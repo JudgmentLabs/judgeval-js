@@ -56,6 +56,22 @@ interface TraceSavePayload {
     parent_name?: string | null;
 }
 
+// Define the structure for a condensed span entry
+interface CondensedSpanEntry {
+    span_id: string;
+    function: string;
+    depth: number;
+    timestamp: number; // Start timestamp of the span
+    parent_span_id?: string | null;
+    span_type: SpanType;
+    inputs: Record<string, any> | null;
+    output: any | null;
+    evaluation_runs: any[]; // Array of evaluation results
+    duration: number | null; // Duration in seconds
+    // Add children property for hierarchical structure
+    children?: CondensedSpanEntry[];
+}
+
 // --- API Interaction Client ---
 
 /**
@@ -186,7 +202,7 @@ class TraceClient {
     public spanDepths: Record<string, number> = {};
     private startTime: number; // Unix timestamp (seconds)
     private traceManager: TraceManagerClient; // Instance of the API client
-    private apiKey: string; // Keep for potential direct use? Or rely on traceManager?
+    private apiKey: string; // Keep for potential use? Or rely on traceManager?
     private organizationId: string;
 
     constructor(
@@ -382,65 +398,141 @@ class TraceClient {
          return (Date.now() / 1000) - this.startTime;
      }
 
-     // Placeholder for condenseTrace - implement based on Python logic
-     private condenseTrace(rawEntries: Partial<TraceEntry>[]): any[] {
-         console.warn("condenseTrace() needs implementation based on Python logic.");
-         // TODO: Implement the logic from Python's condense_trace
-         // Group by span_id, combine inputs/outputs, calculate duration, build hierarchy.
-         // This requires careful handling of the entry structure and relationships.
+     // Updated condenseTrace implementation based on Python logic
+     private condenseTrace(rawEntries: Partial<TraceEntry>[]): CondensedSpanEntry[] {
+         const spansById: Record<string, CondensedSpanEntry & { start_time?: number; end_time?: number }> = {};
 
-         // --- Simplified Example Structure (Needs full implementation) ---
-         const spansById: Record<string, any> = {};
+         // First pass: Group entries by span_id and gather data
          for (const entry of rawEntries) {
-             if (!entry.span_id) continue;
-             if (!spansById[entry.span_id]) {
-                 spansById[entry.span_id] = {
-                     span_id: entry.span_id,
+             const spanId = entry.span_id;
+             if (!spanId) continue;
+
+             // Initialize span data on first encounter (usually 'enter')
+             if (!spansById[spanId]) {
+                 spansById[spanId] = {
+                     span_id: spanId,
                      function: entry.function || 'unknown',
                      depth: entry.depth ?? 0,
-                     timestamp: entry.timestamp, // Entry timestamp
+                     timestamp: entry.timestamp ?? 0, // Defaulting timestamp, 'enter' should set it
                      parent_span_id: entry.parent_span_id,
                      span_type: entry.span_type || 'span',
                      inputs: null,
                      output: null,
                      evaluation_runs: [],
                      duration: null,
-                     start_time: entry.type === 'enter' ? entry.timestamp : undefined,
-                     end_time: entry.type === 'exit' ? entry.timestamp : undefined,
+                     children: [] // Initialize children array
                  };
              }
 
-             const span = spansById[entry.span_id];
-             if (entry.type === 'enter') {
-                 span.start_time = entry.timestamp;
-                 span.parent_span_id = entry.parent_span_id; // Ensure parent ID captured
-                 span.depth = entry.depth;
-                 span.function = entry.function;
-                 span.span_type = entry.span_type;
-             } else if (entry.type === 'exit') {
-                 span.end_time = entry.timestamp;
-                 span.duration = entry.duration; // Use duration from exit entry
-             } else if (entry.type === 'input') {
-                 span.inputs = entry.inputs; // Overwrite/merge as needed
-             } else if (entry.type === 'output' || entry.type === 'error') {
-                 span.output = entry.output; // Capture output/error
-             } else if (entry.type === 'evaluation') {
-                 span.evaluation_runs.push(...(entry.evaluation_runs || []));
+             const currentSpanData = spansById[spanId];
+
+             // Update span data based on entry type
+             switch (entry.type) {
+                 case 'enter':
+                     currentSpanData.function = entry.function || currentSpanData.function;
+                     currentSpanData.depth = entry.depth ?? currentSpanData.depth;
+                     currentSpanData.timestamp = entry.timestamp ?? currentSpanData.timestamp; // Entry timestamp is the start
+                     currentSpanData.parent_span_id = entry.parent_span_id; // Capture parent ID
+                     currentSpanData.span_type = entry.span_type || currentSpanData.span_type;
+                     currentSpanData.start_time = entry.timestamp; // Record start time
+                     break;
+                 case 'exit':
+                     currentSpanData.duration = entry.duration ?? currentSpanData.duration;
+                     currentSpanData.end_time = entry.timestamp; // Record end time
+                     // Recalculate duration if exit entry doesn't have it but start/end times exist
+                     if (currentSpanData.duration === null && currentSpanData.start_time && currentSpanData.end_time) {
+                          currentSpanData.duration = currentSpanData.end_time - currentSpanData.start_time;
+                     }
+                     break;
+                 case 'input':
+                     // Simple overwrite/merge logic (can be enhanced)
+                     if (currentSpanData.inputs === null && entry.inputs) {
+                         currentSpanData.inputs = entry.inputs;
+                     } else if (typeof currentSpanData.inputs === 'object' && typeof entry.inputs === 'object') {
+                         // Basic merge, could be deeper if needed
+                         currentSpanData.inputs = { ...currentSpanData.inputs, ...entry.inputs };
+                     }
+                     break;
+                 case 'output':
+                 case 'error':
+                     currentSpanData.output = entry.output; // Capture output or error structure
+                     break;
+                 case 'evaluation':
+                     if (entry.evaluation_runs) {
+                         currentSpanData.evaluation_runs.push(...entry.evaluation_runs);
+                     }
+                     break;
              }
          }
-         // Calculate duration if not present from exit entry
-         Object.values(spansById).forEach(span => {
-             if (span.duration === null && span.start_time && span.end_time) {
-                 span.duration = span.end_time - span.start_time;
-             }
-             // Remove temporary fields if desired
+
+         // Convert map to list and clean up temporary fields
+         const spansList = Object.values(spansById).map(span => {
+              // Ensure duration is calculated if possible
+              if (span.duration === null && span.start_time && span.end_time) {
+                  span.duration = span.end_time - span.start_time;
+              }
              delete span.start_time;
              delete span.end_time;
+             return span as CondensedSpanEntry; // Cast to final type
          });
 
-         // TODO: Sort entries based on hierarchy (DFS traversal like Python)
-         // For now, returning a flat list
-         return Object.values(spansById).sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
+         // --- Build Tree Structure and Sort --- //
+         // Declare all variables for this section together
+         const childrenMap: Record<string, CondensedSpanEntry[]> = {};
+         const roots: CondensedSpanEntry[] = [];
+         const spanMap: Record<string, CondensedSpanEntry> = {};
+         const sortedCondensedList: CondensedSpanEntry[] = [];
+         const visited = new Set<string>();
+
+         // Populate spanMap and identify roots
+         for (const span of spansList) {
+             spanMap[span.span_id] = span;
+             const parentId = span.parent_span_id;
+             if (parentId === undefined || parentId === null) {
+                 roots.push(span);
+             } else {
+                 if (!childrenMap[parentId]) {
+                     childrenMap[parentId] = [];
+                 }
+                 childrenMap[parentId].push(span);
+             }
+         }
+
+         // Sort roots and children
+         roots.sort((a, b) => a.timestamp - b.timestamp);
+         for (const parentId in childrenMap) {
+             childrenMap[parentId].sort((a, b) => a.timestamp - b.timestamp);
+         }
+
+         // Define the DFS helper function
+         function buildFlatListDfs(span: CondensedSpanEntry) {
+             if (visited.has(span.span_id)) {
+                  return; // Avoid cycles
+              }
+             visited.add(span.span_id);
+             sortedCondensedList.push(span); // Add to flat list (pre-order)
+
+             const children = childrenMap[span.span_id] || [];
+             for (const child of children) {
+                 buildFlatListDfs(child); // Recurse
+             }
+         }
+
+         // --- Perform DFS --- //
+         // Start DFS from each root
+         for (const rootSpan of roots) {
+             buildFlatListDfs(rootSpan);
+         }
+
+         // Handle orphaned spans
+         for (const span of spansList) {
+             if (!visited.has(span.span_id)) {
+                 console.warn(`Orphaned span detected: ${span.span_id}, adding to end of list.`);
+                 buildFlatListDfs(span); // Process orphan and its potential subtree
+             }
+         }
+
+         return sortedCondensedList;
      }
 
      // Save the trace data via the TraceManagerClient
@@ -451,10 +543,10 @@ class TraceClient {
          }
 
          const totalDuration = this.getDuration();
-         const condensedEntries = this.condenseTrace(this.entries);
+         // Call the implemented condenseTrace method
+         const condensedEntries: CondensedSpanEntry[] = this.condenseTrace(this.entries);
 
-         // TODO: Implement token counting logic (needs output format standardization)
-         // This requires parsing the 'output' of 'llm' spans
+         // Implement token counting logic
          const tokenCounts = {
              prompt_tokens: 0,
              completion_tokens: 0,
@@ -464,21 +556,24 @@ class TraceClient {
              total_cost_usd: 0
          };
 
-         // Iterate through condensed entries to calculate tokens (example)
          condensedEntries.forEach(entry => {
              if (entry.span_type === 'llm' && entry.output?.usage) {
                  const usage = entry.output.usage;
-                 // OpenAI/Together structure
-                 tokenCounts.prompt_tokens += usage.prompt_tokens || 0;
-                 tokenCounts.completion_tokens += usage.completion_tokens || 0;
-                 tokenCounts.total_tokens += usage.total_tokens || 0;
-                 // Anthropic structure
-                 tokenCounts.prompt_tokens += usage.input_tokens || 0;
-                 tokenCounts.completion_tokens += usage.output_tokens || 0;
-                  // Anthropic total needs summing if not provided directly
-                  tokenCounts.total_tokens += (usage.input_tokens || 0) + (usage.output_tokens || 0);
+                 // Check for OpenAI/Together format
+                 if (usage.prompt_tokens !== undefined || usage.completion_tokens !== undefined) {
+                     tokenCounts.prompt_tokens += usage.prompt_tokens || 0;
+                     tokenCounts.completion_tokens += usage.completion_tokens || 0;
+                     tokenCounts.total_tokens += usage.total_tokens || (usage.prompt_tokens || 0) + (usage.completion_tokens || 0);
+                 }
+                 // Check for Anthropic format (avoid double counting)
+                 else if (usage.input_tokens !== undefined || usage.output_tokens !== undefined) {
+                     tokenCounts.prompt_tokens += usage.input_tokens || 0;
+                     tokenCounts.completion_tokens += usage.output_tokens || 0;
+                     // Anthropic total needs summing if not provided directly
+                     tokenCounts.total_tokens += (usage.input_tokens || 0) + (usage.output_tokens || 0);
 
-                  // TODO: Add cost calculation if model and cost data are available
+                     // TODO: Add cost calculation if model and cost data are available
+                 }
              }
          });
 
