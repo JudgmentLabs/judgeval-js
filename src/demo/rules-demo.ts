@@ -38,7 +38,7 @@ const sampleRule: Rule = {
   notification: {
     enabled: true,
     communication_methods: ["email"],
-    email_addresses: ["alerts@example.com"],
+    email_addresses: ["minh@judgmentlabs.ai"],
   },
 };
 
@@ -94,7 +94,7 @@ async function runRulesDemo() {
           [answerRelevancyScorer], // <<< Use the actual scorer instance
           {
             input: userInput,
-            actualOutput: responseContent,
+            actualOutput: "Lies",
             model: 'gpt-3.5-turbo', // <<< ADDED model name
             // expectedOutput: "Berlin" // Optionally provide expected output
           }

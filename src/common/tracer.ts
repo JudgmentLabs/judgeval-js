@@ -49,7 +49,8 @@ interface Rule {
 // <<< NEW: Rule and Notification Types END >>>
 
 type ApiClient = OpenAI | Anthropic | Together;
-type SpanType = 'span' | 'tool' | 'llm' | 'evaluation' | 'chain';
+// type SpanType = 'span' | 'tool' | 'llm' | 'evaluation' | 'chain' | 'research';
+type SpanType = string; // Allow any string
 
 interface TraceEntry {
     type: 'enter' | 'exit' | 'input' | 'output' | 'error' | 'evaluation';
