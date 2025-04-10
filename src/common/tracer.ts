@@ -304,4 +304,4 @@ export function wrap<T extends ApiClient>(client: T): T {
 
 // --- Exports --- //
 // Export only what's needed externally for now
-export { Tracer, TraceClient, wrap, currentTraceAsyncLocalStorage, currentSpanAsyncLocalStorage }; 
+export { Tracer, TraceClient, currentTraceAsyncLocalStorage, currentSpanAsyncLocalStorage }; 
