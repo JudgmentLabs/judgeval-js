@@ -9,7 +9,8 @@ import {
   JUDGMENT_EVAL_API_URL,
   JUDGMENT_EVAL_LOG_API_URL,
   MAX_CONCURRENT_EVALUATIONS,
-  JUDGMENT_ADD_TO_RUN_EVAL_QUEUE_API_URL
+  JUDGMENT_ADD_TO_RUN_EVAL_QUEUE_API_URL,
+  JUDGMENT_EVAL_FETCH_API_URL
 } from './constants';
 import logger from './common/logger';
 
@@ -62,6 +63,113 @@ export async function sendToRabbitMQ(evaluationRun: EvaluationRun): Promise<any>
       throw new JudgmentAPIError(`Error sending to RabbitMQ: ${error?.message || String(error)}`);
     }
   }
+}
+
+/**
+ * Checks the status of an async evaluation
+ * @param evaluationRun The evaluation run to check
+ * @returns The status of the evaluation
+ */
+export async function checkEvaluationStatus(evaluationRun: EvaluationRun): Promise<any> {
+  try {
+    const response = await axios.post(
+      `${ROOT_API}/check-eval-status/`,
+      {
+        eval_name: evaluationRun.evalName,
+        project_name: evaluationRun.projectName,
+        judgment_api_key: evaluationRun.judgmentApiKey,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${evaluationRun.judgmentApiKey}`,
+          'X-Organization-Id': evaluationRun.organizationId
+        }
+      }
+    );
+    return response.data;
+  } catch (error: any) {
+    if (axios.isAxiosError(error) && error.response) {
+      throw new JudgmentAPIError(`Error checking evaluation status: ${error.response.data.detail || error.message}`);
+    } else {
+      throw new JudgmentAPIError(`Error checking evaluation status: ${error?.message || String(error)}`);
+    }
+  }
+}
+
+/**
+ * Polls the status of an async evaluation until it's complete
+ * @param evaluationRun The evaluation run to poll
+ * @param intervalMs The interval between polls in milliseconds
+ * @param maxAttempts The maximum number of polling attempts
+ * @param onProgress Optional callback for progress updates
+ * @returns The evaluation results
+ */
+export async function pollEvaluationStatus(
+  evaluationRun: EvaluationRun, 
+  intervalMs: number = 2000, 
+  maxAttempts: number = 300,
+  onProgress?: (status: any) => void
+): Promise<ScoringResult[]> {
+  let attempts = 0;
+  
+  while (attempts < maxAttempts) {
+    try {
+      const status = await checkEvaluationStatus(evaluationRun);
+      
+      // Call progress callback if provided
+      if (onProgress) {
+        onProgress(status);
+      }
+      
+      // Check if evaluation is complete
+      if (status.status === 'complete') {
+        logger.log('Async evaluation complete, fetching results');
+        
+        // Fetch the results
+        const response = await axios.post(
+          JUDGMENT_EVAL_FETCH_API_URL,
+          {
+            eval_name: evaluationRun.evalName,
+            project_name: evaluationRun.projectName,
+            judgment_api_key: evaluationRun.judgmentApiKey,
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${evaluationRun.judgmentApiKey}`,
+              'X-Organization-Id': evaluationRun.organizationId
+            }
+          }
+        );
+        
+        // Convert API results to ScoringResult objects
+        const results = response.data.map((result: any) => {
+          return new ScoringResult({
+            dataObject: result.example,
+            scorersData: result.scorers_data || [],
+            error: result.error
+          });
+        });
+        
+        return results;
+      } else if (status.status === 'failed') {
+        throw new JudgmentAPIError(`Async evaluation failed: ${status.error || 'Unknown error'}`);
+      }
+      
+      // Log progress
+      logger.log(`Evaluation status: ${status.status}, progress: ${status.progress || 'unknown'}`);
+      
+      // Wait before next poll
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
+      attempts++;
+    } catch (error: any) {
+      logger.error(`Error polling evaluation status: ${error?.message || String(error)}`);
+      throw new JudgmentAPIError(`Error polling evaluation status: ${error?.message || String(error)}`);
+    }
+  }
+  
+  throw new JudgmentAPIError(`Evaluation polling timed out after ${maxAttempts} attempts`);
 }
 
 /**
@@ -360,23 +468,29 @@ export async function runEval(
   if (asyncExecution) {
     checkExamples(evaluationRun.examples, evaluationRun.scorers as APIJudgmentScorer[]);
     logger.log("Starting async evaluation");
-    const payload = evaluationRun.toJSON();
     
     try {
       // Add the evaluation to the RabbitMQ queue for async processing
       // The server will pick it up and process it in the background
-      await axios.post(
-        JUDGMENT_ADD_TO_RUN_EVAL_QUEUE_API_URL,
-        payload,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${evaluationRun.judgmentApiKey}`,
-            'X-Organization-Id': evaluationRun.organizationId || ''
-          }
-        }
-      );
-      logger.log("Successfully added evaluation to queue");
+      const response = await sendToRabbitMQ(evaluationRun);
+      
+      // Log the response for debugging
+      logger.log(`Successfully added evaluation to queue: ${JSON.stringify(response)}`);
+      
+      // Set up progress tracking
+      const progressTracker = {
+        evalName: evaluationRun.evalName,
+        projectName: evaluationRun.projectName,
+        status: 'queued',
+        startTime: new Date(),
+        lastChecked: new Date(),
+        progress: 0
+      };
+      
+      // Return the progress tracker object
+      // This allows the caller to check the status of the evaluation
+      console.log(`Async evaluation started. Track progress with JudgmentClient.checkEvalStatus("${evaluationRun.projectName}", "${evaluationRun.evalName}")`);
+      
       // Return empty results for async execution
       // The results will be available later via the UI or API
       return [];

@@ -749,6 +749,117 @@ class TraceClient {
              throw error; // Re-throw or handle as needed
          }
      }
+
+    /**
+     * Asynchronously evaluate an example using the provided scorers.
+     * This is a port of the Python SDK's async_evaluate method.
+     * 
+     * @param scorers Array of scorers to use for evaluation
+     * @param options Evaluation options including input, outputs, and metadata
+     * @returns Promise that resolves when the evaluation has been submitted
+     */
+    async asyncEvaluate(
+        scorers: any[],
+        options: {
+            input?: string;
+            actualOutput?: string;
+            expectedOutput?: string;
+            context?: string[];
+            retrievalContext?: string[];
+            toolsCalled?: string[];
+            expectedTools?: string[];
+            additionalMetadata?: Record<string, any>;
+            model?: string;
+            logResults?: boolean;
+        } = {}
+    ): Promise<void> {
+        if (!this.enableEvaluations) {
+            console.warn("Evaluations are disabled. Skipping async evaluation.");
+            return;
+        }
+
+        const startTime = Date.now() / 1000; // Record start time in seconds
+
+        // Create example from options
+        const example = {
+            input: options.input || "",
+            actual_output: options.actualOutput || "",
+            expected_output: options.expectedOutput || "",
+            context: options.context || [],
+            retrieval_context: options.retrievalContext || [],
+            tools_called: options.toolsCalled || [],
+            expected_tools: options.expectedTools || [],
+            additional_metadata: options.additionalMetadata || {},
+            trace_id: this.traceId
+        };
+
+        try {
+            // Get the current span ID from the context
+            const currentSpanId = currentSpanAsyncLocalStorage.getStore();
+            if (!currentSpanId) {
+                console.warn("No active span found for async evaluation.");
+                return;
+            }
+
+            // Determine function name based on previous entries
+            let functionName = "unknown_function"; // Default
+            let entrySpanType = "span"; // Default span type
+
+            // Find the function name associated with the current span
+            for (let i = this.entries.length - 1; i >= 0; i--) {
+                const entry = this.entries[i];
+                if (entry.span_id === currentSpanId && entry.type === 'enter') {
+                    functionName = entry.function || "unknown_function";
+                    entrySpanType = entry.span_type || "span";
+                    break;
+                }
+            }
+
+            // Get depth for the current span
+            const currentDepth = this.spanDepths[currentSpanId] || 0;
+
+            // Create evaluation run name
+            const scorerNames = scorers.map(scorer => {
+                const name = scorer.constructor.name || "Unknown";
+                return name.charAt(0).toUpperCase() + name.slice(1);
+            }).join(',');
+
+            const evalName = `${this.name.charAt(0).toUpperCase() + this.name.slice(1)}-${currentSpanId.substring(0, 8)}-[${scorerNames}]`;
+
+            // Create evaluation run
+            const evalRun = {
+                organization_id: this.organizationId,
+                log_results: options.logResults !== false, // Default to true
+                project_name: this.projectName,
+                eval_name: evalName,
+                examples: [example],
+                scorers: scorers,
+                model: options.model || "",
+                metadata: {},
+                judgment_api_key: this.apiKey,
+                override: this.overwrite
+            };
+
+            // Add evaluation entry to the trace
+            this.addEntry({
+                type: "evaluation",
+                function: functionName,
+                span_id: currentSpanId,
+                depth: currentDepth,
+                timestamp: Date.now() / 1000,
+                evaluation_runs: [evalRun],
+                duration: (Date.now() / 1000) - startTime,
+                span_type: "evaluation"
+            });
+
+            // In a real implementation, you would submit the evaluation to the backend
+            // This is handled by the save method when the trace is saved
+            console.log(`Async evaluation submitted for ${evalName}`);
+
+        } catch (error) {
+            console.warn(`Failed to submit async evaluation: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
 }
 
 /**

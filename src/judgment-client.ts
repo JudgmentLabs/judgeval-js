@@ -128,7 +128,8 @@ export class JudgmentClient {
     ignoreErrors: boolean = true,
     rules?: Rule[]
   ): Promise<ScoringResult[]> {
-    return this.runEvaluation(
+    // First, start the async evaluation
+    await this.runEvaluation(
       examples, 
       scorers, 
       model, 
@@ -140,9 +141,17 @@ export class JudgmentClient {
       override, 
       useJudgment, 
       ignoreErrors, 
-      true, 
+      true, // Set asyncExecution to true
       rules
     );
+    
+    console.log(`Async evaluation "${evalRunName}" started in project "${projectName}"`);
+    console.log(`You can check the status using: client.checkEvalStatus("${projectName}", "${evalRunName}")`);
+    console.log(`Or wait for completion using: await client.waitForEvaluation("${projectName}", "${evalRunName}")`);
+    
+    // Return an empty array since the evaluation is running asynchronously
+    // The user can use waitForEvaluation to get the results when ready
+    return [];
   }
 
   /**
@@ -750,29 +759,117 @@ export class JudgmentClient {
    * @param evalRunName The name of the evaluation run
    * @returns The status of the evaluation run
    */
-  async checkEvalStatus(projectName: string, evalRunName: string): Promise<any> {
+  public async checkEvalStatus(projectName: string, evalRunName: string): Promise<any> {
     try {
-      const url = `${this.apiUrl}/eval/status`;
-      const response = await axios.post(url, {
-        project_name: projectName,
-        eval_name: evalRunName,
-        judgment_api_key: this.judgmentApiKey
-      }, {
-        headers: {
-          'Authorization': `Bearer ${this.judgmentApiKey}`,
-          'Content-Type': 'application/json',
-          'X-Organization-Id': this.organizationId
+      const response = await axios.post(
+        `${ROOT_API}/check-eval-status/`,
+        {
+          eval_name: evalRunName,
+          project_name: projectName,
+          judgment_api_key: this.judgmentApiKey,
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.judgmentApiKey}`,
+            'X-Organization-Id': this.organizationId
+          }
         }
-      });
+      );
       
-      return response.data;
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const statusCode = error.response?.status;
-        const errorMessage = error.response?.data?.detail || error.message;
-        throw new Error(`Failed to check evaluation status: ${statusCode} - ${errorMessage}`);
+      // Format the response for better readability
+      const status = response.data;
+      const statusText = status.status || 'unknown';
+      const progress = status.progress !== undefined ? `${Math.round(status.progress * 100)}%` : 'unknown';
+      const message = status.message || '';
+      
+      console.log(`Evaluation Status: ${statusText}`);
+      console.log(`Progress: ${progress}`);
+      if (message) {
+        console.log(`Message: ${message}`);
       }
-      throw error;
+      
+      return status;
+    } catch (error: any) {
+      if (error instanceof Error) {
+        throw new Error(`Error checking evaluation status: ${error.message}`);
+      } else {
+        throw new Error(`Error checking evaluation status: ${error}`);
+      }
     }
+  }
+  
+  /**
+   * Wait for an async evaluation to complete and return the results
+   * @param projectName The name of the project
+   * @param evalRunName The name of the evaluation run
+   * @param options Optional configuration for polling
+   * @returns The evaluation results
+   */
+  public async waitForEvaluation(
+    projectName: string, 
+    evalRunName: string, 
+    options: {
+      intervalMs?: number,
+      maxAttempts?: number,
+      showProgress?: boolean
+    } = {}
+  ): Promise<ScoringResult[]> {
+    const {
+      intervalMs = 2000,
+      maxAttempts = 300,
+      showProgress = true
+    } = options;
+    
+    let attempts = 0;
+    let lastProgress = -1;
+    
+    console.log(`Waiting for evaluation "${evalRunName}" in project "${projectName}" to complete...`);
+    
+    while (attempts < maxAttempts) {
+      try {
+        const status = await this.checkEvalStatus(projectName, evalRunName);
+        
+        // Only show progress updates when the progress changes
+        if (showProgress && status.progress !== undefined && Math.round(status.progress * 100) !== lastProgress) {
+          lastProgress = Math.round(status.progress * 100);
+          const progressBar = this._createProgressBar(lastProgress);
+          console.log(`Progress: ${progressBar} ${lastProgress}%`);
+        }
+        
+        // Check if evaluation is complete
+        if (status.status === 'complete') {
+          console.log('Evaluation complete! Fetching results...');
+          return await this.pullEvalResults(projectName, evalRunName);
+        } else if (status.status === 'failed') {
+          throw new Error(`Evaluation failed: ${status.error || 'Unknown error'}`);
+        }
+        
+        // Wait before next poll
+        await new Promise(resolve => setTimeout(resolve, intervalMs));
+        attempts++;
+      } catch (error: any) {
+        if (error instanceof Error) {
+          throw new Error(`Error waiting for evaluation: ${error.message}`);
+        } else {
+          throw new Error(`Error waiting for evaluation: ${error}`);
+        }
+      }
+    }
+    
+    throw new Error(`Evaluation polling timed out after ${maxAttempts} attempts`);
+  }
+  
+  /**
+   * Create a simple ASCII progress bar
+   * @param percent The percentage to display (0-100)
+   * @returns A string representing the progress bar
+   */
+  private _createProgressBar(percent: number): string {
+    const width = 20;
+    const completed = Math.floor(width * (percent / 100));
+    const remaining = width - completed;
+    
+    return '[' + '='.repeat(completed) + ' '.repeat(remaining) + ']';
   }
 }
