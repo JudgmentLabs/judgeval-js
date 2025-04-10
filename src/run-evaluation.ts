@@ -87,15 +87,13 @@ export async function executeApiEval(evaluationRun: EvaluationRun): Promise<any[
     
     // Check if the response status code is not 2XX
     if (response.status < 200 || response.status >= 300) {
-      const errorMessage = response.data?.detail || 'An unknown error occurred.';
+      const responseData = response.data;
+      const errorMessage = responseData?.detail || 'An unknown error occurred.';
       console.error(`Error: ${errorMessage}`);
       throw new JudgmentAPIError(errorMessage);
     }
     
-    // Validate the response format
-    validateApiResponse(response.data);
-    
-    // Return the response data directly, matching Python SDK behavior
+    // Return the response data directly
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response) {
@@ -158,15 +156,11 @@ export async function logEvaluationResults(
   try {
     console.log(`Logging evaluation results for ${evaluationRun.evalName}`);
     
-    // Format the payload according to the server's expected format
+    // Format the payload according to the server's expected format - match Python SDK exactly
     const payload = {
       results: mergedResults.map(result => result.toJSON()),
       project_name: evaluationRun.projectName,
       eval_name: evaluationRun.evalName,
-      model: evaluationRun.model,
-      aggregator: evaluationRun.aggregator,
-      metadata: evaluationRun.metadata,
-      judgment_api_key: evaluationRun.judgmentApiKey,
     };
     
     console.log('Logging payload structure:', JSON.stringify(Object.keys(payload)));
@@ -191,12 +185,7 @@ export async function logEvaluationResults(
       throw new JudgmentAPIError(errorMessage);
     }
     
-    // Validate the response format
-    validateApiResponse(response.data);
-    
-    console.log(`Successfully logged evaluation results for ${evaluationRun.evalName}`);
-    
-    // Return UI results URL if available
+    // Return UI results URL if available - match Python SDK formatting exactly
     if (response.data && response.data.ui_results_url) {
       const url = response.data.ui_results_url;
       return `\n🔍 You can view your evaluation results here: [rgb(106,0,255)][link=${url}]View Results[/link]\n`;
@@ -205,9 +194,11 @@ export async function logEvaluationResults(
     return null;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response) {
-      throw new JudgmentAPIError(`Error logging evaluation results: ${JSON.stringify(error.response.data)}`);
+      console.error(`Request failed while saving evaluation results to DB: ${JSON.stringify(error.response.data)}`);
+      throw new JudgmentAPIError(`Request failed while saving evaluation results to DB: ${JSON.stringify(error.response.data)}`);
     } else {
-      throw new JudgmentAPIError(`Error logging evaluation results: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
+      console.error(`Failed to save evaluation results to DB: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
+      throw new JudgmentAPIError(`Failed to save evaluation results to DB: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
     }
   }
 }
