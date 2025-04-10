@@ -14,6 +14,7 @@ import {
   JUDGMENT_PROJECT_DELETE_API_URL,
   JUDGMENT_PROJECT_CREATE_API_URL
 } from './constants';
+import logger from './common/logger';
 
 // Load environment variables
 dotenv.config();
@@ -43,6 +44,7 @@ export class JudgmentClient {
   private static instance: JudgmentClient;
   private judgmentApiKey: string;
   private organizationId: string;
+  private apiUrl: string;
   
   /**
    * Get the singleton instance of JudgmentClient
@@ -55,17 +57,58 @@ export class JudgmentClient {
   }
 
   /**
-   * Private constructor to enforce singleton pattern
+   * Constructor for JudgmentClient
+   * @param judgmentApiKey The Judgment API key
+   * @param organizationId The organization ID
    */
-  private constructor(
-    judgmentApiKey?: string, 
+  constructor(
+    judgmentApiKey?: string,
     organizationId?: string
   ) {
     this.judgmentApiKey = judgmentApiKey || process.env.JUDGMENT_API_KEY || '';
     this.organizationId = organizationId || process.env.JUDGMENT_ORG_ID || '';
+    this.apiUrl = process.env.JUDGMENT_API_URL || 'https://api.judgment.ai';
+    
+    // Disable all logging to match Python SDK output format
+    logger.disableLogging();
+    
+    // Completely disable console output for internal logging
+    // This is needed to match the Python SDK's output format exactly
+    if (process.env.DISABLE_LOGGING === 'true') {
+      // Save original console methods
+      const originalConsoleLog = console.log;
+      const originalConsoleInfo = console.info;
+      const originalConsoleWarn = console.warn;
+      const originalConsoleError = console.error;
+      
+      // Override console methods to only allow specific messages through
+      console.log = function(...args) {
+        if (args[0] === 'Successfully initialized JudgmentClient!') {
+          originalConsoleLog.apply(console, args);
+        }
+      };
+      console.info = function() {};
+      console.warn = function() {};
+      console.error = function(...args) {
+        if (args[0] && args[0].toString().includes('JUDGMENT_API_KEY environment variable is not set')) {
+          originalConsoleError.apply(console, args);
+        }
+        if (args[0] && args[0].toString().includes('JUDGMENT_ORG_ID environment variable is not set')) {
+          originalConsoleError.apply(console, args);
+        }
+      };
+    }
     
     // For testing purposes, we'll skip API key validation
-    console.log('Initializing JudgmentClient with API key and organization ID');
+    console.log('Successfully initialized JudgmentClient!');
+    
+    if (!this.judgmentApiKey) {
+      throw new Error('Judgment API key is required. Set it in the constructor or as an environment variable JUDGMENT_API_KEY.');
+    }
+    
+    if (!this.organizationId) {
+      throw new Error('Organization ID is required. Set it in the constructor or as an environment variable JUDGMENT_ORG_ID.');
+    }
   }
 
   /**
@@ -203,6 +246,61 @@ export class JudgmentClient {
         throw new Error(`An unexpected error occurred during evaluation: ${error}`);
       }
     }
+  }
+
+  /**
+   * Run an evaluation with a simplified interface (recommended)
+   * @param config Configuration object for the evaluation
+   * @returns Promise<ScoringResult[]> The evaluation results
+   */
+  public async evaluate(config: {
+    examples: Example[];
+    scorers: Array<ScorerWrapper | JudgevalScorer | APIJudgmentScorer>;
+    model?: string | string[] | any;
+    aggregator?: string;
+    metadata?: Record<string, any>;
+    projectName?: string;
+    evalName?: string;
+    logResults?: boolean;
+    useJudgment?: boolean;
+    ignoreErrors?: boolean;
+    asyncExecution?: boolean;
+    rules?: Rule[];
+    override?: boolean;
+  }): Promise<ScoringResult[]> {
+    // Set default values
+    const {
+      examples,
+      scorers,
+      model = 'meta-llama/Meta-Llama-3-8B-Instruct-Turbo',
+      aggregator = undefined,
+      metadata = {},
+      projectName = 'default_project',
+      evalName = `eval-run-${Date.now()}`,
+      logResults = true,
+      useJudgment = true,
+      ignoreErrors = true,
+      asyncExecution = false,
+      rules = undefined,
+      override = false
+    } = config;
+
+    // Call the original runEvaluation method with the extracted parameters
+    return this.runEvaluation(
+      examples,
+      scorers,
+      model,
+      aggregator,
+      metadata,
+      logResults,
+      projectName,
+      evalName,
+      override,
+      useJudgment,
+      ignoreErrors,
+      asyncExecution,
+      rules
+    );
   }
 
   /**
@@ -396,30 +494,14 @@ export class JudgmentClient {
         }
       );
 
-      const evalRunResult: Array<Record<string, any>> = [{}];
-      for (const result of response.data) {
-        const resultId = result.id || '';
-        const resultData = result.result || {};
-        
-        // Filter result data to only include ScoringResult fields
-        const filteredResult: Record<string, any> = {};
-        for (const key in resultData) {
-          if (['dataObject', 'scorersData', 'error'].includes(key)) {
-            filteredResult[key] = resultData[key];
-          }
-        }
-        
-        evalRunResult[0].id = resultId;
-        evalRunResult[0].results = [filteredResult];
-      }
-      
-      return evalRunResult;
+      return response.data.results || [];
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response) {
-        throw new Error(`Error fetching eval results: ${JSON.stringify(error.response.data)}`);
-      } else {
-        throw new Error(`Error fetching eval results: ${error}`);
+      if (axios.isAxiosError(error)) {
+        const statusCode = error.response?.status;
+        const errorMessage = error.response?.data?.detail || error.message;
+        throw new Error(`Failed to pull evaluation results: ${statusCode} - ${errorMessage}`);
       }
+      throw error;
     }
   }
 
@@ -628,5 +710,69 @@ export class JudgmentClient {
     );
 
     assertTest(results);
+  }
+
+  /**
+   * Pull the results of an evaluation run
+   * @param projectName The name of the project
+   * @param evalRunName The name of the evaluation run
+   * @returns The results of the evaluation run
+   */
+  async pullEvalResults(projectName: string, evalRunName: string): Promise<any[]> {
+    try {
+      const url = `${this.apiUrl}/eval/pull`;
+      const response = await axios.post(url, {
+        project_name: projectName,
+        eval_name: evalRunName,
+        judgment_api_key: this.judgmentApiKey
+      }, {
+        headers: {
+          'Authorization': `Bearer ${this.judgmentApiKey}`,
+          'Content-Type': 'application/json',
+          'X-Organization-Id': this.organizationId
+        }
+      });
+      
+      return response.data.results || [];
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const statusCode = error.response?.status;
+        const errorMessage = error.response?.data?.detail || error.message;
+        throw new Error(`Failed to pull evaluation results: ${statusCode} - ${errorMessage}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Check the status of an evaluation run
+   * @param projectName The name of the project
+   * @param evalRunName The name of the evaluation run
+   * @returns The status of the evaluation run
+   */
+  async checkEvalStatus(projectName: string, evalRunName: string): Promise<any> {
+    try {
+      const url = `${this.apiUrl}/eval/status`;
+      const response = await axios.post(url, {
+        project_name: projectName,
+        eval_name: evalRunName,
+        judgment_api_key: this.judgmentApiKey
+      }, {
+        headers: {
+          'Authorization': `Bearer ${this.judgmentApiKey}`,
+          'Content-Type': 'application/json',
+          'X-Organization-Id': this.organizationId
+        }
+      });
+      
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const statusCode = error.response?.status;
+        const errorMessage = error.response?.data?.detail || error.message;
+        throw new Error(`Failed to check evaluation status: ${statusCode} - ${errorMessage}`);
+      }
+      throw error;
+    }
   }
 }

@@ -1,0 +1,784 @@
+2025-04-10 03:23:45 - basic-eval-example - info - Logging enabled
+2025-04-10 03:23:45 - basic-eval-example - info - Starting basic evaluation example with all scorers...
+2025-04-10 03:23:45 - basic-eval-example - info - 
+Testing AnswerRelevancy scorer...
+2025-04-10 03:23:45 - basic-eval-example - info - Logging enabled
+2025-04-10 03:23:45 - basic-eval-example - info - Checking if eval run name 'all-scorers-eval-1744280625232-ar' exists for project 'js-sdk-all-scorers'
+2025-04-10 03:23:45 - basic-eval-example - info - Initializing examples with IDs and timestamps
+2025-04-10 03:23:45 - basic-eval-example - info - Initialized example 9fa5b044-5824-49d1-8bc1-cfeaf0e5c8f6 (index: 0)
+2025-04-10 03:23:45 - basic-eval-example - info - Input: What's the capital of France?
+2025-04-10 03:23:45 - basic-eval-example - info - Actual output: The capital of France is Paris.
+2025-04-10 03:23:45 - basic-eval-example - info - Initialized example e33150a3-d8cd-4ec1-a933-17d7dece68f6 (index: 1)
+2025-04-10 03:23:45 - basic-eval-example - info - Input: What's the capital of France?
+2025-04-10 03:23:45 - basic-eval-example - info - Actual output: There's a lot to do in Marseille. Lots of bars, restaurants, and museums.
+2025-04-10 03:23:45 - basic-eval-example - info - Starting evaluation run with 2 examples
+2025-04-10 03:23:45 - basic-eval-example - info - Grouping scorers by type
+2025-04-10 03:23:45 - basic-eval-example - info - Added judgment scorer: AnswerRelevancyScorer
+2025-04-10 03:23:45 - basic-eval-example - info - Found 1 judgment scorers and 0 local scorers
+2025-04-10 03:23:45 - basic-eval-example - warn - Scorer answer_relevancy requires expectedOutput field
+2025-04-10 03:23:45 - basic-eval-example - warn - Scorer answer_relevancy requires expectedOutput field
+2025-04-10 03:23:45 - basic-eval-example - info - Starting API evaluation
+2025-04-10 03:23:45 - basic-eval-example - info - Creating API evaluation run with 1 scorers
+2025-04-10 03:23:45 - basic-eval-example - info - Sending request to Judgment API
+2025-04-10 03:23:45 - basic-eval-example - info - Executing API evaluation...
+2025-04-10 03:23:48 - basic-eval-example - info - API Response: {"results":[{"success":true,"scorers_data":[{"name":"Answer Relevancy","threshold":0.7,"success":true,"score":1,"reason":"The score is 1.00 because the answer is directly relevant to the input questio...
+2025-04-10 03:23:48 - basic-eval-example - info - Received 2 results from API
+2025-04-10 03:23:48 - basic-eval-example - info - Processing API results
+2025-04-10 03:23:48 - basic-eval-example - info - API response structure: {
+  "success": true,
+  "scorers_data": [
+    {
+      "name": "Answer Relevancy",
+      "threshold": 0.7,
+      "success": true,
+      "score": 1,
+      "reason": "The score is 1.00 because the answer is directly relevant to the input question, providing the correct capital of France. The answer is concise and accurate, making it a perfect match for the input.",
+      "strict_mode": null,
+      "evaluation_model": "meta-llama/Meta-Llama-3-8B-Instruct-Turbo",
+      "error": null,
+      "evaluation...
+2025-04-10 03:23:48 - basic-eval-example - info - Processing result 0:
+2025-04-10 03:23:48 - basic-eval-example - info - - Keys: ["success","scorers_data","name","data_object","trace_id","run_duration","evaluation_cost"]
+2025-04-10 03:23:48 - basic-eval-example - info - - WARNING: No example data in result 0
+2025-04-10 03:23:48 - basic-eval-example - info - - Found 1 scorer data entries
+2025-04-10 03:23:48 - basic-eval-example - info - - First scorer: {"name":"Answer Relevancy","threshold":0.7,"success":true,"score":1,"reason":"The score is 1.00 because the answer is directly relevant to the input question, providing the correct capital of France. The answer is concise and accurate, making it a perfect match for the input.","strict_mode":null,"evaluation_model":"meta-llama/Meta-Llama-3-8B-Instruct-Turbo","error":null,"evaluation_cost":null,"verbose_logs":null,"additional_metadata":null}
+2025-04-10 03:23:48 - basic-eval-example - info - Processing result 1:
+2025-04-10 03:23:48 - basic-eval-example - info - - Keys: ["success","scorers_data","name","data_object","trace_id","run_duration","evaluation_cost"]
+2025-04-10 03:23:48 - basic-eval-example - info - - WARNING: No example data in result 1
+2025-04-10 03:23:48 - basic-eval-example - info - - Found 1 scorer data entries
+2025-04-10 03:23:48 - basic-eval-example - info - - First scorer: {"name":"Answer Relevancy","threshold":0.7,"success":false,"score":0,"reason":"The score is 0.00 because the model's output contains multiple irrelevant statements that do not provide information about the capital of France, which is the main topic of the input. Although the statements are somewhat related to France, they are not directly relevant to the question and do not provide a clear answer. The score is fair because the model did not provide any information that is even remotely related to the capital of France, making it a poor attempt at answering the question.","strict_mode":null,"evaluation_model":"meta-llama/Meta-Llama-3-8B-Instruct-Turbo","error":null,"evaluation_cost":null,"verbose_logs":null,"additional_metadata":null}
+2025-04-10 03:23:48 - basic-eval-example - info - Merging API and local results
+2025-04-10 03:23:48 - basic-eval-example - info - Successfully merged 2 results
+2025-04-10 03:23:48 - basic-eval-example - info - Logging evaluation results for all-scorers-eval-1744280625232-ar
+2025-04-10 03:23:48 - basic-eval-example - info - Logging payload structure: ["results","project_name","eval_name"]
+2025-04-10 03:23:48 - basic-eval-example - info - 
+🔍 You can view your evaluation results here: https://app.judgmentlabs.ai/app/experiment?project_name=js-sdk-all-scorers&eval_run_name=all-scorers-eval-1744280625232-ar 
+
+2025-04-10 03:23:48 - basic-eval-example - info - 
+AnswerRelevancy Results:
+2025-04-10 03:23:48 - basic-eval-example - info - 
+                     
+🔍 You can view your evaluation results here: https://app.judgmentlabs.ai/app/experiment?project_name=js-sdk-all-scorers&eval_run_name=all-scorers-eval-1744280625232-answerrelevancy
+
+=== Test Failure Details ===
+Input: What's the capital of France?
+Output: There's a lot to do in Marseille. Lots of bars, restaurants, and museums.
+Success: false
+Retrieval Context: None
+
+Scorer Details:
+- Name: Answer Relevancy
+- Score: 0
+- Threshold: 0.7
+- Success: false
+- Reason: The score is 0.00 because the model's output contains multiple irrelevant statements that do not provide information about the capital of France, which is the main topic of the input. Although the statements are somewhat related to France, they are not directly relevant to the question and do not provide a clear answer. The score is fair because the model did not provide any information that is even remotely related to the capital of France, making it a poor attempt at answering the question.
+- Error: None
+
+2025-04-10 03:23:48 - basic-eval-example - info - 
+Example 1:
+2025-04-10 03:23:48 - basic-eval-example - info - Input: What's the capital of France?
+2025-04-10 03:23:48 - basic-eval-example - info - Actual Output: The capital of France is Paris.
+2025-04-10 03:23:48 - basic-eval-example - info - Scores:
+2025-04-10 03:23:48 - basic-eval-example - info -   Answer Relevancy: 1 (threshold: 0.7, success: true)
+2025-04-10 03:23:48 - basic-eval-example - info - 
+Example 2:
+2025-04-10 03:23:48 - basic-eval-example - info - Input: What's the capital of France?
+2025-04-10 03:23:48 - basic-eval-example - info - Actual Output: There's a lot to do in Marseille. Lots of bars, restaurants, and museums.
+2025-04-10 03:23:48 - basic-eval-example - info - Scores:
+2025-04-10 03:23:48 - basic-eval-example - info -   Answer Relevancy: 0 (threshold: 0.7, success: false)
+2025-04-10 03:23:48 - basic-eval-example - info - 
+Testing AnswerCorrectness scorer...
+2025-04-10 03:23:48 - basic-eval-example - info - Logging enabled
+2025-04-10 03:23:48 - basic-eval-example - info - Checking if eval run name 'all-scorers-eval-1744280625232-ac' exists for project 'js-sdk-all-scorers'
+2025-04-10 03:23:48 - basic-eval-example - info - Initializing examples with IDs and timestamps
+2025-04-10 03:23:48 - basic-eval-example - info - Initialized example 399d8824-f373-40ff-938d-a3af61b6b791 (index: 0)
+2025-04-10 03:23:48 - basic-eval-example - info - Input: What is the capital of France?
+2025-04-10 03:23:48 - basic-eval-example - info - Actual output: The capital of France is Paris.
+2025-04-10 03:23:48 - basic-eval-example - info - Expected output: Paris is the capital of France.
+2025-04-10 03:23:48 - basic-eval-example - info - Initialized example c6396748-5f04-43d1-97d3-d22bc1b2fdac (index: 1)
+2025-04-10 03:23:48 - basic-eval-example - info - Input: What is the tallest mountain in the world?
+2025-04-10 03:23:48 - basic-eval-example - info - Actual output: Mount Everest is the tallest mountain in the world.
+2025-04-10 03:23:48 - basic-eval-example - info - Expected output: Mount Everest is the tallest mountain in the world.
+2025-04-10 03:23:48 - basic-eval-example - info - Starting evaluation run with 2 examples
+2025-04-10 03:23:48 - basic-eval-example - info - Grouping scorers by type
+2025-04-10 03:23:48 - basic-eval-example - info - Added judgment scorer: AnswerCorrectnessScorer
+2025-04-10 03:23:48 - basic-eval-example - info - Found 1 judgment scorers and 0 local scorers
+2025-04-10 03:23:48 - basic-eval-example - info - Starting API evaluation
+2025-04-10 03:23:48 - basic-eval-example - info - Creating API evaluation run with 1 scorers
+2025-04-10 03:23:48 - basic-eval-example - info - Sending request to Judgment API
+2025-04-10 03:23:48 - basic-eval-example - info - Executing API evaluation...
+2025-04-10 03:23:50 - basic-eval-example - info - API Response: {"results":[{"success":true,"scorers_data":[{"name":"Answer Correctness","threshold":0.7,"success":true,"score":1,"reason":"The score is 1.00 because the model's output perfectly matches the expected ...
+2025-04-10 03:23:50 - basic-eval-example - info - Received 2 results from API
+2025-04-10 03:23:50 - basic-eval-example - info - Processing API results
+2025-04-10 03:23:50 - basic-eval-example - info - API response structure: {
+  "success": true,
+  "scorers_data": [
+    {
+      "name": "Answer Correctness",
+      "threshold": 0.7,
+      "success": true,
+      "score": 1,
+      "reason": "The score is 1.00 because the model's output perfectly matches the expected output, indicating 100% accuracy and relevance.",
+      "strict_mode": null,
+      "evaluation_model": "meta-llama/Meta-Llama-3-8B-Instruct-Turbo",
+      "error": null,
+      "evaluation_cost": null,
+      "verbose_logs": null,
+      "additional_metadata": nu...
+2025-04-10 03:23:50 - basic-eval-example - info - Processing result 0:
+2025-04-10 03:23:50 - basic-eval-example - info - - Keys: ["success","scorers_data","name","data_object","trace_id","run_duration","evaluation_cost"]
+2025-04-10 03:23:50 - basic-eval-example - info - - WARNING: No example data in result 0
+2025-04-10 03:23:50 - basic-eval-example - info - - Found 1 scorer data entries
+2025-04-10 03:23:50 - basic-eval-example - info - - First scorer: {"name":"Answer Correctness","threshold":0.7,"success":true,"score":1,"reason":"The score is 1.00 because the model's output perfectly matches the expected output, indicating 100% accuracy and relevance.","strict_mode":null,"evaluation_model":"meta-llama/Meta-Llama-3-8B-Instruct-Turbo","error":null,"evaluation_cost":null,"verbose_logs":null,"additional_metadata":null}
+2025-04-10 03:23:50 - basic-eval-example - info - Processing result 1:
+2025-04-10 03:23:50 - basic-eval-example - info - - Keys: ["success","scorers_data","name","data_object","trace_id","run_duration","evaluation_cost"]
+2025-04-10 03:23:50 - basic-eval-example - info - - WARNING: No example data in result 1
+2025-04-10 03:23:50 - basic-eval-example - info - - Found 1 scorer data entries
+2025-04-10 03:23:50 - basic-eval-example - info - - First scorer: {"name":"Answer Correctness","threshold":0.7,"success":true,"score":1,"reason":"The score is 1.00 because the model's output perfectly matches the expected output, indicating 100% accuracy and relevance.","strict_mode":null,"evaluation_model":"meta-llama/Meta-Llama-3-8B-Instruct-Turbo","error":null,"evaluation_cost":null,"verbose_logs":null,"additional_metadata":null}
+2025-04-10 03:23:50 - basic-eval-example - info - Merging API and local results
+2025-04-10 03:23:50 - basic-eval-example - info - Successfully merged 2 results
+2025-04-10 03:23:50 - basic-eval-example - info - Logging evaluation results for all-scorers-eval-1744280625232-ac
+2025-04-10 03:23:50 - basic-eval-example - info - Logging payload structure: ["results","project_name","eval_name"]
+2025-04-10 03:23:51 - basic-eval-example - info - 
+🔍 You can view your evaluation results here: https://app.judgmentlabs.ai/app/experiment?project_name=js-sdk-all-scorers&eval_run_name=all-scorers-eval-1744280625232-ac 
+
+2025-04-10 03:23:51 - basic-eval-example - info - 
+AnswerCorrectness Results:
+2025-04-10 03:23:51 - basic-eval-example - info - 
+                     
+🔍 You can view your evaluation results here: https://app.judgmentlabs.ai/app/experiment?project_name=js-sdk-all-scorers&eval_run_name=all-scorers-eval-1744280625232-answercorrectness
+
+
+2025-04-10 03:23:51 - basic-eval-example - info - 
+Example 1:
+2025-04-10 03:23:51 - basic-eval-example - info - Input: What is the capital of France?
+2025-04-10 03:23:51 - basic-eval-example - info - Actual Output: The capital of France is Paris.
+2025-04-10 03:23:51 - basic-eval-example - info - Expected Output: Paris is the capital of France.
+2025-04-10 03:23:51 - basic-eval-example - info - Scores:
+2025-04-10 03:23:51 - basic-eval-example - info -   Answer Correctness: 1 (threshold: 0.7, success: true)
+2025-04-10 03:23:51 - basic-eval-example - info - 
+Example 2:
+2025-04-10 03:23:51 - basic-eval-example - info - Input: What is the tallest mountain in the world?
+2025-04-10 03:23:51 - basic-eval-example - info - Actual Output: Mount Everest is the tallest mountain in the world.
+2025-04-10 03:23:51 - basic-eval-example - info - Expected Output: Mount Everest is the tallest mountain in the world.
+2025-04-10 03:23:51 - basic-eval-example - info - Scores:
+2025-04-10 03:23:51 - basic-eval-example - info -   Answer Correctness: 1 (threshold: 0.7, success: true)
+2025-04-10 03:23:51 - basic-eval-example - info - 
+Testing Faithfulness scorer...
+2025-04-10 03:23:51 - basic-eval-example - info - Logging enabled
+2025-04-10 03:23:51 - basic-eval-example - info - Checking if eval run name 'all-scorers-eval-1744280625232-faith' exists for project 'js-sdk-all-scorers'
+2025-04-10 03:23:51 - basic-eval-example - info - Initializing examples with IDs and timestamps
+2025-04-10 03:23:51 - basic-eval-example - info - Initialized example 61ebc617-716a-4fc1-a04e-6221daa60dbd (index: 0)
+2025-04-10 03:23:51 - basic-eval-example - info - Input: What is the capital of France?
+2025-04-10 03:23:51 - basic-eval-example - info - Actual output: The capital of France is Paris, which is located on the Seine River.
+2025-04-10 03:23:51 - basic-eval-example - info - Context: Paris is the capital of France and is located on the Seine River.
+2025-04-10 03:23:51 - basic-eval-example - info - Initialized example 1d34bf13-e6fe-44b2-bf43-eec296004b8b (index: 1)
+2025-04-10 03:23:51 - basic-eval-example - info - Input: What is the capital of France?
+2025-04-10 03:23:51 - basic-eval-example - info - Actual output: The capital of France is Paris, which has a population of 50 million people.
+2025-04-10 03:23:51 - basic-eval-example - info - Context: Paris is the capital of France and has a population of about 2.2 million.
+2025-04-10 03:23:51 - basic-eval-example - info - Starting evaluation run with 2 examples
+2025-04-10 03:23:51 - basic-eval-example - info - Grouping scorers by type
+2025-04-10 03:23:51 - basic-eval-example - info - Added judgment scorer: FaithfulnessScorer
+2025-04-10 03:23:51 - basic-eval-example - info - Found 1 judgment scorers and 0 local scorers
+2025-04-10 03:23:51 - basic-eval-example - info - Starting API evaluation
+2025-04-10 03:23:51 - basic-eval-example - info - Creating API evaluation run with 1 scorers
+2025-04-10 03:23:51 - basic-eval-example - info - Sending request to Judgment API
+2025-04-10 03:23:51 - basic-eval-example - info - Executing API evaluation...
+2025-04-10 03:23:51 - basic-eval-example - info - API Response: {"results":[{"success":true,"scorers_data":[],"name":null,"data_object":{"example_id":"61ebc617-716a-4fc1-a04e-6221daa60dbd","input":"What is the capital of France?","actual_output":"The capital of Fr...
+2025-04-10 03:23:51 - basic-eval-example - info - Received 2 results from API
+2025-04-10 03:23:51 - basic-eval-example - info - Processing API results
+2025-04-10 03:23:51 - basic-eval-example - info - API response structure: {
+  "success": true,
+  "scorers_data": [],
+  "name": null,
+  "data_object": {
+    "example_id": "61ebc617-716a-4fc1-a04e-6221daa60dbd",
+    "input": "What is the capital of France?",
+    "actual_output": "The capital of France is Paris, which is located on the Seine River.",
+    "expected_output": null,
+    "context": [
+      "Paris is the capital of France and is located on the Seine River."
+    ],
+    "retrieval_context": null,
+    "additional_metadata": null,
+    "tools_called": null,
+    "ex...
+2025-04-10 03:23:51 - basic-eval-example - info - Processing result 0:
+2025-04-10 03:23:51 - basic-eval-example - info - - Keys: ["success","scorers_data","name","data_object","trace_id","run_duration","evaluation_cost"]
+2025-04-10 03:23:51 - basic-eval-example - info - - WARNING: No example data in result 0
+2025-04-10 03:23:51 - basic-eval-example - info - - WARNING: No scorers_data in result 0
+2025-04-10 03:23:51 - basic-eval-example - info - Processing result 1:
+2025-04-10 03:23:51 - basic-eval-example - info - - Keys: ["success","scorers_data","name","data_object","trace_id","run_duration","evaluation_cost"]
+2025-04-10 03:23:51 - basic-eval-example - info - - WARNING: No example data in result 1
+2025-04-10 03:23:51 - basic-eval-example - info - - WARNING: No scorers_data in result 1
+2025-04-10 03:23:51 - basic-eval-example - info - Merging API and local results
+2025-04-10 03:23:51 - basic-eval-example - error - Scorer data is missing for example 0. This is usually caused when the example does not contain the fields required by the scorer. Check that your example contains the fields required by the scorers.
+2025-04-10 03:23:51 - basic-eval-example - error - Scorer data is missing for example 1. This is usually caused when the example does not contain the fields required by the scorer. Check that your example contains the fields required by the scorers.
+2025-04-10 03:23:51 - basic-eval-example - info - Successfully merged 2 results
+2025-04-10 03:23:51 - basic-eval-example - info - Logging evaluation results for all-scorers-eval-1744280625232-faith
+2025-04-10 03:23:51 - basic-eval-example - info - Logging payload structure: ["results","project_name","eval_name"]
+2025-04-10 03:23:52 - basic-eval-example - info - 
+🔍 You can view your evaluation results here: https://app.judgmentlabs.ai/app/experiment?project_name=js-sdk-all-scorers&eval_run_name=all-scorers-eval-1744280625232-faith 
+
+2025-04-10 03:23:52 - basic-eval-example - info - None of the scorers could be executed on example 0. This is usually because the Example is missing the fields needed by the scorers. Try checking that the Example has the necessary fields for your scorers.
+2025-04-10 03:23:52 - basic-eval-example - info - None of the scorers could be executed on example 1. This is usually because the Example is missing the fields needed by the scorers. Try checking that the Example has the necessary fields for your scorers.
+2025-04-10 03:23:52 - basic-eval-example - info - 
+Faithfulness Results:
+2025-04-10 03:23:52 - basic-eval-example - info - 
+                     
+🔍 You can view your evaluation results here: https://app.judgmentlabs.ai/app/experiment?project_name=js-sdk-all-scorers&eval_run_name=all-scorers-eval-1744280625232-faithfulness
+
+
+2025-04-10 03:23:52 - basic-eval-example - info - 
+Example 1:
+2025-04-10 03:23:52 - basic-eval-example - info - Input: What is the capital of France?
+2025-04-10 03:23:52 - basic-eval-example - info - Actual Output: The capital of France is Paris, which is located on the Seine River.
+2025-04-10 03:23:52 - basic-eval-example - info - 
+Example 2:
+2025-04-10 03:23:52 - basic-eval-example - info - Input: What is the capital of France?
+2025-04-10 03:23:52 - basic-eval-example - info - Actual Output: The capital of France is Paris, which has a population of 50 million people.
+2025-04-10 03:23:52 - basic-eval-example - info - 
+Testing Hallucination scorer...
+2025-04-10 03:23:52 - basic-eval-example - info - Logging enabled
+2025-04-10 03:23:52 - basic-eval-example - info - Checking if eval run name 'all-scorers-eval-1744280625232-hall' exists for project 'js-sdk-all-scorers'
+2025-04-10 03:23:52 - basic-eval-example - info - Initializing examples with IDs and timestamps
+2025-04-10 03:23:52 - basic-eval-example - info - Initialized example eaf82c45-bb28-45e7-87e1-efaa279bc299 (index: 0)
+2025-04-10 03:23:52 - basic-eval-example - info - Input: What is the capital of France?
+2025-04-10 03:23:52 - basic-eval-example - info - Actual output: The capital of France is Paris.
+2025-04-10 03:23:52 - basic-eval-example - info - Initialized example 1da6bc7d-8e89-4d3b-8446-11397cb673d6 (index: 1)
+2025-04-10 03:23:52 - basic-eval-example - info - Input: What is the capital of France?
+2025-04-10 03:23:52 - basic-eval-example - info - Actual output: The capital of France is Lyon, which is known for its beautiful architecture.
+2025-04-10 03:23:52 - basic-eval-example - info - Starting evaluation run with 2 examples
+2025-04-10 03:23:52 - basic-eval-example - info - Grouping scorers by type
+2025-04-10 03:23:52 - basic-eval-example - info - Added judgment scorer: HallucinationScorer
+2025-04-10 03:23:52 - basic-eval-example - info - Found 1 judgment scorers and 0 local scorers
+2025-04-10 03:23:52 - basic-eval-example - info - Starting API evaluation
+2025-04-10 03:23:52 - basic-eval-example - info - Creating API evaluation run with 1 scorers
+2025-04-10 03:23:52 - basic-eval-example - info - Sending request to Judgment API
+2025-04-10 03:23:52 - basic-eval-example - info - Executing API evaluation...
+2025-04-10 03:23:52 - basic-eval-example - info - API Response: {"results":[{"success":true,"scorers_data":[],"name":null,"data_object":{"example_id":"eaf82c45-bb28-45e7-87e1-efaa279bc299","input":"What is the capital of France?","actual_output":"The capital of Fr...
+2025-04-10 03:23:52 - basic-eval-example - info - Received 2 results from API
+2025-04-10 03:23:52 - basic-eval-example - info - Processing API results
+2025-04-10 03:23:52 - basic-eval-example - info - API response structure: {
+  "success": true,
+  "scorers_data": [],
+  "name": null,
+  "data_object": {
+    "example_id": "eaf82c45-bb28-45e7-87e1-efaa279bc299",
+    "input": "What is the capital of France?",
+    "actual_output": "The capital of France is Paris.",
+    "expected_output": null,
+    "context": null,
+    "retrieval_context": null,
+    "additional_metadata": null,
+    "tools_called": null,
+    "expected_tools": null,
+    "name": null,
+    "created_at": null,
+    "dataset_id": null,
+    "trace_id": null,
+    "...
+2025-04-10 03:23:52 - basic-eval-example - info - Processing result 0:
+2025-04-10 03:23:52 - basic-eval-example - info - - Keys: ["success","scorers_data","name","data_object","trace_id","run_duration","evaluation_cost"]
+2025-04-10 03:23:52 - basic-eval-example - info - - WARNING: No example data in result 0
+2025-04-10 03:23:52 - basic-eval-example - info - - WARNING: No scorers_data in result 0
+2025-04-10 03:23:52 - basic-eval-example - info - Processing result 1:
+2025-04-10 03:23:52 - basic-eval-example - info - - Keys: ["success","scorers_data","name","data_object","trace_id","run_duration","evaluation_cost"]
+2025-04-10 03:23:52 - basic-eval-example - info - - WARNING: No example data in result 1
+2025-04-10 03:23:52 - basic-eval-example - info - - WARNING: No scorers_data in result 1
+2025-04-10 03:23:52 - basic-eval-example - info - Merging API and local results
+2025-04-10 03:23:52 - basic-eval-example - error - Scorer data is missing for example 0. This is usually caused when the example does not contain the fields required by the scorer. Check that your example contains the fields required by the scorers.
+2025-04-10 03:23:52 - basic-eval-example - error - Scorer data is missing for example 1. This is usually caused when the example does not contain the fields required by the scorer. Check that your example contains the fields required by the scorers.
+2025-04-10 03:23:52 - basic-eval-example - info - Successfully merged 2 results
+2025-04-10 03:23:52 - basic-eval-example - info - Logging evaluation results for all-scorers-eval-1744280625232-hall
+2025-04-10 03:23:52 - basic-eval-example - info - Logging payload structure: ["results","project_name","eval_name"]
+2025-04-10 03:23:52 - basic-eval-example - info - 
+🔍 You can view your evaluation results here: https://app.judgmentlabs.ai/app/experiment?project_name=js-sdk-all-scorers&eval_run_name=all-scorers-eval-1744280625232-hall 
+
+2025-04-10 03:23:52 - basic-eval-example - info - None of the scorers could be executed on example 0. This is usually because the Example is missing the fields needed by the scorers. Try checking that the Example has the necessary fields for your scorers.
+2025-04-10 03:23:52 - basic-eval-example - info - None of the scorers could be executed on example 1. This is usually because the Example is missing the fields needed by the scorers. Try checking that the Example has the necessary fields for your scorers.
+2025-04-10 03:23:52 - basic-eval-example - info - 
+Hallucination Results:
+2025-04-10 03:23:52 - basic-eval-example - info - 
+                     
+🔍 You can view your evaluation results here: https://app.judgmentlabs.ai/app/experiment?project_name=js-sdk-all-scorers&eval_run_name=all-scorers-eval-1744280625232-hallucination
+
+
+2025-04-10 03:23:52 - basic-eval-example - info - 
+Example 1:
+2025-04-10 03:23:52 - basic-eval-example - info - Input: What is the capital of France?
+2025-04-10 03:23:52 - basic-eval-example - info - Actual Output: The capital of France is Paris.
+2025-04-10 03:23:52 - basic-eval-example - info - 
+Example 2:
+2025-04-10 03:23:52 - basic-eval-example - info - Input: What is the capital of France?
+2025-04-10 03:23:52 - basic-eval-example - info - Actual Output: The capital of France is Lyon, which is known for its beautiful architecture.
+2025-04-10 03:23:52 - basic-eval-example - info - 
+Testing Contextual scorers...
+2025-04-10 03:23:52 - basic-eval-example - info - Logging enabled
+2025-04-10 03:23:52 - basic-eval-example - info - Checking if eval run name 'all-scorers-eval-1744280625232-context' exists for project 'js-sdk-all-scorers'
+2025-04-10 03:23:53 - basic-eval-example - info - Initializing examples with IDs and timestamps
+2025-04-10 03:23:53 - basic-eval-example - info - Initialized example f3439d7b-039a-474f-a6c3-61e96d5b1777 (index: 0)
+2025-04-10 03:23:53 - basic-eval-example - info - Input: Based on the context, what is the capital of France?
+2025-04-10 03:23:53 - basic-eval-example - info - Actual output: According to the context, the capital of France is Paris.
+2025-04-10 03:23:53 - basic-eval-example - info - Context: France is a country in Western Europe.,Paris is the capital and most populous city of France.,France has many beautiful cities including Lyon, Marseille, and Nice.
+2025-04-10 03:23:53 - basic-eval-example - info - Initialized example 5ef8dc2f-20ba-458c-a05c-207b41ab6edd (index: 1)
+2025-04-10 03:23:53 - basic-eval-example - info - Input: What does the context say about French cuisine?
+2025-04-10 03:23:53 - basic-eval-example - info - Actual output: The context mentions that French cuisine is known for its sophistication and influence on Western cuisines.
+2025-04-10 03:23:53 - basic-eval-example - info - Context: French cuisine is renowned worldwide for its sophistication.,It has influenced many Western cuisines and is an important part of French culture.,Some famous French dishes include coq au vin, bouillabaisse, and ratatouille.
+2025-04-10 03:23:53 - basic-eval-example - info - Starting evaluation run with 2 examples
+2025-04-10 03:23:53 - basic-eval-example - info - Grouping scorers by type
+2025-04-10 03:23:53 - basic-eval-example - info - Added judgment scorer: ContextualRelevancyScorer
+2025-04-10 03:23:53 - basic-eval-example - info - Added judgment scorer: ContextualPrecisionScorer
+2025-04-10 03:23:53 - basic-eval-example - info - Added judgment scorer: ContextualRecallScorer
+2025-04-10 03:23:53 - basic-eval-example - info - Found 3 judgment scorers and 0 local scorers
+2025-04-10 03:23:53 - basic-eval-example - info - Starting API evaluation
+2025-04-10 03:23:53 - basic-eval-example - info - Creating API evaluation run with 3 scorers
+2025-04-10 03:23:53 - basic-eval-example - info - Sending request to Judgment API
+2025-04-10 03:23:53 - basic-eval-example - info - Executing API evaluation...
+2025-04-10 03:23:53 - basic-eval-example - info - API Response: {"results":[{"success":true,"scorers_data":[],"name":null,"data_object":{"example_id":"f3439d7b-039a-474f-a6c3-61e96d5b1777","input":"Based on the context, what is the capital of France?","actual_outp...
+2025-04-10 03:23:53 - basic-eval-example - info - Received 2 results from API
+2025-04-10 03:23:53 - basic-eval-example - info - Processing API results
+2025-04-10 03:23:53 - basic-eval-example - info - API response structure: {
+  "success": true,
+  "scorers_data": [],
+  "name": null,
+  "data_object": {
+    "example_id": "f3439d7b-039a-474f-a6c3-61e96d5b1777",
+    "input": "Based on the context, what is the capital of France?",
+    "actual_output": "According to the context, the capital of France is Paris.",
+    "expected_output": null,
+    "context": [
+      "France is a country in Western Europe.",
+      "Paris is the capital and most populous city of France.",
+      "France has many beautiful cities including Lyon,...
+2025-04-10 03:23:53 - basic-eval-example - info - Processing result 0:
+2025-04-10 03:23:53 - basic-eval-example - info - - Keys: ["success","scorers_data","name","data_object","trace_id","run_duration","evaluation_cost"]
+2025-04-10 03:23:53 - basic-eval-example - info - - WARNING: No example data in result 0
+2025-04-10 03:23:53 - basic-eval-example - info - - WARNING: No scorers_data in result 0
+2025-04-10 03:23:53 - basic-eval-example - info - Processing result 1:
+2025-04-10 03:23:53 - basic-eval-example - info - - Keys: ["success","scorers_data","name","data_object","trace_id","run_duration","evaluation_cost"]
+2025-04-10 03:23:53 - basic-eval-example - info - - WARNING: No example data in result 1
+2025-04-10 03:23:53 - basic-eval-example - info - - WARNING: No scorers_data in result 1
+2025-04-10 03:23:53 - basic-eval-example - info - Merging API and local results
+2025-04-10 03:23:53 - basic-eval-example - error - Scorer data is missing for example 0. This is usually caused when the example does not contain the fields required by the scorer. Check that your example contains the fields required by the scorers.
+2025-04-10 03:23:53 - basic-eval-example - error - Scorer data is missing for example 1. This is usually caused when the example does not contain the fields required by the scorer. Check that your example contains the fields required by the scorers.
+2025-04-10 03:23:53 - basic-eval-example - info - Successfully merged 2 results
+2025-04-10 03:23:53 - basic-eval-example - info - Logging evaluation results for all-scorers-eval-1744280625232-context
+2025-04-10 03:23:53 - basic-eval-example - info - Logging payload structure: ["results","project_name","eval_name"]
+2025-04-10 03:23:53 - basic-eval-example - info - 
+🔍 You can view your evaluation results here: https://app.judgmentlabs.ai/app/experiment?project_name=js-sdk-all-scorers&eval_run_name=all-scorers-eval-1744280625232-context 
+
+2025-04-10 03:23:53 - basic-eval-example - info - None of the scorers could be executed on example 0. This is usually because the Example is missing the fields needed by the scorers. Try checking that the Example has the necessary fields for your scorers.
+2025-04-10 03:23:53 - basic-eval-example - info - None of the scorers could be executed on example 1. This is usually because the Example is missing the fields needed by the scorers. Try checking that the Example has the necessary fields for your scorers.
+2025-04-10 03:23:53 - basic-eval-example - info - 
+Contextual Results:
+2025-04-10 03:23:53 - basic-eval-example - info - 
+                     
+🔍 You can view your evaluation results here: https://app.judgmentlabs.ai/app/experiment?project_name=js-sdk-all-scorers&eval_run_name=all-scorers-eval-1744280625232-contextual
+
+
+2025-04-10 03:23:53 - basic-eval-example - info - 
+Example 1:
+2025-04-10 03:23:53 - basic-eval-example - info - Input: Based on the context, what is the capital of France?
+2025-04-10 03:23:53 - basic-eval-example - info - Actual Output: According to the context, the capital of France is Paris.
+2025-04-10 03:23:53 - basic-eval-example - info - 
+Example 2:
+2025-04-10 03:23:53 - basic-eval-example - info - Input: What does the context say about French cuisine?
+2025-04-10 03:23:53 - basic-eval-example - info - Actual Output: The context mentions that French cuisine is known for its sophistication and influence on Western cuisines.
+2025-04-10 03:23:53 - basic-eval-example - info - 
+Testing Summarization scorer...
+2025-04-10 03:23:53 - basic-eval-example - info - Logging enabled
+2025-04-10 03:23:53 - basic-eval-example - info - Checking if eval run name 'all-scorers-eval-1744280625232-summ' exists for project 'js-sdk-all-scorers'
+2025-04-10 03:23:54 - basic-eval-example - info - Initializing examples with IDs and timestamps
+2025-04-10 03:23:54 - basic-eval-example - info - Initialized example 364da4ea-c520-4aae-aec3-d443b40c6817 (index: 0)
+2025-04-10 03:23:54 - basic-eval-example - info - Input: Summarize the following text: France is a country in Western Europe. Paris is the capital and most populous city of France. France has many beautiful cities including Lyon, Marseille, and Nice.
+2025-04-10 03:23:54 - basic-eval-example - info - Actual output: France is a Western European country with Paris as its capital and largest city. Other notable cities include Lyon, Marseille, and Nice.
+2025-04-10 03:23:54 - basic-eval-example - info - Starting evaluation run with 1 examples
+2025-04-10 03:23:54 - basic-eval-example - info - Grouping scorers by type
+2025-04-10 03:23:54 - basic-eval-example - info - Added judgment scorer: SummarizationScorer
+2025-04-10 03:23:54 - basic-eval-example - info - Found 1 judgment scorers and 0 local scorers
+2025-04-10 03:23:54 - basic-eval-example - info - Starting API evaluation
+2025-04-10 03:23:54 - basic-eval-example - info - Creating API evaluation run with 1 scorers
+2025-04-10 03:23:54 - basic-eval-example - info - Sending request to Judgment API
+2025-04-10 03:23:54 - basic-eval-example - info - Executing API evaluation...
+2025-04-10 03:23:57 - basic-eval-example - info - API Response: {"results":[{"success":true,"scorers_data":[{"name":"Summarization","threshold":0.7,"success":true,"score":1,"reason":"The score of 1.00 indicates a perfect summary with no factual errors, no unverifi...
+2025-04-10 03:23:57 - basic-eval-example - info - Received 1 results from API
+2025-04-10 03:23:57 - basic-eval-example - info - Processing API results
+2025-04-10 03:23:57 - basic-eval-example - info - API response structure: {
+  "success": true,
+  "scorers_data": [
+    {
+      "name": "Summarization",
+      "threshold": 0.7,
+      "success": true,
+      "score": 1,
+      "reason": "The score of 1.00 indicates a perfect summary with no factual errors, no unverified claims, and complete coverage of the original text's information.",
+      "strict_mode": null,
+      "evaluation_model": "meta-llama/Meta-Llama-3-8B-Instruct-Turbo",
+      "error": null,
+      "evaluation_cost": null,
+      "verbose_logs": null,
+      "add...
+2025-04-10 03:23:57 - basic-eval-example - info - Processing result 0:
+2025-04-10 03:23:57 - basic-eval-example - info - - Keys: ["success","scorers_data","name","data_object","trace_id","run_duration","evaluation_cost"]
+2025-04-10 03:23:57 - basic-eval-example - info - - WARNING: No example data in result 0
+2025-04-10 03:23:57 - basic-eval-example - info - - Found 1 scorer data entries
+2025-04-10 03:23:57 - basic-eval-example - info - - First scorer: {"name":"Summarization","threshold":0.7,"success":true,"score":1,"reason":"The score of 1.00 indicates a perfect summary with no factual errors, no unverified claims, and complete coverage of the original text's information.","strict_mode":null,"evaluation_model":"meta-llama/Meta-Llama-3-8B-Instruct-Turbo","error":null,"evaluation_cost":null,"verbose_logs":null,"additional_metadata":null}
+2025-04-10 03:23:57 - basic-eval-example - info - Merging API and local results
+2025-04-10 03:23:57 - basic-eval-example - info - Successfully merged 1 results
+2025-04-10 03:23:57 - basic-eval-example - info - Logging evaluation results for all-scorers-eval-1744280625232-summ
+2025-04-10 03:23:57 - basic-eval-example - info - Logging payload structure: ["results","project_name","eval_name"]
+2025-04-10 03:23:58 - basic-eval-example - info - 
+🔍 You can view your evaluation results here: https://app.judgmentlabs.ai/app/experiment?project_name=js-sdk-all-scorers&eval_run_name=all-scorers-eval-1744280625232-summ 
+
+2025-04-10 03:23:58 - basic-eval-example - info - 
+Summarization Results:
+2025-04-10 03:23:58 - basic-eval-example - info - 
+                     
+🔍 You can view your evaluation results here: https://app.judgmentlabs.ai/app/experiment?project_name=js-sdk-all-scorers&eval_run_name=all-scorers-eval-1744280625232-summarization
+
+
+2025-04-10 03:23:58 - basic-eval-example - info - 
+Example 1:
+2025-04-10 03:23:58 - basic-eval-example - info - Input: Summarize the following text: France is a country in Western Europe. Paris is the capital and most populous city of France. France has many beautiful cities including Lyon, Marseille, and Nice.
+2025-04-10 03:23:58 - basic-eval-example - info - Actual Output: France is a Western European country with Paris as its capital and largest city. Other notable cities include Lyon, Marseille, and Nice.
+2025-04-10 03:23:58 - basic-eval-example - info - Scores:
+2025-04-10 03:23:58 - basic-eval-example - info -   Summarization: 1 (threshold: 0.7, success: true)
+2025-04-10 03:23:58 - basic-eval-example - info - 
+Testing JSON Correctness scorer...
+2025-04-10 03:23:58 - basic-eval-example - info - Logging enabled
+2025-04-10 03:23:58 - basic-eval-example - info - Checking if eval run name 'all-scorers-eval-1744280625232-json' exists for project 'js-sdk-all-scorers'
+2025-04-10 03:23:58 - basic-eval-example - info - Initializing examples with IDs and timestamps
+2025-04-10 03:23:58 - basic-eval-example - info - Initialized example 0a94505f-7c1c-4e21-9e35-88a9264a8170 (index: 0)
+2025-04-10 03:23:58 - basic-eval-example - info - Input: Return the following information as JSON: Name: John Smith, Age: 30, Occupation: Software Engineer
+2025-04-10 03:23:58 - basic-eval-example - info - Actual output: {"name": "John Smith", "age": 30, "occupation": "Software Engineer"}
+2025-04-10 03:23:58 - basic-eval-example - info - Initialized example a1eadd2d-551b-43d0-9886-80a332199583 (index: 1)
+2025-04-10 03:23:58 - basic-eval-example - info - Input: Return the following information as JSON: Name: John Smith, Age: 30, Occupation: Software Engineer
+2025-04-10 03:23:58 - basic-eval-example - info - Actual output: {"name": "John Smith", "age": "30", "job": "Software Engineer"}
+2025-04-10 03:23:58 - basic-eval-example - info - Starting evaluation run with 2 examples
+2025-04-10 03:23:58 - basic-eval-example - info - Grouping scorers by type
+2025-04-10 03:23:58 - basic-eval-example - info - Added judgment scorer: JsonCorrectnessScorer
+2025-04-10 03:23:58 - basic-eval-example - info - Found 1 judgment scorers and 0 local scorers
+2025-04-10 03:23:58 - basic-eval-example - info - Starting API evaluation
+2025-04-10 03:23:58 - basic-eval-example - info - Creating API evaluation run with 1 scorers
+2025-04-10 03:23:58 - basic-eval-example - info - Sending request to Judgment API
+2025-04-10 03:23:58 - basic-eval-example - info - Executing API evaluation...
+2025-04-10 03:23:58 - basic-eval-example - info - API Response: {"results":[{"success":false,"scorers_data":[{"name":"json_correctness","threshold":0.7,"success":false,"score":null,"reason":null,"strict_mode":null,"evaluation_model":"meta-llama/Meta-Llama-3-8B-Ins...
+2025-04-10 03:23:58 - basic-eval-example - info - Received 2 results from API
+2025-04-10 03:23:58 - basic-eval-example - info - Processing API results
+2025-04-10 03:23:58 - basic-eval-example - info - API response structure: {
+  "success": false,
+  "scorers_data": [
+    {
+      "name": "json_correctness",
+      "threshold": 0.7,
+      "success": false,
+      "score": null,
+      "reason": null,
+      "strict_mode": null,
+      "evaluation_model": "meta-llama/Meta-Llama-3-8B-Instruct-Turbo",
+      "error": "You must implement the `a_score_example` method in your custom scorer",
+      "evaluation_cost": null,
+      "verbose_logs": null,
+      "additional_metadata": null
+    }
+  ],
+  "name": null,
+  "data_object": {
+  ...
+2025-04-10 03:23:58 - basic-eval-example - info - Processing result 0:
+2025-04-10 03:23:58 - basic-eval-example - info - - Keys: ["success","scorers_data","name","data_object","trace_id","run_duration","evaluation_cost"]
+2025-04-10 03:23:58 - basic-eval-example - info - - WARNING: No example data in result 0
+2025-04-10 03:23:58 - basic-eval-example - info - - Found 1 scorer data entries
+2025-04-10 03:23:58 - basic-eval-example - info - - First scorer: {"name":"json_correctness","threshold":0.7,"success":false,"score":null,"reason":null,"strict_mode":null,"evaluation_model":"meta-llama/Meta-Llama-3-8B-Instruct-Turbo","error":"You must implement the `a_score_example` method in your custom scorer","evaluation_cost":null,"verbose_logs":null,"additional_metadata":null}
+2025-04-10 03:23:58 - basic-eval-example - info - Processing result 1:
+2025-04-10 03:23:58 - basic-eval-example - info - - Keys: ["success","scorers_data","name","data_object","trace_id","run_duration","evaluation_cost"]
+2025-04-10 03:23:58 - basic-eval-example - info - - WARNING: No example data in result 1
+2025-04-10 03:23:58 - basic-eval-example - info - - Found 1 scorer data entries
+2025-04-10 03:23:58 - basic-eval-example - info - - First scorer: {"name":"json_correctness","threshold":0.7,"success":false,"score":null,"reason":null,"strict_mode":null,"evaluation_model":"meta-llama/Meta-Llama-3-8B-Instruct-Turbo","error":"You must implement the `a_score_example` method in your custom scorer","evaluation_cost":null,"verbose_logs":null,"additional_metadata":null}
+2025-04-10 03:23:58 - basic-eval-example - info - Merging API and local results
+2025-04-10 03:23:58 - basic-eval-example - info - Successfully merged 2 results
+2025-04-10 03:23:58 - basic-eval-example - info - Logging evaluation results for all-scorers-eval-1744280625232-json
+2025-04-10 03:23:58 - basic-eval-example - info - Logging payload structure: ["results","project_name","eval_name"]
+2025-04-10 03:23:59 - basic-eval-example - info - 
+🔍 You can view your evaluation results here: https://app.judgmentlabs.ai/app/experiment?project_name=js-sdk-all-scorers&eval_run_name=all-scorers-eval-1744280625232-json 
+
+2025-04-10 03:23:59 - basic-eval-example - info - 
+JSON Correctness Results:
+2025-04-10 03:23:59 - basic-eval-example - info - 
+                     
+🔍 You can view your evaluation results here: https://app.judgmentlabs.ai/app/experiment?project_name=js-sdk-all-scorers&eval_run_name=all-scorers-eval-1744280625232-json-correctness
+
+=== Test Failure Details ===
+Input: Return the following information as JSON: Name: John Smith, Age: 30, Occupation: Software Engineer
+Output: {"name": "John Smith", "age": 30, "occupation": "Software Engineer"}
+Success: false
+Retrieval Context: None
+
+Scorer Details:
+- Name: json_correctness
+- Score: null
+- Threshold: 0.7
+- Success: false
+- Error: You must implement the `a_score_example` method in your custom scorer
+=== Test Failure Details ===
+Input: Return the following information as JSON: Name: John Smith, Age: 30, Occupation: Software Engineer
+Output: {"name": "John Smith", "age": "30", "job": "Software Engineer"}
+Success: false
+Retrieval Context: None
+
+Scorer Details:
+- Name: json_correctness
+- Score: null
+- Threshold: 0.7
+- Success: false
+- Error: You must implement the `a_score_example` method in your custom scorer
+
+2025-04-10 03:23:59 - basic-eval-example - info - 
+Example 1:
+2025-04-10 03:23:59 - basic-eval-example - info - Input: Return the following information as JSON: Name: John Smith, Age: 30, Occupation: Software Engineer
+2025-04-10 03:23:59 - basic-eval-example - info - Actual Output: {"name": "John Smith", "age": 30, "occupation": "Software Engineer"}
+2025-04-10 03:23:59 - basic-eval-example - info - Scores:
+2025-04-10 03:23:59 - basic-eval-example - info -   json_correctness: null (threshold: 0.7, success: false)
+2025-04-10 03:23:59 - basic-eval-example - info - 
+Example 2:
+2025-04-10 03:23:59 - basic-eval-example - info - Input: Return the following information as JSON: Name: John Smith, Age: 30, Occupation: Software Engineer
+2025-04-10 03:23:59 - basic-eval-example - info - Actual Output: {"name": "John Smith", "age": "30", "job": "Software Engineer"}
+2025-04-10 03:23:59 - basic-eval-example - info - Scores:
+2025-04-10 03:23:59 - basic-eval-example - info -   json_correctness: null (threshold: 0.7, success: false)
+2025-04-10 03:23:59 - basic-eval-example - info - 
+Testing Instruction Adherence scorer...
+2025-04-10 03:23:59 - basic-eval-example - info - Logging enabled
+2025-04-10 03:23:59 - basic-eval-example - info - Checking if eval run name 'all-scorers-eval-1744280625232-ia' exists for project 'js-sdk-all-scorers'
+2025-04-10 03:23:59 - basic-eval-example - info - Initializing examples with IDs and timestamps
+2025-04-10 03:23:59 - basic-eval-example - info - Initialized example 4b4ec19c-67fc-4a6c-b6eb-88cc47664fdc (index: 0)
+2025-04-10 03:23:59 - basic-eval-example - info - Input: List three European capitals in alphabetical order.
+2025-04-10 03:23:59 - basic-eval-example - info - Actual output: Amsterdam, Berlin, Copenhagen
+2025-04-10 03:23:59 - basic-eval-example - info - Initialized example a83ff0da-562e-492a-8054-24038f649948 (index: 1)
+2025-04-10 03:23:59 - basic-eval-example - info - Input: List three European capitals in alphabetical order.
+2025-04-10 03:23:59 - basic-eval-example - info - Actual output: Paris is the capital of France, Berlin is the capital of Germany, and London is the capital of the UK.
+2025-04-10 03:23:59 - basic-eval-example - info - Starting evaluation run with 2 examples
+2025-04-10 03:23:59 - basic-eval-example - info - Grouping scorers by type
+2025-04-10 03:23:59 - basic-eval-example - info - Added judgment scorer: InstructionAdherenceScorer
+2025-04-10 03:23:59 - basic-eval-example - info - Found 1 judgment scorers and 0 local scorers
+2025-04-10 03:23:59 - basic-eval-example - info - Starting API evaluation
+2025-04-10 03:23:59 - basic-eval-example - info - Creating API evaluation run with 1 scorers
+2025-04-10 03:23:59 - basic-eval-example - info - Sending request to Judgment API
+2025-04-10 03:23:59 - basic-eval-example - info - Executing API evaluation...
+2025-04-10 03:24:00 - basic-eval-example - info - API Response: {"results":[{"success":true,"scorers_data":[{"name":"Instruction Adherence","threshold":0.7,"success":true,"score":1,"reason":"[Verdict(instruction='List three European capitals in alphabetical order....
+2025-04-10 03:24:00 - basic-eval-example - info - Received 2 results from API
+2025-04-10 03:24:00 - basic-eval-example - info - Processing API results
+2025-04-10 03:24:00 - basic-eval-example - info - API response structure: {
+  "success": true,
+  "scorers_data": [
+    {
+      "name": "Instruction Adherence",
+      "threshold": 0.7,
+      "success": true,
+      "score": 1,
+      "reason": "[Verdict(instruction='List three European capitals in alphabetical order.', analysis='The LLM output listed three European capitals in alphabetical order.', score=1.0)]",
+      "strict_mode": null,
+      "evaluation_model": "meta-llama/Meta-Llama-3-8B-Instruct-Turbo",
+      "error": null,
+      "evaluation_cost": null,
+      "verb...
+2025-04-10 03:24:00 - basic-eval-example - info - Processing result 0:
+2025-04-10 03:24:00 - basic-eval-example - info - - Keys: ["success","scorers_data","name","data_object","trace_id","run_duration","evaluation_cost"]
+2025-04-10 03:24:00 - basic-eval-example - info - - WARNING: No example data in result 0
+2025-04-10 03:24:00 - basic-eval-example - info - - Found 1 scorer data entries
+2025-04-10 03:24:00 - basic-eval-example - info - - First scorer: {"name":"Instruction Adherence","threshold":0.7,"success":true,"score":1,"reason":"[Verdict(instruction='List three European capitals in alphabetical order.', analysis='The LLM output listed three European capitals in alphabetical order.', score=1.0)]","strict_mode":null,"evaluation_model":"meta-llama/Meta-Llama-3-8B-Instruct-Turbo","error":null,"evaluation_cost":null,"verbose_logs":null,"additional_metadata":null}
+2025-04-10 03:24:00 - basic-eval-example - info - Processing result 1:
+2025-04-10 03:24:00 - basic-eval-example - info - - Keys: ["success","scorers_data","name","data_object","trace_id","run_duration","evaluation_cost"]
+2025-04-10 03:24:00 - basic-eval-example - info - - WARNING: No example data in result 1
+2025-04-10 03:24:00 - basic-eval-example - info - - Found 1 scorer data entries
+2025-04-10 03:24:00 - basic-eval-example - info - - First scorer: {"name":"Instruction Adherence","threshold":0.7,"success":false,"score":0,"reason":"[Verdict(instruction='List three European capitals in alphabetical order.', analysis='The LLM output listed three European capitals, but they were not in alphabetical order.', score=0.0)]","strict_mode":null,"evaluation_model":"meta-llama/Meta-Llama-3-8B-Instruct-Turbo","error":null,"evaluation_cost":null,"verbose_logs":null,"additional_metadata":null}
+2025-04-10 03:24:00 - basic-eval-example - info - Merging API and local results
+2025-04-10 03:24:00 - basic-eval-example - info - Successfully merged 2 results
+2025-04-10 03:24:00 - basic-eval-example - info - Logging evaluation results for all-scorers-eval-1744280625232-ia
+2025-04-10 03:24:00 - basic-eval-example - info - Logging payload structure: ["results","project_name","eval_name"]
+2025-04-10 03:24:01 - basic-eval-example - info - 
+🔍 You can view your evaluation results here: https://app.judgmentlabs.ai/app/experiment?project_name=js-sdk-all-scorers&eval_run_name=all-scorers-eval-1744280625232-ia 
+
+2025-04-10 03:24:01 - basic-eval-example - info - 
+Instruction Adherence Results:
+2025-04-10 03:24:01 - basic-eval-example - info - 
+                     
+🔍 You can view your evaluation results here: https://app.judgmentlabs.ai/app/experiment?project_name=js-sdk-all-scorers&eval_run_name=all-scorers-eval-1744280625232-instruction-adherence
+
+=== Test Failure Details ===
+Input: List three European capitals in alphabetical order.
+Output: Paris is the capital of France, Berlin is the capital of Germany, and London is the capital of the UK.
+Success: false
+Retrieval Context: None
+
+Scorer Details:
+- Name: Instruction Adherence
+- Score: 0
+- Threshold: 0.7
+- Success: false
+- Reason: [Verdict(instruction='List three European capitals in alphabetical order.', analysis='The LLM output listed three European capitals, but they were not in alphabetical order.', score=0.0)]
+- Error: None
+
+2025-04-10 03:24:01 - basic-eval-example - info - 
+Example 1:
+2025-04-10 03:24:01 - basic-eval-example - info - Input: List three European capitals in alphabetical order.
+2025-04-10 03:24:01 - basic-eval-example - info - Actual Output: Amsterdam, Berlin, Copenhagen
+2025-04-10 03:24:01 - basic-eval-example - info - Scores:
+2025-04-10 03:24:01 - basic-eval-example - info -   Instruction Adherence: 1 (threshold: 0.7, success: true)
+2025-04-10 03:24:01 - basic-eval-example - info - 
+Example 2:
+2025-04-10 03:24:01 - basic-eval-example - info - Input: List three European capitals in alphabetical order.
+2025-04-10 03:24:01 - basic-eval-example - info - Actual Output: Paris is the capital of France, Berlin is the capital of Germany, and London is the capital of the UK.
+2025-04-10 03:24:01 - basic-eval-example - info - Scores:
+2025-04-10 03:24:01 - basic-eval-example - info -   Instruction Adherence: 0 (threshold: 0.7, success: false)
+2025-04-10 03:24:01 - basic-eval-example - info - 
+Testing Comparison scorer...
+2025-04-10 03:24:01 - basic-eval-example - info - Logging enabled
+2025-04-10 03:24:01 - basic-eval-example - info - Checking if eval run name 'all-scorers-eval-1744280625232-comp' exists for project 'js-sdk-all-scorers'
+2025-04-10 03:24:01 - basic-eval-example - info - Initializing examples with IDs and timestamps
+2025-04-10 03:24:01 - basic-eval-example - info - Initialized example 1b4511cb-7ea4-463f-b93e-989866a97402 (index: 0)
+2025-04-10 03:24:01 - basic-eval-example - info - Input: Compare these two responses: Response 1: The capital of France is Paris. Response 2: Paris is the capital city of France.
+2025-04-10 03:24:01 - basic-eval-example - info - Actual output: Both responses correctly state that Paris is the capital of France, but they use slightly different wording.
+2025-04-10 03:24:01 - basic-eval-example - info - Starting evaluation run with 1 examples
+2025-04-10 03:24:01 - basic-eval-example - info - Grouping scorers by type
+2025-04-10 03:24:01 - basic-eval-example - info - Added judgment scorer: ComparisonScorer
+2025-04-10 03:24:01 - basic-eval-example - info - Found 1 judgment scorers and 0 local scorers
+2025-04-10 03:24:01 - basic-eval-example - info - Starting API evaluation
+2025-04-10 03:24:01 - basic-eval-example - info - Creating API evaluation run with 1 scorers
+2025-04-10 03:24:01 - basic-eval-example - info - Sending request to Judgment API
+2025-04-10 03:24:01 - basic-eval-example - info - Executing API evaluation...
+2025-04-10 03:24:01 - basic-eval-example - info - API Response: {"results":[{"success":false,"scorers_data":[{"name":"comparison","threshold":0.5,"success":false,"score":null,"reason":null,"strict_mode":null,"evaluation_model":"meta-llama/Meta-Llama-3-8B-Instruct-...
+2025-04-10 03:24:01 - basic-eval-example - info - Received 1 results from API
+2025-04-10 03:24:01 - basic-eval-example - info - Processing API results
+2025-04-10 03:24:01 - basic-eval-example - info - API response structure: {
+  "success": false,
+  "scorers_data": [
+    {
+      "name": "comparison",
+      "threshold": 0.5,
+      "success": false,
+      "score": null,
+      "reason": null,
+      "strict_mode": null,
+      "evaluation_model": "meta-llama/Meta-Llama-3-8B-Instruct-Turbo",
+      "error": "You must implement the `a_score_example` method in your custom scorer",
+      "evaluation_cost": null,
+      "verbose_logs": null,
+      "additional_metadata": null
+    }
+  ],
+  "name": null,
+  "data_object": {
+    "exa...
+2025-04-10 03:24:01 - basic-eval-example - info - Processing result 0:
+2025-04-10 03:24:01 - basic-eval-example - info - - Keys: ["success","scorers_data","name","data_object","trace_id","run_duration","evaluation_cost"]
+2025-04-10 03:24:01 - basic-eval-example - info - - WARNING: No example data in result 0
+2025-04-10 03:24:01 - basic-eval-example - info - - Found 1 scorer data entries
+2025-04-10 03:24:01 - basic-eval-example - info - - First scorer: {"name":"comparison","threshold":0.5,"success":false,"score":null,"reason":null,"strict_mode":null,"evaluation_model":"meta-llama/Meta-Llama-3-8B-Instruct-Turbo","error":"You must implement the `a_score_example` method in your custom scorer","evaluation_cost":null,"verbose_logs":null,"additional_metadata":null}
+2025-04-10 03:24:01 - basic-eval-example - info - Merging API and local results
+2025-04-10 03:24:01 - basic-eval-example - info - Successfully merged 1 results
+2025-04-10 03:24:01 - basic-eval-example - info - Logging evaluation results for all-scorers-eval-1744280625232-comp
+2025-04-10 03:24:01 - basic-eval-example - info - Logging payload structure: ["results","project_name","eval_name"]
+2025-04-10 03:24:01 - basic-eval-example - info - 
+🔍 You can view your evaluation results here: https://app.judgmentlabs.ai/app/experiment?project_name=js-sdk-all-scorers&eval_run_name=all-scorers-eval-1744280625232-comp 
+
+2025-04-10 03:24:01 - basic-eval-example - info - 
+Comparison Results:
+2025-04-10 03:24:01 - basic-eval-example - info - 
+                     
+🔍 You can view your evaluation results here: https://app.judgmentlabs.ai/app/experiment?project_name=js-sdk-all-scorers&eval_run_name=all-scorers-eval-1744280625232-comparison
+
+=== Test Failure Details ===
+Input: Compare these two responses: Response 1: The capital of France is Paris. Response 2: Paris is the capital city of France.
+Output: Both responses correctly state that Paris is the capital of France, but they use slightly different wording.
+Success: false
+Retrieval Context: None
+
+Scorer Details:
+- Name: comparison
+- Score: null
+- Threshold: 0.5
+- Success: false
+- Error: You must implement the `a_score_example` method in your custom scorer
+
+2025-04-10 03:24:01 - basic-eval-example - info - 
+Example 1:
+2025-04-10 03:24:01 - basic-eval-example - info - Input: Compare these two responses: Response 1: The capital of France is Paris. Response 2: Paris is the capital city of France.
+2025-04-10 03:24:01 - basic-eval-example - info - Actual Output: Both responses correctly state that Paris is the capital of France, but they use slightly different wording.
+2025-04-10 03:24:01 - basic-eval-example - info - Scores:
+2025-04-10 03:24:01 - basic-eval-example - info -   comparison: null (threshold: 0.5, success: false)
+2025-04-10 03:24:01 - basic-eval-example - info - 
+Testing Execution Order scorer...
+2025-04-10 03:24:01 - basic-eval-example - info - Logging enabled
+2025-04-10 03:24:01 - basic-eval-example - info - Checking if eval run name 'all-scorers-eval-1744280625232-eo' exists for project 'js-sdk-all-scorers'
+2025-04-10 03:24:02 - basic-eval-example - info - Initializing examples with IDs and timestamps
+2025-04-10 03:24:02 - basic-eval-example - info - Initialized example 5955e8d6-3542-4f62-91e6-cb4deb776174 (index: 0)
+2025-04-10 03:24:02 - basic-eval-example - info - Input: Describe the steps to make a sandwich.
+2025-04-10 03:24:02 - basic-eval-example - info - Actual output: 1. Get bread. 2. Add condiments. 3. Add fillings. 4. Close the sandwich.
+2025-04-10 03:24:02 - basic-eval-example - info - Expected output: 1. Get bread. 2. Add condiments. 3. Add fillings. 4. Close the sandwich.
+2025-04-10 03:24:02 - basic-eval-example - info - Starting evaluation run with 1 examples
+2025-04-10 03:24:02 - basic-eval-example - info - Grouping scorers by type
+2025-04-10 03:24:02 - basic-eval-example - info - Added judgment scorer: ExecutionOrderScorer
+2025-04-10 03:24:02 - basic-eval-example - info - Found 1 judgment scorers and 0 local scorers
+2025-04-10 03:24:02 - basic-eval-example - warn - Scorer execution_order requires expectedTools field
+2025-04-10 03:24:02 - basic-eval-example - info - Starting API evaluation
+2025-04-10 03:24:02 - basic-eval-example - info - Creating API evaluation run with 1 scorers
+2025-04-10 03:24:02 - basic-eval-example - info - Sending request to Judgment API
+2025-04-10 03:24:02 - basic-eval-example - info - Executing API evaluation...
+2025-04-10 03:24:02 - basic-eval-example - info - API Response: {"results":[{"success":false,"scorers_data":[{"name":"Execution Order","threshold":1,"success":false,"score":0,"reason":"Incomplete tool usage: missing tools []; expected 1. Get bread. 2. Add condimen...
+2025-04-10 03:24:02 - basic-eval-example - info - Received 1 results from API
+2025-04-10 03:24:02 - basic-eval-example - info - Processing API results
+2025-04-10 03:24:02 - basic-eval-example - info - API response structure: {
+  "success": false,
+  "scorers_data": [
+    {
+      "name": "Execution Order",
+      "threshold": 1,
+      "success": false,
+      "score": 0,
+      "reason": "Incomplete tool usage: missing tools []; expected 1. Get bread. 2. Add condiments. 3. Add fillings. 4. Close the sandwich., called 1. Get bread. 2. Add condiments. 3. Add fillings. 4. Close the sandwich..",
+      "strict_mode": null,
+      "evaluation_model": "meta-llama/Meta-Llama-3-8B-Instruct-Turbo",
+      "error": null,
+      "evalu...
+2025-04-10 03:24:02 - basic-eval-example - info - Processing result 0:
+2025-04-10 03:24:02 - basic-eval-example - info - - Keys: ["success","scorers_data","name","data_object","trace_id","run_duration","evaluation_cost"]
+2025-04-10 03:24:02 - basic-eval-example - info - - WARNING: No example data in result 0
+2025-04-10 03:24:02 - basic-eval-example - info - - Found 1 scorer data entries
+2025-04-10 03:24:02 - basic-eval-example - info - - First scorer: {"name":"Execution Order","threshold":1,"success":false,"score":0,"reason":"Incomplete tool usage: missing tools []; expected 1. Get bread. 2. Add condiments. 3. Add fillings. 4. Close the sandwich., called 1. Get bread. 2. Add condiments. 3. Add fillings. 4. Close the sandwich..","strict_mode":null,"evaluation_model":"meta-llama/Meta-Llama-3-8B-Instruct-Turbo","error":null,"evaluation_cost":null,"verbose_logs":null,"additional_metadata":null}
+2025-04-10 03:24:02 - basic-eval-example - info - Merging API and local results
+2025-04-10 03:24:02 - basic-eval-example - info - Successfully merged 1 results
+2025-04-10 03:24:02 - basic-eval-example - info - Logging evaluation results for all-scorers-eval-1744280625232-eo
+2025-04-10 03:24:02 - basic-eval-example - info - Logging payload structure: ["results","project_name","eval_name"]
+2025-04-10 03:24:02 - basic-eval-example - info - 
+🔍 You can view your evaluation results here: https://app.judgmentlabs.ai/app/experiment?project_name=js-sdk-all-scorers&eval_run_name=all-scorers-eval-1744280625232-eo 
+
+2025-04-10 03:24:02 - basic-eval-example - info - 
+Execution Order Results:
+2025-04-10 03:24:02 - basic-eval-example - info - 
+                     
+🔍 You can view your evaluation results here: https://app.judgmentlabs.ai/app/experiment?project_name=js-sdk-all-scorers&eval_run_name=all-scorers-eval-1744280625232-execution-order
+
+=== Test Failure Details ===
+Input: Describe the steps to make a sandwich.
+Output: 1. Get bread. 2. Add condiments. 3. Add fillings. 4. Close the sandwich.
+Success: false
+Retrieval Context: None
+
+Scorer Details:
+- Name: Execution Order
+- Score: 0
+- Threshold: 1
+- Success: false
+- Reason: Incomplete tool usage: missing tools []; expected 1. Get bread. 2. Add condiments. 3. Add fillings. 4. Close the sandwich., called 1. Get bread. 2. Add condiments. 3. Add fillings. 4. Close the sandwich..
+- Error: None
+
+2025-04-10 03:24:02 - basic-eval-example - info - 
+Example 1:
+2025-04-10 03:24:02 - basic-eval-example - info - Input: Describe the steps to make a sandwich.
+2025-04-10 03:24:02 - basic-eval-example - info - Actual Output: 1. Get bread. 2. Add condiments. 3. Add fillings. 4. Close the sandwich.
+2025-04-10 03:24:02 - basic-eval-example - info - Expected Output: 1. Get bread. 2. Add condiments. 3. Add fillings. 4. Close the sandwich.
+2025-04-10 03:24:02 - basic-eval-example - info - Scores:
+2025-04-10 03:24:02 - basic-eval-example - info -   Execution Order: 0 (threshold: 1, success: false)
+2025-04-10 03:24:02 - basic-eval-example - info - 
+All evaluations completed and logged to project 'js-sdk-all-scorers'

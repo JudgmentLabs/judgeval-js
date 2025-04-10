@@ -16,7 +16,8 @@
     "openai": "^4.93.0",
     "together-ai": "^0.14.0",
     "undici-types": "^6.21.0",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "winston": "^3.17.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
