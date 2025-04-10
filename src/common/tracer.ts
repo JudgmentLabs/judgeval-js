@@ -17,11 +17,47 @@ import {
 } from '../constants';
 
 // --- Type Aliases and Interfaces ---
+
+// <<< NEW: Rule and Notification Types START >>>
+// Configuration for notifications when a rule is triggered.
+interface NotificationConfig {
+    enabled?: boolean;
+    communication_methods?: string[]; // e.g., ["email", "slack"]
+    email_addresses?: string[];
+    send_at?: number; // Unix timestamp for scheduled notifications
+}
+
+// Defines the core information about a scorer needed for a rule condition.
+interface ScorerDefinition {
+    score_type: string; // The unique name/type of the scorer (e.g., "faithfulness")
+    threshold: number;  // The threshold for the scorer in this condition
+    // Add other relevant config from the scorer if needed by the backend
+}
+
+// Represents a single condition within a rule.
+interface Condition {
+    metric: ScorerDefinition;
+}
+
+// Defines how conditions within a rule are combined.
+type CombineType = "all" | "any"; // 'all' = AND, 'any' = OR
+
+// Represents a rule to be evaluated (likely by the backend).
+interface Rule {
+    rule_id?: string; // Optional client-side ID, backend might generate/use its own
+    name: string;
+    description?: string;
+    conditions: Condition[];
+    combine_type: CombineType;
+    notification?: NotificationConfig;
+}
+// <<< NEW: Rule and Notification Types END >>>
+
 type ApiClient = OpenAI | Anthropic | Together;
 type SpanType = 'span' | 'tool' | 'llm' | 'evaluation' | 'chain';
 
-interface TraceEntry { // Minimal structure needed by runInSpan/recordInput/Output
-    type: 'enter' | 'exit' | 'input' | 'output' | 'error' | 'evaluation'; // Added 'evaluation'
+interface TraceEntry {
+    type: 'enter' | 'exit' | 'input' | 'output' | 'error' | 'evaluation';
     function: string;
     span_id: string;
     depth: number;
@@ -31,7 +67,6 @@ interface TraceEntry { // Minimal structure needed by runInSpan/recordInput/Outp
     inputs?: Record<string, any>;
     span_type: SpanType;
     parent_span_id?: string;
-    // Evaluation specific fields can be added later if needed
     evaluation_runs?: any[]; // Placeholder for evaluation results
 }
 
@@ -50,7 +85,8 @@ interface TraceSavePayload {
         completion_tokens_cost_usd: number;
         total_cost_usd: number;
     };
-    entries: any[]; // Use specific condensed entry type later
+    entries: CondensedSpanEntry[];
+    rules?: Record<string, Rule>;
     empty_save: boolean;
     overwrite: boolean;
     parent_trace_id?: string | null;
@@ -194,6 +230,7 @@ class TraceClient {
     public readonly name: string;
     public readonly projectName: string;
     public readonly overwrite: boolean;
+    public readonly rules: Rule[];
     public readonly enableMonitoring: boolean;
     public readonly enableEvaluations: boolean;
     public readonly parentTraceId?: string | null;
@@ -203,59 +240,55 @@ class TraceClient {
     public entries: Partial<TraceEntry>[] = [];
     public spanDepths: Record<string, number> = {};
     private startTime: number; // Unix timestamp (seconds)
-    private traceManager: TraceManagerClient; // Instance of the API client
-    private apiKey: string; // Keep for potential use? Or rely on traceManager?
+    private traceManager: TraceManagerClient | null = null; // Can be null if monitoring disabled
+    private apiKey: string;
     private organizationId: string;
 
     constructor(
          config: {
-             tracer: Tracer, // Reference back to parent Tracer
+             tracer: Tracer,
              traceId?: string,
              name?: string,
              projectName?: string,
              overwrite?: boolean,
-             // rules?: Rule[], // Add later if needed
+             rules?: Rule[],
              enableMonitoring?: boolean,
              enableEvaluations?: boolean,
              parentTraceId?: string | null,
              parentName?: string | null,
-             apiKey: string, // Passed from Tracer
-             organizationId: string // Passed from Tracer
+             apiKey: string,
+             organizationId: string
          }
     ) {
          this.traceId = config.traceId || uuidv4();
          this.name = config.name || 'default_trace';
-         // Use project name from config, fallback to tracer's project name
          this.projectName = config.projectName ?? config.tracer.projectName;
          this.overwrite = config.overwrite ?? false;
-         // Inherit monitoring/evaluation settings from the tracer instance
-         this.enableMonitoring = config.enableMonitoring ?? config.tracer.enableMonitoring;
-         this.enableEvaluations = config.enableEvaluations ?? config.tracer.enableEvaluations;
+         this.rules = config.rules ?? [];
+         // Determine effective monitoring status based on tracer and API keys
+         let effectiveMonitoring = config.enableMonitoring ?? config.tracer.enableMonitoring;
+         if (effectiveMonitoring && (!config.apiKey || !config.organizationId)) {
+             console.warn(`TraceClient ${this.traceId}: Monitoring requires JUDGMENT_API_KEY and JUDGMENT_ORG_ID. Disabling monitoring for this trace.`);
+             effectiveMonitoring = false;
+         }
+         this.enableMonitoring = effectiveMonitoring;
+         // Evaluations depend on monitoring
+         this.enableEvaluations = effectiveMonitoring && (config.enableEvaluations ?? config.tracer.enableEvaluations);
+
          this.parentTraceId = config.parentTraceId;
          this.parentName = config.parentName;
-         this.apiKey = config.apiKey; // Store API key from Tracer
-         this.organizationId = config.organizationId; // Store Org ID from Tracer
-
+         this.apiKey = config.apiKey;
+         this.organizationId = config.organizationId;
          this.startTime = Date.now() / 1000;
-         // Instantiate the API client only if monitoring is enabled
-         if (this.enableMonitoring) {
-            this.traceManager = new TraceManagerClient(this.apiKey, this.organizationId);
-         } else {
-            // Provide a null/dummy manager if monitoring is off? Or handle calls conditionally.
-            // For now, methods calling traceManager should check enableMonitoring.
-            this.traceManager = null as any; // Avoid TS errors, ensure checks later
-         }
 
-         // TODO: Add rules handling later if needed
-         // this.rules = config.rules || [];
+         if (this.enableMonitoring) {
+             this.traceManager = new TraceManagerClient(this.apiKey, this.organizationId);
+         }
     }
 
     addEntry(entry: Partial<TraceEntry>): void {
         if (!this.enableMonitoring) return;
-        // Ensure timestamp is in seconds
         entry.timestamp = entry.timestamp || Date.now() / 1000;
-        // Simple logging for now, replace with proper storage/printing later
-        // Consider more structured logging or removing noisy logs
         this.entries.push(entry);
     }
 
@@ -263,10 +296,9 @@ class TraceClient {
         const spanId = currentSpanAsyncLocalStorage.getStore();
         if (!spanId || !this.enableMonitoring) return;
 
-        // Find enter entry to get context like function name, depth etc.
         const enterEntry = this.entries.find(e => e.span_id === spanId && e.type === 'enter');
         const functionName = enterEntry?.function || 'unknown_function';
-        const depth = enterEntry?.depth ?? this.spanDepths[spanId] ?? 0; // Use depth from enter entry if possible
+        const depth = enterEntry?.depth ?? this.spanDepths[spanId] ?? 0;
         const spanType = enterEntry?.span_type || 'span';
 
         this.addEntry({
@@ -279,7 +311,6 @@ class TraceClient {
          });
     }
 
-    // Updated to get context from the 'enter' entry for consistency
     recordOutput(output: any): void {
         const spanId = currentSpanAsyncLocalStorage.getStore();
         if (!spanId || !this.enableMonitoring) return;
@@ -289,7 +320,6 @@ class TraceClient {
         const depth = enterEntry?.depth ?? this.spanDepths[spanId] ?? 0;
         const spanType = enterEntry?.span_type || 'span';
 
-        // Handle potential errors passed as output
         let entryType: TraceEntry['type'] = 'output';
         let outputData = output;
         if (output instanceof Error) {
@@ -297,11 +327,11 @@ class TraceClient {
             outputData = {
                  name: output.name,
                  message: output.message,
-                 stack: output.stack?.substring(0, 1000) // Limit stack trace length
+                 stack: output.stack?.substring(0, 1000)
             };
-        } else if (output?.error) { // Handle structured errors recorded manually
+        } else if (output?.error) {
              entryType = 'error';
-             outputData = output; // Assume it's already structured
+             outputData = output;
         }
 
 
@@ -313,21 +343,15 @@ class TraceClient {
              depth: depth,
              span_type: spanType
          });
-
-         // TODO: Add async handling like Python's _update_coroutine_output if needed for Promises
     }
 
-
-    // Core logic to run a function within a span context
     async runInSpan<T>(
         name: string,
         options: { spanType?: SpanType },
         func: () => Promise<T> | T
     ): Promise<T> {
-        // If monitoring is disabled, just run the function without tracing overhead
         if (!this.enableMonitoring) {
              const result = func();
-             // Handle both sync and async results
              return result instanceof Promise ? await result : result;
         }
 
@@ -336,12 +360,11 @@ class TraceClient {
         const parentSpanId = currentSpanAsyncLocalStorage.getStore();
         const spanType = options.spanType || 'span';
 
-        // Calculate depth based on parent span
         let currentDepth = 0;
         if (parentSpanId && this.spanDepths[parentSpanId] !== undefined) {
             currentDepth = this.spanDepths[parentSpanId] + 1;
         }
-        this.spanDepths[spanId] = currentDepth; // Store depth for this span
+        this.spanDepths[spanId] = currentDepth;
 
         this.addEntry({
              type: 'enter',
@@ -355,107 +378,90 @@ class TraceClient {
 
         let result: T;
         try {
-            // Run the function within the context of the new span ID using AsyncLocalStorage
             result = await currentSpanAsyncLocalStorage.run(spanId, async () => {
                  const res = func();
-                 // Await if it's a promise, otherwise return directly
                  return res instanceof Promise ? await res : res;
             });
-            // Record output *after* successful execution, before finally block
-            // This allows output recording before the exit entry
-            // this.recordOutput(result); // Moved recording logic outside span potentially
-            return result; // Return result immediately after successful execution
+            return result;
         } catch (error) {
-             // Record error details as the output of the span
-             this.recordOutput({ // Use recordOutput to capture error structure
+             this.recordOutput({
                  error: String(error),
                  error_details: error instanceof Error
                      ? { name: error.name, message: error.message, stack: error.stack?.substring(0, 500) }
                      : { detail: String(error) }
              });
-             throw error; // Re-throw the error to maintain original behavior
+             throw error;
         } finally {
-            // This block executes regardless of success or error
             const endTime = Date.now() / 1000;
             const duration = endTime - startTime;
             this.addEntry({
                  type: 'exit',
                  function: name,
                  span_id: spanId,
-                 depth: currentDepth, // Use depth stored at the start of the span
+                 depth: currentDepth,
                  timestamp: endTime,
                  duration: duration,
                  span_type: spanType
             });
-            // Clean up depth tracking for this specific span ID once it exits
             delete this.spanDepths[spanId];
-            // No need to reset currentSpanAsyncLocalStorage manually when using .run()
         }
     }
-
 
     getDuration(): number {
          return (Date.now() / 1000) - this.startTime;
      }
 
-     // Updated condenseTrace implementation based on Python logic
      private condenseTrace(rawEntries: Partial<TraceEntry>[]): CondensedSpanEntry[] {
          const spansById: Record<string, CondensedSpanEntry & { start_time?: number; end_time?: number }> = {};
 
-         // First pass: Group entries by span_id and gather data
          for (const entry of rawEntries) {
              const spanId = entry.span_id;
              if (!spanId) continue;
 
-             // Initialize span data on first encounter (usually 'enter')
              if (!spansById[spanId]) {
                  spansById[spanId] = {
                      span_id: spanId,
                      function: entry.function || 'unknown',
                      depth: entry.depth ?? 0,
-                     timestamp: entry.timestamp ?? 0, // Defaulting timestamp, 'enter' should set it
+                     timestamp: entry.timestamp ?? 0,
                      parent_span_id: entry.parent_span_id,
                      span_type: entry.span_type || 'span',
                      inputs: null,
                      output: null,
                      evaluation_runs: [],
                      duration: null,
-                     children: [] // Initialize children array
+                     children: []
                  };
              }
 
              const currentSpanData = spansById[spanId];
 
-             // Update span data based on entry type
              switch (entry.type) {
                  case 'enter':
                      currentSpanData.function = entry.function || currentSpanData.function;
                      currentSpanData.depth = entry.depth ?? currentSpanData.depth;
-                     currentSpanData.timestamp = entry.timestamp ?? currentSpanData.timestamp; // Entry timestamp is the start
-                     currentSpanData.parent_span_id = entry.parent_span_id; // Capture parent ID
+                     currentSpanData.timestamp = entry.timestamp ?? currentSpanData.timestamp;
+                     currentSpanData.parent_span_id = entry.parent_span_id;
                      currentSpanData.span_type = entry.span_type || currentSpanData.span_type;
-                     currentSpanData.start_time = entry.timestamp; // Record start time
+                     currentSpanData.start_time = entry.timestamp;
                      break;
                  case 'exit':
                      currentSpanData.duration = entry.duration ?? currentSpanData.duration;
-                     currentSpanData.end_time = entry.timestamp; // Record end time
-                     // Recalculate duration if exit entry doesn't have it but start/end times exist
+                     currentSpanData.end_time = entry.timestamp;
                      if (currentSpanData.duration === null && currentSpanData.start_time && currentSpanData.end_time) {
                           currentSpanData.duration = currentSpanData.end_time - currentSpanData.start_time;
                      }
                      break;
                  case 'input':
-                     // Simple overwrite/merge logic (can be enhanced)
                      if (currentSpanData.inputs === null && entry.inputs) {
                          currentSpanData.inputs = entry.inputs;
                      } else if (typeof currentSpanData.inputs === 'object' && typeof entry.inputs === 'object') {
-                         // Basic merge, could be deeper if needed
                          currentSpanData.inputs = { ...currentSpanData.inputs, ...entry.inputs };
                      }
                      break;
                  case 'output':
                  case 'error':
-                     currentSpanData.output = entry.output; // Capture output or error structure
+                     currentSpanData.output = entry.output;
                      break;
                  case 'evaluation':
                      if (entry.evaluation_runs) {
@@ -465,26 +471,21 @@ class TraceClient {
              }
          }
 
-         // Convert map to list and clean up temporary fields
          const spansList = Object.values(spansById).map(span => {
-              // Ensure duration is calculated if possible
               if (span.duration === null && span.start_time && span.end_time) {
                   span.duration = span.end_time - span.start_time;
               }
              delete span.start_time;
              delete span.end_time;
-             return span as CondensedSpanEntry; // Cast to final type
+             return span as CondensedSpanEntry;
          });
 
-         // --- Build Tree Structure and Sort --- //
-         // Declare all variables for this section together
          const childrenMap: Record<string, CondensedSpanEntry[]> = {};
          const roots: CondensedSpanEntry[] = [];
          const spanMap: Record<string, CondensedSpanEntry> = {};
          const sortedCondensedList: CondensedSpanEntry[] = [];
          const visited = new Set<string>();
 
-         // Populate spanMap and identify roots
          for (const span of spansList) {
              spanMap[span.span_id] = span;
              const parentId = span.parent_span_id;
@@ -498,137 +499,104 @@ class TraceClient {
              }
          }
 
-         // Sort roots and children
          roots.sort((a, b) => a.timestamp - b.timestamp);
          for (const parentId in childrenMap) {
              childrenMap[parentId].sort((a, b) => a.timestamp - b.timestamp);
          }
 
-         // Define the DFS helper function
          function buildFlatListDfs(span: CondensedSpanEntry) {
-             if (visited.has(span.span_id)) {
-                  return; // Avoid cycles
-              }
+             if (visited.has(span.span_id)) return;
              visited.add(span.span_id);
-             sortedCondensedList.push(span); // Add to flat list (pre-order)
+             sortedCondensedList.push(span);
 
              const children = childrenMap[span.span_id] || [];
              for (const child of children) {
-                 buildFlatListDfs(child); // Recurse
+                 buildFlatListDfs(child);
              }
          }
 
-         // --- Perform DFS --- //
-         // Start DFS from each root
          for (const rootSpan of roots) {
              buildFlatListDfs(rootSpan);
          }
 
-         // Handle orphaned spans
          for (const span of spansList) {
              if (!visited.has(span.span_id)) {
                  console.warn(`Orphaned span detected: ${span.span_id}, adding to end of list.`);
-                 buildFlatListDfs(span); // Process orphan and its potential subtree
+                 buildFlatListDfs(span);
              }
          }
 
          return sortedCondensedList;
      }
 
-     // Save the trace data via the TraceManagerClient
      async save(emptySave: boolean = false): Promise<{ traceId: string; traceData: TraceSavePayload } | null> {
          if (!this.enableMonitoring || !this.traceManager) {
               return null;
          }
 
          const totalDuration = this.getDuration();
-         // Call the implemented condenseTrace method
          const condensedEntries: CondensedSpanEntry[] = this.condenseTrace(this.entries);
 
-         // Implement token counting logic
          const tokenCounts = {
-             prompt_tokens: 0,
-             completion_tokens: 0,
-             total_tokens: 0,
-             prompt_tokens_cost_usd: 0, // Cost calculation needs separate handling (litellm equivalent)
-             completion_tokens_cost_usd: 0,
-             total_cost_usd: 0
+             prompt_tokens: 0, completion_tokens: 0, total_tokens: 0,
+             prompt_tokens_cost_usd: 0.0, completion_tokens_cost_usd: 0.0, total_cost_usd: 0.0
          };
-
          condensedEntries.forEach(entry => {
              if (entry.span_type === 'llm' && entry.output?.usage) {
                  const usage = entry.output.usage;
-                 // Check for OpenAI/Together format
+                 let promptTokens = 0;
+                 let completionTokens = 0;
+
                  if (usage.prompt_tokens !== undefined || usage.completion_tokens !== undefined) {
-                     tokenCounts.prompt_tokens += usage.prompt_tokens || 0;
-                     tokenCounts.completion_tokens += usage.completion_tokens || 0;
-                     tokenCounts.total_tokens += usage.total_tokens || (usage.prompt_tokens || 0) + (usage.completion_tokens || 0);
-                 }
-                 // Check for Anthropic format (avoid double counting)
-                 else if (usage.input_tokens !== undefined || usage.output_tokens !== undefined) {
-                     tokenCounts.prompt_tokens += usage.input_tokens || 0;
-                     tokenCounts.completion_tokens += usage.output_tokens || 0;
-                     // Anthropic total needs summing if not provided directly
-                     tokenCounts.total_tokens += (usage.input_tokens || 0) + (usage.output_tokens || 0);
-                 }
-
-                 // --- START: Add per-call cost calculation (mirroring Python) ---
-                 const modelName = entry.inputs?.model || ""; // Get model name from inputs
-                 const promptTokens = usage.prompt_tokens || usage.input_tokens || 0;
-                 const completionTokens = usage.completion_tokens || usage.output_tokens || 0;
-
-                 if (modelName) {
-                     try {
-                         // --- Placeholder for cost calculation ---
-                         // Replace this with actual cost calculation logic,
-                         // similar to Python's `cost_per_token(model=modelName, prompt_tokens=..., completion_tokens=...)`
-                         // You'll need a way to access model cost data (e.g., a library, a map, an API call).
-                         const promptCost = 0.0; // Replace with calculated prompt cost
-                         const completionCost = 0.0; // Replace with calculated completion cost
-                         const callTotalCost = promptCost + completionCost;
-                         // --- End Placeholder ---
-
-                         // Add cost info directly to the entry's usage object
-                         entry.output.usage.prompt_tokens_cost_usd = promptCost;
-                         entry.output.usage.completion_tokens_cost_usd = completionCost;
-                         entry.output.usage.total_cost_usd = callTotalCost;
-
-                         // Accumulate total costs
-                         tokenCounts.prompt_tokens_cost_usd += promptCost;
-                         tokenCounts.completion_tokens_cost_usd += completionCost;
-                         tokenCounts.total_cost_usd += callTotalCost;
-
-                     } catch (e) {
-                         console.warn(`Error calculating cost for model '${modelName}':`, e);
-                         // Assign null or 0 if cost calculation fails for this call
-                         entry.output.usage.prompt_tokens_cost_usd = null;
-                         entry.output.usage.completion_tokens_cost_usd = null;
-                         entry.output.usage.total_cost_usd = null;
-                     }
-                 } else {
-                     // Handle cases where model name is missing, if necessary
-                      entry.output.usage.prompt_tokens_cost_usd = null;
-                      entry.output.usage.completion_tokens_cost_usd = null;
-                      entry.output.usage.total_cost_usd = null;
-                 }
-                  // --- END: Add per-call cost calculation ---
-             }
- 
-             // --- Standardize Keys (Moved Here) ---
-             // This ensures we only rename keys when we know entry.output.usage is valid
-             if (entry.span_type === 'llm' && entry.output?.usage) {
-                 const usage = entry.output.usage; // Safe to access now
-                 if ('input_tokens' in usage && 'output_tokens' in usage) {
-                     // Standardize for Anthropic-like structures
-                     usage.prompt_tokens = usage.input_tokens;
-                     usage.completion_tokens = usage.output_tokens;
+                     promptTokens = usage.prompt_tokens || 0;
+                     completionTokens = usage.completion_tokens || 0;
+                 } else if (usage.input_tokens !== undefined || usage.output_tokens !== undefined) {
+                     promptTokens = usage.input_tokens || 0;
+                     completionTokens = usage.output_tokens || 0;
+                     usage.prompt_tokens = promptTokens;
+                     usage.completion_tokens = completionTokens;
                      delete usage.input_tokens;
                      delete usage.output_tokens;
-                     // total_tokens should already be consistent based on previous _formatOutputData step
+                 }
+                 tokenCounts.prompt_tokens += promptTokens;
+                 tokenCounts.completion_tokens += completionTokens;
+                 tokenCounts.total_tokens += usage.total_tokens || (promptTokens + completionTokens);
+
+                 const modelName = entry.inputs?.model || "";
+                 if (modelName) {
+                      try {
+                          const promptCost = 0.0;
+                          const completionCost = 0.0;
+                          const callTotalCost = promptCost + completionCost;
+
+                          usage.prompt_tokens_cost_usd = promptCost;
+                          usage.completion_tokens_cost_usd = completionCost;
+                          usage.total_cost_usd = callTotalCost;
+
+                          tokenCounts.prompt_tokens_cost_usd += promptCost;
+                          tokenCounts.completion_tokens_cost_usd += completionCost;
+                          tokenCounts.total_cost_usd += callTotalCost;
+                      } catch (e) {
+                          console.warn(`Error calculating cost for model '${modelName}':`, e);
+                          usage.prompt_tokens_cost_usd = null;
+                          usage.completion_tokens_cost_usd = null;
+                          usage.total_cost_usd = null;
+                      }
+                 } else {
+                      usage.prompt_tokens_cost_usd = null;
+                      usage.completion_tokens_cost_usd = null;
+                      usage.total_cost_usd = null;
                  }
              }
          });
 
+         // Convert rules array to a dictionary (Record<string, Rule>)
+         const rulesDict: Record<string, Rule> = {};
+         this.rules.forEach(rule => {
+             // Use rule_id if available, otherwise fallback to name
+             const key = rule.rule_id ?? rule.name;
+             rulesDict[key] = rule;
+         });
 
          const traceData: TraceSavePayload = {
              trace_id: this.traceId,
@@ -638,6 +606,7 @@ class TraceClient {
              duration: totalDuration,
              token_counts: tokenCounts,
              entries: condensedEntries,
+             rules: rulesDict,
              empty_save: emptySave,
              overwrite: this.overwrite,
              parent_trace_id: this.parentTraceId,
@@ -647,26 +616,20 @@ class TraceClient {
          try {
              await this.traceManager.saveTrace(traceData, emptySave);
 
-             // Trigger evaluation queue add *after* successful save (if not empty and enabled)
              if (!emptySave && this.enableEvaluations) {
                  try {
-                     // Pass the same traceData used for saving
                      await this.traceManager.addTraceToEvalQueue(traceData);
                  } catch (evalError) {
                      console.warn(`Failed to add trace ${this.traceId} to evaluation queue:`, evalError);
-                     // Decide if this should be a critical error or just a warning
                  }
              }
              return { traceId: this.traceId, traceData };
          } catch (error) {
              console.error(`Failed to save trace ${this.traceId}:`, error);
-              return null; // Indicate failure
+              return null;
          }
      }
 
-     /**
-      * Prints the recorded trace entries to the console in a hierarchical format.
-      */
      print(): void {
          if (!this.enableMonitoring) {
              console.log("Monitoring was disabled. No trace entries recorded.");
@@ -680,15 +643,12 @@ class TraceClient {
          console.log(`\n--- Trace Details: ${this.name} (ID: ${this.traceId}) ---`);
  
          this.entries.forEach(entry => {
-             // Use a default depth of 0 if undefined
              const indent = "  ".repeat(entry.depth ?? 0);
-             // Format timestamp if it exists
              const timeStr = entry.timestamp ? `@ ${new Date(entry.timestamp * 1000).toISOString()}` : '';
-             // Shorten span and parent IDs for readability
              const shortSpanId = entry.span_id ? `(id: ${entry.span_id.substring(0, 8)}...)` : '';
              const shortParentId = entry.parent_span_id ? `(parent: ${entry.parent_span_id.substring(0, 8)}...)` : '';
  
-             try { // Add try-catch for safety during stringification
+             try {
                  switch (entry.type) {
                      case 'enter':
                          console.log(`${indent}→ ${entry.function || 'unknown'} ${shortSpanId} ${shortParentId} [${entry.span_type || 'span'}] ${timeStr}`);
@@ -698,55 +658,46 @@ class TraceClient {
                          console.log(`${indent}← ${entry.function || 'unknown'} ${shortSpanId} ${durationStr} ${timeStr}`);
                          break;
                      case 'input':
-                         // Truncate potentially large input strings
                          let inputStr = JSON.stringify(entry.inputs);
-                         if (inputStr && inputStr.length > 200) {
-                              inputStr = inputStr.substring(0, 197) + '...';
-                         }
+                         if (inputStr && inputStr.length > 200) { inputStr = inputStr.substring(0, 197) + '...'; }
                          console.log(`${indent}  Input (for ${shortSpanId}): ${inputStr || '{}'}`);
                          break;
                      case 'output':
                      case 'error':
-                         // Truncate potentially large output/error strings
                          let outputStr = JSON.stringify(entry.output);
-                         if (outputStr && outputStr.length > 200) {
-                             outputStr = outputStr.substring(0, 197) + '...';
-                         }
+                         if (outputStr && outputStr.length > 200) { outputStr = outputStr.substring(0, 197) + '...'; }
                          const prefix = entry.type === 'error' ? 'Error' : 'Output';
                          console.log(`${indent}  ${prefix} (for ${shortSpanId}): ${outputStr || 'null'}`);
                          break;
                      case 'evaluation':
-                         // Basic display for evaluation runs
                          let evalStr = JSON.stringify(entry.evaluation_runs);
-                          if (evalStr && evalStr.length > 200) {
-                             evalStr = evalStr.substring(0, 197) + '...';
-                         }
+                          if (evalStr && evalStr.length > 200) { evalStr = evalStr.substring(0, 197) + '...'; }
                          console.log(`${indent}  Evaluation (for ${shortSpanId}): ${evalStr || '[]'}`);
                          break;
                      default:
                          console.log(`${indent}? Unknown entry type: ${JSON.stringify(entry)}`);
                  }
              } catch (stringifyError) {
-                  // Check if it's an error object before accessing message
                   const errorMessage = stringifyError instanceof Error ? stringifyError.message : String(stringifyError);
                   console.log(`${indent}! Error formatting entry: ${errorMessage}`);
-                  console.log(`${indent}  Raw entry:`, entry); // Log raw entry on formatting error
+                  console.log(`${indent}  Raw entry:`, entry);
              }
          });
          console.log(`--- End Trace: ${this.name} ---`);
      }
 
-     // Delete the trace via the TraceManagerClient
      async delete(): Promise<any> {
          if (!this.enableMonitoring || !this.traceManager) {
+              console.warn(`Cannot delete trace ${this.traceId}, monitoring disabled or manager missing.`);
               return null;
          }
          try {
              const result = await this.traceManager.deleteTrace(this.traceId);
-             return result; // Return the API response (often null on success for DELETE)
+             console.log(`Trace ${this.traceId} deleted successfully.`);
+             return result;
          } catch (error) {
              console.error(`Failed to delete trace ${this.traceId}:`, error);
-             throw error; // Re-throw or handle as needed
+             throw error;
          }
      }
 
@@ -870,210 +821,168 @@ class Tracer {
     public readonly apiKey: string;
     public readonly organizationId: string;
     public readonly projectName: string;
+    public readonly defaultRules: Rule[];
     public readonly enableMonitoring: boolean;
     public readonly enableEvaluations: boolean;
-    // public readonly rules: Rule[]; // Add later
     private initialized: boolean = false;
 
-    // Private constructor for singleton pattern
     private constructor(config?: {
          apiKey?: string,
          organizationId?: string,
          projectName?: string,
-         // rules?: Rule[], // Add later
+         rules?: Rule[],
          enableMonitoring?: boolean,
          enableEvaluations?: boolean
     }) {
-         // Load defaults from environment variables, checking for process object existence
          const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
 
          const envApiKey = isNode ? process.env?.JUDGMENT_API_KEY : undefined;
          const envOrgId = isNode ? process.env?.JUDGMENT_ORG_ID : undefined;
-         const envProjectName = isNode ? process.env?.JUDGMENT_PROJECT_NAME : undefined; // Keep as potentially undefined here
+         const envProjectName = isNode ? process.env?.JUDGMENT_PROJECT_NAME : undefined;
          const envMonitoring = isNode ? process.env?.JUDGMENT_MONITORING : 'true';
          const envEvaluations = isNode ? process.env?.JUDGMENT_EVALUATIONS : 'true';
 
          this.apiKey = config?.apiKey ?? envApiKey ?? '';
          this.organizationId = config?.organizationId ?? envOrgId ?? '';
-         // Add final fallback to ensure projectName is always a string
          this.projectName = config?.projectName ?? envProjectName ?? 'default_project';
-         // Default to true if not explicitly set or passed as false
-         this.enableMonitoring = config?.enableMonitoring ?? (envMonitoring?.toLowerCase() !== 'false');
-         this.enableEvaluations = config?.enableEvaluations ?? (envEvaluations?.toLowerCase() !== 'false');
+         this.defaultRules = config?.rules ?? [];
 
-         // Validate essential configuration only if monitoring is intended to be enabled
-         if (this.enableMonitoring) {
-             if (!this.apiKey) {
-                console.warn("JUDGMENT_API_KEY not found in environment or config. Monitoring will be effectively disabled.");
-                this.enableMonitoring = false; // Disable if key is missing
-                this.enableEvaluations = false; // Evaluations depend on monitoring/saving
-             }
-             if (!this.organizationId) {
-                console.warn("JUDGMENT_ORG_ID not found in environment or config. Monitoring will be effectively disabled.");
-                this.enableMonitoring = false; // Disable if org ID is missing
-                this.enableEvaluations = false;
-             }
+         let effectiveMonitoring = config?.enableMonitoring ?? (envMonitoring?.toLowerCase() !== 'false');
+         if (effectiveMonitoring && (!this.apiKey || !this.organizationId)) {
+             console.warn("JUDGMENT_API_KEY or JUDGMENT_ORG_ID missing. Monitoring disabled.");
+             effectiveMonitoring = false;
          }
-
-         // this.rules = config?.rules ?? []; // Initialize rules later
+         this.enableMonitoring = effectiveMonitoring;
+         this.enableEvaluations = effectiveMonitoring && (config?.enableEvaluations ?? (envEvaluations?.toLowerCase() !== 'false'));
 
          this.initialized = true;
     }
 
-    // Static method to get the singleton instance
-    public static getInstance(config?: { // Allow optional config on first call
+    public static getInstance(config?: {
          apiKey?: string,
          organizationId?: string,
          projectName?: string,
+         rules?: Rule[],
          enableMonitoring?: boolean,
          enableEvaluations?: boolean
-         // rules?: Rule[]
      }): Tracer {
         if (!Tracer.instance) {
             Tracer.instance = new Tracer(config);
         } else if (config && !Tracer.instance.initialized) {
-             // This scenario should ideally not happen with correct singleton usage
              console.warn("Tracer getInstance called with config after implicit initialization. Re-initializing.");
-             Tracer.instance = new Tracer(config); // Overwrite with new config
+             Tracer.instance = new Tracer(config);
         } else if (config && Tracer.instance.initialized) {
-             // Warn if trying to reconfigure *mutable* properties after initialization
-             // Currently, properties are readonly after construction, but project name might be conceptually mutable.
              if (config.projectName && config.projectName !== Tracer.instance.projectName) {
-                 console.warn(`Attempting to re-initialize Tracer with project_name='${config.projectName}' but it was already initialized with project_name='${Tracer.instance.projectName}'. The original project_name ('${Tracer.instance.projectName}') will be used.`);
+                 console.warn(`Attempting to re-initialize Tracer with different project_name. Original will be used: '${Tracer.instance.projectName}'.`);
              }
-             // Note: API Key and Org ID changes would require creating a new instance.
+             if (config.rules && config.rules.length > 0 && Tracer.instance.defaultRules.length === 0) {
+                try {
+                    console.warn("Setting default rules on Tracer instance after initial creation.");
+                    (Tracer.instance as { -readonly [K in keyof Tracer]: Tracer[K] }).defaultRules = config.rules;
+                } catch (e) {
+                    console.error("Failed to set default rules after tracer initialization:", e);
+                }
+             } else if (config.rules && JSON.stringify(config.rules) !== JSON.stringify(Tracer.instance.defaultRules)) {
+                  console.warn("Attempting to change default rules on Tracer after initialization. Original rules will be used.");
+             }
         }
         return Tracer.instance;
     }
 
-    // Gets the current TraceClient from async context
     getCurrentTrace(): TraceClient | undefined {
-        // No need to check enableMonitoring here, as getCurrentTrace is passive
         return currentTraceAsyncLocalStorage.getStore();
     }
 
-    // --- Trace creation method (Handles setting up the context) ---
-    // This replaces the Python context manager approach with an explicit start/end or runInTrace
      private _startTraceInternal(config: {
          name: string,
          projectName?: string,
          overwrite?: boolean,
-         // rules?: Rule[] // Add later
+         rules?: Rule[]
      }): TraceClient {
-         // Get parent trace *before* setting the new one in context
          const parentTrace = this.getCurrentTrace();
 
+         const traceSpecificRules = config.rules ?? [];
+         const effectiveRulesMap = new Map<string, Rule>();
+         this.defaultRules.forEach(rule => effectiveRulesMap.set(rule.rule_id ?? rule.name, rule));
+         traceSpecificRules.forEach(rule => effectiveRulesMap.set(rule.rule_id ?? rule.name, rule));
+         const effectiveRules = Array.from(effectiveRulesMap.values());
+
          const traceClient = new TraceClient({
-             tracer: this, // Pass reference to this Tracer instance
+             tracer: this,
              name: config.name,
-             projectName: config.projectName ?? this.projectName, // Use specific or default project name
+             projectName: config.projectName ?? this.projectName,
              overwrite: config.overwrite,
-             // Inherit monitoring settings from Tracer
+             rules: effectiveRules,
              enableMonitoring: this.enableMonitoring,
              enableEvaluations: this.enableEvaluations,
              parentTraceId: parentTrace?.traceId,
              parentName: parentTrace?.name,
-             apiKey: this.apiKey, // Pass credentials down
+             apiKey: this.apiKey,
              organizationId: this.organizationId,
-             // rules: config.rules ?? this.rules // Combine rules later
          });
 
-         // Save empty trace immediately if monitoring is enabled
-         // This helps establish the trace record early for potential async operations or UI visibility
          if (traceClient.enableMonitoring) {
               traceClient.save(true).catch(err => {
-                   // Log error but don't block execution
-              }); // Fire-and-forget initial save
+                   console.error(`>>> Tracer: Error saving empty trace for ${traceClient.traceId}:`, err);
+              });
          }
 
          return traceClient;
      }
 
-     /**
-      * Runs a function within a new trace context.
-      * Handles context setup, execution, and saving the trace.
-      * Similar to using `with tracer.trace(...)` in Python.
-      *
-      * @param config Configuration for the trace (name, project, etc.)
-      * @param func The async function to execute within the trace context.
-      *             It receives the TraceClient instance as an argument.
-      * @returns The result of the executed function.
-      */
       async runInTrace<T>(
           config: {
               name: string,
               projectName?: string,
               overwrite?: boolean,
-              createRootSpan?: boolean; // ADDED: Option to control root span creation
-              // rules?: Rule[] // Add later
+              createRootSpan?: boolean;
+              rules?: Rule[]
           },
-          func: (traceClient: TraceClient) => Promise<T> | T // Allow sync or async func
+          func: (traceClient: TraceClient) => Promise<T> | T
       ): Promise<T> {
-          // Start the trace internally (creates client, saves empty trace)
           const traceClient = this._startTraceInternal(config);
-          // Determine if we should create the automatic root span
-          const shouldCreateRootSpan = config.createRootSpan ?? true; // Default to true
+          const shouldCreateRootSpan = config.createRootSpan ?? true;
 
-          // Run the user's function within the AsyncLocalStorage context for this trace
           return await currentTraceAsyncLocalStorage.run(traceClient, async () => {
               let result: T;
               try {
-                  // Conditionally create a top-level span for the traced function
                   if (shouldCreateRootSpan) {
-                       // Use 'chain' to indicate a logical sequence or workflow root
                        result = await traceClient.runInSpan(config.name, { spanType: 'chain' }, async () => {
-                           // Execute the user-provided function, passing the client
                            const funcResult = func(traceClient);
-                           // Await if the user function is async
                            return funcResult instanceof Promise ? await funcResult : funcResult;
                        });
                   } else {
-                       // Execute the user-provided function directly without the extra root span
                        const funcResult = func(traceClient);
                        result = funcResult instanceof Promise ? await funcResult : funcResult;
                   }
 
-
-                  // Save the completed trace data (not empty) after successful execution
                   if (traceClient.enableMonitoring) {
                        await traceClient.save(false).catch(saveErr => {
                            console.error(`Failed to save completed trace '${config.name}' (${traceClient.traceId}):`, saveErr);
                        });
                   }
-                  return result; // Return the result of the user's function
+                  return result;
 
               } catch (error) {
                    console.error(`Error during traced execution of '${config.name}' (${traceClient.traceId}):`, error);
-                   // Attempt to save the trace even if there was an error during execution
                    if (traceClient.enableMonitoring) {
                         await traceClient.save(false).catch(saveErr => {
                              console.error(`Failed to save trace '${config.name}' after error:`, saveErr);
                         });
                    }
-                   throw error; // Re-throw the original error after attempting save
+                   throw error;
               }
-              // AsyncLocalStorage context is automatically managed by .run()
           });
       }
 
-     /**
-      * Decorator/higher-order function to automatically trace function execution.
-      *
-      * @param options Configuration for the observation (name, spanType, etc.)
-      * @returns A function that takes the target function and returns a wrapped version.
-      */
      observe<T extends (...args: any[]) => any>(options?: {
          name?: string;
          spanType?: SpanType;
-         // project_name?: string; // Add later if needed
-         // overwrite?: boolean; // Add later if needed
      }) {
-         // If monitoring is globally disabled, return a no-op HOF
          if (!this.enableMonitoring) {
              return (func: T): T => func;
          }
 
-         // Return the actual higher-order function
          return (func: T): T => {
              const spanName = options?.name || func.name || 'anonymous_function';
              const spanType = options?.spanType || 'span';
@@ -1081,211 +990,110 @@ class Tracer {
              const wrapper = (...args: Parameters<T>): ReturnType<T> | Promise<ReturnType<T>> => {
                  const currentTrace = this.getCurrentTrace();
 
-                 // --- Case 1: Called outside an active trace context ---
                  if (!currentTrace) {
-                     // Create a new root trace context automatically
-                     // Use runInTrace, but tell it NOT to create its own root span,
-                     // as `observe` will create the correct span itself.
                      return this.runInTrace({
                          name: spanName,
-                         createRootSpan: false // MODIFIED: Tell runInTrace not to create the span
+                         createRootSpan: false
                      }, async (traceClient) => {
-                         // Now, explicitly create the span for this observed function
-                         // using the logic identical to the nested case.
                          const executionLogic = () => {
                              const result = func(...args);
                              return result instanceof Promise ? result : Promise.resolve(result);
                          };
 
                          return traceClient.runInSpan(spanName, { spanType }, async () => {
-                             const serializableArgs = args.map(arg => {
-                                  try {
-                                      return JSON.parse(JSON.stringify(arg));
-                                  } catch {
-                                      return String(arg); // Fallback
-                                  }
-                             });
+                             const serializableArgs = args.map(arg => { try { return JSON.parse(JSON.stringify(arg)); } catch { return String(arg); } });
                              traceClient.recordInput({ args: serializableArgs });
-
                              try {
                                  const finalResult = await executionLogic();
                                  traceClient.recordOutput(finalResult);
                                  return finalResult;
                              } catch (error) {
-                                 // runInSpan handles recording the error output
                                  console.error(`Error captured by observe decorator (root) in span '${spanName}':`, error);
-                                 throw error; // Re-throw error
+                                 throw error;
                              }
                          });
-                     }) as Promise<ReturnType<T>>; // Assume async if starting trace
+                     }) as Promise<ReturnType<T>>;
                  }
-
-                 // --- Case 2: Called within an existing trace context ---
                  else {
-                      // Use runInSpan on the existing trace client (This logic remains the same)
                       const executionLogic = () => {
                           const result = func(...args);
                           return result instanceof Promise ? result : Promise.resolve(result);
                       };
 
                       return currentTrace.runInSpan(spanName, { spanType }, async () => {
-                          // Record inputs *inside* the span
-                          // Convert args to a serializable format if needed
-                          const serializableArgs = args.map(arg => {
-                               try {
-                                   // Basic serialization check - improve if needed
-                                   return JSON.parse(JSON.stringify(arg));
-                               } catch {
-                                   return String(arg); // Fallback to string
-                               }
-                          });
+                          const serializableArgs = args.map(arg => { try { return JSON.parse(JSON.stringify(arg)); } catch { return String(arg); } });
                           currentTrace.recordInput({ args: serializableArgs });
-
                           try {
                               const finalResult = await executionLogic();
-                              // Record output *inside* the span
                               currentTrace.recordOutput(finalResult);
                               return finalResult;
                           } catch (error) {
-                              // runInSpan handles recording the error output
                               console.error(`Error captured by observe decorator (nested) in span '${spanName}':`, error);
-                              throw error; // Re-throw error after it's recorded
+                              throw error;
                           }
-                      }) as Promise<ReturnType<T>>; // runInSpan returns a Promise
+                      }) as Promise<ReturnType<T>>;
                  }
              };
 
-             // Preserve original function name and properties if possible
              Object.defineProperty(wrapper, 'name', { value: func.name, configurable: true });
-             // Copy other static properties if necessary
-
              return wrapper as T;
          };
      }
-
-     // TODO: Add score() decorator equivalent and async_evaluate() direct call
-     // public score(...) { ... }
-     // public async evaluate(...) { ... }
 }
 
 // --- Helper Functions for Wrapping LLM Clients --- //
 
-// Gets the correct method and span name for supported clients
 function _getClientConfig(client: ApiClient): { spanName: string; originalMethod: (...args: any[]) => any } | null {
-    // Ensure 'this' context is preserved using .bind()
     if (client instanceof OpenAI && typeof client?.chat?.completions?.create === 'function') {
         return { spanName: "OPENAI_API_CALL", originalMethod: client.chat.completions.create.bind(client.chat.completions) };
     } else if (client instanceof Anthropic && typeof client?.messages?.create === 'function') {
         return { spanName: "ANTHROPIC_API_CALL", originalMethod: client.messages.create.bind(client.messages) };
     }
-    // Add support for Together client
     else if (client instanceof Together && typeof client?.chat?.completions?.create === 'function') {
         return { spanName: "TOGETHER_API_CALL", originalMethod: client.chat.completions.create.bind(client.chat.completions) };
     }
-
     console.warn("Cannot wrap client: Unsupported type or incompatible SDK structure.", client?.constructor?.name);
     return null;
 }
 
-// Formats input parameters for tracing (more aligned with Python version)
-// Use explicit casting as a final attempt to resolve persistent type error
 function _formatInputData(client: ApiClient, args: any[]): Record<string, any> {
-    // Assume args[0] contains the primary request payload (like Python's kwargs)
     const params = args[0] || {};
     try {
-        // Handle OpenAI and Together similarly
         if (client instanceof OpenAI || client instanceof Together) {
-            // Extract common parameters - ALIGNED WITH PYTHON
-            return {
-                model: params.model,
-                messages: params.messages,
-                // temperature: params.temperature,
-                // max_tokens: params.max_tokens,
-                // top_p: params.top_p,
-                // stream: params.stream,
-            } as Record<string, any>; // Explicit cast
+            return { model: params.model, messages: params.messages, } as Record<string, any>;
         } else if (client instanceof Anthropic) {
-             // Extract Anthropic parameters
-             return {
-                 model: params.model,
-                 messages: params.messages,
-                 max_tokens: params.max_tokens,
-                 // system: params.system, // Removed for alignment
-                 // temperature: params.temperature, // Removed for alignment
-                 // top_p: params.top_p, // Removed for alignment
-                 // stream: params.stream, // Removed for alignment
-             } as Record<string, any>; // Explicit cast
+             return { model: params.model, messages: params.messages, max_tokens: params.max_tokens, } as Record<string, any>;
         }
     } catch (e) {
          console.error("Error formatting LLM input:", e);
-         // Fallback: Return raw parameters if formatting fails
-         return { raw_params: params } as Record<string, any>; // Explicit cast
+         return { raw_params: params } as Record<string, any>;
     }
-    // Fallback for unknown client types or errors
-    return { raw_params: params } as Record<string, any>; // Explicit cast
+    return { raw_params: params } as Record<string, any>;
 }
 
-// Formats output/response for tracing (more aligned with Python version)
-// Handles both standard responses and stream chunks if applicable
 function _formatOutputData(client: ApiClient, response: any): Record<string, any> {
-     // TODO: Add proper handling for streaming responses.
-     // This currently assumes a complete, non-streamed response object.
      try {
-          // OpenAI / Together Structure - ALIGNED WITH PYTHON
           if ((client instanceof OpenAI || client instanceof Together) && response?.choices?.[0]?.message) {
               const message = response.choices[0].message;
-              return {
-                  content: message.content, // Primary text content
-                  usage: response.usage, // { prompt_tokens, completion_tokens, total_tokens }
-              };
+              return { content: message.content, usage: response.usage, };
           }
-          // Anthropic Structure
           else if (client instanceof Anthropic && response?.content?.[0]) {
-               // Anthropic might return multiple content blocks, join text ones for preview
-               const textContent = response.content
-                   .filter((block: any) => block.type === 'text')
-                   .map((block: any) => block.text)
-                   .join('');
-               
-               // Align with Python - only record content and usage base
-               const usage = {
-                  input_tokens: response.usage?.input_tokens,
-                  output_tokens: response.usage?.output_tokens,
-                  total_tokens: (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0)
-               };
-
-               return {
-                   content: textContent, // Combined text content
-                   usage: usage,
-               };
+               const textContent = response.content.filter((block: any) => block.type === 'text').map((block: any) => block.text).join('');
+               const usage = { input_tokens: response.usage?.input_tokens, output_tokens: response.usage?.output_tokens, total_tokens: (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0) };
+               return { content: textContent, usage: usage, };
           }
      } catch (e) {
           console.error("Error formatting LLM output:", e);
-          // Fallback: Return raw response with error indicator
            return { formatting_error: String(e), raw_response: response };
      }
-     // Fallback for unknown structures or streaming chunks (needs specific handling)
       return { raw_response: response };
 }
 
 // --- The Wrap Function --- //
 
-/**
- * Wraps an API client (OpenAI, Anthropic) to automatically trace its standard 'create' calls.
- * Modifies the client object in place by replacing the target method.
- * IMPORTANT: This does NOT currently handle streaming responses correctly for tracing.
- *
- * Usage:
- *   const openai = wrap(new OpenAI());
- *   const anthropic = wrap(new Anthropic());
- *
- * @param client The API client instance (OpenAI or Anthropic).
- * @returns The same client instance, now wrapped for tracing non-streaming calls.
- */
 export function wrap<T extends ApiClient>(client: T): T {
-    const tracer = Tracer.getInstance(); // Get singleton instance
+    const tracer = Tracer.getInstance();
 
-    // Skip wrapping if monitoring is disabled globally
     if (!tracer.enableMonitoring) {
         console.log("Global monitoring disabled, client wrapping skipped.");
         return client;
@@ -1293,85 +1101,65 @@ export function wrap<T extends ApiClient>(client: T): T {
 
     const config = _getClientConfig(client);
     if (!config) {
-        // Client type not supported or config failed
         return client;
     }
 
     const { spanName, originalMethod } = config;
 
-    // Define the replacement (traced) method
     const tracedMethod = async (...args: any[]) => {
-        // Get the current trace context *at the time of the call*
         const currentTrace = tracer.getCurrentTrace();
 
-        // If there's no active trace context OR monitoring is disabled for this specific trace,
-        // call the original method directly without tracing overhead.
         if (!currentTrace || !currentTrace.enableMonitoring) {
-            return originalMethod(...args); // Pass arguments as received
+            return originalMethod(...args);
         }
 
-        // Run the original API call within a new 'llm' span
-        // Use runInSpan from the currentTrace instance
         return await currentTrace.runInSpan(spanName, { spanType: 'llm' }, async () => {
-            // Format and record inputs *inside* the span context
             const inputData = _formatInputData(client, args);
             currentTrace.recordInput(inputData);
 
             try {
-                 // Call the original API method (already bound to the correct client context)
-                 const response = await originalMethod(...args); // Pass arguments as received
-
-                 // TODO: Add proper handling for streaming responses.
-                 // If response is a stream, we need to iterate and record chunks,
-                 // then potentially summarize or record the final aggregated output.
-                 // This simplified version assumes a non-streaming response.
-
-                 // Format and record the complete output
+                 const response = await originalMethod(...args);
                  const outputData = _formatOutputData(client, response);
                  currentTrace.recordOutput(outputData);
-
-                 return response; // Return the original response
-
+                 return response;
             } catch (error) {
-                 // Record the error details using recordOutput
-                 currentTrace.recordOutput(error); // Pass the Error object directly
-                 throw error; // Re-throw the error
+                 currentTrace.recordOutput(error);
+                 throw error;
             }
         });
     };
 
-    // Replace the original method on the client instance
-    // This modifies the client object directly.
-    // Use 'as any' carefully to bypass strict SDK type checking for the assignment.
     if (client instanceof OpenAI && client.chat?.completions) {
         (client.chat.completions as any).create = tracedMethod;
     } else if (client instanceof Anthropic && client.messages) {
         (client.messages as any).create = tracedMethod;
     }
-    // Add Together wrapping
     else if (client instanceof Together && client.chat?.completions) {
         (client.chat.completions as any).create = tracedMethod;
     }
      else {
-         // This case should ideally be caught by _getClientConfig, but added for safety
          console.error("Failed to apply wrapper: Could not find method to replace after config check.");
-         return client; // Return original client if replacement fails unexpectedly
+         return client;
     }
 
-    return client; // Return the modified client
+    return client;
 }
 
 // --- Exports --- //
 export {
     Tracer,
     TraceClient,
-    TraceManagerClient, // Export the new client
-    // wrap, // Removed from here as it's exported inline
+    TraceManagerClient,
     currentTraceAsyncLocalStorage,
     currentSpanAsyncLocalStorage,
-    // Export types if needed for external use
+    Rule,
+    Condition,
+    ScorerDefinition,
+    NotificationConfig,
+    CombineType,
     TraceEntry,
     SpanType,
     ApiClient,
-    TraceSavePayload
+    TraceSavePayload,
+    CondensedSpanEntry
 }; 
