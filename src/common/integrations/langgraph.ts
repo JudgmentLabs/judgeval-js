@@ -35,7 +35,7 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         super(); // Call parent constructor
         this.tracer = tracer ?? Tracer.getInstance(); // Use provided or singleton tracer
         // No need to get traceClient here, will be fetched from context in methods
-        console.log(`Judgeval Langgraph Handler Initialized. Monitoring Enabled: ${this.tracer.enableMonitoring}`);
+        console.log(`[Judgeval Handler] Initialized. Monitoring Enabled: ${this.tracer.enableMonitoring}`); // Added prefix
     }
 
     // Helper to safely get the current TraceClient from context
@@ -45,9 +45,9 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
             return null;
         }
         const client = this.tracer.getCurrentTrace();
-        // if (!client) {
-        //     console.log("Judgeval Handler: No active trace client found in context."); // Reduce noise
-        // }
+        if (!client) {
+            console.log("[Judgeval Handler] _getActiveTraceClient: No active trace client found in context."); // Added log
+        }
         // Explicitly return null if client is undefined
         return client ?? null;
     }
@@ -170,36 +170,25 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         metadata?: Record<string, unknown> | undefined,
         options?: Record<string, any> // Langchain-JS doesn't seem to pass options here consistently
     ): Promise<void> {
+        console.log(`[Judgeval Handler] onChainStart called for runId: ${runId}`); // Added log
         // console.log(`>>> onChainStart: runId: ${runId}, parentRunId: ${parentRunId}, metadata: ${JSON.stringify(metadata)}, tags: ${JSON.stringify(tags)}`); // Debug log
         const traceClient = this._getActiveTraceClient();
         if (!traceClient) return;
 
         let spanName: string;
-        let spanType: SpanType = "chain"; // LangGraph chains/nodes are treated as 'chain' type
+        const spanType: SpanType = "chain"; // Keep type as chain
 
-        // Prioritize metadata for node name (seems most common in LangGraph JS)
-        const nodeName = metadata?.langgraph_node ? String(metadata.langgraph_node) : null;
-
-        if (nodeName) {
-            spanName = `NODE: ${nodeName}`;
-            // Track node execution (if needed externally, e.g., for evaluation datasets)
-            // this.executedNodes.push(nodeName); // Example, adapt if needed
+        // Determine span name based on Python logic: prioritize 'LangGraph' root, then serialized name
+        const executionName = serialized?.name ?? 'Unknown Chain';
+        if (executionName === 'LangGraph') {
+            spanName = 'LangGraph'; // Match Python root span name
         } else {
-             // Try tags for node name as fallback
-            const nodeTag = tags?.find(tag => tag.startsWith("langgraph:node:"));
-            if (nodeTag) {
-                 spanName = `NODE: ${nodeTag.substring("langgraph:node:".length)}`;
-            } else {
-                 // Generic chain step (could be the root graph execution or other chain)
-                 // Use metadata.name if available, otherwise serialized.name
-                 const executionName = metadata?.name ?? serialized?.name ?? 'Unknown Chain';
-                 spanName = `CHAIN: ${executionName}`;
-                 // Special handling for the overall graph entry point if needed
-                 if (executionName === 'LangGraph') {
-                      spanName = 'LangGraph Root'; // More specific name
-                 }
-            }
+            // Use the serialized name or a generic fallback, avoiding node-specific prefixes
+            spanName = executionName;
         }
+        // Removed node-specific logic:
+        // const nodeName = metadata?.langgraph_node ? String(metadata.langgraph_node) : null;
+        // if (nodeName) { ... } else { ... }
 
         this._startSpan(runId, spanName, spanType);
         // Record input associated with the started span
@@ -297,6 +286,7 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         metadata?: Record<string, unknown> | undefined,
         options?: Record<string, any> // options might contain invocation_params
     ): Promise<void> {
+        console.log(`[Judgeval Handler] onLlmStart called for runId: ${runId}`); // Added log
         await this._handleLlmStart(serialized, runId, { prompts }, extraParams, options);
     }
 
@@ -311,6 +301,7 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
          metadata?: Record<string, unknown> | undefined,
          options?: Record<string, any> // options might contain invocation_params
      ): Promise<void> {
+         console.log(`[Judgeval Handler] onChatModelStart called for runId: ${runId}`); // Added log
          await this._handleLlmStart(serialized, runId, { messages }, extraParams, options);
      }
 
@@ -411,33 +402,35 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         metadata?: Record<string, unknown> | undefined,
         // options?: Record<string, any> // Not typically passed here
     ): Promise<void> {
-         // console.log(`>>> onToolStart: runId: ${runId}, name: ${serialized?.name}`); // Debug log
-         const traceClient = this._getActiveTraceClient();
-         if (!traceClient) return;
+        console.log(`[Judgeval Handler] onToolStart called for runId: ${runId}`); // Added log
+        // console.log(`>>> onToolStart: runId: ${runId}, name: ${serialized?.name}`); // Debug log
+        const traceClient = this._getActiveTraceClient();
+        if (!traceClient) return;
 
-         const toolName = serialized?.name ?? 'Unknown Tool';
-         const spanName = `TOOL: ${toolName}`; // Add TOOL: prefix for clarity
-         this._startSpan(runId, spanName, "tool");
+        // Match Python: Use the tool name directly as the span name
+        const toolName = serialized?.name ?? 'Unknown Tool';
+        const spanName = toolName; // Removed "TOOL: " prefix
+        this._startSpan(runId, spanName, "tool");
 
-         // Try to parse inputStr if it's JSON, otherwise keep as string
-         let parsedInput: any = inputStr;
-         try {
-             // Avoid parsing null/empty strings
-             if (inputStr && inputStr.trim().startsWith('{') && inputStr.trim().endsWith('}')) {
-                 parsedInput = JSON.parse(inputStr);
-             }
-         } catch (e) {
-             // Ignore error, keep as string if parsing fails
-         }
+        // Try to parse inputStr if it's JSON, otherwise keep as string
+        let parsedInput: any = inputStr;
+        try {
+            // Avoid parsing null/empty strings
+            if (inputStr && inputStr.trim().startsWith('{') && inputStr.trim().endsWith('}')) {
+                parsedInput = JSON.parse(inputStr);
+            }
+        } catch (e) {
+            // Ignore error, keep as string if parsing fails
+        }
 
-         // Record input associated with the started span
-         const currentSpanId = this.runIdToSpanId[runId];
-         if (currentSpanId) {
-            // Input is recorded in the current context span of the TraceClient
-            traceClient.recordInput({ input: parsedInput /* , options: options */ }); // Removed spanId
-         }
-         // Track tool execution (if needed externally)
-         // this.executedTools.push(toolName); // Example
+        // Record input associated with the started span
+        const currentSpanId = this.runIdToSpanId[runId];
+        if (currentSpanId) {
+           // Input is recorded in the current context span of the TraceClient
+           traceClient.recordInput({ input: parsedInput /* , options: options */ }); // Removed spanId
+        }
+        // Track tool execution (if needed externally)
+        // this.executedTools.push(toolName); // Example
     }
 
     async onToolEnd(
@@ -472,12 +465,20 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
          metadata?: Record<string, unknown> | undefined,
          // options?: Record<string, any> // Not typically passed here
      ): Promise<void> {
+         console.log(`[Judgeval Handler] onRetrieverStart called for runId: ${runId}`); // Added log
          // console.log(`>>> onRetrieverStart: runId: ${runId}, name: ${serialized?.name}`); // Debug log
          const traceClient = this._getActiveTraceClient();
          if (!traceClient) return;
 
-         const retrieverName = serialized?.name ?? 'Unknown Retriever';
-         const spanName = `RETRIEVER: ${retrieverName}`;
+         // Match Python naming convention
+         const retrieverName = serialized?.name;
+         let spanName: string;
+         if (retrieverName) {
+             spanName = `RETRIEVER_${retrieverName.toUpperCase()}`;
+         } else {
+             spanName = "RETRIEVER_CALL";
+         }
+         // const spanName = `RETRIEVER: ${retrieverName}`; // Old naming
          this._startSpan(runId, spanName, "retriever"); // Use 'retriever' span type
 
          // Record input associated with the started span

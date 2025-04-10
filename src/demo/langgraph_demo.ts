@@ -2,6 +2,7 @@ import * as dotenv from 'dotenv';
 import { StateGraph, END } from "@langchain/langgraph";
 import { ChatOpenAI } from "@langchain/openai";
 import { BaseMessage } from "@langchain/core/messages";
+import { RunnableConfig } from "@langchain/core/runnables"; // Import RunnableConfig
 import { JudgevalLanggraphCallbackHandler } from "../common/integrations/langgraph"; // Adjust path if needed
 import { Tracer } from "../common/tracer"; // Adjust path if needed
 import { getEnvironmentVariable } from "@langchain/core/utils/env";
@@ -42,7 +43,8 @@ type PartialAgentState = Partial<AgentState>;
 
 // 2. Define the nodes
 // Use the specific update type for clarity
-async function callModel(state: AgentState): Promise<PartialAgentState> {
+// **** Update function signature to accept config ****
+async function callModel(state: AgentState, config?: RunnableConfig): Promise<PartialAgentState> {
   const { messages, input } = state; // Use input if needed, or pass relevant history
   const model = new ChatOpenAI({ temperature: 0, modelName: "gpt-4o-mini" }); // Use a specific model
 
@@ -55,7 +57,8 @@ async function callModel(state: AgentState): Promise<PartialAgentState> {
 
   // The handler should capture this automatically via onChatModelStart/onLlmEnd
   console.log("--- Node: callModel - Invoking model (handler should trace) ---");
-  const response = await model.invoke(modelMessages);
+  // **** Pass callbacks from config to model.invoke ****
+  const response = await model.invoke(modelMessages, { callbacks: config?.callbacks });
   console.log("--- Node: callModel - Model Response --- ", response.content);
 
   // Return the response to append to the messages list
@@ -90,7 +93,7 @@ const app = workflowWithNodesAndEdges.compile();
 
 // 5. Run the graph with the Judgeval handler
 async function runDemo() {
-  console.log("--- Starting LangGraph Demo ---");
+  // console.log("--- Starting LangGraph Demo ---"); // Removed
 
   // Get the tracer instance
   const tracer = Tracer.getInstance({
@@ -104,7 +107,7 @@ async function runDemo() {
     input: "What is the capital of France?",
   };
 
-  console.log("--- Invoking Graph within runInTrace --- ");
+  // console.log("--- Invoking Graph within runInTrace --- "); // Removed
   try {
     // Wrap the invocation in tracer.runInTrace
     const result = await tracer.runInTrace(
@@ -112,7 +115,7 @@ async function runDemo() {
             name: "langgraph-demo-trace", // Name for the overall trace
         },
         async (traceClient) => { // runInTrace provides the active client
-            console.log(`>>> Main: Inside trace context: ${traceClient.traceId}`);
+            // console.log(`>>> Main: Inside trace context: ${traceClient.traceId}`); // Removed
 
             // *** Instantiate handler INSIDE the trace context ***
             const judgevalHandler = new JudgevalLanggraphCallbackHandler(tracer);
@@ -122,13 +125,13 @@ async function runDemo() {
                 callbacks: [judgevalHandler],
             }) as AgentState; // Assert the final state shape
 
-            console.log("\n--- Graph Result (inside trace) ---");
-            console.log(JSON.stringify(graphResult, null, 2));
+            // console.log("\n--- Graph Result (inside trace) ---"); // Removed
+            // console.log(JSON.stringify(graphResult, null, 2)); // Removed
 
             // Access messages safely after type assertion
             const finalMessages = graphResult.messages || [];
             const finalAiMessage = finalMessages.length > 0 ? finalMessages[finalMessages.length - 1] : null;
-            console.log("\nFinal AI Message Content:", finalAiMessage?.content);
+            console.log("\nFinal AI Message Content:", finalAiMessage?.content); // Keep final output log
 
             return graphResult; // Return the result from the traced function
         }
@@ -136,15 +139,15 @@ async function runDemo() {
 
     // Handler should save the trace upon completion (when root span ends)
     // runInTrace handles saving the trace upon completion
-    console.log("--- Trace execution finished ---");
+    // console.log("--- Trace execution finished ---"); // Removed
 
   } catch (e) {
     console.error("--- Error during traced execution ---", e);
     // runInTrace attempts to save the trace even on error
   } finally {
-      console.log("--- Demo Finished ---");
+      // console.log("--- Demo Finished ---"); // Removed
       if (tracer.enableMonitoring) {
-          console.log("Check Judgment dashboard for the trace (should include root span and manual LLM span).");
+          console.log("Check Judgment dashboard for the trace."); // Simplified
       } else {
           console.log("Judgment monitoring disabled, no trace was sent.");
       }
