@@ -34,9 +34,8 @@ export const UNBOUNDED_SCORERS = new Set<APIScorer>([
     APIScorer.COMPARISON,
 ]);
 
-const ROOT_API = process.env.JUDGMENT_API_URL || 'https://api.judgmentlabs.ai';
-
 // API URLs
+export const ROOT_API = process.env.JUDGMENT_API_URL || 'https://api.judgmentlabs.ai';
 export const JUDGMENT_EVAL_API_URL = `${ROOT_API}/evaluate/`;
 export const JUDGMENT_DATASETS_PUSH_API_URL = `${ROOT_API}/datasets/push/`;
 export const JUDGMENT_DATASETS_PULL_API_URL = `${ROOT_API}/datasets/pull/`;
@@ -129,9 +128,9 @@ export const JUDGMENT_SUPPORTED_MODELS = new Set<string>(["osiris-large", "osiri
 
 // Combine model sets
 export const ACCEPTABLE_MODELS = new Set<string>([
-    ...LITELLM_SUPPORTED_MODELS,
-    ...TOGETHER_SUPPORTED_MODELS,
-    ...JUDGMENT_SUPPORTED_MODELS,
+  ...LITELLM_SUPPORTED_MODELS,
+  ...TOGETHER_SUPPORTED_MODELS,
+  ...JUDGMENT_SUPPORTED_MODELS,
 ]);
 
 // System settings

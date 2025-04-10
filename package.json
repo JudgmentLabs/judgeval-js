@@ -1,7 +1,8 @@
 {
   "name": "judgeval",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "directories": {
     "test": "tests"
   },
@@ -9,6 +10,7 @@
     "@anthropic-ai/sdk": "^0.39.0",
     "@types/node-fetch": "^2.6.12",
     "@types/uuid": "^10.0.0",
+    "axios": "^1.6.7",
     "dotenv": "^16.4.7",
     "node-fetch": "^2.7.0",
     "openai": "^4.93.0",
@@ -18,21 +20,30 @@
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "example:basic": "ts-node src/examples/basic-evaluation.ts",
+    "prepare": "npm run build"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/JudgmentLabs/judgeval-js.git"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "evaluation",
+    "llm",
+    "judgment",
+    "ai"
+  ],
+  "author": "Judgment Labs",
   "license": "ISC",
   "bugs": {
     "url": "https://github.com/JudgmentLabs/judgeval-js/issues"
   },
   "homepage": "https://github.com/JudgmentLabs/judgeval-js#readme",
-  "description": ""
+  "description": "TypeScript SDK for the JudgEval evaluation platform"
 }
