@@ -255,7 +255,6 @@ class TraceClient {
         entry.timestamp = entry.timestamp || Date.now() / 1000;
         // Simple logging for now, replace with proper storage/printing later
         // Consider more structured logging or removing noisy logs
-        // console.log(`[Trace ${this.traceId}] Add Entry: ${entry.type} - ${entry.function || 'N/A'} (Span: ${entry.span_id})`);
         this.entries.push(entry);
     }
 
@@ -366,7 +365,6 @@ class TraceClient {
             // this.recordOutput(result); // Moved recording logic outside span potentially
             return result; // Return result immediately after successful execution
         } catch (error) {
-             console.error(`Error in span '${name}' (spanId: ${spanId}):`, error);
              // Record error details as the output of the span
              this.recordOutput({ // Use recordOutput to capture error structure
                  error: String(error),
@@ -539,7 +537,6 @@ class TraceClient {
      // Save the trace data via the TraceManagerClient
      async save(emptySave: boolean = false): Promise<{ traceId: string; traceData: TraceSavePayload } | null> {
          if (!this.enableMonitoring || !this.traceManager) {
-              console.log("Monitoring disabled or TraceManager not initialized, skipping save.");
               return null;
          }
 
@@ -633,15 +630,11 @@ class TraceClient {
          };
 
          try {
-             // Avoid logging sensitive data in production
-             // console.log(`Saving trace ${this.traceId} (emptySave=${emptySave}). Data:`, JSON.stringify(traceData, null, 2));
-             console.log(`Saving trace ${this.traceId} (emptySave=${emptySave})...`);
              await this.traceManager.saveTrace(traceData, emptySave);
 
              // Trigger evaluation queue add *after* successful save (if not empty and enabled)
              if (!emptySave && this.enableEvaluations) {
                  try {
-                     console.log(`Adding trace ${this.traceId} to evaluation queue...`);
                      // Pass the same traceData used for saving
                      await this.traceManager.addTraceToEvalQueue(traceData);
                  } catch (evalError) {
@@ -649,7 +642,6 @@ class TraceClient {
                      // Decide if this should be a critical error or just a warning
                  }
              }
-              console.log(`Trace ${this.traceId} saved successfully.`);
              return { traceId: this.traceId, traceData };
          } catch (error) {
              console.error(`Failed to save trace ${this.traceId}:`, error);
@@ -732,13 +724,10 @@ class TraceClient {
      // Delete the trace via the TraceManagerClient
      async delete(): Promise<any> {
          if (!this.enableMonitoring || !this.traceManager) {
-              console.log("Monitoring disabled or TraceManager not initialized, skipping delete.");
               return null;
          }
          try {
-             console.log(`Deleting trace ${this.traceId}...`);
              const result = await this.traceManager.deleteTrace(this.traceId);
-             console.log(`Trace ${this.traceId} deleted successfully.`);
              return result; // Return the API response (often null on success for DELETE)
          } catch (error) {
              console.error(`Failed to delete trace ${this.traceId}:`, error);
@@ -803,7 +792,6 @@ class Tracer {
          // this.rules = config?.rules ?? []; // Initialize rules later
 
          this.initialized = true;
-         console.log(`Tracer Initialized. Monitoring: ${this.enableMonitoring}, Evaluations: ${this.enableEvaluations}, Project: ${this.projectName}`);
     }
 
     // Static method to get the singleton instance
@@ -869,7 +857,6 @@ class Tracer {
          if (traceClient.enableMonitoring) {
               traceClient.save(true).catch(err => {
                    // Log error but don't block execution
-                   console.error(`Failed to save initial empty trace for '${config.name}':`, err);
               }); // Fire-and-forget initial save
          }
 
@@ -1061,13 +1048,13 @@ class Tracer {
 function _getClientConfig(client: ApiClient): { spanName: string; originalMethod: (...args: any[]) => any } | null {
     // Ensure 'this' context is preserved using .bind()
     if (client instanceof OpenAI && typeof client?.chat?.completions?.create === 'function') {
-        return { spanName: "openai.chat.completions.create", originalMethod: client.chat.completions.create.bind(client.chat.completions) };
+        return { spanName: "OPENAI_API_CALL", originalMethod: client.chat.completions.create.bind(client.chat.completions) };
     } else if (client instanceof Anthropic && typeof client?.messages?.create === 'function') {
-        return { spanName: "anthropic.messages.create", originalMethod: client.messages.create.bind(client.messages) };
+        return { spanName: "ANTHROPIC_API_CALL", originalMethod: client.messages.create.bind(client.messages) };
     }
     // TODO: Add support for Together client if needed
     // else if (client instanceof Together && typeof client?.chat?.completions?.create === 'function') {
-    //     return { spanName: "together.chat.completions.create", originalMethod: client.chat.completions.create.bind(client.chat.completions) };
+    //     return { spanName: "TOGETHER_API_CALL", originalMethod: client.chat.completions.create.bind(client.chat.completions) };
     // }
 
     console.warn("Cannot wrap client: Unsupported type or incompatible SDK structure.", client?.constructor?.name);
@@ -1081,14 +1068,14 @@ function _formatInputData(client: ApiClient, args: any[]): Record<string, any> {
     const params = args[0] || {};
     try {
         if (client instanceof OpenAI /* || client instanceof Together */) {
-            // Extract common parameters
+            // Extract common parameters - ALIGNED WITH PYTHON
             return {
-                model: params.model, // Keep defaults or allow undefined based on desired behavior
+                model: params.model,
                 messages: params.messages,
-                temperature: params.temperature,
-                max_tokens: params.max_tokens,
-                top_p: params.top_p,
-                stream: params.stream,
+                // temperature: params.temperature,
+                // max_tokens: params.max_tokens,
+                // top_p: params.top_p,
+                // stream: params.stream,
             } as Record<string, any>; // Explicit cast
         } else if (client instanceof Anthropic) {
              // Extract Anthropic parameters
@@ -1117,17 +1104,11 @@ function _formatOutputData(client: ApiClient, response: any): Record<string, any
      // TODO: Add proper handling for streaming responses.
      // This currently assumes a complete, non-streamed response object.
      try {
-          // OpenAI / Together Structure
+          // OpenAI / Together Structure - ALIGNED WITH PYTHON
           if (client instanceof OpenAI /* || client instanceof Together */ && response?.choices?.[0]?.message) {
               const message = response.choices[0].message;
               return {
-                  id: response.id,
-                  model: response.model,
-                  // Combine content parts if needed (e.g., tool calls)
                   content: message.content, // Primary text content
-                  role: message.role,
-                  tool_calls: message.tool_calls, // Include tool calls if present
-                  finish_reason: response.choices[0].finish_reason,
                   usage: response.usage, // { prompt_tokens, completion_tokens, total_tokens }
               };
           }
@@ -1191,7 +1172,6 @@ export function wrap<T extends ApiClient>(client: T): T {
     }
 
     const { spanName, originalMethod } = config;
-    console.log(`Wrapping method ${spanName} for tracing...`);
 
     // Define the replacement (traced) method
     const tracedMethod = async (...args: any[]) => {
@@ -1201,10 +1181,6 @@ export function wrap<T extends ApiClient>(client: T): T {
         // If there's no active trace context OR monitoring is disabled for this specific trace,
         // call the original method directly without tracing overhead.
         if (!currentTrace || !currentTrace.enableMonitoring) {
-            // Optional: Warn if called outside a trace when monitoring is expected
-            // if (tracer.enableMonitoring && !currentTrace) {
-            //     console.warn(`${spanName} called outside of an active trace context.`);
-            // }
             return originalMethod(...args); // Pass arguments as received
         }
 
@@ -1231,7 +1207,6 @@ export function wrap<T extends ApiClient>(client: T): T {
                  return response; // Return the original response
 
             } catch (error) {
-                 console.error(`${spanName} API call failed:`, error);
                  // Record the error details using recordOutput
                  currentTrace.recordOutput(error); // Pass the Error object directly
                  throw error; // Re-throw the error
@@ -1244,15 +1219,12 @@ export function wrap<T extends ApiClient>(client: T): T {
     // Use 'as any' carefully to bypass strict SDK type checking for the assignment.
     if (client instanceof OpenAI && client.chat?.completions) {
         (client.chat.completions as any).create = tracedMethod;
-         console.log(`Successfully wrapped OpenAI client: chat.completions.create`);
     } else if (client instanceof Anthropic && client.messages) {
         (client.messages as any).create = tracedMethod;
-         console.log(`Successfully wrapped Anthropic client: messages.create`);
     }
     // TODO: Add Together wrapping if needed
     // else if (client instanceof Together && client.chat?.completions) {
     //     (client.chat.completions as any).create = tracedMethod;
-    //     console.log(`Successfully wrapped Together client: chat.completions.create`);
     // }
      else {
          // This case should ideally be caught by _getClientConfig, but added for safety
