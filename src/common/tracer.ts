@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 // Installed SDKs
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
+import Together from 'together-ai';
 
 // Local Imports
 import {
@@ -16,7 +17,7 @@ import {
 } from '../constants';
 
 // --- Type Aliases and Interfaces ---
-type ApiClient = OpenAI | Anthropic; // Add Together later if needed
+type ApiClient = OpenAI | Anthropic | Together;
 type SpanType = 'span' | 'tool' | 'llm' | 'evaluation' | 'chain';
 
 interface TraceEntry { // Minimal structure needed by runInSpan/recordInput/Output
@@ -612,6 +613,17 @@ class TraceClient {
                  }
                   // --- END: Add per-call cost calculation ---
              }
+ 
+             // Standardize keys within the specific entry's usage object for display consistency
+             // Note: This modification happens *after* the values have been used for total counts/costs above.
+             const usage = entry.output.usage; // Re-access usage for modification
+             if (usage && 'input_tokens' in usage && 'output_tokens' in usage) {
+                 usage.prompt_tokens = usage.input_tokens;
+                 usage.completion_tokens = usage.output_tokens;
+                 delete usage.input_tokens;
+                 delete usage.output_tokens;
+                 // total_tokens is already consistent or calculated correctly
+             }
          });
 
 
@@ -1052,10 +1064,10 @@ function _getClientConfig(client: ApiClient): { spanName: string; originalMethod
     } else if (client instanceof Anthropic && typeof client?.messages?.create === 'function') {
         return { spanName: "ANTHROPIC_API_CALL", originalMethod: client.messages.create.bind(client.messages) };
     }
-    // TODO: Add support for Together client if needed
-    // else if (client instanceof Together && typeof client?.chat?.completions?.create === 'function') {
-    //     return { spanName: "TOGETHER_API_CALL", originalMethod: client.chat.completions.create.bind(client.chat.completions) };
-    // }
+    // Add support for Together client
+    else if (client instanceof Together && typeof client?.chat?.completions?.create === 'function') {
+        return { spanName: "TOGETHER_API_CALL", originalMethod: client.chat.completions.create.bind(client.chat.completions) };
+    }
 
     console.warn("Cannot wrap client: Unsupported type or incompatible SDK structure.", client?.constructor?.name);
     return null;
@@ -1067,7 +1079,8 @@ function _formatInputData(client: ApiClient, args: any[]): Record<string, any> {
     // Assume args[0] contains the primary request payload (like Python's kwargs)
     const params = args[0] || {};
     try {
-        if (client instanceof OpenAI /* || client instanceof Together */) {
+        // Handle OpenAI and Together similarly
+        if (client instanceof OpenAI || client instanceof Together) {
             // Extract common parameters - ALIGNED WITH PYTHON
             return {
                 model: params.model,
@@ -1083,10 +1096,10 @@ function _formatInputData(client: ApiClient, args: any[]): Record<string, any> {
                  model: params.model,
                  messages: params.messages,
                  max_tokens: params.max_tokens,
-                 system: params.system,
-                 temperature: params.temperature,
-                 top_p: params.top_p,
-                 stream: params.stream,
+                 // system: params.system, // Removed for alignment
+                 // temperature: params.temperature, // Removed for alignment
+                 // top_p: params.top_p, // Removed for alignment
+                 // stream: params.stream, // Removed for alignment
              } as Record<string, any>; // Explicit cast
         }
     } catch (e) {
@@ -1105,7 +1118,7 @@ function _formatOutputData(client: ApiClient, response: any): Record<string, any
      // This currently assumes a complete, non-streamed response object.
      try {
           // OpenAI / Together Structure - ALIGNED WITH PYTHON
-          if (client instanceof OpenAI /* || client instanceof Together */ && response?.choices?.[0]?.message) {
+          if ((client instanceof OpenAI || client instanceof Together) && response?.choices?.[0]?.message) {
               const message = response.choices[0].message;
               return {
                   content: message.content, // Primary text content
@@ -1119,18 +1132,17 @@ function _formatOutputData(client: ApiClient, response: any): Record<string, any
                    .filter((block: any) => block.type === 'text')
                    .map((block: any) => block.text)
                    .join('');
-               // Include other block types (e.g., tool_use) if needed
-               const toolUseBlocks = response.content.filter((block: any) => block.type === 'tool_use');
+               
+               // Align with Python - only record content and usage base
+               const usage = {
+                  input_tokens: response.usage?.input_tokens,
+                  output_tokens: response.usage?.output_tokens,
+                  total_tokens: (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0)
+               };
 
                return {
-                   id: response.id,
-                   model: response.model,
-                   role: response.role,
                    content: textContent, // Combined text content
-                   tool_uses: toolUseBlocks.length > 0 ? toolUseBlocks : undefined, // Include tool use blocks
-                   stop_reason: response.stop_reason,
-                   stop_sequence: response.stop_sequence,
-                   usage: response.usage, // { input_tokens, output_tokens }
+                   usage: usage,
                };
           }
      } catch (e) {
@@ -1222,10 +1234,10 @@ export function wrap<T extends ApiClient>(client: T): T {
     } else if (client instanceof Anthropic && client.messages) {
         (client.messages as any).create = tracedMethod;
     }
-    // TODO: Add Together wrapping if needed
-    // else if (client instanceof Together && client.chat?.completions) {
-    //     (client.chat.completions as any).create = tracedMethod;
-    // }
+    // Add Together wrapping
+    else if (client instanceof Together && client.chat?.completions) {
+        (client.chat.completions as any).create = tracedMethod;
+    }
      else {
          // This case should ideally be caught by _getClientConfig, but added for safety
          console.error("Failed to apply wrapper: Could not find method to replace after config check.");
