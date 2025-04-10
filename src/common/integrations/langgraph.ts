@@ -52,26 +52,28 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         this.tracer = tracer ?? Tracer.getInstance(); // Use provided or singleton tracer
         // Attempt to get trace client if already in a context (e.g., wrapped in runInTrace)
         this.traceClient = this.tracer.getCurrentTrace() ?? null;
-        console.log(`Judgeval Handler Initialized. Initial TraceClient: ${this.traceClient ? this.traceClient.traceId : 'None'}`);
+        console.log(`>>> HANDLER: Constructor called. Initial TraceClient: ${this.traceClient ? this.traceClient.traceId : 'None'}. Monitoring Enabled: ${this.tracer.enableMonitoring}`);
     }
 
     private _ensureTraceClient(parentRunId?: string): boolean {
+        console.log(`>>> HANDLER: _ensureTraceClient called. Current traceClient: ${this.traceClient ? this.traceClient.traceId : 'None'}`);
         // If a traceClient already exists (from higher context), use it.
         if (this.traceClient) {
             // If an outer trace exists, this handler didn't create it.
             this.handlerCreatedTrace = false;
+            console.log(`>>> HANDLER: _ensureTraceClient - Using existing traceClient: ${this.traceClient.traceId}`);
             return true;
         }
         // If monitoring is disabled globally, don't create a trace.
         if (!this.tracer.enableMonitoring) {
-            console.log("Judgeval Handler: Monitoring disabled, skipping trace creation.");
+            console.log(">>> HANDLER: _ensureTraceClient - Monitoring disabled, skipping trace creation.");
             return false;
         }
 
         // If no trace client, this is likely the root call for LangGraph within this handler's scope.
         // Create a new root trace specifically for this LangGraph run.
         const traceName = `langgraph-run-${parentRunId ?? uuidv4()}`;
-        console.log(`Judgeval Handler: No active trace found. Creating new root trace: ${traceName}`);
+        console.log(`>>> HANDLER: _ensureTraceClient - No active trace found. Attempting to create new root trace: ${traceName}`);
 
         // Use the internal method directly if accessible, otherwise replicate its core logic
         // Assuming _startTraceInternal is not directly public/callable
@@ -89,14 +91,15 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
 
             this.traceClient = traceClient;
             this.handlerCreatedTrace = true; // Mark that this handler instance created the trace
+            console.log(`>>> HANDLER: _ensureTraceClient - Created new traceClient: ${this.traceClient.traceId}. handlerCreatedTrace: ${this.handlerCreatedTrace}`);
 
             // Save empty trace immediately
              this.traceClient.save(true).catch((err: any) => {
-                 console.error(`Judgeval Handler: Failed to save initial empty trace for '${traceName}':`, err);
+                 console.error(`>>> HANDLER_ERROR: Failed to save initial empty trace for '${traceName}':`, err);
              });
              return true;
         } catch (error: any) {
-             console.error("Judgeval Handler: Error creating TraceClient:", error);
+             console.error(">>> HANDLER_ERROR: Error creating TraceClient:", error);
              this.traceClient = null;
              this.handlerCreatedTrace = false;
              return false;
@@ -104,7 +107,11 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
     }
 
     private _startSpan(name: string, spanType: SpanType = "span"): string | null {
-        if (!this.traceClient || !this.traceClient.enableMonitoring) return null;
+        console.log(`>>> HANDLER: _startSpan called for name: '${name}', type: '${spanType}'. Current traceClient: ${this.traceClient ? this.traceClient.traceId : 'None'}`);
+        if (!this.traceClient || !this.traceClient.enableMonitoring) {
+            console.log(`>>> HANDLER: _startSpan - Skipping, traceClient missing or monitoring disabled.`);
+            return null;
+        }
 
         const startTime = Date.now() / 1000;
         const spanId = uuidv4();
@@ -114,6 +121,7 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
 
         // Calculate depth based on the handler's stack relative to the root span
         const depth = this.spanIdStack.length + (this.rootSpanId ? 1 : 0);
+        console.log(`>>> HANDLER: _startSpan - Creating span ${spanId} ('${name}') depth: ${depth}, parent: ${parentSpanId ?? 'None'}`);
 
         this.traceClient.addEntry({
             type: 'enter',
@@ -127,11 +135,12 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
 
         this.spanStartTimes[spanId] = startTime;
         this.spanIdStack.push(spanId);
+        console.log(`>>> HANDLER: _startSpan - Pushed ${spanId} to stack. Stack: [${this.spanIdStack.join(', ')}]`);
 
         // If this is the *first* span started by the handler in a trace it created, mark it as root
         if (this.handlerCreatedTrace && !this.rootSpanId) {
             this.rootSpanId = spanId;
-            console.log(`Judgeval Handler: Marked ${spanId} as root span for trace ${this.traceClient.traceId}`);
+            console.log(`>>> HANDLER: _startSpan - Marked ${spanId} as rootSpanId. handlerCreatedTrace: ${this.handlerCreatedTrace}`);
         }
 
         return spanId;
@@ -146,16 +155,18 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
 
 
     private _endSpan(spanId: string | null, spanType: SpanType = "span"): void {
+         console.log(`>>> HANDLER: _endSpan called for spanId: ${spanId}, type: ${spanType}. Stack top: ${this.spanIdStack[this.spanIdStack.length - 1] ?? 'Empty'}`);
          if (!spanId || !this.traceClient || !this.traceClient.enableMonitoring || !(spanId in this.spanStartTimes)) {
-             // console.log(`Judgeval Handler: Skipping endSpan for ${spanId} - trace/time missing`);
+             console.log(`>>> HANDLER: _endSpan - Skipping endSpan for ${spanId} - ID/trace/time missing or monitoring disabled.`);
              return;
          }
 
          // Pop the correct span from the stack
          if (this.spanIdStack.length > 0 && this.spanIdStack[this.spanIdStack.length - 1] === spanId) {
              this.spanIdStack.pop();
+             console.log(`>>> HANDLER: _endSpan - Popped ${spanId}. Stack after pop: [${this.spanIdStack.join(', ')}]`);
          } else {
-              console.warn(`Judgeval Handler: Span ID mismatch on exit. Stack top: ${this.spanIdStack[this.spanIdStack.length - 1]}, ending span: ${spanId}.`);
+              console.warn(`>>> HANDLER_WARN: Span ID mismatch on exit. Stack top: ${this.spanIdStack[this.spanIdStack.length - 1]}, ending span: ${spanId}.`);
               // Avoid popping if mismatch to prevent errors, but log it.
          }
 
@@ -179,18 +190,22 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
          delete this.spanStartTimes[spanId];
 
          // If this was the root span ending AND the handler created the trace, save it.
-         if (spanId === this.rootSpanId && this.handlerCreatedTrace && this.traceClient) {
-             console.log(`Judgeval Handler: Root span ${this.rootSpanId} ended. Saving trace ${this.traceClient.traceId}`);
+         const isRootEnding = spanId === this.rootSpanId;
+         const shouldSave = isRootEnding && this.handlerCreatedTrace && this.traceClient;
+         console.log(`>>> HANDLER: _endSpan - Checking save condition for ${spanId}. isRoot: ${isRootEnding}, handlerCreatedTrace: ${this.handlerCreatedTrace}, shouldSave: ${shouldSave}`);
+
+         if (shouldSave) {
+             console.log(`>>> HANDLER: _endSpan - Root span ${this.rootSpanId} ended. Saving trace ${this.traceClient.traceId}...`);
              const clientToSave = this.traceClient; // Capture client in case it gets reset
              this.rootSpanId = null; // Reset root marker
              this.handlerCreatedTrace = false; // Reset flag
              this.traceClient = this.tracer.getCurrentTrace() ?? null; // Reset to any outer trace *before* async save
 
              clientToSave.save(false).catch((err: any) => {
-                 console.error(`Judgeval Handler: Failed to save final trace ${clientToSave.traceId}:`, err);
+                 console.error(`>>> HANDLER_ERROR: Failed to save final trace ${clientToSave.traceId}:`, err);
              }).finally(() => {
+                 console.log(`>>> HANDLER: Trace ${clientToSave.traceId} save process finished.`);
                  // Additional cleanup if needed after save completes/fails
-                 console.log(`Judgeval Handler: Trace ${clientToSave.traceId} save process finished.`);
                  // Reset stack/times only after ensuring save is attempted
                  this.spanIdStack = [];
                  this.spanStartTimes = {};
@@ -206,10 +221,14 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         parentRunId?: string | undefined,
         tags?: string[] | undefined,
         metadata?: Record<string, unknown> | undefined,
-        // kwargs?: any // Langchain JS often uses a single 'options' or 'config' object at the end
         options?: Record<string, any> // Check if options are passed here
     ): Promise<void> {
+        console.log(`
+>>> HANDLER: onChainStart triggered. runId: ${runId}, parentRunId: ${parentRunId}`);
+        console.log(`>>> HANDLER: onChainStart - serialized: ${JSON.stringify(serialized)}, metadata: ${JSON.stringify(metadata)}, tags: ${tags}`);
+
         const currentSpanIdBeforeStart = this.spanIdStack[this.spanIdStack.length - 1] ?? null;
+        console.log(`>>> HANDLER: onChainStart - Span stack before start: [${this.spanIdStack.join(', ')}]`);
         // Ensure trace exists, potentially creating a root trace for this graph run
         const traceActive = this._ensureTraceClient(parentRunId ?? runId);
         if (!traceActive || !this.traceClient) {
@@ -248,6 +267,7 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
             // Generic chain step
             spanName = `CHAIN: ${executionName}`;
             spanType = "chain";
+            console.log(`>>> HANDLER: onChainStart - Starting generic chain span: ${spanName}`);
             const spanId = this._startSpan(spanName, spanType);
              if(this.traceClient) {
                  this.traceClient.recordInput({ args: inputs, options: options });
@@ -264,6 +284,10 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         options?: Record<string, any>
     ): Promise<void> {
         const currentSpanId = this.spanIdStack[this.spanIdStack.length - 1] ?? null;
+        console.log(`
+>>> HANDLER: onChainEnd triggered. runId: ${runId}, currentSpanId: ${currentSpanId}`);
+        console.log(`>>> HANDLER: onChainEnd - outputs: ${JSON.stringify(outputs)}, tags: ${tags}`);
+
         // console.log(`Judgeval Handler: onChainEnd called for span ${currentSpanId}, stack: ${this.spanIdStack}`);
         if (!this.traceClient || !currentSpanId) {
             // console.log("Judgeval Handler: Trace not active or no span ID in onChainEnd");
@@ -348,6 +372,8 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         metadata?: Record<string, unknown> | undefined,
         options?: Record<string, any>
     ): Promise<void> {
+        console.log(`
+>>> HANDLER: onLlmStart triggered. runId: ${runId}`);
         if (!this._ensureTraceClient(parentRunId ?? runId) || !this.traceClient) return;
 
         const invocationParams = extraParams?.invocation_params as Record<string, any> ?? extraParams ?? {};
@@ -381,6 +407,8 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
          metadata?: Record<string, unknown> | undefined,
          options?: Record<string, any>
      ): Promise<void> {
+         console.log(`
+>>> HANDLER: onChatModelStart triggered. runId: ${runId}`);
          if (!this._ensureTraceClient(parentRunId ?? runId) || !this.traceClient) return;
 
          const invocationParams = extraParams?.invocation_params as Record<string, any> ?? extraParams ?? {};
@@ -412,6 +440,8 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
      * @param parentRunId The unique ID of the parent run, if any.
      */
     async onLlmEnd(output: LLMResult, runId: string): Promise<void> {
+        console.log(`
+>>> HANDLER: onLlmEnd triggered. runId: ${runId}`);
         // Get the current span ID. Ensure traceClient exists.
         const currentSpanId = this.spanIdStack[this.spanIdStack.length - 1] ?? null;
         if (!this.traceClient || !currentSpanId) {
@@ -475,6 +505,8 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         parentRunId?: string | undefined,
         options?: Record<string, any>
     ): Promise<void> {
+        console.log(`
+>>> HANDLER: onLlmError triggered. runId: ${runId}`);
         const currentSpanId = this.spanIdStack[this.spanIdStack.length - 1] ?? null;
         if (!this.traceClient || !currentSpanId) return;
 
@@ -493,6 +525,8 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         metadata?: Record<string, unknown> | undefined,
         options?: Record<string, any>
     ): Promise<void> {
+         console.log(`
+>>> HANDLER: onToolStart triggered. runId: ${runId}`);
          if (!this._ensureTraceClient(parentRunId ?? runId) || !this.traceClient) return;
 
          const toolName = serialized?.name ?? 'unknown_tool';
@@ -508,6 +542,8 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         parentRunId?: string | undefined,
         options?: Record<string, any>
     ): Promise<void> {
+        console.log(`
+>>> HANDLER: onToolEnd triggered. runId: ${runId}`);
         const currentSpanId = this.spanIdStack[this.spanIdStack.length - 1] ?? null;
         if (!this.traceClient || !currentSpanId) return;
 
@@ -521,6 +557,8 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         parentRunId?: string | undefined,
         options?: Record<string, any>
     ): Promise<void> {
+        console.log(`
+>>> HANDLER: onToolError triggered. runId: ${runId}`);
         const currentSpanId = this.spanIdStack[this.spanIdStack.length - 1] ?? null;
         if (!this.traceClient || !currentSpanId) return;
 
@@ -539,6 +577,8 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
          metadata?: Record<string, unknown> | undefined,
          options?: Record<string, any>
      ): Promise<void> {
+         console.log(`
+>>> HANDLER: onRetrieverStart triggered. runId: ${runId}`);
          if (!this._ensureTraceClient(parentRunId ?? runId) || !this.traceClient) return;
 
          const retrieverName = serialized?.name ?? 'unknown_retriever';
@@ -557,6 +597,8 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
          tags?: string[] | undefined,
          options?: Record<string, any>
      ): Promise<void> {
+         console.log(`
+>>> HANDLER: onRetrieverEnd triggered. runId: ${runId}`);
          const currentSpanId = this.spanIdStack[this.spanIdStack.length - 1] ?? null;
          if (!this.traceClient || !currentSpanId) return;
 
@@ -582,6 +624,8 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
          tags?: string[] | undefined,
          options?: Record<string, any>
       ): Promise<void> {
+          console.log(`
+>>> HANDLER: onRetrieverError triggered. runId: ${runId}`);
           const currentSpanId = this.spanIdStack[this.spanIdStack.length - 1] ?? null;
           if (!this.traceClient || !currentSpanId) return;
 

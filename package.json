@@ -8,6 +8,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "@langchain/core": "^0.3.44",
+    "@langchain/langgraph": "^0.2.63",
+    "@langchain/openai": "^0.5.5",
     "@types/node-fetch": "^2.6.12",
     "@types/uuid": "^10.0.0",
     "dotenv": "^16.4.7",
