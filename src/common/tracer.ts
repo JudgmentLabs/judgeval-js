@@ -571,9 +571,48 @@ class TraceClient {
                      tokenCounts.completion_tokens += usage.output_tokens || 0;
                      // Anthropic total needs summing if not provided directly
                      tokenCounts.total_tokens += (usage.input_tokens || 0) + (usage.output_tokens || 0);
-
-                     // TODO: Add cost calculation if model and cost data are available
                  }
+
+                 // --- START: Add per-call cost calculation (mirroring Python) ---
+                 const modelName = entry.inputs?.model || ""; // Get model name from inputs
+                 const promptTokens = usage.prompt_tokens || usage.input_tokens || 0;
+                 const completionTokens = usage.completion_tokens || usage.output_tokens || 0;
+
+                 if (modelName) {
+                     try {
+                         // --- Placeholder for cost calculation ---
+                         // Replace this with actual cost calculation logic,
+                         // similar to Python's `cost_per_token(model=modelName, prompt_tokens=..., completion_tokens=...)`
+                         // You'll need a way to access model cost data (e.g., a library, a map, an API call).
+                         const promptCost = 0.0; // Replace with calculated prompt cost
+                         const completionCost = 0.0; // Replace with calculated completion cost
+                         const callTotalCost = promptCost + completionCost;
+                         // --- End Placeholder ---
+
+                         // Add cost info directly to the entry's usage object
+                         entry.output.usage.prompt_tokens_cost_usd = promptCost;
+                         entry.output.usage.completion_tokens_cost_usd = completionCost;
+                         entry.output.usage.total_cost_usd = callTotalCost;
+
+                         // Accumulate total costs
+                         tokenCounts.prompt_tokens_cost_usd += promptCost;
+                         tokenCounts.completion_tokens_cost_usd += completionCost;
+                         tokenCounts.total_cost_usd += callTotalCost;
+
+                     } catch (e) {
+                         console.warn(`Error calculating cost for model '${modelName}':`, e);
+                         // Assign null or 0 if cost calculation fails for this call
+                         entry.output.usage.prompt_tokens_cost_usd = null;
+                         entry.output.usage.completion_tokens_cost_usd = null;
+                         entry.output.usage.total_cost_usd = null;
+                     }
+                 } else {
+                     // Handle cases where model name is missing, if necessary
+                      entry.output.usage.prompt_tokens_cost_usd = null;
+                      entry.output.usage.completion_tokens_cost_usd = null;
+                      entry.output.usage.total_cost_usd = null;
+                 }
+                  // --- END: Add per-call cost calculation ---
              }
          });
 
@@ -821,8 +860,103 @@ class Tracer {
           });
       }
 
-     // TODO: Add observe() decorator equivalent (higher-order function)
-     // public observe(...) { ... }
+     /**
+      * Decorator/higher-order function to automatically trace function execution.
+      *
+      * @param options Configuration for the observation (name, spanType, etc.)
+      * @returns A function that takes the target function and returns a wrapped version.
+      */
+     observe<T extends (...args: any[]) => any>(options?: {
+         name?: string;
+         spanType?: SpanType;
+         // project_name?: string; // Add later if needed
+         // overwrite?: boolean; // Add later if needed
+     }) {
+         // If monitoring is globally disabled, return a no-op HOF
+         if (!this.enableMonitoring) {
+             return (func: T): T => func;
+         }
+
+         // Return the actual higher-order function
+         return (func: T): T => {
+             const spanName = options?.name || func.name || 'anonymous_function';
+             const spanType = options?.spanType || 'span';
+
+             const wrapper = (...args: Parameters<T>): ReturnType<T> | Promise<ReturnType<T>> => {
+                 const currentTrace = this.getCurrentTrace();
+
+                 // --- Case 1: Called outside an active trace context ---
+                 if (!currentTrace) {
+                     // Create a new root trace context automatically
+                     // Use runInTrace which handles creation, saving empty, running func, saving result
+                     return this.runInTrace({ name: spanName /*, projectName, overwrite */ }, async (traceClient) => {
+                         // Inside runInTrace, a top-level span is already created.
+                         // We might want to skip creating *another* span here, or adjust runInTrace.
+                         // For simplicity matching python's observe creating its own root span, let's run directly.
+
+                         // TODO: Reconcile runInTrace's automatic span with observe's desire to create *the* span.
+                         // Current simple approach: runInTrace creates a 'chain' span, observe's logic runs inside it.
+                         // Alternative: runInTrace doesn't create a span, observe does.
+
+                         // Let's stick to the simple approach for now:
+                         try {
+                            // Execute the original function
+                            const result = func(...args);
+                            // Await if it's async
+                            const finalResult = result instanceof Promise ? await result : result;
+                            // Note: runInSpan within runInTrace *should* record output, but maybe not inputs?
+                            // traceClient.recordInput({ args: args }); // Maybe record input manually?
+                            // traceClient.recordOutput(finalResult); // And output?
+                            return finalResult;
+                         } catch(error) {
+                             // Error is caught and trace saved by runInTrace
+                             throw error;
+                         }
+                     }) as Promise<ReturnType<T>>; // Assume async if starting trace
+                 }
+
+                 // --- Case 2: Called within an existing trace context ---
+                 else {
+                      // Use runInSpan on the existing trace client
+                      const executionLogic = () => {
+                          const result = func(...args);
+                          return result instanceof Promise ? result : Promise.resolve(result);
+                      };
+
+                      return currentTrace.runInSpan(spanName, { spanType }, async () => {
+                          // Record inputs *inside* the span
+                          // Convert args to a serializable format if needed
+                          const serializableArgs = args.map(arg => {
+                               try {
+                                   // Basic serialization check - improve if needed
+                                   return JSON.parse(JSON.stringify(arg));
+                               } catch {
+                                   return String(arg); // Fallback to string
+                               }
+                          });
+                          currentTrace.recordInput({ args: serializableArgs });
+
+                          try {
+                              const finalResult = await executionLogic();
+                              // Record output *inside* the span
+                              currentTrace.recordOutput(finalResult);
+                              return finalResult;
+                          } catch (error) {
+                              // runInSpan handles recording the error output
+                              console.error(`Error captured by observe decorator in span '${spanName}':`, error);
+                              throw error; // Re-throw error after it's recorded
+                          }
+                      }) as Promise<ReturnType<T>>; // runInSpan returns a Promise
+                 }
+             };
+
+             // Preserve original function name and properties if possible
+             Object.defineProperty(wrapper, 'name', { value: func.name, configurable: true });
+             // Copy other static properties if necessary
+
+             return wrapper as T;
+         };
+     }
 
      // TODO: Add score() decorator equivalent and async_evaluate() direct call
      // public score(...) { ... }
