@@ -1,0 +1,31 @@
+{
+  "name": "judgeval",
+  "version": "1.0.0",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "undici-types": "^6.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "typescript": "^5.8.3"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JudgmentLabs/judgeval-js.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/JudgmentLabs/judgeval-js/issues"
+  },
+  "homepage": "https://github.com/JudgmentLabs/judgeval-js#readme",
+  "description": ""
+}
