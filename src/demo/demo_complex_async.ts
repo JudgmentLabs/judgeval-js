@@ -1,3 +1,6 @@
+import * as dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' }); // Load .env.local
+
 import { setTimeout } from 'timers/promises';
 
 // Assuming tracer.ts is compiled to ./dist/common/tracer.js
@@ -16,7 +19,7 @@ const tracer = Tracer.getInstance({
 // --- Define Observed Functions (equivalent to @tracer.observe) ---
 
 // Level 5 - Deepest level
-const level5_function = tracer.observe() // Use observe as a HOF
+const level5_function = tracer.observe({ name: "level5_function" }) // Use observe as a HOF
     (async (param: string): Promise<string> => {
         console.log(`Level 5 function with ${param}`);
         await setTimeout(50); // Equivalent to asyncio.sleep(0.05)
@@ -24,7 +27,7 @@ const level5_function = tracer.observe() // Use observe as a HOF
     });
 
 // Recursive Fibonacci example
-const fib = tracer.observe()
+const fib = tracer.observe({ name: "fib" })
     (async (n: number): Promise<number> => {
         if (n <= 1) {
             return n;
@@ -36,7 +39,7 @@ const fib = tracer.observe()
 
 
 // Level 4 - Deep function that calls level 5 and fib
-const level4_deep_function = tracer.observe()
+const level4_deep_function = tracer.observe({ name: "level4_deep_function" })
     (async (param: string): Promise<string> => {
         console.log(`Level 4 deep function with ${param}`);
         const [result_l5, result_fib] = await Promise.all([
@@ -47,7 +50,7 @@ const level4_deep_function = tracer.observe()
     });
 
 // Level 4 - Deepest regular function
-const level4_function = tracer.observe()
+const level4_function = tracer.observe({ name: "level4_function" })
     (async (param: string): Promise<string> => {
         console.log(`Level 4 function with ${param}`);
         await setTimeout(50);
@@ -56,7 +59,7 @@ const level4_function = tracer.observe()
 
 
 // Level 3 - Second parallel function called by level2_parallel1
-const level3_parallel2 = tracer.observe()
+const level3_parallel2 = tracer.observe({ name: "level3_parallel2" })
     (async (param: string): Promise<string> => {
         console.log(`Level 3 parallel 2 with ${param}`);
         await setTimeout(100);
@@ -67,7 +70,7 @@ const level3_parallel2 = tracer.observe()
 
 
 // Level 3 - First parallel function called by level2_parallel1
-const level3_parallel1 = tracer.observe()
+const level3_parallel1 = tracer.observe({ name: "level3_parallel1" })
     (async (param: string): Promise<string> => {
         console.log(`Level 3 parallel 1 with ${param}`);
         // Nested Promise.all (gather) call with level 4 functions
@@ -81,7 +84,7 @@ const level3_parallel1 = tracer.observe()
 
 
 // Level 3 - Child of level 2 direct
-const level3_function = tracer.observe()
+const level3_function = tracer.observe({ name: "level3_function" })
     (async (param: string): Promise<string> => {
         console.log(`Level 3 function with ${param}`);
         // Call to level 4
@@ -91,7 +94,7 @@ const level3_function = tracer.observe()
 
 
 // Level 2 - Second parallel function
-const level2_parallel2 = tracer.observe()
+const level2_parallel2 = tracer.observe({ name: "level2_parallel2" })
     (async (param: string): Promise<string> => {
         console.log(`Level 2 parallel 2 with ${param}`);
         // Direct await to level 3
@@ -101,7 +104,7 @@ const level2_parallel2 = tracer.observe()
 
 
 // Level 2 - First parallel function
-const level2_parallel1 = tracer.observe()
+const level2_parallel1 = tracer.observe({ name: "level2_parallel1" })
     (async (param: string): Promise<string> => {
         console.log(`Level 2 parallel 1 with ${param}`);
         // Parallel call to level 3 functions using Promise.all
@@ -114,7 +117,7 @@ const level2_parallel1 = tracer.observe()
 
 
 // Level 2 - Direct child of root
-const level2_function = tracer.observe()
+const level2_function = tracer.observe({ name: "level2_function" })
     (async (param: string): Promise<string> => {
         console.log(`Level 2 function with ${param}`);
         // Call to level 3
@@ -150,16 +153,33 @@ async function main() {
     const startTime = Date.now();
     try {
         console.log("Starting complex async demo...");
-        const finalResult = await root_function(); // root_function is automatically traced
+
+        // Explicitly use runInTrace to get access to the traceClient
+        const finalResult = await tracer.runInTrace(
+            { name: "complex_async_ts_run" }, // Name for the overall run trace
+            async (traceClient) => { // Function receives traceClient
+                // The root function is already observed, so it will create its own span
+                const result = await root_function(); 
+                
+                // --- Add pretty print after execution --- 
+                console.log("\n--- Calling traceClient.print() ---");
+                traceClient.print(); 
+                console.log("--- Finished traceClient.print() ---");
+                // --- End pretty print --- 
+                
+                return result; // Return the result from root_function
+            }
+        );
+
         console.log(`\nAsync Final result: ${finalResult}`);
     } catch (error) {
         console.error("\nError during execution:", error);
     } finally {
         const endTime = Date.now();
         console.log(`Async Total execution time: ${((endTime - startTime) / 1000).toFixed(2)} seconds`);
-        // Note: Trace saving happens asynchronously in the background via runInTrace/runInSpan
-        // Allow some time for potential background saving/API calls to attempt completion
-        console.log("Waiting slightly for background trace saving to potentially finish...");
+        // Note: Trace saving happens asynchronously by runInTrace after the main function finishes
+        // Wait slightly for the background save triggered by runInTrace
+        console.log("Waiting slightly for runInTrace background save...");
         await setTimeout(2000); // Wait 2 seconds
         console.log("Demo finished.");
     }

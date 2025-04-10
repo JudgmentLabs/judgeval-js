@@ -141,8 +141,9 @@ class TraceManagerClient {
 
          // Optionally log the UI URL like the Python version
          if (!emptySave && response?.ui_results_url) {
-             // Use console.info or a dedicated logger for user-facing messages
-             console.info(`
+              // Use console.info or a dedicated logger for user-facing messages
+              // Note: We can't replicate Rich library's colored link easily in standard console
+              console.info(`
 🔍 View trace: ${response.ui_results_url}
 `);
          }
@@ -656,6 +657,78 @@ class TraceClient {
          }
      }
 
+     /**
+      * Prints the recorded trace entries to the console in a hierarchical format.
+      */
+     print(): void {
+         if (!this.enableMonitoring) {
+             console.log("Monitoring was disabled. No trace entries recorded.");
+             return;
+         }
+         if (this.entries.length === 0) {
+             console.log("No trace entries recorded.");
+             return;
+         }
+ 
+         console.log(`\n--- Trace Details: ${this.name} (ID: ${this.traceId}) ---`);
+ 
+         this.entries.forEach(entry => {
+             // Use a default depth of 0 if undefined
+             const indent = "  ".repeat(entry.depth ?? 0);
+             // Format timestamp if it exists
+             const timeStr = entry.timestamp ? `@ ${new Date(entry.timestamp * 1000).toISOString()}` : '';
+             // Shorten span and parent IDs for readability
+             const shortSpanId = entry.span_id ? `(id: ${entry.span_id.substring(0, 8)}...)` : '';
+             const shortParentId = entry.parent_span_id ? `(parent: ${entry.parent_span_id.substring(0, 8)}...)` : '';
+ 
+             try { // Add try-catch for safety during stringification
+                 switch (entry.type) {
+                     case 'enter':
+                         console.log(`${indent}→ ${entry.function || 'unknown'} ${shortSpanId} ${shortParentId} [${entry.span_type || 'span'}] ${timeStr}`);
+                         break;
+                     case 'exit':
+                         const durationStr = entry.duration !== undefined ? `(${entry.duration.toFixed(3)}s)` : '';
+                         console.log(`${indent}← ${entry.function || 'unknown'} ${shortSpanId} ${durationStr} ${timeStr}`);
+                         break;
+                     case 'input':
+                         // Truncate potentially large input strings
+                         let inputStr = JSON.stringify(entry.inputs);
+                         if (inputStr && inputStr.length > 200) {
+                              inputStr = inputStr.substring(0, 197) + '...';
+                         }
+                         console.log(`${indent}  Input (for ${shortSpanId}): ${inputStr || '{}'}`);
+                         break;
+                     case 'output':
+                     case 'error':
+                         // Truncate potentially large output/error strings
+                         let outputStr = JSON.stringify(entry.output);
+                         if (outputStr && outputStr.length > 200) {
+                             outputStr = outputStr.substring(0, 197) + '...';
+                         }
+                         const prefix = entry.type === 'error' ? 'Error' : 'Output';
+                         console.log(`${indent}  ${prefix} (for ${shortSpanId}): ${outputStr || 'null'}`);
+                         break;
+                     case 'evaluation':
+                         // Basic display for evaluation runs
+                         let evalStr = JSON.stringify(entry.evaluation_runs);
+                          if (evalStr && evalStr.length > 200) {
+                             evalStr = evalStr.substring(0, 197) + '...';
+                         }
+                         console.log(`${indent}  Evaluation (for ${shortSpanId}): ${evalStr || '[]'}`);
+                         break;
+                     default:
+                         console.log(`${indent}? Unknown entry type: ${JSON.stringify(entry)}`);
+                 }
+             } catch (stringifyError) {
+                  // Check if it's an error object before accessing message
+                  const errorMessage = stringifyError instanceof Error ? stringifyError.message : String(stringifyError);
+                  console.log(`${indent}! Error formatting entry: ${errorMessage}`);
+                  console.log(`${indent}  Raw entry:`, entry); // Log raw entry on formatting error
+             }
+         });
+         console.log(`--- End Trace: ${this.name} ---`);
+     }
+
      // Delete the trace via the TraceManagerClient
      async delete(): Promise<any> {
          if (!this.enableMonitoring || !this.traceManager) {
@@ -818,25 +891,35 @@ class Tracer {
               name: string,
               projectName?: string,
               overwrite?: boolean,
+              createRootSpan?: boolean; // ADDED: Option to control root span creation
               // rules?: Rule[] // Add later
           },
           func: (traceClient: TraceClient) => Promise<T> | T // Allow sync or async func
       ): Promise<T> {
           // Start the trace internally (creates client, saves empty trace)
           const traceClient = this._startTraceInternal(config);
+          // Determine if we should create the automatic root span
+          const shouldCreateRootSpan = config.createRootSpan ?? true; // Default to true
 
           // Run the user's function within the AsyncLocalStorage context for this trace
           return await currentTraceAsyncLocalStorage.run(traceClient, async () => {
               let result: T;
               try {
-                  // Automatically create a top-level span for the traced function
-                  // Use 'chain' to indicate a logical sequence or workflow root
-                  result = await traceClient.runInSpan(config.name, { spanType: 'chain' }, async () => {
-                      // Execute the user-provided function, passing the client
-                      const funcResult = func(traceClient);
-                      // Await if the user function is async
-                      return funcResult instanceof Promise ? await funcResult : funcResult;
-                  });
+                  // Conditionally create a top-level span for the traced function
+                  if (shouldCreateRootSpan) {
+                       // Use 'chain' to indicate a logical sequence or workflow root
+                       result = await traceClient.runInSpan(config.name, { spanType: 'chain' }, async () => {
+                           // Execute the user-provided function, passing the client
+                           const funcResult = func(traceClient);
+                           // Await if the user function is async
+                           return funcResult instanceof Promise ? await funcResult : funcResult;
+                       });
+                  } else {
+                       // Execute the user-provided function directly without the extra root span
+                       const funcResult = func(traceClient);
+                       result = funcResult instanceof Promise ? await funcResult : funcResult;
+                  }
+
 
                   // Save the completed trace data (not empty) after successful execution
                   if (traceClient.enableMonitoring) {
@@ -888,36 +971,45 @@ class Tracer {
                  // --- Case 1: Called outside an active trace context ---
                  if (!currentTrace) {
                      // Create a new root trace context automatically
-                     // Use runInTrace which handles creation, saving empty, running func, saving result
-                     return this.runInTrace({ name: spanName /*, projectName, overwrite */ }, async (traceClient) => {
-                         // Inside runInTrace, a top-level span is already created.
-                         // We might want to skip creating *another* span here, or adjust runInTrace.
-                         // For simplicity matching python's observe creating its own root span, let's run directly.
+                     // Use runInTrace, but tell it NOT to create its own root span,
+                     // as `observe` will create the correct span itself.
+                     return this.runInTrace({
+                         name: spanName,
+                         createRootSpan: false // MODIFIED: Tell runInTrace not to create the span
+                     }, async (traceClient) => {
+                         // Now, explicitly create the span for this observed function
+                         // using the logic identical to the nested case.
+                         const executionLogic = () => {
+                             const result = func(...args);
+                             return result instanceof Promise ? result : Promise.resolve(result);
+                         };
 
-                         // TODO: Reconcile runInTrace's automatic span with observe's desire to create *the* span.
-                         // Current simple approach: runInTrace creates a 'chain' span, observe's logic runs inside it.
-                         // Alternative: runInTrace doesn't create a span, observe does.
+                         return traceClient.runInSpan(spanName, { spanType }, async () => {
+                             const serializableArgs = args.map(arg => {
+                                  try {
+                                      return JSON.parse(JSON.stringify(arg));
+                                  } catch {
+                                      return String(arg); // Fallback
+                                  }
+                             });
+                             traceClient.recordInput({ args: serializableArgs });
 
-                         // Let's stick to the simple approach for now:
-                         try {
-                            // Execute the original function
-                            const result = func(...args);
-                            // Await if it's async
-                            const finalResult = result instanceof Promise ? await result : result;
-                            // Note: runInSpan within runInTrace *should* record output, but maybe not inputs?
-                            // traceClient.recordInput({ args: args }); // Maybe record input manually?
-                            // traceClient.recordOutput(finalResult); // And output?
-                            return finalResult;
-                         } catch(error) {
-                             // Error is caught and trace saved by runInTrace
-                             throw error;
-                         }
+                             try {
+                                 const finalResult = await executionLogic();
+                                 traceClient.recordOutput(finalResult);
+                                 return finalResult;
+                             } catch (error) {
+                                 // runInSpan handles recording the error output
+                                 console.error(`Error captured by observe decorator (root) in span '${spanName}':`, error);
+                                 throw error; // Re-throw error
+                             }
+                         });
                      }) as Promise<ReturnType<T>>; // Assume async if starting trace
                  }
 
                  // --- Case 2: Called within an existing trace context ---
                  else {
-                      // Use runInSpan on the existing trace client
+                      // Use runInSpan on the existing trace client (This logic remains the same)
                       const executionLogic = () => {
                           const result = func(...args);
                           return result instanceof Promise ? result : Promise.resolve(result);
@@ -943,7 +1035,7 @@ class Tracer {
                               return finalResult;
                           } catch (error) {
                               // runInSpan handles recording the error output
-                              console.error(`Error captured by observe decorator in span '${spanName}':`, error);
+                              console.error(`Error captured by observe decorator (nested) in span '${spanName}':`, error);
                               throw error; // Re-throw error after it's recorded
                           }
                       }) as Promise<ReturnType<T>>; // runInSpan returns a Promise
