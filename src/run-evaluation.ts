@@ -22,6 +22,20 @@ export class JudgmentAPIError extends Error {
 }
 
 /**
+ * Validates an API response to ensure it has the expected format
+ * Throws a JudgmentAPIError if the response is invalid
+ */
+export function validateApiResponse(response: any): void {
+  if (!response || typeof response !== 'object') {
+    throw new JudgmentAPIError('Invalid API response format: response is not an object');
+  }
+  
+  if (response.error) {
+    throw new JudgmentAPIError(`API error: ${response.error}`);
+  }
+}
+
+/**
  * Sends an evaluation run to the RabbitMQ evaluation queue
  */
 export async function sendToRabbitMQ(evaluationRun: EvaluationRun): Promise<any> {
@@ -71,50 +85,21 @@ export async function executeApiEval(evaluationRun: EvaluationRun): Promise<any[
     // Log the response for debugging
     console.log('API Response:', JSON.stringify(response.data).substring(0, 200) + '...');
     
-    // Handle different response formats
-    if (Array.isArray(response.data)) {
-      return response.data;
-    } else if (response.data && typeof response.data === 'object') {
-      // If the response is an object with results property
-      if (Array.isArray(response.data.results)) {
-        return response.data.results;
-      }
-      
-      // If it's just an object, wrap it in an array
-      return [response.data];
+    // Check if the response status code is not 2XX
+    if (response.status < 200 || response.status >= 300) {
+      const errorMessage = response.data?.detail || 'An unknown error occurred.';
+      console.error(`Error: ${errorMessage}`);
+      throw new JudgmentAPIError(errorMessage);
     }
     
-    // Fallback to mock data for testing if the response format is unexpected
-    console.warn('Unexpected API response format, falling back to mock data');
-    return evaluationRun.examples.map((example, index) => {
-      const mockScores: Record<string, any> = {};
-      
-      evaluationRun.scorers.forEach(scorer => {
-        if ('scoreType' in scorer) {
-          const scoreType = scorer.scoreType;
-          const score = 0.85; // Mock score
-          const threshold = scorer.threshold;
-          const success = score >= threshold;
-          
-          mockScores[scoreType] = {
-            name: scoreType,
-            score,
-            threshold,
-            success,
-            metadata: {}
-          };
-        }
-      });
-      
-      return {
-        example_index: index,
-        scorers_data: Object.values(mockScores),
-        error: null
-      };
-    });
+    // Validate the response format
+    validateApiResponse(response.data);
+    
+    // Return the response data directly, matching Python SDK behavior
+    return response.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response) {
-      const errorMessage = error.response.data.detail || JSON.stringify(error.response.data) || 'An unknown error occurred.';
+      const errorMessage = error.response.data?.detail || JSON.stringify(error.response.data) || 'An unknown error occurred.';
       console.error(`Error: ${errorMessage}`);
       throw new JudgmentAPIError(errorMessage);
     } else {
@@ -169,7 +154,7 @@ export async function checkEvalRunNameExists(
 export async function logEvaluationResults(
   mergedResults: ScoringResult[],
   evaluationRun: EvaluationRun
-): Promise<void> {
+): Promise<string | null> {
   try {
     console.log(`Logging evaluation results for ${evaluationRun.evalName}`);
     
@@ -186,7 +171,7 @@ export async function logEvaluationResults(
     
     console.log('Logging payload structure:', JSON.stringify(Object.keys(payload)));
     
-    await axios.post(
+    const response = await axios.post(
       JUDGMENT_EVAL_LOG_API_URL,
       payload,
       {
@@ -198,7 +183,26 @@ export async function logEvaluationResults(
       }
     );
     
+    // Check if the response is OK
+    if (response.status < 200 || response.status >= 300) {
+      const responseData = response.data;
+      const errorMessage = responseData?.detail || 'An unknown error occurred.';
+      console.error(`Error ${response.status}: ${errorMessage}`);
+      throw new JudgmentAPIError(errorMessage);
+    }
+    
+    // Validate the response format
+    validateApiResponse(response.data);
+    
     console.log(`Successfully logged evaluation results for ${evaluationRun.evalName}`);
+    
+    // Return UI results URL if available
+    if (response.data && response.data.ui_results_url) {
+      const url = response.data.ui_results_url;
+      return `\n🔍 You can view your evaluation results here: ${url}\n`;
+    }
+    
+    return null;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response) {
       throw new JudgmentAPIError(`Error logging evaluation results: ${JSON.stringify(error.response.data)}`);
@@ -423,7 +427,10 @@ export async function runEval(
 
   // Log results to Judgment API if requested
   if (evaluationRun.logResults) {
-    await logEvaluationResults(checkedResults, evaluationRun);
+    const uiResultsUrl = await logEvaluationResults(checkedResults, evaluationRun);
+    if (uiResultsUrl) {
+      console.log(uiResultsUrl);
+    }
   }
 
   return checkedResults;

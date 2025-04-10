@@ -570,26 +570,26 @@ export class JudgmentClient {
    */
   private async validateApiKey(): Promise<[boolean, string]> {
     try {
-      // For testing purposes, we'll skip the actual API call
-      console.log('Skipping API key validation for testing');
-      return [true, 'API key validation skipped for testing'];
-      
-      /* Uncomment for actual validation
-      const response = await axios.get(
-        `${ROOT_API}/validate-api-key/`,
+      const response = await axios.post(
+        `${ROOT_API}/validate_api_key/`,
+        {},  // Empty body
         {
           headers: {
+            'Content-Type': 'application/json',
             'Authorization': `Bearer ${this.judgmentApiKey}`,
             'X-Organization-Id': this.organizationId
           }
         }
       );
-
-      return [true, 'API key is valid'];
-      */
+      
+      if (response.status === 200) {
+        return [true, JSON.stringify(response.data)];
+      } else {
+        return [false, response.data?.detail || 'Error validating API key'];
+      }
     } catch (error) {
       if (axios.isAxiosError(error) && error.response) {
-        return [false, JSON.stringify(error.response.data)];
+        return [false, error.response.data?.detail || 'Error validating API key'];
       } else {
         return [false, String(error)];
       }
