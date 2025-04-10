@@ -1,0 +1,137 @@
+import * as dotenv from 'dotenv';
+import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
+import Together from 'together-ai';
+import { Tracer, wrap } from '../common/tracer'; // Adjust path as necessary
+
+// Load environment variables from .env file
+dotenv.config({ path: '.env.local' });
+
+// --- Environment Variable Checks ---
+function checkEnvVar(varName: string, isRequired: boolean = false): boolean {
+  if (!process.env[varName]) {
+    if (isRequired) {
+      console.error(`Error: Required environment variable ${varName} is not set.`);
+      process.exit(1);
+    }
+    console.warn(`Warning: Environment variable ${varName} is not set. Calls using this client may fail.`);
+    return false;
+  }
+  return true;
+}
+
+const hasOpenAIKey = checkEnvVar('OPENAI_API_KEY', true); // Assume OpenAI is primary for demo
+const hasAnthropicKey = checkEnvVar('ANTHROPIC_API_KEY');
+const hasTogetherKey = checkEnvVar('TOGETHER_API_KEY');
+
+if (!checkEnvVar('JUDGMENT_API_KEY')) {
+  console.warn("Warning: JUDGMENT_API_KEY environment variable is not set. Tracing will be disabled.");
+}
+if (!checkEnvVar('JUDGMENT_ORG_ID')) {
+  console.warn("Warning: JUDGMENT_ORG_ID environment variable is not set. Tracing will be disabled.");
+}
+
+// --- Main Demo Function ---
+async function runDemo() {
+  // 1. Initialize the Tracer
+  const tracer = Tracer.getInstance({
+    projectName: 'js-wrap-all-clients-demo',
+  });
+
+  // 2. Create and Wrap Clients
+  let openai: OpenAI | null = null;
+  let anthropic: Anthropic | null = null;
+  let together: Together | null = null;
+
+  if (hasOpenAIKey) {
+    openai = wrap(new OpenAI({ apiKey: process.env.OPENAI_API_KEY }));
+    console.log('OpenAI client wrapped.');
+  }
+  if (hasAnthropicKey) {
+    anthropic = wrap(new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }));
+    console.log('Anthropic client wrapped.');
+  }
+  if (hasTogetherKey) {
+    together = wrap(new Together({ apiKey: process.env.TOGETHER_API_KEY }));
+    console.log('Together client wrapped.');
+  }
+
+  // 3. Use the wrapped clients within a trace context
+  const traceName = 'llm-wrap-multi-client-demo';
+  console.log(`\nStarting trace: ${traceName}`);
+
+  try {
+    await tracer.runInTrace(
+      {
+        name: traceName,
+        overwrite: true, // Overwrite if running multiple times
+      },
+      async (traceClient) => {
+        console.log(`Inside trace context for ${traceClient.name} (ID: ${traceClient.traceId})`);
+
+        // --- OpenAI Call ---
+        if (openai) {
+          try {
+            console.log('\nMaking OpenAI API call...');
+            const params: OpenAI.Chat.ChatCompletionCreateParams = {
+              model: 'gpt-3.5-turbo',
+              messages: [{ role: 'user', content: 'Explain the concept of API wrapping briefly.' }],
+              max_tokens: 60,
+            };
+            const response = await openai.chat.completions.create(params);
+            console.log('OpenAI Response:', response.choices[0]?.message?.content?.trim());
+          } catch (error) {
+            console.error('OpenAI call failed:', error);
+          }
+        }
+
+        // --- Anthropic Call ---
+        if (anthropic) {
+          try {
+            console.log('\nMaking Anthropic API call...');
+            const params: Anthropic.Messages.MessageCreateParams = {
+              model: 'claude-3-haiku-20240307', // Use a valid Anthropic model
+              messages: [{ role: 'user', content: 'What is the capital of France?' }],
+              max_tokens: 50,
+            };
+            const response = await anthropic.messages.create(params);
+            // Anthropic response content is often in an array
+            const responseText = response.content.map(block => block.type === 'text' ? block.text : '').join('');
+            console.log('Anthropic Response:', responseText.trim());
+          } catch (error) {
+            console.error('Anthropic call failed:', error);
+          }
+        }
+
+        // --- Together AI Call ---
+        if (together) {
+          try {
+            console.log('\nMaking Together AI API call...');
+            // Adjust model name as needed for Together AI
+            const params = {
+              model: 'meta-llama/Llama-3-8b-chat-hf',
+              messages: [{ role: 'user', content: 'Write a short poem about clouds.' } as const],
+              max_tokens: 70,
+            };
+            const response = await together.chat.completions.create(params);
+            console.log('Together AI Response:', response.choices[0]?.message?.content?.trim());
+          } catch (error) {
+            console.error('Together AI call failed:', error);
+          }
+        }
+
+      }
+    );
+
+  } catch (error) {
+    // Errors during runInTrace setup or saving (less likely)
+    console.error('\n--- Error during trace execution framework ---');
+    console.error(error);
+    console.log('-------------------------------------------');
+  } finally {
+    console.log(`\nTrace finished. Check Judgment dashboard if monitoring was enabled.`);
+  }
+}
+
+// Run the demo
+runDemo(); 
