@@ -282,28 +282,28 @@ async function main() {
               // For a real async evaluation, you would use one of these methods:
               
               // Method 1: Use aRunEvaluation (recommended for async)
-              // await client.aRunEvaluation(
-              //   examples,
-              //   scorers,
-              //   "claude-3-opus-20240229", // Use a valid model name
-              //   undefined, // aggregator
-              //   { 
-              //     timestamp: runId, 
-              //     traceId: traceClient.traceId 
-              //   }, // metadata
-              //   true, // logResults
-              //   projectName,
-              //   evalName,
-              //   true, // override
-              //   true, // useJudgment
-              //   true // ignoreErrors
-              // );
+              await client.aRunEvaluation(
+                examples,
+                scorers,
+                "gpt-4o-mini", // Use a valid model name
+                undefined, // aggregator
+                { 
+                  timestamp: runId, 
+                  traceId: traceClient.traceId 
+                }, // metadata
+                true, // logResults
+                projectName,
+                evalName,
+                true, // override
+                true, // useJudgment
+                true // ignoreErrors
+              );
               
               // Method 2: Use evaluate with asyncExecution
               // await client.evaluate({
               //   examples,
               //   scorers,
-              //   model: "claude-3-opus-20240229", // Use a valid model name
+              //   model: "gpt-4o-mini", // Use a valid model name
               //   projectName,
               //   evalName,
               //   logResults: true,
