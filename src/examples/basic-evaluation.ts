@@ -156,7 +156,7 @@ async function runBasicEvaluation() {
     // Directly format and print results in Python SDK format
     function formatPythonOutput(results: any[], projectName: string, evalName: string) {
       console.log('\n                     ');
-      console.log(' You can view your evaluation results here: View Results');
+      console.log(' 🔍 You can view your evaluation results here: https://app.judgmentlabs.ai/app/experiment?project_name=' + projectName + '&eval_run_name=' + evalName);
       console.log('');
       
       let hasFailures = false;

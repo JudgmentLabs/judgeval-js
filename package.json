@@ -33,6 +33,9 @@
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1",
     "example:basic": "ts-node src/examples/basic-evaluation.ts",
+    "example:async": "ts-node src/examples/async-evaluation.ts",
+    "example:llm-async": "ts-node src/examples/llm-async-tracer.ts",
+    "examples": "npm run example:basic && npm run example:async && npm run example:llm-async",
     "prepare": "npm run build"
   },
   "repository": {

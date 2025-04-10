@@ -240,12 +240,6 @@ async function main() {
     console.log('   - aRunEvaluation: Part of the high-level JudgmentClient API');
     console.log('   - asyncEvaluate: Integrated with the tracing system for monitoring');
     
-    console.log('\n=== Pay-as-you-go Billing Integration ===');
-    console.log('Both methods integrate with the pay-as-you-go billing system:');
-    console.log('- 10,000 judgee limit per request to prevent excessive billing');
-    console.log('- Only successful scorers are counted for billing purposes');
-    console.log('- System checks regular resources before using pay-as-you-go');
-    
   } catch (error) {
     console.error(`Error in async evaluation: ${error instanceof Error ? error.message : String(error)}`);
   }

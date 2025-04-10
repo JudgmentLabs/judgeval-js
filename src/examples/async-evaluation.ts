@@ -6,11 +6,6 @@
  * 1. Submitting an async evaluation
  * 2. Tracking the progress of the evaluation
  * 3. Retrieving and displaying the results
- * 
- * The SDK integrates with the pay-as-you-go billing system, which:
- * - Enforces a 10,000 judgee limit per request to prevent excessive billing
- * - Only counts successful scorers for billing purposes
- * - Checks regular resources before using pay-as-you-go
  */
 
 import * as dotenv from 'dotenv';
@@ -283,13 +278,6 @@ async function main() {
               console.log('2. Check status with client.checkEvalStatus(projectName, evalName)');
               console.log('3. Poll for completion with client.waitForEvaluation(projectName, evalName, options)');
               console.log('4. Process results when complete');
-              
-              console.log('\n=== Pay-as-you-go Billing Integration ===');
-              console.log('The SDK integrates with the pay-as-you-go billing system:');
-              console.log('- 10,000 judgee limit per request to prevent excessive billing');
-              console.log('- Only successful scorers are counted for billing purposes');
-              console.log('- System checks regular resources before using pay-as-you-go');
-              console.log('- Organizations can use resources beyond tier limits without pre-purchasing');
               
               // For a real async evaluation, you would use one of these methods:
               
