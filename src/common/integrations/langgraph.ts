@@ -15,7 +15,7 @@ import { getEnvironmentVariable } from "@langchain/core/utils/env";
 import { ChatGeneration } from "@langchain/core/outputs"; // Import ChatGeneration
 
 import { v4 as uuidv4 } from 'uuid';
-import { Tracer, TraceClient, SpanType } from "../common/tracer"; // Adjust path
+import { Tracer, TraceClient, SpanType } from "../tracer"; // Adjust path
 
 // --- Global Handler Setup (Manual) ---
 // NOTE: LangChain JS context propagation might work differently than Python's hooks.
