@@ -614,15 +614,18 @@ class TraceClient {
                   // --- END: Add per-call cost calculation ---
              }
  
-             // Standardize keys within the specific entry's usage object for display consistency
-             // Note: This modification happens *after* the values have been used for total counts/costs above.
-             const usage = entry.output.usage; // Re-access usage for modification
-             if (usage && 'input_tokens' in usage && 'output_tokens' in usage) {
-                 usage.prompt_tokens = usage.input_tokens;
-                 usage.completion_tokens = usage.output_tokens;
-                 delete usage.input_tokens;
-                 delete usage.output_tokens;
-                 // total_tokens is already consistent or calculated correctly
+             // --- Standardize Keys (Moved Here) ---
+             // This ensures we only rename keys when we know entry.output.usage is valid
+             if (entry.span_type === 'llm' && entry.output?.usage) {
+                 const usage = entry.output.usage; // Safe to access now
+                 if ('input_tokens' in usage && 'output_tokens' in usage) {
+                     // Standardize for Anthropic-like structures
+                     usage.prompt_tokens = usage.input_tokens;
+                     usage.completion_tokens = usage.output_tokens;
+                     delete usage.input_tokens;
+                     delete usage.output_tokens;
+                     // total_tokens should already be consistent based on previous _formatOutputData step
+                 }
              }
          });
 
