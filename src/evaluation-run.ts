@@ -133,7 +133,7 @@ export class EvaluationRun {
 
   /**
    * Convert the evaluation run to a plain object
-   * This matches the Python SDK's model_dump method
+   * 
    */
   toJSON(): Record<string, any> {
     const data: Record<string, any> = {

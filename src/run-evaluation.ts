@@ -156,7 +156,7 @@ export async function logEvaluationResults(
   try {
     console.log(`Logging evaluation results for ${evaluationRun.evalName}`);
     
-    // Format the payload according to the server's expected format - match Python SDK exactly
+    // Format the payload according to the server's expected format
     const payload = {
       results: mergedResults.map(result => result.toJSON()),
       project_name: evaluationRun.projectName,
@@ -185,10 +185,10 @@ export async function logEvaluationResults(
       throw new JudgmentAPIError(errorMessage);
     }
     
-    // Return UI results URL if available - match Python SDK formatting exactly
+    // Return UI results URL if available
     if (response.data && response.data.ui_results_url) {
       const url = response.data.ui_results_url;
-      return `\n🔍 You can view your evaluation results here: [rgb(106,0,255)][link=${url}]View Results[/link]\n`;
+      return `\n🔍 You can view your evaluation results here: ${url} \n`;
     }
     
     return null;
