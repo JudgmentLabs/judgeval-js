@@ -16,6 +16,8 @@ import {
     // Add other necessary constants if needed
 } from '../constants';
 
+import { APIJudgmentScorer } from '../scorers/base-scorer';
+
 // --- Type Aliases and Interfaces ---
 
 // <<< NEW: Rule and Notification Types START >>>
@@ -27,16 +29,9 @@ interface NotificationConfig {
     send_at?: number; // Unix timestamp for scheduled notifications
 }
 
-// Defines the core information about a scorer needed for a rule condition.
-interface ScorerDefinition {
-    score_type: string; // The unique name/type of the scorer (e.g., "faithfulness")
-    threshold: number;  // The threshold for the scorer in this condition
-    // Add other relevant config from the scorer if needed by the backend
-}
-
 // Represents a single condition within a rule.
 interface Condition {
-    metric: ScorerDefinition;
+    metric: APIJudgmentScorer; // Use the scorer object directly
 }
 
 // Defines how conditions within a rule are combined.
@@ -54,7 +49,8 @@ interface Rule {
 // <<< NEW: Rule and Notification Types END >>>
 
 type ApiClient = OpenAI | Anthropic | Together;
-type SpanType = 'span' | 'tool' | 'llm' | 'evaluation' | 'chain';
+// type SpanType = 'span' | 'tool' | 'llm' | 'evaluation' | 'chain' | 'research';
+type SpanType = string; // Allow any string
 
 interface TraceEntry {
     type: 'enter' | 'exit' | 'input' | 'output' | 'error' | 'evaluation';
@@ -69,6 +65,33 @@ interface TraceEntry {
     parent_span_id?: string;
     evaluation_runs?: any[]; // Placeholder for evaluation results
 }
+
+// <<< NEW: Interface for the Evaluation Run Payload START >>>
+// Mirrors the structure needed for backend evaluation processing
+interface EvaluationRunPayload {
+    organization_id: string;
+    log_results: boolean;
+    project_name: string;
+    eval_name: string;
+    examples: { // Structure matching Python's Example within EvaluationRun
+        input?: string;
+        actual_output?: string;
+        expected_output?: string;
+        context?: string[];
+        retrieval_context?: string[];
+        tools_called?: string[];
+        expected_tools?: string[];
+        additional_metadata?: Record<string, any>;
+        trace_id: string;
+    }[];
+    scorers: APIJudgmentScorer[]; // Assuming only API scorers for now
+    model?: string;
+    metadata?: Record<string, any>;
+    judgment_api_key: string;
+    override?: boolean;
+    rules?: Rule[]; // Rules associated with this specific eval run
+}
+// <<< NEW: Interface for the Evaluation Run Payload END >>>
 
 // Interface for the data structure sent to the save endpoint
 interface TraceSavePayload {
@@ -220,6 +243,15 @@ const currentTraceAsyncLocalStorage = new AsyncLocalStorage<TraceClient>();
 // Holds the ID of the currently active span within a trace
 const currentSpanAsyncLocalStorage = new AsyncLocalStorage<string>();
 
+// --- Helper Functions ---
+
+// Helper function to sanitize names (e.g., replace spaces with underscores)
+function sanitizeName(name: string): string {
+    // Replace spaces with underscores and remove potentially problematic characters
+    // You can adjust the regex further if other characters cause issues.
+    return name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_.-]/g, '');
+}
+
 // --- Core Trace Classes ---
 
 /**
@@ -227,7 +259,7 @@ const currentSpanAsyncLocalStorage = new AsyncLocalStorage<string>();
  */
 class TraceClient {
     public readonly traceId: string;
-    public readonly name: string;
+    public readonly name: string; // This will now store the sanitized name
     public readonly projectName: string;
     public readonly overwrite: boolean;
     public readonly rules: Rule[];
@@ -243,6 +275,7 @@ class TraceClient {
     private traceManager: TraceManagerClient | null = null; // Can be null if monitoring disabled
     private apiKey: string;
     private organizationId: string;
+    private originalName: string; // Keep the original name if needed for display purposes
 
     constructor(
          config: {
@@ -261,7 +294,13 @@ class TraceClient {
          }
     ) {
          this.traceId = config.traceId || uuidv4();
-         this.name = config.name || 'default_trace';
+         this.originalName = config.name || 'default_trace'; // Store original
+         this.name = sanitizeName(this.originalName); // Use sanitized name internally
+         // If the sanitized name is empty, fallback to a default
+         if (!this.name) {
+             console.warn(`Original trace name "${this.originalName}" sanitized to empty string. Using default_trace_${this.traceId.substring(0, 8)}.`);
+             this.name = `default_trace_${this.traceId.substring(0, 8)}`;
+         }
          this.projectName = config.projectName ?? config.tracer.projectName;
          this.overwrite = config.overwrite ?? false;
          this.rules = config.rules ?? [];
@@ -282,7 +321,7 @@ class TraceClient {
          this.startTime = Date.now() / 1000;
 
          if (this.enableMonitoring) {
-             this.traceManager = new TraceManagerClient(this.apiKey, this.organizationId);
+              this.traceManager = new TraceManagerClient(this.apiKey, this.organizationId);
          }
     }
 
@@ -702,15 +741,17 @@ class TraceClient {
      }
 
     /**
-     * Asynchronously evaluate an example using the provided scorers.
-     * This is a port of the Python SDK's async_evaluate method.
-     * 
-     * @param scorers Array of scorers to use for evaluation
+     * Asynchronously evaluate an example using the provided scorers,
+     * embedding the evaluation request into the trace data.
+     * Ported from the Python SDK's async_evaluate method.
+     *
+     * @param scorers Array of scorers to use for evaluation (currently assumes APIJudgmentScorer)
      * @param options Evaluation options including input, outputs, and metadata
-     * @returns Promise that resolves when the evaluation has been submitted
+     * @returns Promise that resolves when the evaluation entry has been added to the trace
      */
     async asyncEvaluate(
-        scorers: any[],
+        // TODO: Allow JudgevalScorer type if rules are not used?
+        scorers: APIJudgmentScorer[],
         options: {
             input?: string;
             actualOutput?: string;
@@ -728,10 +769,14 @@ class TraceClient {
             console.warn("Evaluations are disabled. Skipping async evaluation.");
             return;
         }
+        if (!scorers || scorers.length === 0) {
+            console.warn("No scorers provided. Skipping async evaluation.");
+            return;
+        }
 
         const startTime = Date.now() / 1000; // Record start time in seconds
 
-        // Create example from options
+        // Create example structure matching Python/backend expectations
         const example = {
             input: options.input || "",
             actual_output: options.actualOutput || "",
@@ -748,68 +793,114 @@ class TraceClient {
             // Get the current span ID from the context
             const currentSpanId = currentSpanAsyncLocalStorage.getStore();
             if (!currentSpanId) {
-                console.warn("No active span found for async evaluation.");
-                return;
+                console.warn("No active span found for async evaluation. Evaluation will not be associated with a specific step.");
+                // Decide if we should proceed or return. For now, proceed without span association.
+                // return;
             }
 
-            // Determine function name based on previous entries
-            let functionName = "unknown_function"; // Default
-            let entrySpanType = "span"; // Default span type
-
-            // Find the function name associated with the current span
-            for (let i = this.entries.length - 1; i >= 0; i--) {
-                const entry = this.entries[i];
-                if (entry.span_id === currentSpanId && entry.type === 'enter') {
-                    functionName = entry.function || "unknown_function";
-                    entrySpanType = entry.span_type || "span";
-                    break;
+            // Determine function name and depth (best effort if spanId is missing)
+            let functionName = "unknown_function";
+            let entrySpanType = "evaluation";
+            let currentDepth = 0;
+            if (currentSpanId) {
+                currentDepth = this.spanDepths[currentSpanId] ?? 0;
+                for (let i = this.entries.length - 1; i >= 0; i--) {
+                    const entry = this.entries[i];
+                    if (entry.span_id === currentSpanId && entry.type === 'enter') {
+                        functionName = entry.function || "unknown_function";
+                        // Keep span_type as 'evaluation' for the entry itself
+                        break;
+                    }
                 }
             }
 
-            // Get depth for the current span
-            const currentDepth = this.spanDepths[currentSpanId] || 0;
-
-            // Create evaluation run name
+            // --- Create evaluation run name (similar to Python) ---
+            // Capitalize scorer names
             const scorerNames = scorers.map(scorer => {
-                const name = scorer.constructor.name || "Unknown";
+                // Attempt to get score_type, fallback to class name or Unknown
+                const name = scorer?.scoreType || scorer?.constructor?.name || "Unknown";
                 return name.charAt(0).toUpperCase() + name.slice(1);
             }).join(',');
+            // Use trace name and shortened span ID (or trace ID if no span)
+            const idPart = currentSpanId ? currentSpanId.substring(0, 8) : this.traceId.substring(0, 8);
+            const evalName = `${this.name.charAt(0).toUpperCase() + this.name.slice(1)}-${idPart}-[${scorerNames}]`;
+            // --- End eval name creation ---
 
-            const evalName = `${this.name.charAt(0).toUpperCase() + this.name.slice(1)}-${currentSpanId.substring(0, 8)}-[${scorerNames}]`;
+            // Process rules (currently just using this.rules directly)
+            const loadedRules = this.rules; // TODO: Add ScorerWrapper-like processing if needed in TS
 
-            // Create evaluation run
-            const evalRun = {
+            // Construct the evaluation payload
+            const evalRunPayload: EvaluationRunPayload = {
                 organization_id: this.organizationId,
                 log_results: options.logResults !== false, // Default to true
                 project_name: this.projectName,
                 eval_name: evalName,
                 examples: [example],
-                scorers: scorers,
+                scorers: scorers, // Pass scorers directly
                 model: options.model || "",
-                metadata: {},
+                metadata: {}, // Matches Python tracer
                 judgment_api_key: this.apiKey,
-                override: this.overwrite
+                override: this.overwrite, // Use trace's overwrite setting
+                rules: loadedRules // Pass the processed rules
             };
 
-            // Add evaluation entry to the trace
-            this.addEntry({
-                type: "evaluation",
-                function: functionName,
-                span_id: currentSpanId,
-                depth: currentDepth,
-                timestamp: Date.now() / 1000,
-                evaluation_runs: [evalRun],
-                duration: (Date.now() / 1000) - startTime,
-                span_type: "evaluation"
-            });
-
-            // In a real implementation, you would submit the evaluation to the backend
-            // This is handled by the save method when the trace is saved
-            console.log(`Async evaluation submitted for ${evalName}`);
+            // Add evaluation entry using the helper method
+            this._addEvalRun(evalRunPayload, startTime);
 
         } catch (error) {
-            console.warn(`Failed to submit async evaluation: ${error instanceof Error ? error.message : String(error)}`);
+            console.error(`Failed during asyncEvaluate execution: ${error instanceof Error ? error.message : String(error)}`);
+            // Decide if we should re-throw or just log
         }
+    }
+
+    /**
+     * Private helper to add an evaluation entry to the trace.
+     * This mirrors the structure of Python's add_eval_run.
+     *
+     * @param evalRunPayload The constructed payload for the evaluation.
+     * @param startTime The start time (in seconds) of the evaluation process.
+     */
+    private _addEvalRun(evalRunPayload: EvaluationRunPayload, startTime: number): void {
+        const currentSpanId = currentSpanAsyncLocalStorage.getStore();
+        if (!currentSpanId) {
+            // If no span ID, the evaluation entry won't be linked to a specific span
+            // This might happen if asyncEvaluate is called outside a runInSpan context
+            console.warn("Adding evaluation entry without an active span ID.");
+        }
+
+        let functionName = "unknown_function";
+        let currentDepth = 0; // Default depth if no span
+
+        if (currentSpanId) {
+            currentDepth = this.spanDepths[currentSpanId] ?? 0;
+            // Find the function name associated with the current span_id
+            for (let i = this.entries.length - 1; i >= 0; i--) {
+                const entry = this.entries[i];
+                if (entry.span_id === currentSpanId && entry.type === 'enter') {
+                    functionName = entry.function || "unknown_function";
+                    break;
+                }
+            }
+        }
+
+        const duration = (Date.now() / 1000) - startTime;
+
+        // Add evaluation entry to the trace
+        this.addEntry({
+            type: "evaluation",
+            function: functionName,
+            span_id: currentSpanId, // May be undefined
+            depth: currentDepth,
+            timestamp: Date.now() / 1000,
+            evaluation_runs: [evalRunPayload], // Embed the payload
+            duration: duration,
+            span_type: "evaluation"
+        });
+    }
+
+    // OPTIONAL: Add a method to get the original name if needed elsewhere
+    getOriginalName(): string {
+        return this.originalName;
     }
 }
 
@@ -1154,7 +1245,6 @@ export {
     currentSpanAsyncLocalStorage,
     Rule,
     Condition,
-    ScorerDefinition,
     NotificationConfig,
     CombineType,
     TraceEntry,
