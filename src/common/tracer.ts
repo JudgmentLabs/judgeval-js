@@ -243,6 +243,15 @@ const currentTraceAsyncLocalStorage = new AsyncLocalStorage<TraceClient>();
 // Holds the ID of the currently active span within a trace
 const currentSpanAsyncLocalStorage = new AsyncLocalStorage<string>();
 
+// --- Helper Functions ---
+
+// Helper function to sanitize names (e.g., replace spaces with underscores)
+function sanitizeName(name: string): string {
+    // Replace spaces with underscores and remove potentially problematic characters
+    // You can adjust the regex further if other characters cause issues.
+    return name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_.-]/g, '');
+}
+
 // --- Core Trace Classes ---
 
 /**
@@ -250,7 +259,7 @@ const currentSpanAsyncLocalStorage = new AsyncLocalStorage<string>();
  */
 class TraceClient {
     public readonly traceId: string;
-    public readonly name: string;
+    public readonly name: string; // This will now store the sanitized name
     public readonly projectName: string;
     public readonly overwrite: boolean;
     public readonly rules: Rule[];
@@ -266,6 +275,7 @@ class TraceClient {
     private traceManager: TraceManagerClient | null = null; // Can be null if monitoring disabled
     private apiKey: string;
     private organizationId: string;
+    private originalName: string; // Keep the original name if needed for display purposes
 
     constructor(
          config: {
@@ -284,7 +294,13 @@ class TraceClient {
          }
     ) {
          this.traceId = config.traceId || uuidv4();
-         this.name = config.name || 'default_trace';
+         this.originalName = config.name || 'default_trace'; // Store original
+         this.name = sanitizeName(this.originalName); // Use sanitized name internally
+         // If the sanitized name is empty, fallback to a default
+         if (!this.name) {
+             console.warn(`Original trace name "${this.originalName}" sanitized to empty string. Using default_trace_${this.traceId.substring(0, 8)}.`);
+             this.name = `default_trace_${this.traceId.substring(0, 8)}`;
+         }
          this.projectName = config.projectName ?? config.tracer.projectName;
          this.overwrite = config.overwrite ?? false;
          this.rules = config.rules ?? [];
@@ -305,7 +321,7 @@ class TraceClient {
          this.startTime = Date.now() / 1000;
 
          if (this.enableMonitoring) {
-             this.traceManager = new TraceManagerClient(this.apiKey, this.organizationId);
+              this.traceManager = new TraceManagerClient(this.apiKey, this.organizationId);
          }
     }
 
@@ -880,6 +896,11 @@ class TraceClient {
             duration: duration,
             span_type: "evaluation"
         });
+    }
+
+    // OPTIONAL: Add a method to get the original name if needed elsewhere
+    getOriginalName(): string {
+        return this.originalName;
     }
 }
 

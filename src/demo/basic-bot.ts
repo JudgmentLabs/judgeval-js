@@ -244,7 +244,7 @@ async function main() {
     try {
         cuisine = await rl.question("What kind of food would you like to eat? ");
     } finally {
-         rl.close(); // Ensure readline closes even if runInTrace throws early
+         rl.close(); // Ensure readline closes
     }
 
 
@@ -256,20 +256,9 @@ async function main() {
     console.log(`\nOkay, looking for ${cuisine} recommendations...`);
 
     try {
-        // Run the main logic within a named trace
-        const recommendation = await judgment.runInTrace(
-            {
-                name: `Food Bot Recommendation: ${cuisine}`,
-                 // Optional: Add input/output logging to trace automatically if needed
-                 // input: { cuisine: cuisine }
-            },
-            async (traceClient: TraceClient) => { // runInTrace provides the traceClient -> Add type TraceClient
-                console.log(`Trace started: ${traceClient.traceId}`);
-                // Call the main application logic function
-                return await get_food_recommendations(cuisine);
-                // Trace saving is handled automatically by runInTrace on success/error
-            }
-        );
+        // Call the main application logic function directly.
+        // The @observe decorator on get_food_recommendations will handle trace creation.
+        const recommendation = await get_food_recommendations(cuisine);
 
         console.log("\n--- Recommendation ---");
         console.log(recommendation);
