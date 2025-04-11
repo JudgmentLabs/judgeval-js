@@ -160,8 +160,7 @@ async function runBasicEvaluation() {
     });
     
     // Use simplified print function - matches Python SDK's print(results) behavior
-    // Pass projectName and evalName to ensure URL is printed
-    logger.print(arResults, projectName, `${evalRunName}-ar`);
+    logger.print(arResults);
 
     // Test AnswerCorrectness scorer
     const acResults = await judgmentClient.evaluate({
@@ -173,8 +172,7 @@ async function runBasicEvaluation() {
     });
     
     // Use simplified print function - matches Python SDK's print(results) behavior
-    // Pass projectName and evalName to ensure URL is printed
-    logger.print(acResults, projectName, `${evalRunName}-ac`);
+    logger.print(acResults);
 
     // Test Faithfulness scorer
     const faithResults = await judgmentClient.evaluate({
@@ -186,8 +184,7 @@ async function runBasicEvaluation() {
     });
     
     // Use simplified print function - matches Python SDK's print(results) behavior
-    // Pass projectName and evalName to ensure URL is printed
-    logger.print(faithResults, projectName, `${evalRunName}-faith`);
+    logger.print(faithResults);
 
     // Test Hallucination scorer
     const hallResults = await judgmentClient.evaluate({

@@ -9,6 +9,7 @@ import dotenv from 'dotenv';
 import { ExampleBuilder } from '../data/example';
 import { JudgmentClient } from '../judgment-client';
 import { FaithfulnessScorer } from '../scorers/api-scorer';
+import logger from '../common/logger';
 
 // Load environment variables
 dotenv.config();
@@ -20,7 +21,7 @@ async function main() {
     process.env.JUDGMENT_ORG_ID
   );
 
-  console.log("Successfully initialized JudgmentClient!");
+  logger.info("Successfully initialized JudgmentClient!");
 
   // Create a unique evaluation run name with timestamp to avoid conflicts
   const evalRunName = `test-run-${Date.now()}`;
@@ -35,7 +36,7 @@ async function main() {
   // Create a scorer
   const scorer = new FaithfulnessScorer(0.5);
   
-  console.log(`Starting async evaluation with run name: ${evalRunName}`);
+  logger.info(`Starting async evaluation with run name: ${evalRunName}`);
   
   try {
     // Run the async evaluation - exactly matching Python SDK's demo.py
@@ -52,24 +53,24 @@ async function main() {
     );
     
     // Print the results - this will be an empty array for async evaluations
-    console.log("Async evaluation submitted successfully!");
-    console.log("Results:", results);
+    logger.info("Async evaluation submitted successfully!");
+    logger.print(results);
     
-    console.log("\nYou can check the status of this evaluation using:");
-    console.log(`const status = await client.checkEvalStatus("js-sdk-async-demo", "${evalRunName}");`);
+    logger.info("\nYou can check the status of this evaluation using:");
+    logger.info(`const status = await client.checkEvalStatus("js-sdk-async-demo", "${evalRunName}");`);
     
-    console.log("\nOr wait for it to complete using:");
-    console.log(`const results = await client.waitForEvaluation("js-sdk-async-demo", "${evalRunName}");`);
+    logger.info("\nOr wait for it to complete using:");
+    logger.info(`const results = await client.waitForEvaluation("js-sdk-async-demo", "${evalRunName}");`);
     
-    console.log("\nYou can also view the results in the Judgment UI at:");
-    console.log(`https://app.judgmentlabs.ai/app/experiment?project_name=js-sdk-async-demo&eval_run_name=${evalRunName}`);
+    logger.info("\nYou can also view the results in the Judgment UI at:");
+    logger.info(`https://app.judgmentlabs.ai/app/experiment?project_name=js-sdk-async-demo&eval_run_name=${evalRunName}`);
   } catch (error) {
-    console.error("Error running async evaluation:", error);
+    logger.error("Error running async evaluation: " + (error instanceof Error ? error.message : String(error)));
   }
 }
 
 // Run the example
 main().catch(error => {
-  console.error("Error:", error);
+  logger.error("Error: " + (error instanceof Error ? error.message : String(error)));
   process.exit(1);
 });

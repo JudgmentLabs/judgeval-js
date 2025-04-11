@@ -5,21 +5,18 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { format, transports, Logger } from 'winston';
-import * as winston from 'winston';
 
 // Define logging state
-const LOGGING_STATE = {
-  enabled: true,
-  path: null as string | null
-};
+class LoggingState {
+  enabled: boolean = false;
+  path: string | null = null;
+}
+
+const LOGGING_STATE = new LoggingState();
 
 // Track current example info
 let currentExampleId: string | null = null;
 let currentTimestamp: string | null = null;
-
-// Enable logging by default
-let loggingEnabled = true;
 
 // Define a simple logger interface
 interface SimpleLogger {
@@ -29,79 +26,82 @@ interface SimpleLogger {
   debug: (message: string) => void;
 }
 
+// Create a simple logger that writes to console
+const logger: SimpleLogger = {
+  debug: (message: string) => {
+    if (LOGGING_STATE.enabled) {
+      console.debug(`[DEBUG] ${message}`);
+    }
+  },
+  info: (message: string) => {
+    if (LOGGING_STATE.enabled) {
+      console.info(`[INFO] ${message}`);
+    }
+  },
+  warn: (message: string) => {
+    if (LOGGING_STATE.enabled) {
+      console.warn(`[WARN] ${message}`);
+    }
+  },
+  error: (message: string) => {
+    if (LOGGING_STATE.enabled) {
+      console.error(`[ERROR] ${message}`);
+    }
+  }
+};
+
 /**
  * Enable logging
- * @param namespace The namespace to use for logging
+ * @param name The namespace to use for logging
  * @param logDir The directory to store logs in
  */
-export function enableLogging(namespace: string = 'judgeval', logDir: string = './logs'): void {
-  // Do nothing - we want to keep logging disabled to match Python SDK output format
-  loggingEnabled = true;
+export function enableLogging(name: string = 'judgeval', logDir: string = './logs'): void {
+  LOGGING_STATE.enabled = true;
+  LOGGING_STATE.path = logDir;
+  
+  // Create log directory if it doesn't exist
+  if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir, { recursive: true });
+  }
+  
+  logger.info("Logging enabled");
 }
 
 /**
  * Disable logging
  */
 export function disableLogging(): void {
-  loggingEnabled = false;
-}
-
-/**
- * Get the logger instance
- * @returns The logger instance
- */
-export function getLogger(): SimpleLogger {
-  // Return a dummy logger that does nothing
-  return {
-    info: () => {},
-    warn: () => {},
-    error: () => {},
-    debug: () => {},
-  };
-}
-
-/**
- * Create a logger instance
- * @param namespace The namespace to use for logging
- * @param logDir The directory to store logs in
- * @returns The logger instance
- */
-export function createLoggerInstance(namespace: string = 'judgeval', logDir: string = './logs'): SimpleLogger {
-  // Return a dummy logger that does nothing
-  return {
-    info: () => {},
-    warn: () => {},
-    error: () => {},
-    debug: () => {},
-  };
+  if (LOGGING_STATE.enabled) {
+    logger.info("Logging disabled");
+  }
+  LOGGING_STATE.enabled = false;
 }
 
 /**
  * Check if logging is enabled
  */
-function isLoggingEnabled(): boolean {
-  return loggingEnabled;
+export function isLoggingEnabled(): boolean {
+  return LOGGING_STATE.enabled;
 }
 
 /**
  * Log a debug message
  */
 export function debug(message: string): void {
-  if (isLoggingEnabled()) {
-    getLogger().debug(message);
-  }
+  logger.debug(message);
 }
 
 /**
  * Log an info message (alias for info)
  */
 export function log(message: string, ...args: any[]): void {
-  if (isLoggingEnabled()) {
-    if (args.length > 0) {
-      getLogger().info(`${message} ${args.map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')}`);
-    } else {
-      getLogger().info(message);
-    }
+  if (args.length > 0) {
+    const formattedArgs = args.map(arg => 
+      typeof arg === 'object' ? JSON.stringify(arg) : arg
+    ).join(' ');
+    logger.info(`${message} ${formattedArgs}`);
+  } else {
+    logger.info(message);
   }
 }
 
@@ -109,18 +109,14 @@ export function log(message: string, ...args: any[]): void {
  * Log an info message
  */
 export function info(message: string): void {
-  if (isLoggingEnabled()) {
-    getLogger().info(message);
-  }
+  logger.info(message);
 }
 
 /**
  * Log a warning message
  */
 export function warning(message: string): void {
-  if (isLoggingEnabled()) {
-    getLogger().warn(message);
-  }
+  logger.warn(message);
 }
 
 /**
@@ -134,9 +130,7 @@ export function warn(message: string): void {
  * Log an error message
  */
 export function error(message: string): void {
-  if (isLoggingEnabled()) {
-    getLogger().error(message);
-  }
+  logger.error(message);
 }
 
 /**
@@ -159,8 +153,8 @@ export function clearExampleContext(): void {
  * Create a context for example-specific logging
  */
 export function withExampleContext<T>(exampleId: string, timestamp: string, fn: () => T): T {
+  setExampleContext(exampleId, timestamp);
   try {
-    setExampleContext(exampleId, timestamp);
     return fn();
   } finally {
     clearExampleContext();
@@ -174,50 +168,42 @@ export function withExampleContext<T>(exampleId: string, timestamp: string, fn: 
 export function formatEvaluationResults(results: any[], projectName?: string, evalName?: string): string {
   let output = '';
   
-  // Process each result
-  for (const result of results) {
-    // Check if this is a failure
-    const success = result.success || (result.scorersData?.every((s: any) => s.success) ?? false);
+  // Print summary information
+  if (results.length > 0) {
+    output += `\n=== Evaluation Results (${results.length} examples) ===\n\n`;
     
-    // If the result is not a success, print the failure details
-    if (!success) {
-      output += '=== Test Failure Details ===\n';
+    // Calculate success rate
+    const successfulExamples = results.filter(r => 
+      r.success || (r.scorersData?.every((s: any) => s.success) ?? false)
+    ).length;
+    
+    const successRate = (successfulExamples / results.length) * 100;
+    output += `Success Rate: ${successRate.toFixed(2)}% (${successfulExamples}/${results.length})\n\n`;
+    
+    // Print failures if any
+    const failures = results.filter(r => 
+      !r.success || (r.scorersData?.some((s: any) => !s.success) ?? false)
+    );
+    
+    if (failures.length > 0) {
+      output += `Failures (${failures.length}):\n`;
       
-      // Get input from either format
-      const input = result.dataObject?.input || result.example?.input;
-      const actualOutput = result.dataObject?.actualOutput || result.example?.actualOutput;
-      const retrievalContext = result.dataObject?.retrievalContext || result.example?.retrievalContext;
-      
-      output += `Input: ${input}\n`;
-      output += `Output: ${actualOutput}\n`;
-      output += `Success: False\n`;
-      
-      if (retrievalContext && retrievalContext.length > 0) {
-        output += `Retrieval Context: ${JSON.stringify(retrievalContext)}\n`;
-      } else {
-        output += 'Retrieval Context: None\n';
-      }
-      
-      // Get scorer data from either format
-      const scorersData = result.scorersData || result.scores;
-      
-      if (scorersData && scorersData.length > 0) {
-        output += '\nScorer Details:\n';
-        for (const scorer of scorersData) {
-          if (!scorer.success) {
-            output += `- Name: ${scorer.name}\n`;
-            output += `- Score: ${scorer.score}\n`;
-            output += `- Threshold: ${scorer.threshold}\n`;
-            output += `- Success: False\n`;
-            if (scorer.reason) {
-              output += `- Reason: ${scorer.reason}\n`;
+      for (const [index, failure] of failures.entries()) {
+        output += `\nExample ${index + 1}:\n`;
+        output += `Input: ${failure.example?.input || 'N/A'}\n`;
+        
+        if (failure.scorersData) {
+          output += 'Scorer Failures:\n';
+          
+          for (const scorer of failure.scorersData) {
+            if (!scorer.success) {
+              output += `  - ${scorer.name}: ${scorer.error || 'Unknown error'}\n`;
             }
-            output += `- Error: ${scorer.error || 'None'}\n`;
           }
+        } else if (!failure.success) {
+          output += `Error: ${failure.error || 'Unknown error'}\n`;
         }
       }
-      
-      output += '\n';
     }
   }
   
@@ -236,30 +222,49 @@ export function printResults(results: any[], projectName?: string, evalName?: st
     const resultsUrl = `${baseUrl}${urlParams}`;
     
     // Print the URL
-    process.stdout.write(`\n                     \n🔍 You can view your evaluation results here: ${resultsUrl}\n\n`);
+    console.log(`\n🔍 View results: ${resultsUrl}\n`);
   }
   
   // Format the results - only includes failure details
   const formattedResults = formatEvaluationResults(results, projectName, evalName);
   
-  // Print the results to the console directly using console.log
-  process.stdout.write(formattedResults);
-  
-  // Print raw results for successful evaluations in the same format as Python SDK
-  for (const result of results) {
-    if (result.success || (result.scorersData?.every((s: any) => s.success) ?? false)) {
-      process.stdout.write(`[${JSON.stringify(result)}]\n`);
-    }
+  // Print the results to the console directly
+  if (formattedResults) {
+    console.log(formattedResults);
   }
+  
+  // Print raw results in the same format as Python SDK
+  console.log(JSON.stringify(results, null, 2));
 }
 
 /**
  * Simplified print function for results - matches Python SDK's print(results) behavior
  * This is the preferred way to print results
  */
-export function print(results: any[], projectName?: string, evalName?: string): void {
-  // Just call printResults with all parameters
-  printResults(results, projectName, evalName);
+export function print(data: any): void {
+  if (Array.isArray(data)) {
+    // Handle array of results (evaluation results)
+    let projectName, evalName;
+    
+    // Try to extract project name and eval name from the first result
+    if (data.length > 0 && data[0].metadata) {
+      projectName = data[0].metadata.project_name;
+      evalName = data[0].metadata.eval_name;
+    }
+    
+    printResults(data, projectName, evalName);
+  } else if (data && typeof data === 'object' && data.traceId) {
+    // Handle trace object
+    console.log(`\n--- Trace: ${data.name || 'Unnamed'} (ID: ${data.traceId}) ---`);
+    if (data.projectName) {
+      const traceUrl = `https://app.judgmentlabs.ai/app/monitor?project_name=${data.projectName}&trace_id=${data.traceId}&trace_name=${data.name || 'trace'}&show_trace=true`;
+      console.log(`\n🔍 View trace: ${traceUrl}\n`);
+    }
+    console.log(JSON.stringify(data, null, 2));
+  } else {
+    // Handle any other object
+    console.log(JSON.stringify(data, null, 2));
+  }
 }
 
 // Export all functions

@@ -27,6 +27,7 @@ import {
 import { ScoringResult } from '../data/result';
 import { Tracer } from '../common/tracer';
 import { v4 as uuidv4 } from 'uuid';
+import logger from '../common/logger';
 
 // Load environment variables
 dotenv.config();
