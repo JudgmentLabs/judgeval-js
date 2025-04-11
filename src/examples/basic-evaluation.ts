@@ -20,23 +20,10 @@ import logger from '../common/logger';
 // Load environment variables
 dotenv.config();
 
-// Ensure necessary environment variables are set
-if (!process.env.JUDGMENT_API_KEY) {
-  console.error("Error: JUDGMENT_API_KEY environment variable is not set.");
-  process.exit(1);
-}
-
-if (!process.env.JUDGMENT_ORG_ID) {
-  console.error("Error: JUDGMENT_ORG_ID environment variable is not set.");
-  process.exit(1);
-}
-
 async function runBasicEvaluation() {
-  // Completely disable all logging
-  process.env.DISABLE_LOGGING = 'true';
-  
   // Initialize the JudgmentClient
   const judgmentClient = JudgmentClient.getInstance();
+  
   // Create examples for different scorer types
   const examples = {
     // Basic examples for simple scorers
@@ -276,7 +263,7 @@ async function runBasicEvaluation() {
     // Use simplified print function - matches Python SDK's print(results) behavior
     logger.print(eoResults);
   } catch (error) {
-    console.error(`Error running evaluations: ${error instanceof Error ? error.message : String(error)}`);
+    logger.error(`Error running evaluations: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 

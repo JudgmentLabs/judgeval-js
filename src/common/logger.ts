@@ -261,6 +261,45 @@ export function print(data: any): void {
       console.log(`\n🔍 View trace: ${traceUrl}\n`);
     }
     console.log(JSON.stringify(data, null, 2));
+  } else if (data && typeof data === 'object' && data.title === "Workflow Analysis Results") {
+    // Handle workflow analysis results
+    console.log(`\n=== ${data.title} ===\n`);
+    
+    // Print scorer performance
+    console.log('Scorer Performance Summary:');
+    console.log('----------------------------');
+    if (Array.isArray(data.scorerPerformance)) {
+      data.scorerPerformance.forEach((scorer: any) => {
+        console.log(`${scorer.name.padEnd(30)} ${scorer.score.toFixed(2)} (${scorer.rating})`);
+      });
+    }
+    
+    // Print areas for improvement
+    if (Array.isArray(data.areasForImprovement) && data.areasForImprovement.length > 0) {
+      console.log('\nAreas for Improvement:');
+      console.log('----------------------');
+      data.areasForImprovement.forEach((area: string, index: number) => {
+        console.log(`${index + 1}. ${area}`);
+      });
+    }
+    
+    // Print strengths
+    if (Array.isArray(data.strengths) && data.strengths.length > 0) {
+      console.log('\nStrengths:');
+      console.log('----------');
+      data.strengths.forEach((strength: string, index: number) => {
+        console.log(`${index + 1}. ${strength}`);
+      });
+    }
+  } else if (data && typeof data === 'object' && data.title && data.recommendations) {
+    // Handle recommendations
+    console.log(`\n=== ${data.title} ===`);
+    
+    if (Array.isArray(data.recommendations)) {
+      data.recommendations.forEach((rec: string, index: number) => {
+        console.log(`${index + 1}. ${rec}`);
+      });
+    }
   } else {
     // Handle any other object
     console.log(JSON.stringify(data, null, 2));

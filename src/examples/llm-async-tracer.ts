@@ -1,16 +1,5 @@
 /**
  * LLM Workflow Analysis with Async Evaluation and Tracing
- * 
- * This example demonstrates a comprehensive approach to analyzing an LLM workflow:
- * 1. Using multiple scorers to evaluate LLM responses
- * 2. Tracing the entire workflow with spans for each step
- * 3. Performing async evaluation within the trace
- * 4. Analyzing the results with detailed metrics
- * 
- * This represents a real-world scenario where you might want to:
- * - Track the performance of your LLM application
- * - Evaluate the quality of responses using multiple criteria
- * - Identify areas for improvement in your prompt engineering
  */
 
 import * as dotenv from 'dotenv';
@@ -79,31 +68,20 @@ const customerServiceData = [
  * Simulates a customer service LLM application with tracing and evaluation
  */
 async function runCustomerServiceLLMWorkflow() {
-  console.log('=== Customer Service LLM Workflow Analysis ===\n');
-  
   // Create a unique run ID for this test
   const runId = Date.now();
   const projectName = 'customer-service-analysis';
   const evalRunName = `cs-eval-${runId}`;
   
-  console.log(`Project: ${projectName}`);
-  console.log(`Evaluation Run: ${evalRunName}`);
-  
-  // Initialize the JudgmentClient
-  console.log('\nInitializing JudgmentClient...');
+
   const client = JudgmentClient.getInstance();
-  console.log('JudgmentClient initialized successfully!');
-  
-  // Initialize the Tracer
-  console.log('Initializing Tracer...');
+
   const tracer = Tracer.getInstance({
     projectName,
     enableEvaluations: true
   });
-  console.log('Tracer initialized successfully!');
   
   // Create examples for evaluation
-  console.log('\nPreparing examples for evaluation...');
   const examples = customerServiceData.map(data => {
     return new ExampleBuilder()
       .input(data.customer)
@@ -112,10 +90,8 @@ async function runCustomerServiceLLMWorkflow() {
       .retrievalContext(data.context)
       .build();
   });
-  console.log(`Created ${examples.length} examples for evaluation`);
   
   // Create scorers with different weights and thresholds
-  console.log('\nConfiguring scorers...');
   const scorers = [
     new FaithfulnessScorer(0.8),            // High importance on factual accuracy
     new AnswerCorrectnessScorer(0.7),       // Important for customer service accuracy
@@ -124,25 +100,27 @@ async function runCustomerServiceLLMWorkflow() {
     new HallucinationScorer(0.5),           // Check for hallucinations
     new InstructionAdherenceScorer(0.95)    // Critical for following instructions
   ];
-  console.log(`Configured ${scorers.length} scorers with appropriate weights`);
   
   // Start the trace for the entire workflow
-  console.log('\nStarting workflow trace...');
   const traceName = `customer-service-workflow-${runId}`;
+  
+  // Store the trace ID and URL for later use
+  let traceId = '';
+  let traceUrl = '';
   
   await tracer.runInTrace({
     name: traceName,
     projectName
   }, async (trace) => {
-    console.log(`Trace started with ID: ${trace.traceId}`);
+    // Store the trace ID for later use
+    traceId = trace.traceId;
+    traceUrl = `https://app.judgmentlabs.ai/app/monitor?project_name=${projectName}&trace_id=${traceId}&trace_name=${traceName}&show_trace=true`;
     
     // PART 1: Run async evaluation on all examples
     await trace.runInSpan("batch_evaluation", { spanType: "tool" }, async () => {
-      console.log('\n=== Running Batch Async Evaluation ===');
       
       try {
         // Submit the async evaluation
-        console.log('Submitting async evaluation job...');
         await client.aRunEvaluation(
           examples,
           scorers,
@@ -157,41 +135,31 @@ async function runCustomerServiceLLMWorkflow() {
           true  // ignoreErrors
         );
         
-        console.log('Async evaluation job submitted successfully!');
-        
         // In a real-world scenario, you would poll for status
         // For this example, we'll simulate the progress
-        console.log('\nSimulating evaluation progress...');
         for (let i = 1; i <= 5; i++) {
           const progress = i / 5;
-          console.log(`Progress: ${createProgressBar(progress)}`);
+          logger.info(`Progress: ${createProgressBar(progress)}`);
           await new Promise(resolve => setTimeout(resolve, 500));
         }
         
-        console.log('\nBatch evaluation complete!');
-        console.log(`View results at: https://app.judgmentlabs.ai/app/experiment?project_name=${projectName}&eval_run_name=${evalRunName}`);
       } catch (error) {
-        console.log(`Note: Batch evaluation simulated (${error instanceof Error ? error.message : String(error)})`);
+        logger.error('Error running batch evaluation: ' + (error instanceof Error ? error.message : String(error)));
       }
     });
     
     // PART 2: Process each customer query individually with tracing
-    console.log('\n=== Processing Individual Customer Queries ===');
-    
     for (let i = 0; i < customerServiceData.length; i++) {
       const data = customerServiceData[i];
       const queryId = uuidv4().substring(0, 8);
       
       await trace.runInSpan(`customer_query_${i+1}`, { spanType: "chain" }, async () => {
-        console.log(`\nProcessing Customer Query #${i+1}: "${data.customer.substring(0, 40)}..."`);
         
         // Step 1: Context retrieval
         await trace.runInSpan("context_retrieval", { spanType: "tool" }, async () => {
-          console.log("Retrieving context...");
           trace.recordInput({ query: data.customer });
           await new Promise(resolve => setTimeout(resolve, 300)); // Simulate retrieval time
           trace.recordOutput({ context: data.context });
-          console.log(`Retrieved ${data.context.length} context items`);
         });
         
         // Step 2: LLM response generation
@@ -208,7 +176,6 @@ Respond to the customer query using the provided context. Be helpful, accurate, 
           
           trace.recordInput({ prompt });
           
-          console.log("Generating LLM response...");
           await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate LLM processing time
           
           // In a real scenario, this would be the actual LLM call
@@ -224,11 +191,7 @@ Respond to the customer query using the provided context. Be helpful, accurate, 
             }
           });
           
-          console.log(`LLM Response: "${response.substring(0, 60)}..."`);
-          
           // Evaluate the LLM response asynchronously within the trace
-          console.log("Submitting async evaluation for this response...");
-          
           const example = new ExampleBuilder()
             .input(data.customer)
             .actualOutput(response)
@@ -253,69 +216,81 @@ Respond to the customer query using the provided context. Be helpful, accurate, 
               logResults: true
             }
           );
-          
-          console.log("Async evaluation added to trace");
         });
       });
     }
     
     // PART 3: Analyze the results
     await trace.runInSpan("results_analysis", { spanType: "tool" }, async () => {
-      console.log('\n=== Analyzing Workflow Results ===');
       
       // In a real scenario, you would fetch the actual results
       // For this example, we'll simulate the analysis
       
-      console.log('\nScorer Performance Summary:');
-      console.log('----------------------------');
-      console.log('FaithfulnessScorer:         0.87 (Good)');
-      console.log('AnswerCorrectnessScorer:    0.92 (Excellent)');
-      console.log('AnswerRelevancyScorer:      0.95 (Excellent)');
-      console.log('GroundednessScorer:         0.89 (Good)');
-      console.log('HallucinationScorer:        0.94 (Excellent)');
-      console.log('InstructionAdherenceScorer: 0.98 (Excellent)');
+      // Create a structured analysis result object
+      const analysisResults = {
+        title: "Workflow Analysis Results",
+        scorerPerformance: [
+          { name: "FaithfulnessScorer", score: 0.87, rating: "Good" },
+          { name: "AnswerCorrectnessScorer", score: 0.92, rating: "Excellent" },
+          { name: "AnswerRelevancyScorer", score: 0.95, rating: "Excellent" },
+          { name: "GroundednessScorer", score: 0.89, rating: "Good" },
+          { name: "HallucinationScorer", score: 0.94, rating: "Excellent" },
+          { name: "InstructionAdherenceScorer", score: 0.98, rating: "Excellent" }
+        ],
+        areasForImprovement: [
+          "Faithfulness: Ensure all context information is accurately reflected",
+          "Groundedness: Improve grounding in the provided context"
+        ],
+        strengths: [
+          "Relevancy: Responses directly address customer queries",
+          "Low Hallucination: No fabricated information detected",
+          "Correctness: Responses align well with expected outputs"
+        ]
+      };
       
-      console.log('\nAreas for Improvement:');
-      console.log('----------------------');
-      console.log('1. Faithfulness: Ensure all context information is accurately reflected');
-      console.log('2. Groundedness: Improve grounding in the provided context');
-      
-      console.log('\nStrengths:');
-      console.log('----------');
-      console.log('1. Relevancy: Responses directly address customer queries');
-      console.log('2. Low Hallucination: No fabricated information detected');
-      console.log('3. Correctness: Responses align well with expected outputs');
+      // Use the standardized logger.print to display the results
+      logger.print(analysisResults);
     });
     
     // Display trace information
-    console.log('\n=== Workflow Trace Complete ===');
-    console.log(`Trace ID: ${trace.traceId}`);
-    console.log(`View trace details at: https://app.judgmentlabs.ai/app/monitor?project_name=${projectName}&trace_id=${trace.traceId}&trace_name=${traceName}&show_trace=true`);
+    logger.info('\n=== Workflow Trace Complete ===');
+    logger.info(`Trace ID: ${traceId}`);
+    logger.info(`View trace details at: ${traceUrl}`);
   });
   
-  // PART 4: Recommendations based on the analysis
-  console.log('\n=== Recommendations ===');
-  console.log('1. Prompt Engineering: Add explicit instructions to include all context items');
-  console.log('2. Model Selection: Current model performs well for customer service tasks');
-  console.log('3. Monitoring: Set up continuous evaluation with these scorers');
-  console.log('4. Thresholds: Set minimum score thresholds of 0.85 for production use');
-  
-  console.log('\n=== Customer Service LLM Workflow Analysis Complete ===');
+  // Return the analysis results instead of logging them directly
+  return {
+    recommendations: [
+      'Prompt Engineering: Add explicit instructions to include all context items',
+      'Model Selection: Current model performs well for customer service tasks',
+      'Monitoring: Set up continuous evaluation with these scorers',
+      'Thresholds: Set minimum score thresholds of 0.85 for production use'
+    ],
+    traceUrl
+  };
 }
 
 // Run the example
 async function main() {
   try {
-    console.log('Starting LLM workflow analysis with tracing and async evaluation...\n');
-    await runCustomerServiceLLMWorkflow();
-    console.log('\nAnalysis complete! You can view the detailed results and traces in the Judgment UI.');
+    logger.info('Starting LLM workflow analysis with tracing and async evaluation...\n');
+    const results = await runCustomerServiceLLMWorkflow();
+    
+    // Use the standardized logger to print the recommendations
+    logger.print({
+      title: "Customer Service LLM Workflow Recommendations",
+      recommendations: results.recommendations
+    });
+    
+    logger.info('\n=== Customer Service LLM Workflow Analysis Complete ===');
+    logger.info('\nAnalysis complete! You can view the detailed results and traces in the Judgment UI.');
   } catch (error) {
-    console.error('Error running the workflow analysis:', error);
+    logger.error('Error running the workflow analysis: ' + (error instanceof Error ? error.message : String(error)));
   }
 }
 
 // Execute the main function
 main().catch(error => {
-  console.error(`Unhandled error: ${error instanceof Error ? error.message : String(error)}`);
+  logger.error('Unhandled error: ' + (error instanceof Error ? error.message : String(error)));
   process.exit(1);
 });
