@@ -7,8 +7,8 @@ import { ScorerData } from '../data/result';
  * Implementation of API-based scorers
  */
 export class AnswerCorrectnessScorer extends APIJudgmentScorer {
-  constructor(threshold: number = 0.7, metadata?: Record<string, any>) {
-    super('answer_correctness', threshold, metadata);
+  constructor(threshold: number = 0.7, additional_metadata?: Record<string, any>, verbose: boolean = false) {
+    super('answer_correctness', threshold, additional_metadata, verbose);
     this.validateThreshold();
   }
 
@@ -18,8 +18,8 @@ export class AnswerCorrectnessScorer extends APIJudgmentScorer {
 }
 
 export class AnswerRelevancyScorer extends APIJudgmentScorer {
-  constructor(threshold: number = 0.7, metadata?: Record<string, any>) {
-    super('answer_relevancy', threshold, metadata);
+  constructor(threshold: number = 0.7, additional_metadata?: Record<string, any>, verbose: boolean = false) {
+    super('answer_relevancy', threshold, additional_metadata, verbose);
     this.validateThreshold();
   }
 
@@ -36,9 +36,10 @@ export class ComparisonScorer extends APIJudgmentScorer {
     threshold: number = 0.5, 
     criteria: string[] = ['Accuracy', 'Helpfulness', 'Relevance'], 
     description: string = 'Compare the outputs based on the given criteria',
-    metadata?: Record<string, any>
+    additional_metadata?: Record<string, any>,
+    verbose: boolean = false
   ) {
-    super('comparison', threshold, metadata);
+    super('comparison', threshold, additional_metadata, verbose);
     this.criteria = criteria;
     this.description = description;
     // Comparison is an unbounded scorer, only validate that threshold >= 0
@@ -53,7 +54,8 @@ export class ComparisonScorer extends APIJudgmentScorer {
       threshold: this.threshold,
       criteria: this.criteria,
       description: this.description,
-      metadata: this.metadata
+      additional_metadata: this.additional_metadata,
+      verbose: this.verbose
     };
   }
 
@@ -63,8 +65,8 @@ export class ComparisonScorer extends APIJudgmentScorer {
 }
 
 export class ContextualPrecisionScorer extends APIJudgmentScorer {
-  constructor(threshold: number = 0.7, metadata?: Record<string, any>) {
-    super('contextual_precision', threshold, metadata);
+  constructor(threshold: number = 0.7, additional_metadata?: Record<string, any>, verbose: boolean = false) {
+    super('contextual_precision', threshold, additional_metadata, verbose);
     this.validateThreshold();
   }
 
@@ -74,8 +76,8 @@ export class ContextualPrecisionScorer extends APIJudgmentScorer {
 }
 
 export class ContextualRecallScorer extends APIJudgmentScorer {
-  constructor(threshold: number = 0.7, metadata?: Record<string, any>) {
-    super('contextual_recall', threshold, metadata);
+  constructor(threshold: number = 0.7, additional_metadata?: Record<string, any>, verbose: boolean = false) {
+    super('contextual_recall', threshold, additional_metadata, verbose);
     this.validateThreshold();
   }
 
@@ -85,8 +87,8 @@ export class ContextualRecallScorer extends APIJudgmentScorer {
 }
 
 export class ContextualRelevancyScorer extends APIJudgmentScorer {
-  constructor(threshold: number = 0.7, metadata?: Record<string, any>) {
-    super('contextual_relevancy', threshold, metadata);
+  constructor(threshold: number = 0.7, additional_metadata?: Record<string, any>, verbose: boolean = false) {
+    super('contextual_relevancy', threshold, additional_metadata, verbose);
     this.validateThreshold();
   }
 
@@ -99,8 +101,8 @@ export class ExecutionOrderScorer extends APIJudgmentScorer {
   strictMode: boolean;
   expectedTools?: string[];
 
-  constructor(threshold: number = 1.0, strictMode: boolean = true, expectedTools?: string[], metadata?: Record<string, any>) {
-    super('execution_order', threshold, metadata);
+  constructor(threshold: number = 1.0, strictMode: boolean = true, expectedTools?: string[], additional_metadata?: Record<string, any>, verbose: boolean = false) {
+    super('execution_order', threshold, additional_metadata, verbose);
     this.strictMode = strictMode;
     this.expectedTools = expectedTools;
     this.validateThreshold();
@@ -112,7 +114,8 @@ export class ExecutionOrderScorer extends APIJudgmentScorer {
       threshold: this.threshold,
       strict_mode: this.strictMode,
       expected_tools: this.expectedTools,
-      metadata: this.metadata
+      additional_metadata: this.additional_metadata,
+      verbose: this.verbose
     };
   }
 
@@ -122,8 +125,8 @@ export class ExecutionOrderScorer extends APIJudgmentScorer {
 }
 
 export class FaithfulnessScorer extends APIJudgmentScorer {
-  constructor(threshold: number = 0.7, metadata?: Record<string, any>) {
-    super('faithfulness', threshold, metadata);
+  constructor(threshold: number = 0.7, additional_metadata?: Record<string, any>, verbose: boolean = false) {
+    super('faithfulness', threshold, additional_metadata, verbose);
     this.validateThreshold();
   }
 
@@ -133,8 +136,8 @@ export class FaithfulnessScorer extends APIJudgmentScorer {
 }
 
 export class GroundednessScorer extends APIJudgmentScorer {
-  constructor(threshold: number = 0.7, metadata?: Record<string, any>) {
-    super('groundedness', threshold, metadata);
+  constructor(threshold: number = 0.7, additional_metadata?: Record<string, any>, verbose: boolean = false) {
+    super('groundedness', threshold, additional_metadata, verbose);
     this.validateThreshold();
   }
 
@@ -144,8 +147,8 @@ export class GroundednessScorer extends APIJudgmentScorer {
 }
 
 export class HallucinationScorer extends APIJudgmentScorer {
-  constructor(threshold: number = 0.7, metadata?: Record<string, any>) {
-    super('hallucination', threshold, metadata);
+  constructor(threshold: number = 0.7, additional_metadata?: Record<string, any>, verbose: boolean = false) {
+    super('hallucination', threshold, additional_metadata, verbose);
     this.validateThreshold();
   }
 
@@ -155,8 +158,8 @@ export class HallucinationScorer extends APIJudgmentScorer {
 }
 
 export class InstructionAdherenceScorer extends APIJudgmentScorer {
-  constructor(threshold: number = 0.7, metadata?: Record<string, any>) {
-    super('instruction_adherence', threshold, metadata);
+  constructor(threshold: number = 0.7, additional_metadata?: Record<string, any>, verbose: boolean = false) {
+    super('instruction_adherence', threshold, additional_metadata, verbose);
     this.validateThreshold();
   }
 
@@ -171,9 +174,10 @@ export class JsonCorrectnessScorer extends APIJudgmentScorer {
   constructor(
     threshold: number = 0.7, 
     jsonSchema?: Record<string, any>,
-    metadata?: Record<string, any>
+    additional_metadata?: Record<string, any>,
+    verbose: boolean = false
   ) {
-    super('json_correctness', threshold, metadata);
+    super('json_correctness', threshold, additional_metadata, verbose);
     this.jsonSchema = jsonSchema;
     this.validateThreshold();
   }
@@ -183,7 +187,8 @@ export class JsonCorrectnessScorer extends APIJudgmentScorer {
       score_type: 'json_correctness', 
       threshold: this.threshold,
       json_schema: this.jsonSchema,
-      metadata: this.metadata
+      additional_metadata: this.additional_metadata,
+      verbose: this.verbose
     };
   }
 
@@ -193,8 +198,8 @@ export class JsonCorrectnessScorer extends APIJudgmentScorer {
 }
 
 export class SummarizationScorer extends APIJudgmentScorer {
-  constructor(threshold: number = 0.7, metadata?: Record<string, any>) {
-    super('summarization', threshold, metadata);
+  constructor(threshold: number = 0.7, additional_metadata?: Record<string, any>, verbose: boolean = false) {
+    super('summarization', threshold, additional_metadata, verbose);
     this.validateThreshold();
   }
 
@@ -204,8 +209,8 @@ export class SummarizationScorer extends APIJudgmentScorer {
 }
 
 export class Text2SQLScorer extends APIJudgmentScorer {
-  constructor(threshold: number = 0.7, metadata?: Record<string, any>) {
-    super('text2sql', threshold, metadata);
+  constructor(threshold: number = 0.7, additional_metadata?: Record<string, any>, verbose: boolean = false) {
+    super('text2sql', threshold, additional_metadata, verbose);
     this.validateThreshold();
   }
 
@@ -230,60 +235,60 @@ export class ScorerWrapper {
     return this.scorer.threshold;
   }
 
-  get metadata(): Record<string, any> | undefined {
-    return this.scorer.metadata;
+  get additional_metadata(): Record<string, any> | undefined {
+    return this.scorer.additional_metadata;
   }
 
   toJSON(): Record<string, any> {
     return this.scorer.toJSON();
   }
 
-  static fromType(type: string, threshold: number, metadata?: Record<string, any>): APIJudgmentScorer {
+  static fromType(type: string, threshold: number, additional_metadata?: Record<string, any>, verbose: boolean = false): APIJudgmentScorer {
     switch (type.toLowerCase()) {
       case 'answer_correctness':
-        return new AnswerCorrectnessScorer(threshold, metadata);
+        return new AnswerCorrectnessScorer(threshold, additional_metadata, verbose);
       case 'answer_relevancy':
-        return new AnswerRelevancyScorer(threshold, metadata);
+        return new AnswerRelevancyScorer(threshold, additional_metadata, verbose);
       case 'comparison':
         // For comparison, extract criteria and description from metadata if available
-        const criteria = metadata?.criteria as string[] || ['Accuracy', 'Helpfulness', 'Relevance'];
-        const description = metadata?.description as string || 'Compare the outputs based on the given criteria';
-        const comparisonMetadata = { ...metadata };
+        const criteria = additional_metadata?.criteria as string[] || ['Accuracy', 'Helpfulness', 'Relevance'];
+        const description = additional_metadata?.description as string || 'Compare the outputs based on the given criteria';
+        const comparisonMetadata = { ...additional_metadata };
         delete comparisonMetadata?.criteria;
         delete comparisonMetadata?.description;
-        return new ComparisonScorer(threshold, criteria, description, comparisonMetadata);
+        return new ComparisonScorer(threshold, criteria, description, comparisonMetadata, verbose);
       case 'contextual_precision':
-        return new ContextualPrecisionScorer(threshold, metadata);
+        return new ContextualPrecisionScorer(threshold, additional_metadata, verbose);
       case 'contextual_recall':
-        return new ContextualRecallScorer(threshold, metadata);
+        return new ContextualRecallScorer(threshold, additional_metadata, verbose);
       case 'contextual_relevancy':
-        return new ContextualRelevancyScorer(threshold, metadata);
+        return new ContextualRelevancyScorer(threshold, additional_metadata, verbose);
       case 'execution_order':
         // For execution order, extract strict_mode and expected_tools from metadata if available
-        const strictMode = metadata?.strict_mode as boolean || true;
-        const expectedTools = metadata?.expected_tools as string[];
-        const executionOrderMetadata = { ...metadata };
+        const strictMode = additional_metadata?.strict_mode as boolean || true;
+        const expectedTools = additional_metadata?.expected_tools as string[];
+        const executionOrderMetadata = { ...additional_metadata };
         delete executionOrderMetadata?.strict_mode;
         delete executionOrderMetadata?.expected_tools;
-        return new ExecutionOrderScorer(threshold, strictMode, expectedTools, executionOrderMetadata);
+        return new ExecutionOrderScorer(threshold, strictMode, expectedTools, executionOrderMetadata, verbose);
       case 'faithfulness':
-        return new FaithfulnessScorer(threshold, metadata);
+        return new FaithfulnessScorer(threshold, additional_metadata, verbose);
       case 'groundedness':
-        return new GroundednessScorer(threshold, metadata);
+        return new GroundednessScorer(threshold, additional_metadata, verbose);
       case 'hallucination':
-        return new HallucinationScorer(threshold, metadata);
+        return new HallucinationScorer(threshold, additional_metadata, verbose);
       case 'instruction_adherence':
-        return new InstructionAdherenceScorer(threshold, metadata);
+        return new InstructionAdherenceScorer(threshold, additional_metadata, verbose);
       case 'json_correctness':
         // For JSON correctness, extract json_schema from metadata if available
-        const jsonSchema = metadata?.json_schema;
-        const jsonMetadata = { ...metadata };
+        const jsonSchema = additional_metadata?.json_schema;
+        const jsonMetadata = { ...additional_metadata };
         delete jsonMetadata?.json_schema;
-        return new JsonCorrectnessScorer(threshold, jsonSchema, jsonMetadata);
+        return new JsonCorrectnessScorer(threshold, jsonSchema, jsonMetadata, verbose);
       case 'summarization':
-        return new SummarizationScorer(threshold, metadata);
+        return new SummarizationScorer(threshold, additional_metadata, verbose);
       case 'text2sql':
-        return new Text2SQLScorer(threshold, metadata);
+        return new Text2SQLScorer(threshold, additional_metadata, verbose);
       default:
         throw new Error(`Unknown scorer type: ${type}`);
     }

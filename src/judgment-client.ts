@@ -128,8 +128,8 @@ export class JudgmentClient {
     ignoreErrors: boolean = true,
     rules?: Rule[]
   ): Promise<ScoringResult[]> {
-    // First, start the async evaluation
-    await this.runEvaluation(
+    // Simply call runEvaluation with asyncExecution=true
+    return this.runEvaluation(
       examples, 
       scorers, 
       model, 
@@ -144,14 +144,6 @@ export class JudgmentClient {
       true, // Set asyncExecution to true
       rules
     );
-    
-    console.log(`Async evaluation "${evalRunName}" started in project "${projectName}"`);
-    console.log(`You can check the status using: client.checkEvalStatus("${projectName}", "${evalRunName}")`);
-    console.log(`Or wait for completion using: await client.waitForEvaluation("${projectName}", "${evalRunName}")`);
-    
-    // Return an empty array since the evaluation is running asynchronously
-    // The user can use waitForEvaluation to get the results when ready
-    return [];
   }
 
   /**
@@ -762,10 +754,10 @@ export class JudgmentClient {
   public async checkEvalStatus(projectName: string, evalRunName: string): Promise<any> {
     try {
       const response = await axios.post(
-        `${ROOT_API}/check-eval-status/`,
+        JUDGMENT_EVAL_FETCH_API_URL,
         {
-          eval_name: evalRunName,
           project_name: projectName,
+          eval_run_name: evalRunName,
           judgment_api_key: this.judgmentApiKey,
         },
         {
@@ -773,7 +765,8 @@ export class JudgmentClient {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${this.judgmentApiKey}`,
             'X-Organization-Id': this.organizationId
-          }
+          },
+          timeout: 10000 // Add timeout to prevent hanging requests
         }
       );
       
@@ -783,19 +776,25 @@ export class JudgmentClient {
       const progress = status.progress !== undefined ? `${Math.round(status.progress * 100)}%` : 'unknown';
       const message = status.message || '';
       
-      console.log(`Evaluation Status: ${statusText}`);
-      console.log(`Progress: ${progress}`);
-      if (message) {
-        console.log(`Message: ${message}`);
+      // Only log status if it's not being called from waitForEvaluation
+      if (Error().stack?.indexOf('waitForEvaluation') === -1) {
+        console.log(`Evaluation Status: ${statusText}`);
+        console.log(`Progress: ${progress}`);
+        if (message) {
+          console.log(`Message: ${message}`);
+        }
       }
       
       return status;
-    } catch (error: any) {
-      if (error instanceof Error) {
-        throw new Error(`Error checking evaluation status: ${error.message}`);
-      } else {
-        throw new Error(`Error checking evaluation status: ${error}`);
-      }
+    } catch (error: unknown) {
+      // Don't throw errors, just return a default status object
+      // This allows waitForEvaluation to continue polling
+      console.error("Error checking evaluation status:", error instanceof Error ? error.message : String(error));
+      return {
+        status: 'unknown',
+        progress: 0,
+        message: `Error checking status: ${error instanceof Error ? error.message : String(error)}`
+      };
     }
   }
   
@@ -840,24 +839,28 @@ export class JudgmentClient {
         // Check if evaluation is complete
         if (status.status === 'complete') {
           console.log('Evaluation complete! Fetching results...');
-          return await this.pullEvalResults(projectName, evalRunName);
+          try {
+            return await this.pullEvalResults(projectName, evalRunName);
+          } catch (error) {
+            console.error('Error fetching results:', error instanceof Error ? error.message : String(error));
+            return []; // Return empty array on error, matching Python SDK behavior
+          }
         } else if (status.status === 'failed') {
-          throw new Error(`Evaluation failed: ${status.error || 'Unknown error'}`);
+          console.error(`Evaluation failed: ${status.error || 'Unknown error'}`);
+          return []; // Return empty array on failure, matching Python SDK behavior
         }
-        
-        // Wait before next poll
-        await new Promise(resolve => setTimeout(resolve, intervalMs));
-        attempts++;
-      } catch (error: any) {
-        if (error instanceof Error) {
-          throw new Error(`Error waiting for evaluation: ${error.message}`);
-        } else {
-          throw new Error(`Error waiting for evaluation: ${error}`);
-        }
+      } catch (error) {
+        // Log the error but continue polling
+        console.error(`Error checking status (attempt ${attempts + 1}/${maxAttempts}):`, error instanceof Error ? error.message : String(error));
       }
+      
+      // Wait before next poll
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
+      attempts++;
     }
     
-    throw new Error(`Evaluation polling timed out after ${maxAttempts} attempts`);
+    console.error(`Evaluation polling timed out after ${maxAttempts} attempts`);
+    return []; // Return empty array on timeout, matching Python SDK behavior
   }
   
   /**

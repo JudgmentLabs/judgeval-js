@@ -35,7 +35,7 @@ export const UNBOUNDED_SCORERS = new Set<APIScorer>([
 ]);
 
 // API URLs
-export const ROOT_API = process.env.JUDGMENT_API_URL || 'https://api.judgmentlabs.ai';
+export const ROOT_API = 'https://api.judgmentlabs.ai';
 export const JUDGMENT_EVAL_API_URL = `${ROOT_API}/evaluate/`;
 export const JUDGMENT_DATASETS_PUSH_API_URL = `${ROOT_API}/datasets/push/`;
 export const JUDGMENT_DATASETS_PULL_API_URL = `${ROOT_API}/datasets/pull/`;
@@ -57,7 +57,7 @@ export const JUDGMENT_WEBSOCKET_URL = process.env.JUDGMENT_WEBSOCKET_URL || 'wss
 export const JUDGMENT_ADD_TO_RUN_EVAL_QUEUE_API_URL = `${ROOT_API}/add_to_run_eval_queue/`;
 
 // RabbitMQ
-export const RABBITMQ_HOST = process.env.RABBITMQ_HOST || 'rabbitmq-networklb-faa155df16ec9085.elb.us-west-1.amazonaws.com';
+export const RABBITMQ_HOST = process.env.RABBITMQ_HOST || 'localhost';
 export const RABBITMQ_PORT = process.env.RABBITMQ_PORT ? parseInt(process.env.RABBITMQ_PORT, 10) : 5672;
 export const RABBITMQ_QUEUE = process.env.RABBITMQ_QUEUE || 'task_queue';
 

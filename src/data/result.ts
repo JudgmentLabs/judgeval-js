@@ -8,8 +8,13 @@ export interface ScorerData {
   score: number;
   threshold: number;
   success: boolean;
-  metadata?: Record<string, any>;
-  error?: string;
+  reason: string | null;
+  strict_mode: boolean | null;
+  evaluation_model: string | null;
+  error: string | null;
+  evaluation_cost: number | null;
+  verbose_logs: any | null;
+  additional_metadata: Record<string, any>;
 }
 
 /**
@@ -50,13 +55,13 @@ export class ScoringResult {
         threshold: scorer.threshold,
         success: scorer.success,
         score: scorer.score,
-        reason: null,
-        strict_mode: null,
-        evaluation_model: "gpt-4",
-        error: scorer.error || null,
-        evaluation_cost: null,
-        verbose_logs: null,
-        additional_metadata: scorer.metadata || null
+        reason: scorer.reason,
+        strict_mode: scorer.strict_mode,
+        evaluation_model: scorer.evaluation_model,
+        error: scorer.error,
+        evaluation_cost: scorer.evaluation_cost,
+        verbose_logs: scorer.verbose_logs,
+        additional_metadata: scorer.additional_metadata
       })) : null,
       data_object: this.dataObject ? {
         input: this.dataObject.input,

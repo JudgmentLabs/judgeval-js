@@ -10,7 +10,7 @@ import * as winston from 'winston';
 
 // Define logging state
 const LOGGING_STATE = {
-  enabled: false,
+  enabled: true,
   path: null as string | null
 };
 
@@ -18,8 +18,8 @@ const LOGGING_STATE = {
 let currentExampleId: string | null = null;
 let currentTimestamp: string | null = null;
 
-// Disable all logging by default
-let loggingEnabled = false;
+// Enable logging by default
+let loggingEnabled = true;
 
 // Define a simple logger interface
 interface SimpleLogger {
@@ -36,7 +36,7 @@ interface SimpleLogger {
  */
 export function enableLogging(namespace: string = 'judgeval', logDir: string = './logs'): void {
   // Do nothing - we want to keep logging disabled to match Python SDK output format
-  loggingEnabled = false;
+  loggingEnabled = true;
 }
 
 /**
@@ -174,14 +174,6 @@ export function withExampleContext<T>(exampleId: string, timestamp: string, fn: 
 export function formatEvaluationResults(results: any[], projectName?: string, evalName?: string): string {
   let output = '';
   
-  // Generate a proper URL for viewing results
-  const baseUrl = 'https://app.judgmentlabs.ai/app/experiment';
-  const urlParams = projectName && evalName ? `?project_name=${projectName}&eval_run_name=${evalName}` : '';
-  const resultsUrl = `${baseUrl}${urlParams}`;
-  
-  // Add the view results URL at the beginning only once
-  output += `\n                     \n🔍 You can view your evaluation results here: View Results\n\n`;
-  
   // Process each result
   for (const result of results) {
     // Check if this is a failure
@@ -237,11 +229,20 @@ export function formatEvaluationResults(results: any[], projectName?: string, ev
  * This matches the Python SDK's output format exactly
  */
 export function printResults(results: any[], projectName?: string, evalName?: string): void {
-  // Format the results
+  // Always print a URL if projectName and evalName are provided
+  if (projectName && evalName) {
+    const baseUrl = 'https://app.judgmentlabs.ai/app/experiment';
+    const urlParams = `?project_name=${projectName}&eval_run_name=${evalName}`;
+    const resultsUrl = `${baseUrl}${urlParams}`;
+    
+    // Print the URL
+    process.stdout.write(`\n                     \n🔍 You can view your evaluation results here: ${resultsUrl}\n\n`);
+  }
+  
+  // Format the results - only includes failure details
   const formattedResults = formatEvaluationResults(results, projectName, evalName);
   
   // Print the results to the console directly using console.log
-  // This bypasses the Winston logger completely
   process.stdout.write(formattedResults);
   
   // Print raw results for successful evaluations in the same format as Python SDK
@@ -250,6 +251,15 @@ export function printResults(results: any[], projectName?: string, evalName?: st
       process.stdout.write(`[${JSON.stringify(result)}]\n`);
     }
   }
+}
+
+/**
+ * Simplified print function for results - matches Python SDK's print(results) behavior
+ * This is the preferred way to print results
+ */
+export function print(results: any[], projectName?: string, evalName?: string): void {
+  // Just call printResults with all parameters
+  printResults(results, projectName, evalName);
 }
 
 // Export all functions
@@ -267,5 +277,6 @@ export default {
   clearExampleContext,
   withExampleContext,
   formatEvaluationResults,
-  printResults
+  printResults,
+  print
 };

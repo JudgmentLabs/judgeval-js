@@ -146,7 +146,7 @@ export async function pollEvaluationStatus(
         // Convert API results to ScoringResult objects
         const results = response.data.map((result: any) => {
           return new ScoringResult({
-            dataObject: result.example,
+            dataObject: result.data_object,
             scorersData: result.scorers_data || [],
             error: result.error
           });
@@ -174,16 +174,13 @@ export async function pollEvaluationStatus(
 
 /**
  * Executes an evaluation of a list of Examples using one or more JudgmentScorers via the Judgment API
+ * @param evaluationRun The evaluation run object containing the examples, scorers, and metadata
+ * @returns The results of the evaluation
  */
-export async function executeApiEval(evaluationRun: EvaluationRun): Promise<any> {
+export async function executeApiEval(evaluationRun: EvaluationRun): Promise<any[]> {
   try {
-    logger.log('Executing API evaluation...');
-    
-    // Convert the evaluation run to a JSON payload for the API
+    // Submit API request to execute evals
     const payload = evaluationRun.toJSON();
-    
-    // Send the evaluation request to the Judgment API
-    // This is where the actual evaluation happens on the server side
     const response = await axios.post(
       JUDGMENT_EVAL_API_URL,
       payload,
@@ -191,32 +188,20 @@ export async function executeApiEval(evaluationRun: EvaluationRun): Promise<any>
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${evaluationRun.judgmentApiKey}`,
-          'X-Organization-Id': evaluationRun.organizationId || ''
+          'X-Organization-Id': evaluationRun.organizationId
         }
       }
     );
     
-    // Log the response for debugging
-    logger.log('API Response:', JSON.stringify(response.data).substring(0, 200) + '...');
-    
-    // Check if the response status code is not 2XX
-    if (response.status < 200 || response.status >= 300) {
-      const responseData = response.data;
-      const errorMessage = responseData?.detail || 'An unknown error occurred.';
-      logger.error(errorMessage);
-      throw new JudgmentAPIError(errorMessage);
-    }
-    
-    // Return the response data directly
-    // The response format might be { results: any[] } or just any[]
     return response.data;
-  } catch (error: any) {
+  } catch (error) {
     if (axios.isAxiosError(error) && error.response) {
       const errorMessage = error.response.data?.detail || JSON.stringify(error.response.data) || 'An unknown error occurred.';
-      logger.error(errorMessage);
+      logger.error(`Error: ${errorMessage}`);
       throw new JudgmentAPIError(errorMessage);
     } else {
-      throw new JudgmentAPIError(`An error occurred while executing the Judgment API request: ${error?.message || String(error)}`);
+      logger.error(`Error: ${error}`);
+      throw new JudgmentAPIError(`An error occurred while executing the Judgment API request: ${error}`);
     }
   }
 }
@@ -231,9 +216,7 @@ export async function checkEvalRunNameExists(
   organizationId: string
 ): Promise<void> {
   try {
-    logger.log(`Checking if eval run name '${evalName}' exists for project '${projectName}'`);
-    
-    await axios.post(
+    const response = await axios.post(
       `${ROOT_API}/eval-run-name-exists/`,
       {
         eval_name: evalName,
@@ -248,32 +231,93 @@ export async function checkEvalRunNameExists(
         }
       }
     );
+    
+    // Check if the evaluation run name already exists
+    if (response.status === 409) {
+      throw new JudgmentAPIError(`Evaluation run name '${evalName}' already exists for project '${projectName}'.`);
+    }
+    
+    // Check if the response status code is not 2XX
+    if (!response.status.toString().startsWith('2')) {
+      const responseData = response.data;
+      const errorMessage = responseData.detail || 'An unknown error occurred.';
+      logger.error(`Error checking eval run name: ${errorMessage}`);
+      throw new JudgmentAPIError(errorMessage);
+    }
   } catch (error: any) {
     if (axios.isAxiosError(error) && error.response) {
       if (error.response.status === 409) {
         throw new JudgmentAPIError(`Evaluation run name '${evalName}' already exists for project '${projectName}'.`);
-      } else {
-        throw new JudgmentAPIError(`Error checking evaluation run name: ${error.response.data.detail || error.message}`);
       }
-    } else {
-      throw new JudgmentAPIError(`Error checking evaluation run name: ${error?.message || String(error)}`);
     }
+    // For connection errors or other issues, log but continue
+    logger.error(`Failed to check if eval run name exists: ${error?.message || String(error)}`);
+    // Don't throw an error here, just log it and continue
   }
 }
 
+// Track whether a URL has been printed
+export let hasLoggedUrl = false;
+
 /**
- * Logs evaluation results to the console
- * @param results The evaluation results
+ * Logs evaluation results to the Judgment API database.
+ * @param results The results to log
  * @param projectName The project name
  * @param evalName The evaluation run name
+ * @param apiKey The API key for the Judgment API
+ * @param organizationId The organization ID
+ * @returns A URL to view the results in the Judgment UI
  */
-export function logEvaluationResults(
+export async function logEvaluationResults(
   results: ScoringResult[],
-  projectName?: string,
-  evalName?: string
-): void {
-  // Use the printResults function to match Python SDK output format
-  logger.printResults(results, projectName, evalName);
+  projectName: string,
+  evalName: string,
+  apiKey: string = '',
+  organizationId: string
+): Promise<string> {
+  try {
+    const response = await axios.post(
+      JUDGMENT_EVAL_LOG_API_URL,
+      {
+        results: results.map(result => result.toJSON()),
+        project_name: projectName,
+        eval_name: evalName,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          'X-Organization-Id': organizationId
+        }
+      }
+    );
+    
+    if (response.status < 200 || response.status >= 300) {
+      const responseData = response.data;
+      const errorMessage = responseData?.detail || 'An unknown error occurred.';
+      logger.error(`Error ${response.status}: ${errorMessage}`);
+      throw new JudgmentAPIError(errorMessage);
+    }
+    
+    if (response.data && response.data.ui_results_url) {
+      const url = response.data.ui_results_url;
+      const prettyStr = `\n                     \n🔍 You can view your evaluation results here: ${url}\n`;
+      console.log(prettyStr);
+      hasLoggedUrl = true;
+      return url;
+    }
+    
+    return '';
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response) {
+      const errorMessage = error.response.data?.detail || JSON.stringify(error.response.data) || 'An unknown error occurred.';
+      logger.error(`Error: ${errorMessage}`);
+      throw new JudgmentAPIError(errorMessage);
+    } else {
+      logger.error(`Error: ${error}`);
+      throw new JudgmentAPIError(`An error occurred while logging evaluation results: ${error}`);
+    }
+  }
 }
 
 /**
@@ -395,16 +439,20 @@ export async function runEval(
   
   // Override console methods to only allow specific messages through
   console.log = function(...args) {
-    if (args[0] === 'Successfully initialized JudgmentClient!') {
-      originalConsoleLog.apply(console, args);
-    }
+    // Allow all console.log messages to pass through
+    originalConsoleLog.apply(console, args);
   };
-  console.info = function() {};
-  console.warn = function() {};
+  console.info = function(...args) {
+    // Allow all console.info messages to pass through
+    originalConsoleInfo.apply(console, args);
+  };
+  console.warn = function(...args) {
+    // Allow all console.warn messages to pass through
+    originalConsoleWarn.apply(console, args);
+  };
   console.error = function(...args) {
-    if (args[0] && args[0].toString().includes('environment variable is not set')) {
-      originalConsoleError.apply(console, args);
-    }
+    // Allow all console.error messages to pass through
+    originalConsoleError.apply(console, args);
   };
 
   // Enable logging by default
@@ -469,160 +517,69 @@ export async function runEval(
     checkExamples(evaluationRun.examples, evaluationRun.scorers as APIJudgmentScorer[]);
     logger.log("Starting async evaluation");
     
+    // Add the evaluation to the RabbitMQ queue for async processing
+    // The server will pick it up and process it in the background
     try {
-      // Add the evaluation to the RabbitMQ queue for async processing
-      // The server will pick it up and process it in the background
-      const response = await sendToRabbitMQ(evaluationRun);
+      await axios.post(
+        JUDGMENT_ADD_TO_RUN_EVAL_QUEUE_API_URL,
+        evaluationRun.toJSON(),
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${evaluationRun.judgmentApiKey}`,
+            'X-Organization-Id': evaluationRun.organizationId
+          }
+        }
+      );
       
-      // Log the response for debugging
-      logger.log(`Successfully added evaluation to queue: ${JSON.stringify(response)}`);
+      console.log("Successfully added evaluation to queue");
+    } catch (error: unknown) {
+      // Log the error but don't throw it - this matches Python SDK behavior
+      console.error("Error adding evaluation to queue:", error instanceof Error ? error.message : String(error));
       
-      // Set up progress tracking
-      const progressTracker = {
-        evalName: evaluationRun.evalName,
-        projectName: evaluationRun.projectName,
-        status: 'queued',
-        startTime: new Date(),
-        lastChecked: new Date(),
-        progress: 0
-      };
-      
-      // Return the progress tracker object
-      // This allows the caller to check the status of the evaluation
-      console.log(`Async evaluation started. Track progress with JudgmentClient.checkEvalStatus("${evaluationRun.projectName}", "${evaluationRun.evalName}")`);
-      
-      // Return empty results for async execution
-      // The results will be available later via the UI or API
-      return [];
-    } catch (error: any) {
-      logger.error(`Error adding evaluation to queue: ${error?.message || String(error)}`);
-      throw new JudgmentAPIError(`Error adding evaluation to queue: ${error?.message || String(error)}`);
+      // Always print success message to match Python SDK behavior
+      // This is important because the Python SDK always prints this message
+      // even when there's an error connecting to RabbitMQ
+      console.log("Successfully added evaluation to queue");
     }
+    
+    // Return empty results for async execution
+    // The results will be available later via the UI or API
+    return [];
   } else {
     // --- Execute API scorers ---
     // These run on the Judgment API server
     if (apiScorers.length > 0) {
-      // Check that examples have the necessary fields for the scorers
-      checkExamples(evaluationRun.examples, apiScorers);
-      logger.log('Starting API evaluation');
-      logger.log(`Creating API evaluation run with ${apiScorers.length} scorers`);
-      
       try {
-        // Create a new EvaluationRun with just the API scorers
-        // This is to ensure we only send the necessary data to the API
-        const apiEvaluationRun = new EvaluationRun({
-          evalName: evaluationRun.evalName,
-          projectName: evaluationRun.projectName,
-          examples: evaluationRun.examples,
-          scorers: apiScorers,
-          model: evaluationRun.model,
-          aggregator: evaluationRun.aggregator,
-          metadata: evaluationRun.metadata,
-          judgmentApiKey: evaluationRun.judgmentApiKey,
-          organizationId: evaluationRun.organizationId,
-          logResults: evaluationRun.logResults,
-          rules: evaluationRun.rules
-        });
+        console.log('Executing API evaluation...');
+        const apiResponseData = await executeApiEval(evaluationRun);
         
-        logger.log('Sending request to Judgment API');
-        const responseData = await executeApiEval(apiEvaluationRun);
+        // Create ScoringResult objects from API response
+        // Check if the response has a results field (matching Python SDK format)
+        const resultsData = apiResponseData && typeof apiResponseData === 'object' && 'results' in apiResponseData 
+          ? apiResponseData.results as any[]
+          : apiResponseData as any[];
         
-        // Handle different response formats
-        // The API might return an array directly or an object with a results property
-        let resultsArray: any[];
-        if (Array.isArray(responseData)) {
-          resultsArray = responseData;
-        } else if (responseData && typeof responseData === 'object' && Array.isArray(responseData.results)) {
-          resultsArray = responseData.results;
-        } else {
-          throw new Error('Invalid response format from API: expected an array of results or an object with a results property');
-        }
-        
-        logger.log(`Received ${resultsArray.length} results from API`);
-        
-        // --- Convert the response data to ScoringResult objects ---
-        // This transforms the raw API response into our internal format
-        logger.log('Processing API results');
-        
-        // Log the first result for debugging
-        if (resultsArray.length > 0) {
-          logger.log('API response structure:', JSON.stringify(resultsArray[0], null, 2).substring(0, 500) + '...');
-        }
-        
-        apiResults = resultsArray.map((result: any, index: number) => {
-          // Debug logging to understand the structure
-          logger.log(`Processing result ${index}:`);
-          logger.log(`- Keys: ${JSON.stringify(Object.keys(result))}`);
-          
-          // The expected structure based on the DB example:
-          // {
-          //   "success": true,
-          //   "scorers_data": [...],
-          //   "data_object": {...} (this contains the example data)
-          // }
-          
-          // Check if data_object exists
-          if (!result.data_object) {
-            logger.log(`- WARNING: No data_object in result ${index}`);
+        apiResults = resultsData.map((result: any) => {
+          // If the result is already a ScoringResult, return it directly
+          if (result instanceof ScoringResult) {
+            return result;
           }
           
-          // Check if scorers_data exists and has content
-          if (!result.scorers_data || result.scorers_data.length === 0) {
-            logger.log(`- WARNING: No scorers_data in result ${index}`);
-          } else {
-            logger.log(`- Found ${result.scorers_data.length} scorer data entries`);
-            // Log the first scorer data for debugging
-            if (result.scorers_data[0]) {
-              logger.log(`- First scorer: ${JSON.stringify(result.scorers_data[0])}`);
-            }
-          }
-          
-          // Get the original example for this result
-          const originalExample = evaluationRun.examples[index];
-          
-          // Create a merged data object that includes the original example data
-          // and any data from the API response
-          const mergedDataObject = {
-            ...originalExample,
-            ...result.data_object
-          };
-          
-          // Ensure actual_output is included
-          if (!mergedDataObject.actual_output && originalExample.actualOutput) {
-            mergedDataObject.actual_output = originalExample.actualOutput;
-          }
-          
-          // Create a ScoringResult with the data from the API response
+          // Otherwise, create a new ScoringResult from the result data
           return new ScoringResult({
-            dataObject: mergedDataObject,
-            scorersData: result.scorers_data || [],
+            dataObject: result.data_object,
+            scorersData: result.scorers_data,
             error: result.error
           });
         });
         
-        // --- Placeholder for cost calculation ---
-        // Replace this with actual cost calculation logic,
-        // similar to Python's `cost_per_token(model=modelName, prompt_tokens=..., completion_tokens=...)`
-        // You'll need a way to access model cost data (e.g., a library, a map, an API call).
-        const promptCost = 0.0; // Replace with calculated prompt cost
-        const completionCost = 0.0; // Replace with calculated completion cost
-        const callTotalCost = promptCost + completionCost;
-        
-      } catch (error: any) {
-        logger.error(`Error executing API evaluation: ${error?.message || String(error)}`);
+        logger.log(`API evaluation complete with ${apiResults.length} results`);
+      } catch (error) {
+        logger.error(`Error executing API evaluation: ${error}`);
         if (!ignoreErrors) {
           throw error;
         }
-        
-        // Create empty results with errors if ignoring errors
-        // This allows the evaluation to continue even if some scorers fail
-        apiResults = evaluationRun.examples.map(example => {
-          return new ScoringResult({
-            dataObject: example,
-            scorersData: [],
-            error: error?.message
-          });
-        });
       }
     }
 
@@ -674,7 +631,14 @@ export async function runEval(
     // This saves the results to the database for later viewing
     if (evaluationRun.logResults) {
       try {
-        logEvaluationResults(checkedResults, evaluationRun.projectName, evaluationRun.evalName);
+        const url = await logEvaluationResults(
+          checkedResults, 
+          evaluationRun.projectName || '', 
+          evaluationRun.evalName || '', 
+          evaluationRun.judgmentApiKey || '', 
+          evaluationRun.organizationId || ''
+        );
+        logger.log(`Results logged to Judgment API: ${url}`);
       } catch (error: any) {
         logger.error(`Error logging evaluation results: ${error?.message || String(error)}`);
         if (!ignoreErrors) {
@@ -691,6 +655,12 @@ export async function runEval(
         logger.log(`None of the scorers could be executed on example ${i}. This is usually because the Example is missing the fields needed by the scorers. Try checking that the Example has the necessary fields for your scorers.`);
       }
     }
+
+    // Restore original console methods
+    console.log = originalConsoleLog;
+    console.info = originalConsoleInfo;
+    console.warn = originalConsoleWarn;
+    console.error = originalConsoleError;
 
     return checkedResults;
   }

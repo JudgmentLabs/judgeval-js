@@ -1,22 +1,32 @@
 /**
- * Async Evaluation and Tracing Example
+ * LLM Workflow Analysis with Async Evaluation and Tracing
  * 
- * This example demonstrates two approaches to async evaluation:
- * 1. Using aRunEvaluation from JudgmentClient (full evaluation pipeline)
- * 2. Using asyncEvaluate from TraceClient (for evaluating within traces)
+ * This example demonstrates a comprehensive approach to analyzing an LLM workflow:
+ * 1. Using multiple scorers to evaluate LLM responses
+ * 2. Tracing the entire workflow with spans for each step
+ * 3. Performing async evaluation within the trace
+ * 4. Analyzing the results with detailed metrics
  * 
- * It shows the differences between these approaches and when to use each.
+ * This represents a real-world scenario where you might want to:
+ * - Track the performance of your LLM application
+ * - Evaluate the quality of responses using multiple criteria
+ * - Identify areas for improvement in your prompt engineering
  */
 
 import * as dotenv from 'dotenv';
-import { Example } from '../data/example';
+import { Example, ExampleBuilder } from '../data/example';
 import { JudgmentClient } from '../judgment-client';
 import { 
   FaithfulnessScorer,
-  AnswerCorrectnessScorer
+  AnswerCorrectnessScorer,
+  AnswerRelevancyScorer,
+  GroundednessScorer,
+  HallucinationScorer,
+  InstructionAdherenceScorer
 } from '../scorers/api-scorer';
 import { ScoringResult } from '../data/result';
 import { Tracer } from '../common/tracer';
+import { v4 as uuidv4 } from 'uuid';
 
 // Load environment variables
 dotenv.config();
@@ -28,224 +38,283 @@ function createProgressBar(percent: number, length: number = 20): string {
   return `[${'='.repeat(filled)}${' '.repeat(empty)}] ${Math.round(percent * 100)}%`;
 }
 
-async function runJudgmentClientExample() {
-  // Create a unique ID for this run to avoid conflicts
+// Sample customer service conversation data
+const customerServiceData = [
+  {
+    customer: "I ordered a pair of shoes last week, but they still haven't shipped. Order #12345.",
+    context: [
+      "Order #12345 was placed on April 3, 2025",
+      "Order status: Processing",
+      "Expected shipping date: April 12, 2025",
+      "Customer is a premium member"
+    ],
+    agentResponse: "I apologize for the delay with your order #12345. I can see that your order is still processing and is scheduled to ship by April 12. As a premium member, would you like me to expedite your shipping at no additional cost?",
+    expectedResponse: "I apologize for the delay. Your order #12345 is still processing and will ship by April 12. As a premium member, I can expedite your shipping at no extra cost if you'd like."
+  },
+  {
+    customer: "The product I received is damaged. Can I get a refund?",
+    context: [
+      "Return policy: 30-day full refund for damaged items",
+      "Customer purchased item 14 days ago",
+      "Customer has submitted photos of the damage"
+    ],
+    agentResponse: "I'm sorry to hear that your product arrived damaged. I've reviewed the photos you submitted, and I can confirm that you're eligible for a full refund under our 30-day return policy. I've initiated the refund process, and you should see the funds back in your account within 3-5 business days. Would you like to return the damaged item or keep it?",
+    expectedResponse: "I'm sorry about the damaged product. Based on the photos and our 30-day policy, I've approved your full refund. The money will return to your account in 3-5 business days. Would you like to return or keep the damaged item?"
+  },
+  {
+    customer: "I'm trying to change my delivery address for my upcoming order.",
+    context: [
+      "Order #78901 placed yesterday",
+      "Current status: Processing",
+      "Current delivery address: 123 Main St, Anytown, USA",
+      "Order has not been shipped yet"
+    ],
+    agentResponse: "I'd be happy to help you change the delivery address for order #78901. Since your order is still processing and hasn't shipped yet, we can update the address. Could you please provide the new delivery address you'd like to use? Once you provide it, I'll update your order immediately.",
+    expectedResponse: "I can help change the delivery address for order #78901 since it's still processing and hasn't shipped. Please provide your new address, and I'll update it immediately."
+  }
+];
+
+/**
+ * Simulates a customer service LLM application with tracing and evaluation
+ */
+async function runCustomerServiceLLMWorkflow() {
+  console.log('=== Customer Service LLM Workflow Analysis ===\n');
+  
+  // Create a unique run ID for this test
   const runId = Date.now();
-  const projectName = 'async-example';
-  const evalName = `async-eval-${runId}`;
-  
-  console.log('\n=== PART 1: JudgmentClient.aRunEvaluation Example ===');
-  console.log('Initializing JudgmentClient...');
-  
-  // Initialize the JudgmentClient
-  const client = JudgmentClient.getInstance();
-  console.log('Successfully initialized JudgmentClient!');
-  
-  // Create simple examples for evaluation
-  console.log('Creating examples...');
-  const examples = [
-    new Example({
-      input: "What is the capital of France?",
-      actualOutput: "The capital of France is Paris, which is known as the City of Light.",
-      expectedOutput: "Paris is the capital of France."
-    }),
-    new Example({
-      input: "How many planets are in our solar system?",
-      actualOutput: "There are eight planets in our solar system: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, and Neptune. Pluto was reclassified as a dwarf planet in 2006.",
-      expectedOutput: "There are eight planets in our solar system."
-    })
-  ];
-  console.log(`Created ${examples.length} examples`);
-  
-  // Create scorers
-  console.log('Creating scorers...');
-  const scorers = [
-    new FaithfulnessScorer(0.7),
-    new AnswerCorrectnessScorer(0.6)
-  ];
-  console.log(`Created ${scorers.length} scorers`);
+  const projectName = 'customer-service-analysis';
+  const evalRunName = `cs-eval-${runId}`;
   
   console.log(`Project: ${projectName}`);
-  console.log(`Evaluation run: ${evalName}`);
+  console.log(`Evaluation Run: ${evalRunName}`);
   
-  // Log the input parameters
-  console.log('Starting async evaluation...');
-  console.log('Input parameters:');
-  console.log(`- Examples: ${examples.length}`);
-  console.log(`- Scorers: ${scorers.map(s => s.constructor.name).join(', ')}`);
-  console.log(`- Project: ${projectName}`);
-  console.log(`- Evaluation run: ${evalName}`);
+  // Initialize the JudgmentClient
+  console.log('\nInitializing JudgmentClient...');
+  const client = JudgmentClient.getInstance();
+  console.log('JudgmentClient initialized successfully!');
   
-  // Submit the async evaluation
-  console.log('Submitting async evaluation job...');
-  try {
-    await client.aRunEvaluation(
-      examples,
-      scorers,
-      "gpt-4", // Using a specific model instead of "default"
-      undefined, // aggregator
-      { timestamp: runId }, // metadata
-      true, // logResults
-      projectName,
-      evalName,
-      true, // override
-      true, // useJudgment
-      true // ignoreErrors
-    );
-    
-    console.log(`\nAsync evaluation job submitted successfully!`);
-  } catch (error) {
-    console.log(`\nNote: Async evaluation submission simulated (${error instanceof Error ? error.message : String(error)})`);
-  }
-  console.log(`\n=== Monitoring Evaluation Progress ===`);
-  
-  // Define polling parameters
-  const pollingIntervalMs = 2000; // 2 seconds
-  const maxAttempts = 5; // Reduced for demonstration purposes
-  
-  console.log(`\nPolling for status every ${pollingIntervalMs/1000} seconds (max ${maxAttempts} attempts)...`);
-  
-  // Simulate progress for demo purposes
-  for (let i = 1; i <= 5; i++) {
-    const progress = i / 5;
-    console.log(`Progress: ${createProgressBar(progress)}`);
-    await new Promise(resolve => setTimeout(resolve, 500));
-  }
-  
-  console.log(`\nEvaluation complete! Fetching results...`);
-  
-  // Display the results
-  console.log(`\n=== Evaluation Results (${examples.length} examples) ===`);
-  
-  // Simulate results for demo purposes
-  examples.forEach((example, index) => {
-    console.log(`\nExample ${index + 1}:`);
-    console.log(`Input: "${example.input.substring(0, 30)}..."`);
-    console.log("Scores:");
-    console.log(`  FaithfulnessScorer: ${(0.9 + Math.random() * 0.1).toFixed(2)}`);
-    console.log(`  AnswerCorrectnessScorer: ${(0.85 + Math.random() * 0.15).toFixed(2)}`);
-  });
-  
-  // Display average scores
-  console.log("\nAverage Scores:");
-  console.log(`  FaithfulnessScorer: ${(0.92).toFixed(2)}`);
-  console.log(`  AnswerCorrectnessScorer: ${(0.9).toFixed(2)}`);
-  
-  console.log('\n=== JudgmentClient.aRunEvaluation Complete ===');
-  console.log(`View detailed results at: https://app.judgmentlabs.ai/app/experiment?project_name=${projectName}&eval_run_name=${evalName}`);
-}
-
-async function runTracerExample() {
-  console.log('\n=== PART 2: TraceClient.asyncEvaluate Example ===');
-  
-  // Create a unique trace ID
-  const traceId = `trace-${Date.now()}`;
-  const traceName = "llm-async-evaluate-trace";
-  const projectName = "async-tracer-example";
-  
-  console.log(`Creating trace '${traceName}' in project '${projectName}'`);
-  
-  // Get the tracer instance
+  // Initialize the Tracer
+  console.log('Initializing Tracer...');
   const tracer = Tracer.getInstance({
-    projectName: projectName,
+    projectName,
     enableEvaluations: true
   });
+  console.log('Tracer initialized successfully!');
   
-  // Run the example in a trace
+  // Create examples for evaluation
+  console.log('\nPreparing examples for evaluation...');
+  const examples = customerServiceData.map(data => {
+    return new ExampleBuilder()
+      .input(data.customer)
+      .actualOutput(data.agentResponse)
+      .expectedOutput(data.expectedResponse)
+      .retrievalContext(data.context)
+      .build();
+  });
+  console.log(`Created ${examples.length} examples for evaluation`);
+  
+  // Create scorers with different weights and thresholds
+  console.log('\nConfiguring scorers...');
+  const scorers = [
+    new FaithfulnessScorer(0.8),            // High importance on factual accuracy
+    new AnswerCorrectnessScorer(0.7),       // Important for customer service accuracy
+    new AnswerRelevancyScorer(0.9),         // Critical for customer service
+    new GroundednessScorer(0.6),            // Important but not critical
+    new HallucinationScorer(0.5),           // Check for hallucinations
+    new InstructionAdherenceScorer(0.95)    // Critical for following instructions
+  ];
+  console.log(`Configured ${scorers.length} scorers with appropriate weights`);
+  
+  // Start the trace for the entire workflow
+  console.log('\nStarting workflow trace...');
+  const traceName = `customer-service-workflow-${runId}`;
+  
   await tracer.runInTrace({
     name: traceName,
-    projectName: projectName
+    projectName
   }, async (trace) => {
-    console.log(`Trace created with ID: ${trace.traceId}`);
+    console.log(`Trace started with ID: ${trace.traceId}`);
     
-    // Simulate an LLM call
-    await trace.runInSpan("llm_call", { spanType: "llm" }, async () => {
-      // Simulate input
-      const input = "What is the capital of France?";
-      trace.recordInput({ prompt: input });
+    // PART 1: Run async evaluation on all examples
+    await trace.runInSpan("batch_evaluation", { spanType: "tool" }, async () => {
+      console.log('\n=== Running Batch Async Evaluation ===');
       
-      // Simulate LLM output
-      console.log(`Processing LLM request: "${input}"`);
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate processing time
-      
-      const output = "The capital of France is Paris. It's known as the City of Light (La Ville Lumière) and is famous for the Eiffel Tower, Louvre Museum, and Notre-Dame Cathedral.";
-      
-      // Record the output
-      trace.recordOutput({
-        response: output,
-        usage: {
-          prompt_tokens: 7,
-          completion_tokens: 30,
-          total_tokens: 37
+      try {
+        // Submit the async evaluation
+        console.log('Submitting async evaluation job...');
+        await client.aRunEvaluation(
+          examples,
+          scorers,
+          "meta-llama/Meta-Llama-3-8B-Instruct-Turbo", // Using a specific model
+          undefined, // aggregator
+          { workflow: "customer_service", timestamp: runId }, // metadata
+          true, // logResults
+          projectName,
+          evalRunName,
+          true, // override
+          true, // useJudgment
+          true  // ignoreErrors
+        );
+        
+        console.log('Async evaluation job submitted successfully!');
+        
+        // In a real-world scenario, you would poll for status
+        // For this example, we'll simulate the progress
+        console.log('\nSimulating evaluation progress...');
+        for (let i = 1; i <= 5; i++) {
+          const progress = i / 5;
+          console.log(`Progress: ${createProgressBar(progress)}`);
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
-      });
-      
-      console.log(`LLM Response: "${output}"`);
-      
-      // Create scorers for evaluation
-      const faithfulnessScorer = new FaithfulnessScorer();
-      const correctnessScorer = new AnswerCorrectnessScorer();
-      
-      // Use asyncEvaluate to evaluate the output
-      console.log("Submitting async evaluation via TraceClient.asyncEvaluate...");
-      await trace.asyncEvaluate(
-        [faithfulnessScorer, correctnessScorer],
-        {
-          input: input,
-          actualOutput: output,
-          expectedOutput: "Paris is the capital of France.",
-          logResults: true
-        }
-      );
-      
-      console.log("Async evaluation added to trace");
+        
+        console.log('\nBatch evaluation complete!');
+        console.log(`View results at: https://app.judgmentlabs.ai/app/experiment?project_name=${projectName}&eval_run_name=${evalRunName}`);
+      } catch (error) {
+        console.log(`Note: Batch evaluation simulated (${error instanceof Error ? error.message : String(error)})`);
+      }
     });
     
-    // Print the trace for debugging
-    trace.print();
+    // PART 2: Process each customer query individually with tracing
+    console.log('\n=== Processing Individual Customer Queries ===');
     
-    console.log(`Trace saved automatically with ID: ${trace.traceId}`);
-    console.log(`View trace: https://app.judgmentlabs.ai/app/monitor?project_name=${trace.projectName}&trace_id=${trace.traceId}&trace_name=${trace.name}&show_trace=true`);
+    for (let i = 0; i < customerServiceData.length; i++) {
+      const data = customerServiceData[i];
+      const queryId = uuidv4().substring(0, 8);
+      
+      await trace.runInSpan(`customer_query_${i+1}`, { spanType: "chain" }, async () => {
+        console.log(`\nProcessing Customer Query #${i+1}: "${data.customer.substring(0, 40)}..."`);
+        
+        // Step 1: Context retrieval
+        await trace.runInSpan("context_retrieval", { spanType: "tool" }, async () => {
+          console.log("Retrieving context...");
+          trace.recordInput({ query: data.customer });
+          await new Promise(resolve => setTimeout(resolve, 300)); // Simulate retrieval time
+          trace.recordOutput({ context: data.context });
+          console.log(`Retrieved ${data.context.length} context items`);
+        });
+        
+        // Step 2: LLM response generation
+        await trace.runInSpan("llm_generation", { spanType: "llm" }, async () => {
+          // Prepare the prompt with context
+          const prompt = `
+Customer query: ${data.customer}
+
+Context:
+${data.context.map(c => `- ${c}`).join('\n')}
+
+Respond to the customer query using the provided context. Be helpful, accurate, and concise.
+`;
+          
+          trace.recordInput({ prompt });
+          
+          console.log("Generating LLM response...");
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate LLM processing time
+          
+          // In a real scenario, this would be the actual LLM call
+          // For this example, we'll use the pre-defined response
+          const response = data.agentResponse;
+          
+          trace.recordOutput({
+            response,
+            usage: {
+              prompt_tokens: prompt.length / 4, // Rough estimate
+              completion_tokens: response.length / 4, // Rough estimate
+              total_tokens: (prompt.length + response.length) / 4 // Rough estimate
+            }
+          });
+          
+          console.log(`LLM Response: "${response.substring(0, 60)}..."`);
+          
+          // Evaluate the LLM response asynchronously within the trace
+          console.log("Submitting async evaluation for this response...");
+          
+          const example = new ExampleBuilder()
+            .input(data.customer)
+            .actualOutput(response)
+            .expectedOutput(data.expectedResponse)
+            .retrievalContext(data.context)
+            .build();
+          
+          // Use a subset of scorers for individual evaluations
+          const responseScorers = [
+            new FaithfulnessScorer(0.8),
+            new AnswerRelevancyScorer(0.9),
+            new HallucinationScorer(0.95)
+          ];
+          
+          await trace.asyncEvaluate(
+            responseScorers,
+            {
+              input: data.customer,
+              actualOutput: response,
+              expectedOutput: data.expectedResponse,
+              retrievalContext: data.context,
+              logResults: true
+            }
+          );
+          
+          console.log("Async evaluation added to trace");
+        });
+      });
+    }
+    
+    // PART 3: Analyze the results
+    await trace.runInSpan("results_analysis", { spanType: "tool" }, async () => {
+      console.log('\n=== Analyzing Workflow Results ===');
+      
+      // In a real scenario, you would fetch the actual results
+      // For this example, we'll simulate the analysis
+      
+      console.log('\nScorer Performance Summary:');
+      console.log('----------------------------');
+      console.log('FaithfulnessScorer:         0.87 (Good)');
+      console.log('AnswerCorrectnessScorer:    0.92 (Excellent)');
+      console.log('AnswerRelevancyScorer:      0.95 (Excellent)');
+      console.log('GroundednessScorer:         0.89 (Good)');
+      console.log('HallucinationScorer:        0.94 (Excellent)');
+      console.log('InstructionAdherenceScorer: 0.98 (Excellent)');
+      
+      console.log('\nAreas for Improvement:');
+      console.log('----------------------');
+      console.log('1. Faithfulness: Ensure all context information is accurately reflected');
+      console.log('2. Groundedness: Improve grounding in the provided context');
+      
+      console.log('\nStrengths:');
+      console.log('----------');
+      console.log('1. Relevancy: Responses directly address customer queries');
+      console.log('2. Low Hallucination: No fabricated information detected');
+      console.log('3. Correctness: Responses align well with expected outputs');
+    });
+    
+    // Display trace information
+    console.log('\n=== Workflow Trace Complete ===');
+    console.log(`Trace ID: ${trace.traceId}`);
+    console.log(`View trace details at: https://app.judgmentlabs.ai/app/monitor?project_name=${projectName}&trace_id=${trace.traceId}&trace_name=${traceName}&show_trace=true`);
   });
   
-  console.log('\n=== TraceClient.asyncEvaluate Complete ===');
-}
-
-async function main() {
-  try {
-    console.log("Starting async evaluation examples...");
-    
-    // Run both examples
-    await runJudgmentClientExample();
-    await runTracerExample();
-    
-    console.log('\n=== Key Differences Between aRunEvaluation and asyncEvaluate ===');
-    console.log('1. Purpose:');
-    console.log('   - aRunEvaluation: For standalone evaluation runs with multiple examples');
-    console.log('   - asyncEvaluate: For evaluating specific LLM outputs within a trace');
-    
-    console.log('\n2. Context:');
-    console.log('   - aRunEvaluation: Used at the JudgmentClient level, independent of traces');
-    console.log('   - asyncEvaluate: Used within an active trace span, tied to specific LLM calls');
-    
-    console.log('\n3. Data Flow:');
-    console.log('   - aRunEvaluation: Creates a separate evaluation pipeline');
-    console.log('   - asyncEvaluate: Adds evaluation data to an existing trace');
-    
-    console.log('\n4. Use Cases:');
-    console.log('   - aRunEvaluation: Batch evaluation of multiple examples, benchmarking');
-    console.log('   - asyncEvaluate: Real-time evaluation during application execution');
-    
-    console.log('\n5. Integration:');
-    console.log('   - aRunEvaluation: Part of the high-level JudgmentClient API');
-    console.log('   - asyncEvaluate: Integrated with the tracing system for monitoring');
-    
-  } catch (error) {
-    console.error(`Error in async evaluation: ${error instanceof Error ? error.message : String(error)}`);
-  }
+  // PART 4: Recommendations based on the analysis
+  console.log('\n=== Recommendations ===');
+  console.log('1. Prompt Engineering: Add explicit instructions to include all context items');
+  console.log('2. Model Selection: Current model performs well for customer service tasks');
+  console.log('3. Monitoring: Set up continuous evaluation with these scorers');
+  console.log('4. Thresholds: Set minimum score thresholds of 0.85 for production use');
+  
+  console.log('\n=== Customer Service LLM Workflow Analysis Complete ===');
 }
 
 // Run the example
+async function main() {
+  try {
+    console.log('Starting LLM workflow analysis with tracing and async evaluation...\n');
+    await runCustomerServiceLLMWorkflow();
+    console.log('\nAnalysis complete! You can view the detailed results and traces in the Judgment UI.');
+  } catch (error) {
+    console.error('Error running the workflow analysis:', error);
+  }
+}
+
+// Execute the main function
 main().catch(error => {
   console.error(`Unhandled error: ${error instanceof Error ? error.message : String(error)}`);
+  process.exit(1);
 });

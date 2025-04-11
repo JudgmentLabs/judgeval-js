@@ -1,20 +1,19 @@
-import * as dotenv from 'dotenv';
-import { Example, ExampleBuilder } from '../data/example';
+import dotenv from 'dotenv';
 import { JudgmentClient } from '../judgment-client';
-import { 
-  FaithfulnessScorer, 
-  AnswerRelevancyScorer,
+import { Example, ExampleBuilder } from '../data/example';
+import {
   AnswerCorrectnessScorer,
-  HallucinationScorer,
-  ContextualRelevancyScorer,
+  AnswerRelevancyScorer,
+  ComparisonScorer,
   ContextualPrecisionScorer,
   ContextualRecallScorer,
-  SummarizationScorer,
-  ComparisonScorer,
+  ContextualRelevancyScorer,
+  ExecutionOrderScorer,
+  FaithfulnessScorer,
+  HallucinationScorer,
   InstructionAdherenceScorer,
   JsonCorrectnessScorer,
-  ExecutionOrderScorer,
-  GroundednessScorer
+  SummarizationScorer
 } from '../scorers/api-scorer';
 import logger from '../common/logger';
 
@@ -38,8 +37,6 @@ async function runBasicEvaluation() {
   
   // Initialize the JudgmentClient
   const judgmentClient = JudgmentClient.getInstance();
-  console.log('Successfully initialized JudgmentClient!');
-
   // Create examples for different scorer types
   const examples = {
     // Basic examples for simple scorers
@@ -153,107 +150,62 @@ async function runBasicEvaluation() {
   const model = 'meta-llama/Meta-Llama-3-8B-Instruct-Turbo';
 
   try {
-    // Directly format and print results in Python SDK format
-    function formatPythonOutput(results: any[], projectName: string, evalName: string) {
-      console.log('\n                     ');
-      console.log(' 🔍 You can view your evaluation results here: https://app.judgmentlabs.ai/app/experiment?project_name=' + projectName + '&eval_run_name=' + evalName);
-      console.log('');
-      
-      let hasFailures = false;
-
-      for (const result of results) {
-        const success = result.success || (result.scorersData?.every((s: any) => s.success) ?? false);
-        
-        if (!success) {
-          hasFailures = true;
-          console.log('=== Test Failure Details ===');
-          
-          const input = result.dataObject?.input || result.example?.input;
-          const actualOutput = result.dataObject?.actualOutput || result.example?.actualOutput;
-          const retrievalContext = result.dataObject?.retrievalContext || result.example?.retrievalContext;
-          
-          console.log(`Input: ${input}`);
-          console.log(`Output: ${actualOutput}`);
-          console.log(`Success: False`);
-          
-          if (retrievalContext && retrievalContext.length > 0) {
-            console.log(`Retrieval Context: ${JSON.stringify(retrievalContext)}`);
-          } else {
-            console.log('Retrieval Context: None');
-          }
-          
-          const scorersData = result.scorersData || result.scores;
-          
-          if (scorersData && scorersData.length > 0) {
-            console.log('\nScorer Details:');
-            for (const scorer of scorersData) {
-              if (!scorer.success) {
-                console.log(`- Name: ${scorer.name}`);
-                console.log(`- Score: ${scorer.score}`);
-                console.log(`- Threshold: ${scorer.threshold}`);
-                console.log(`- Success: False`);
-                if (scorer.reason) {
-                  console.log(`- Reason: ${scorer.reason}`);
-                }
-                console.log(`- Error: ${scorer.error || 'None'}`);
-              }
-            }
-          }
-          
-          console.log('');
-        }
-      }
-
-      if (!hasFailures) {
-        console.log('All tests passed successfully!\n');
-      }
-    }
-    
     // Test AnswerRelevancy scorer
     const arResults = await judgmentClient.evaluate({
       examples: examples.answerRelevancy,
-      scorers: [new AnswerRelevancyScorer(0.7)],
+      scorers: [new AnswerRelevancyScorer(0.7, {}, true)],
       evalName: `${evalRunName}-ar`,
       projectName: projectName,
       model: model
     });
-    formatPythonOutput(arResults, projectName, `${evalRunName}-ar`);
+    
+    // Use simplified print function - matches Python SDK's print(results) behavior
+    // Pass projectName and evalName to ensure URL is printed
+    logger.print(arResults, projectName, `${evalRunName}-ar`);
 
     // Test AnswerCorrectness scorer
     const acResults = await judgmentClient.evaluate({
       examples: examples.basic,
-      scorers: [new AnswerCorrectnessScorer(0.7)],
+      scorers: [new AnswerCorrectnessScorer(0.7, {}, true)],
       evalName: `${evalRunName}-ac`,
       projectName: projectName,
       model: model
     });
-    formatPythonOutput(acResults, projectName, `${evalRunName}-ac`);
+    
+    // Use simplified print function - matches Python SDK's print(results) behavior
+    // Pass projectName and evalName to ensure URL is printed
+    logger.print(acResults, projectName, `${evalRunName}-ac`);
 
     // Test Faithfulness scorer
     const faithResults = await judgmentClient.evaluate({
       examples: examples.faithfulness,
-      scorers: [new FaithfulnessScorer(0.7)],
+      scorers: [new FaithfulnessScorer(0.7, {}, true)],
       evalName: `${evalRunName}-faith`,
       projectName: projectName,
       model: model
     });
-    formatPythonOutput(faithResults, projectName, `${evalRunName}-faith`);
+    
+    // Use simplified print function - matches Python SDK's print(results) behavior
+    // Pass projectName and evalName to ensure URL is printed
+    logger.print(faithResults, projectName, `${evalRunName}-faith`);
 
     // Test Hallucination scorer
     const hallResults = await judgmentClient.evaluate({
       examples: examples.hallucination,
-      scorers: [new HallucinationScorer(0.7)],
+      scorers: [new HallucinationScorer(0.7, {}, true)],
       evalName: `${evalRunName}-hall`,
       projectName: projectName,
       model: model
     });
-    formatPythonOutput(hallResults, projectName, `${evalRunName}-hall`);
+    
+    // Use simplified print function - matches Python SDK's print(results) behavior
+    logger.print(hallResults);
 
     // Test Contextual scorers
     const contextualScorers = [
-      new ContextualRelevancyScorer(0.7),
-      new ContextualPrecisionScorer(0.7),
-      new ContextualRecallScorer(0.7)
+      new ContextualRelevancyScorer(0.7, {}, true),
+      new ContextualPrecisionScorer(0.7, {}, true),
+      new ContextualRecallScorer(0.7, {}, true)
     ];
     
     const contextResults = await judgmentClient.evaluate({
@@ -263,57 +215,69 @@ async function runBasicEvaluation() {
       projectName: projectName,
       model: model
     });
-    formatPythonOutput(contextResults, projectName, `${evalRunName}-context`);
+    
+    // Use simplified print function - matches Python SDK's print(results) behavior
+    logger.print(contextResults);
 
     // Test Summarization scorer
     const summResults = await judgmentClient.evaluate({
       examples: examples.summarization,
-      scorers: [new SummarizationScorer(0.7)],
+      scorers: [new SummarizationScorer(0.7, {}, true)],
       evalName: `${evalRunName}-summ`,
       projectName: projectName,
       model: model
     });
-    formatPythonOutput(summResults, projectName, `${evalRunName}-summ`);
+    
+    // Use simplified print function - matches Python SDK's print(results) behavior
+    logger.print(summResults);
 
     // Test JSON Correctness scorer
     const jsonResults = await judgmentClient.evaluate({
       examples: examples.jsonCorrectness,
-      scorers: [new JsonCorrectnessScorer(0.7)],
+      scorers: [new JsonCorrectnessScorer(0.7, undefined, {}, true)],
       evalName: `${evalRunName}-json`,
       projectName: projectName,
       model: model
     });
-    formatPythonOutput(jsonResults, projectName, `${evalRunName}-json`);
+    
+    // Use simplified print function - matches Python SDK's print(results) behavior
+    logger.print(jsonResults);
 
     // Test Instruction Adherence scorer
     const iaResults = await judgmentClient.evaluate({
       examples: examples.instructionAdherence,
-      scorers: [new InstructionAdherenceScorer(0.7)],
+      scorers: [new InstructionAdherenceScorer(0.7, {}, true)],
       evalName: `${evalRunName}-ia`,
       projectName: projectName,
       model: model
     });
-    formatPythonOutput(iaResults, projectName, `${evalRunName}-ia`);
+    
+    // Use simplified print function - matches Python SDK's print(results) behavior
+    logger.print(iaResults);
 
     // Test Comparison scorer
     const compResults = await judgmentClient.evaluate({
       examples: examples.comparison,
-      scorers: [new ComparisonScorer(0.5)],
+      scorers: [new ComparisonScorer(0.5, ['Accuracy', 'Helpfulness', 'Relevance'], 'Compare the outputs based on the given criteria', {}, true)],
       evalName: `${evalRunName}-comp`,
       projectName: projectName,
       model: model
     });
-    formatPythonOutput(compResults, projectName, `${evalRunName}-comp`);
+    
+    // Use simplified print function - matches Python SDK's print(results) behavior
+    logger.print(compResults);
 
     // Test Execution Order scorer
     const eoResults = await judgmentClient.evaluate({
       examples: examples.executionOrder,
-      scorers: [new ExecutionOrderScorer(0.7)],
+      scorers: [new ExecutionOrderScorer(0.7, true, undefined, {}, true)],
       evalName: `${evalRunName}-eo`,
       projectName: projectName,
       model: model
     });
-    formatPythonOutput(eoResults, projectName, `${evalRunName}-eo`);
+    
+    // Use simplified print function - matches Python SDK's print(results) behavior
+    logger.print(eoResults);
   } catch (error) {
     console.error(`Error running evaluations: ${error instanceof Error ? error.message : String(error)}`);
   }

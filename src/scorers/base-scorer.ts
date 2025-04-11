@@ -10,7 +10,8 @@ export interface Scorer {
   scoreType: string; // For backward compatibility
   threshold: number;
   score?: number;
-  metadata?: Record<string, any>;
+  additional_metadata?: Record<string, any>;
+  verbose: boolean;
   validateThreshold(): void;
   toJSON(): Record<string, any>;
   successCheck(): boolean;
@@ -24,12 +25,14 @@ export abstract class APIJudgmentScorer implements Scorer {
   get scoreType(): string { return this.type; } // For backward compatibility
   readonly threshold: number;
   score?: number;
-  metadata?: Record<string, any>;
+  additional_metadata?: Record<string, any>;
+  verbose: boolean;
 
-  constructor(type: string, threshold: number, metadata?: Record<string, any>) {
+  constructor(type: string, threshold: number, additional_metadata?: Record<string, any>, verbose: boolean = false) {
     this.type = type;
     this.threshold = threshold;
-    this.metadata = metadata;
+    this.additional_metadata = additional_metadata;
+    this.verbose = verbose;
   }
 
   /**
@@ -70,7 +73,8 @@ export abstract class APIJudgmentScorer implements Scorer {
       score_type: this.type,
       threshold: this.threshold,
       score: this.score,
-      metadata: this.metadata,
+      additional_metadata: this.additional_metadata,
+      verbose: this.verbose,
     };
 
     return result;
@@ -89,13 +93,15 @@ export abstract class JudgevalScorer implements Scorer {
   scoreType: string; // For backward compatibility
   threshold: number;
   score?: number;
-  metadata?: Record<string, any>;
+  additional_metadata?: Record<string, any>;
+  verbose: boolean;
 
-  constructor(type: string, threshold: number, metadata?: Record<string, any>) {
+  constructor(type: string, threshold: number, additional_metadata?: Record<string, any>, verbose: boolean = false) {
     this.type = type;
     this.scoreType = type; // For backward compatibility
     this.threshold = threshold;
-    this.metadata = metadata;
+    this.additional_metadata = additional_metadata;
+    this.verbose = verbose;
   }
 
   /**
@@ -143,7 +149,8 @@ export abstract class JudgevalScorer implements Scorer {
       score_type: this.type,
       threshold: this.threshold,
       score: this.score,
-      metadata: this.metadata,
+      additional_metadata: this.additional_metadata,
+      verbose: this.verbose,
     };
   }
 }
@@ -156,6 +163,8 @@ export class ScorerWrapper implements Scorer {
   scoreType: string; // For backward compatibility
   threshold: number;
   score?: number;
+  additional_metadata?: Record<string, any>;
+  verbose: boolean;
   scorer: any;
 
   constructor(scorer: any) {
@@ -164,6 +173,8 @@ export class ScorerWrapper implements Scorer {
     this.scoreType = scorer.scoreType || scorer.score_type; // For backward compatibility
     this.threshold = scorer.threshold;
     this.score = scorer.score;
+    this.additional_metadata = scorer.additional_metadata;
+    this.verbose = scorer.verbose;
   }
 
   /**
@@ -219,6 +230,8 @@ export class ScorerWrapper implements Scorer {
       score_type: this.type,
       threshold: this.threshold,
       score: this.score,
+      additional_metadata: this.additional_metadata,
+      verbose: this.verbose,
     };
   }
 }
