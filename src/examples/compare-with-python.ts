@@ -110,9 +110,6 @@ async function main() {
       if (evalResults && evalResults.length > 0) {
         const firstResult = evalResults[0];
         console.log("\nFirst result details:");
-        console.log(`Input: ${firstResult.dataObject?.input}`);
-        console.log(`Actual Output: ${firstResult.dataObject?.actualOutput}`);
-        console.log(`Expected Output: ${firstResult.dataObject?.expectedOutput}`);
         console.log(`Score: ${firstResult.scorersData?.[0]?.score}`);
         console.log(`Success: ${firstResult.scorersData?.[0]?.success}`);
       }

@@ -647,34 +647,34 @@ export class JudgmentClient {
       if (format === 'json') {
         return JSON.stringify(evalRun, null, 2);
       } else if (format === 'csv') {
-        // Simple CSV conversion for the results
         const results = evalRun[0]?.results || [];
         if (results.length === 0) {
           return 'No results found';
         }
-        
-        // Get headers from the first result
-        const firstResult = results[0];
-        const headers = Object.keys(firstResult).filter(key => typeof firstResult[key] !== 'object');
-        
-        // Create CSV header row
-        let csv = headers.join(',') + '\n';
-        
-        // Add data rows
-        for (const result of results) {
-          const row = headers.map(header => {
-            const value = result[header];
-            if (typeof value === 'string') {
-              // Escape quotes and wrap in quotes
-              return `"${value.replace(/"/g, '""')}"`;
+
+        // Use json2csv library instead of manual conversion
+        const { Parser } = require('json2csv');
+
+        try {
+          // Convert complex objects to strings to avoid json2csv errors
+          const processedResults = results.map((result: any) => {
+            const processedResult = { ...result };
+            for (const key in processedResult) {
+              if (typeof processedResult[key] === 'object' && processedResult[key] !== null) {
+                processedResult[key] = JSON.stringify(processedResult[key]);
+              }
             }
-            return value;
-          }).join(',');
+            return processedResult;
+          });
           
-          csv += row + '\n';
+          const parser = new Parser();
+          return parser.parse(processedResults);
+        } catch (error) {
+          console.error('Error converting to CSV:', error);
+          // Check the type before accessing .message
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          return `Error generating CSV: ${errorMessage}`;
         }
-        
-        return csv;
       } else {
         throw new Error(`Unsupported export format: ${format}`);
       }

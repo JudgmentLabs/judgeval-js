@@ -126,7 +126,7 @@ async function main() {
       // Export as CSV
       const csvExport = await client.exportEvalResults(projectName, evalRunName, 'csv');
       console.log("Exported CSV results (first 100 characters):");
-      console.log(csvExport.substring(0, 100) + "...");
+      console.log(csvExport);
     } catch (error) {
       console.error(`Error exporting evaluation results: ${error}`);
     }
