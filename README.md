@@ -1,6 +1,6 @@
 # JudgEval TypeScript SDK
 
-The JudgEval TypeScript SDK provides a powerful and flexible way to evaluate LLM outputs using a variety of scorers. This SDK is designed to be easy to use while providing comprehensive evaluation capabilities.
+A TypeScript SDK for evaluating LLM outputs using the JudgmentLabs evaluation platform.
 
 ## Installation
 
@@ -11,172 +11,143 @@ npm install judgeval
 ## Quick Start
 
 ```typescript
-import { JudgmentClient, Example, AnswerRelevancyScorer } from 'judgeval';
+import { JudgmentClient, ExampleBuilder, AnswerRelevancyScorer } from 'judgeval';
 import dotenv from 'dotenv';
 
 // Load environment variables
 dotenv.config();
 
-// Initialize the client
+// Initialize client
 const client = JudgmentClient.getInstance();
 
-// Create examples
-const examples = [
-  new Example({
-    input: "What's the capital of France?",
-    actualOutput: "The capital of France is Paris.",
-    expectedOutput: "Paris is the capital of France."
-  })
-];
+// Create example
+const example = new ExampleBuilder()
+  .input("What's the capital of France?")
+  .actualOutput("The capital of France is Paris.")
+  .build();
 
-// Create a scorer
-const scorer = new AnswerRelevancyScorer(0.7);
-
-// Run the evaluation
-async function runEvaluation() {
-  const results = await client.evaluate({
-    examples: examples,
-    scorers: [scorer],
-    projectName: 'my-project',
-    evalName: 'my-evaluation'
-  });
+// Run evaluation
+async function main() {
+  const results = await client.runEvaluation(
+    [example],
+    [new AnswerRelevancyScorer(0.7)],
+    "meta-llama/Meta-Llama-3-8B-Instruct-Turbo"
+  );
   
-  console.log(results);
+  // Print results using standardized logger
+  logger.print(results);
 }
 
-runEvaluation();
+main();
 ```
 
+## Key Features
 
-The `JudgmentClient` is the main entry point for the SDK. It provides methods to run evaluations, manage datasets, and interact with the JudgEval API.
+- **Standardized Logging**: Consistent logging across all examples with formatted output
+- **Asynchronous Evaluation**: Support for both sync and async evaluation workflows
+- **Comprehensive Scorers**: Multiple pre-built scorers for different evaluation aspects
+- **Tracing Support**: Trace LLM workflows with spans and evaluation integration
+- **Pay-as-you-go Integration**: Automatic handling of billing limits and resource allocation
+
+## Core Components
+
+### JudgmentClient
+
+The main entry point for interacting with the JudgmentLabs API:
 
 ```typescript
-// Get the singleton instance
+// Get singleton instance
 const client = JudgmentClient.getInstance();
+
+// Or create with explicit credentials
+const client = new JudgmentClient(process.env.JUDGMENT_API_KEY, process.env.JUDGMENT_ORG_ID);
 ```
 
 ### Examples
 
-Examples are the inputs and outputs that you want to evaluate. Each example consists of:
-
-- `input`: The prompt or question given to the model
-- `actualOutput`: The model's response that you want to evaluate
-- `expectedOutput` (optional): The expected or reference output
-- `context` (optional): Additional context for the input
-- `retrievalContext` (optional): Context used for retrieval-based evaluations
+Create examples using the builder pattern:
 
 ```typescript
-// Create an example using the builder pattern
-const example = Example.builder()
+const example = new ExampleBuilder()
   .input("What's the capital of France?")
   .actualOutput("The capital of France is Paris.")
   .expectedOutput("Paris is the capital of France.")
+  .retrievalContext(["France is a country in Western Europe."])
   .build();
-
-// Or create an example using the constructor
-const example = new Example({
-  input: "What's the capital of France?",
-  actualOutput: "The capital of France is Paris.",
-  expectedOutput: "Paris is the capital of France."
-});
 ```
 
 ### Scorers
 
-Scorers evaluate different aspects of the model's output. 
+Available scorers include:
+
+- `AnswerCorrectnessScorer`: Evaluates factual correctness
+- `AnswerRelevancyScorer`: Measures relevance to the input
+- `FaithfulnessScorer`: Checks adherence to provided context
+- `HallucinationScorer`: Detects fabricated information
+- `GroundednessScorer`: Evaluates grounding in context
+- `InstructionAdherenceScorer`: Measures adherence to instructions
+- `JsonCorrectnessScorer`: Validates JSON structure
+- `ComparisonScorer`: Compares outputs on multiple criteria
+- `ExecutionOrderScorer`: Evaluates tool usage sequences
+
+### Evaluation Methods
 
 ```typescript
-// Create a scorer with a threshold
-const scorer = new AnswerRelevancyScorer(0.7);
+// Synchronous evaluation
+const results = await client.runEvaluation(examples, scorers, model);
 
-// Run an evaluation with multiple scorers
-const results = await client.evaluate({
-  examples: examples,
-  scorers: [
-    new AnswerCorrectnessScorer(0.7),
-    new FaithfulnessScorer(0.8),
-    new HallucinationScorer(0.5)
-  ],
-  projectName: 'my-project',
-  evalName: 'my-evaluation'
-});
+// Asynchronous evaluation
+await client.aRunEvaluation(
+  examples,
+  scorers,
+  model,
+  projectName,
+  evalRunName
+);
 ```
 
-## Running Evaluations
-
-The SDK provides a simplified interface for running evaluations:
-
-```typescript
-const results = await client.evaluate({
-  examples: examples,
-  scorers: scorers,
-  model: 'meta-llama/Meta-Llama-3-8B-Instruct-Turbo', // Optional, defaults to Meta-Llama-3
-  projectName: 'my-project',
-  evalName: 'my-evaluation',
-  logResults: true, // Optional, defaults to true
-  asyncExecution: false // Optional, defaults to false
-});
-```
-
-### Synchronous vs. Asynchronous Evaluation
-
-By default, evaluations run synchronously, and the results are returned when the evaluation is complete. For large-scale evaluations, you can use asynchronous execution:
-
-```typescript
-// Run an evaluation asynchronously
-await client.evaluate({
-  examples: examples,
-  scorers: scorers,
-  projectName: 'my-project',
-  evalName: 'my-evaluation',
-  asyncExecution: true
-});
-
-// The evaluation will run in the background, and results will be available in the JudgEval UI
-```
-
-## Viewing Results
-
-Evaluation results can be viewed in the JudgEval UI or accessed programmatically:
-
-```typescript
-// View results in the JudgEval UI
-console.log(`View results at: https://app.judgmentlabs.ai/app/experiment?project_name=my-project&eval_run_name=my-evaluation`);
-
-// Access results programmatically
-const results = await client.pullEval('my-project', 'my-evaluation');
-```
-
-## Logging
-
-The SDK includes a comprehensive logging system that provides detailed information about the evaluation process:
+### Logging
 
 ```typescript
 import logger from 'judgeval/common/logger';
 
 // Enable logging
-logger.enableLogging('my-app', './logs');
+logger.enableLogging();
 
 // Log messages
-logger.info('Starting evaluation...');
-logger.error('An error occurred');
+logger.info("Starting evaluation...");
 
-// Disable logging
-logger.disableLogging();
+// Print results in standardized format
+logger.print(results);
 ```
 
-## Advanced Usage
-
-### Custom Scorers
-
-You can create custom scorers by extending the `APIJudgmentScorer` or `JudgevalScorer` classes:
+### Tracing
 
 ```typescript
-import { APIJudgmentScorer } from 'judgeval';
+import { Tracer } from 'judgeval/common/tracer';
 
-class MyCustomScorer extends APIJudgmentScorer {
-  constructor(threshold: number) {
-    super('my_custom_scorer', threshold);
-  }
-}
+const tracer = Tracer.getInstance({
+  projectName: "my-project",
+  enableEvaluations: true
+});
+
+await tracer.runInTrace({ name: "my-trace" }, async (trace) => {
+  // Run operations within the trace
+  await trace.runInSpan("operation", { spanType: "tool" }, async () => {
+    // Perform operations
+  });
+});
 ```
+
+## Environment Variables
+
+- `JUDGMENT_API_KEY`: Your JudgmentLabs API key
+- `JUDGMENT_ORG_ID`: Your organization ID
+
+## Examples
+
+See the `/examples` directory for complete usage examples:
+- `basic-evaluation.ts`: Simple evaluation workflow
+- `async-evaluation.ts`: Asynchronous evaluation
+- `llm-async-tracer.ts`: Workflow tracing with evaluation
+- `simple-async.ts`: Simplified async evaluation
