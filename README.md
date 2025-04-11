@@ -139,6 +139,48 @@ await tracer.runInTrace({ name: "my-trace" }, async (trace) => {
 });
 ```
 
+## Result Retrieval
+
+You can retrieve past evaluation results using several methods:
+
+```typescript
+// Initialize the JudgmentClient
+const client = JudgmentClient.getInstance();
+
+// Method 1: Using pullEval
+const results = await client.pullEval('my-project', 'my-eval-run');
+
+// Method 2: Using getEvalRun (alias for pullEval)
+const results = await client.getEvalRun('my-project', 'my-eval-run');
+
+// List all evaluation runs for a project
+const evalRuns = await client.listEvalRuns('my-project', 100, 0); // limit=100, offset=0
+
+// Get statistics for an evaluation run
+const stats = await client.getEvalRunStats('my-project', 'my-eval-run');
+
+// Export evaluation results to JSON or CSV
+const jsonExport = await client.exportEvalResults('my-project', 'my-eval-run', 'json');
+const csvExport = await client.exportEvalResults('my-project', 'my-eval-run', 'csv');
+```
+
+The returned results include the evaluation run ID and a list of scoring results:
+
+```typescript
+[
+  {
+    "id": "eval-run-id",
+    "results": [
+      {
+        // ScoringResult object with dataObject, scorersData, etc.
+      }
+    ]
+  }
+]
+```
+
+For a complete example of retrieving evaluation results, see `src/examples/result-retrieval.ts`.
+
 ## Custom Scorers
 
 You can create custom scorers by extending the `JudgevalScorer` class. Here's an example of a custom scorer that checks for exact string matches:

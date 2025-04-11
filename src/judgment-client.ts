@@ -471,6 +471,9 @@ export class JudgmentClient {
 
   /**
    * Pull evaluation results from the server
+   * @param projectName Name of the project
+   * @param evalRunName Name of the evaluation run
+   * @returns Dictionary containing the evaluation run ID and list of scoring results
    */
   public async pullEval(
     projectName: string,
@@ -495,7 +498,44 @@ export class JudgmentClient {
         }
       );
 
-      return response.data.results || [];
+      // Process the response to match the Python SDK's format
+      const evalRunResult = [{}] as any[];
+      
+      for (const result of response.data) {
+        const resultId = result.id || '';
+        const resultData = result.result || {};
+        
+        // Extract data object to create an Example
+        const dataObject = resultData.data_object || {};
+        const example = new Example({
+          input: dataObject.input || '',
+          actualOutput: dataObject.actual_output || '',
+          expectedOutput: dataObject.expected_output || '',
+          context: dataObject.context,
+          retrievalContext: dataObject.retrieval_context,
+          additionalMetadata: dataObject.additional_metadata,
+          toolsCalled: dataObject.tools_called,
+          expectedTools: dataObject.expected_tools,
+          exampleId: dataObject.example_id,
+          exampleIndex: dataObject.example_index || 0,
+          timestamp: dataObject.timestamp
+        });
+        
+        // Extract scorers data
+        const scorersData = resultData.scorers_data || [];
+        
+        // Create ScoringResult
+        const scoringResult = new ScoringResult({
+          dataObject: example,
+          scorersData: scorersData,
+          error: resultData.error
+        });
+        
+        evalRunResult[0].id = resultId;
+        evalRunResult[0].results = [scoringResult];
+      }
+      
+      return evalRunResult;
     } catch (error) {
       if (axios.isAxiosError(error)) {
         const statusCode = error.response?.status;
@@ -503,6 +543,143 @@ export class JudgmentClient {
         throw new Error(`Failed to pull evaluation results: ${statusCode} - ${errorMessage}`);
       }
       throw error;
+    }
+  }
+
+  /**
+   * Get evaluation run results (alias for pullEval with a more intuitive name)
+   * @param projectName Name of the project
+   * @param evalRunName Name of the evaluation run
+   * @returns Dictionary containing the evaluation run ID and list of scoring results
+   */
+  public async getEvalRun(
+    projectName: string,
+    evalRunName: string
+  ): Promise<Array<Record<string, any>>> {
+    return this.pullEval(projectName, evalRunName);
+  }
+
+  /**
+   * List all evaluation runs for a project
+   * @param projectName Name of the project
+   * @param limit Maximum number of evaluation runs to return (default: 100)
+   * @param offset Offset for pagination (default: 0)
+   * @returns List of evaluation run metadata
+   */
+  public async listEvalRuns(
+    projectName: string,
+    limit: number = 100,
+    offset: number = 0
+  ): Promise<Array<Record<string, any>>> {
+    try {
+      const response = await axios.get(
+        `${this.apiUrl}/projects/${projectName}/eval-runs`,
+        {
+          params: {
+            limit,
+            offset
+          },
+          headers: {
+            'Authorization': `Bearer ${this.judgmentApiKey}`,
+            'X-Organization-Id': this.organizationId
+          }
+        }
+      );
+
+      return response.data || [];
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const statusCode = error.response?.status;
+        const errorMessage = error.response?.data?.detail || error.message;
+        throw new Error(`Failed to list evaluation runs: ${statusCode} - ${errorMessage}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Get evaluation run statistics
+   * @param projectName Name of the project
+   * @param evalRunName Name of the evaluation run
+   * @returns Statistics for the evaluation run
+   */
+  public async getEvalRunStats(
+    projectName: string,
+    evalRunName: string
+  ): Promise<Record<string, any>> {
+    try {
+      const response = await axios.get(
+        `${this.apiUrl}/projects/${projectName}/eval-runs/${evalRunName}/stats`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.judgmentApiKey}`,
+            'X-Organization-Id': this.organizationId
+          }
+        }
+      );
+
+      return response.data || {};
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const statusCode = error.response?.status;
+        const errorMessage = error.response?.data?.detail || error.message;
+        throw new Error(`Failed to get evaluation run statistics: ${statusCode} - ${errorMessage}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Export evaluation results to a file format
+   * @param projectName Name of the project
+   * @param evalRunName Name of the evaluation run
+   * @param format Export format ('json' or 'csv')
+   * @returns The exported data as a string
+   */
+  public async exportEvalResults(
+    projectName: string,
+    evalRunName: string,
+    format: 'json' | 'csv' = 'json'
+  ): Promise<string> {
+    try {
+      const evalRun = await this.pullEval(projectName, evalRunName);
+      
+      if (format === 'json') {
+        return JSON.stringify(evalRun, null, 2);
+      } else if (format === 'csv') {
+        // Simple CSV conversion for the results
+        const results = evalRun[0]?.results || [];
+        if (results.length === 0) {
+          return 'No results found';
+        }
+        
+        // Get headers from the first result
+        const firstResult = results[0];
+        const headers = Object.keys(firstResult).filter(key => typeof firstResult[key] !== 'object');
+        
+        // Create CSV header row
+        let csv = headers.join(',') + '\n';
+        
+        // Add data rows
+        for (const result of results) {
+          const row = headers.map(header => {
+            const value = result[header];
+            if (typeof value === 'string') {
+              // Escape quotes and wrap in quotes
+              return `"${value.replace(/"/g, '""')}"`;
+            }
+            return value;
+          }).join(',');
+          
+          csv += row + '\n';
+        }
+        
+        return csv;
+      } else {
+        throw new Error(`Unsupported export format: ${format}`);
+      }
+    } catch (error) {
+      throw new Error(`Failed to export evaluation results: ${error}`);
     }
   }
 
