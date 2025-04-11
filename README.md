@@ -139,10 +139,149 @@ await tracer.runInTrace({ name: "my-trace" }, async (trace) => {
 });
 ```
 
-## Environment Variables
+## Custom Scorers
 
-- `JUDGMENT_API_KEY`: Your JudgmentLabs API key
-- `JUDGMENT_ORG_ID`: Your organization ID
+You can create custom scorers by extending the `JudgevalScorer` class. Here's an example of a custom scorer that checks for exact string matches:
+
+```typescript
+import { Example } from './data/example';
+import { JudgevalScorer } from './scorers/base-scorer';
+import { ScorerData } from './data/result';
+
+/**
+ * ExactMatchScorer - A custom scorer that checks if the actual output exactly matches the expected output
+ */
+class ExactMatchScorer extends JudgevalScorer {
+  constructor(threshold: number, additionalMetadata?: Record<string, any>, verbose: boolean = false) {
+    super('exact_match', threshold, additionalMetadata, verbose);
+  }
+
+  async scoreExample(example: Example): Promise<ScorerData> {
+    try {
+      // Check if the example has expected output
+      if (!example.expectedOutput) {
+        return {
+          name: this.type,
+          threshold: this.threshold,
+          success: false,
+          score: 0,
+          reason: "Expected output is required for exact match scoring",
+          strict_mode: null,
+          evaluation_model: "exact-match",
+          error: "Missing expected output",
+          evaluation_cost: null,
+          verbose_logs: null,
+          additional_metadata: this.additional_metadata || {}
+        };
+      }
+
+      // Compare the actual output with the expected output
+      const actualOutput = example.actualOutput?.trim() || '';
+      const expectedOutput = example.expectedOutput.trim();
+      
+      // Calculate the score (1 for exact match, 0 otherwise)
+      const isMatch = actualOutput === expectedOutput;
+      this.score = isMatch ? 1 : 0;
+      
+      // Generate a reason for the score
+      const reason = isMatch
+        ? "The actual output exactly matches the expected output."
+        : `The actual output "${actualOutput}" does not match the expected output "${expectedOutput}".`;
+      
+      // Return the scorer data
+      return {
+        name: this.type,
+        threshold: this.threshold,
+        success: this.successCheck(),
+        score: this.score,
+        reason: reason,
+        strict_mode: null,
+        evaluation_model: "exact-match",
+        error: null,
+        evaluation_cost: null,
+        verbose_logs: this.verbose ? `Comparing: "${actualOutput}" with "${expectedOutput}"` : null,
+        additional_metadata: this.additional_metadata || {}
+      };
+    } catch (error) {
+      // Handle any errors during scoring
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      return {
+        name: this.type,
+        threshold: this.threshold,
+        success: false,
+        score: 0,
+        reason: `Error during scoring: ${errorMessage}`,
+        strict_mode: null,
+        evaluation_model: "exact-match",
+        error: errorMessage,
+        evaluation_cost: null,
+        verbose_logs: null,
+        additional_metadata: this.additional_metadata || {}
+      };
+    }
+  }
+}
+```
+
+### Using Custom Scorers
+
+You can use custom scorers with the JudgmentClient just like any other scorer:
+
+```typescript
+// Create examples
+const examples = [
+  new ExampleBuilder()
+    .input("What is the capital of France?")
+    .actualOutput("Paris is the capital of France.")
+    .expectedOutput("Paris is the capital of France.")
+    .exampleIndex(0)
+    .build(),
+  // Add more examples...
+];
+
+// Create a custom scorer
+const exactMatchScorer = new ExactMatchScorer(1.0, { description: "Checks for exact string match" }, true);
+
+// Initialize the JudgmentClient
+const client = JudgmentClient.getInstance();
+
+// Run evaluation with the custom scorer
+const results = await client.runEvaluation(
+  examples,
+  [exactMatchScorer],
+  "gpt-3.5-turbo", // Specify a valid model name
+  "my-project",
+  {
+    evalRunName: "custom-scorer-test",
+    logResults: true
+  }
+);
+```
+
+### Viewing Results
+
+After running an evaluation with custom scorers, you can view the results in the Judgment platform:
+
+```
+https://app.judgmentlabs.ai/app/experiment?project_name=my-project&eval_run_name=custom-scorer-test
+```
+
+You can also access the results programmatically:
+
+```typescript
+// Print the results
+console.log(results);
+
+// Get success rate
+const successCount = results.filter(r => {
+  return r.scorersData?.every(s => s.success) ?? false;
+}).length;
+
+console.log(`Success rate: ${successCount}/${examples.length} (${(successCount/examples.length*100).toFixed(2)}%)`);
+```
+
+For a complete example of using custom scorers, see `src/examples/custom-scorer.ts`.
 
 ## Examples
 
@@ -151,3 +290,9 @@ See the `/examples` directory for complete usage examples:
 - `async-evaluation.ts`: Asynchronous evaluation
 - `llm-async-tracer.ts`: Workflow tracing with evaluation
 - `simple-async.ts`: Simplified async evaluation
+- `custom-scorer.ts`: Custom scorer implementation
+
+## Environment Variables
+
+- `JUDGMENT_API_KEY`: Your JudgmentLabs API key
+- `JUDGMENT_ORG_ID`: Your organization ID

@@ -588,16 +588,44 @@ export async function runEval(
     if (localScorers.length > 0) {
       logger.log('Starting local evaluation');
       try {
-        // TODO: Add async handling like Python's _update_coroutine_output if needed for Promises
-        // Implementation for local scorers would go here
-        // For now, we'll just create empty results
-        localResults = evaluationRun.examples.map(example => {
+        // Process each example with each local scorer
+        localResults = await Promise.all(evaluationRun.examples.map(async (example) => {
+          const scorersData = [];
+          
+          // Run each local scorer on the example
+          for (const scorer of localScorers) {
+            try {
+              logger.log(`Running local scorer ${scorer.type} on example ${example.exampleId}`);
+              const scorerData = await scorer.scoreExample(example);
+              scorersData.push(scorerData);
+              logger.log(`Scorer ${scorer.type} result: score=${scorerData.score}, success=${scorerData.success}`);
+            } catch (scorerError: any) {
+              logger.error(`Error running scorer ${scorer.type} on example ${example.exampleId}: ${scorerError?.message || String(scorerError)}`);
+              // Add failed scorer data
+              scorersData.push({
+                name: scorer.type,
+                threshold: scorer.threshold,
+                success: false,
+                score: 0,
+                reason: null,
+                strict_mode: null,
+                evaluation_model: null,
+                error: scorerError?.message || String(scorerError),
+                evaluation_cost: null,
+                verbose_logs: null,
+                additional_metadata: scorer.additional_metadata || {}
+              });
+            }
+          }
+          
+          // Create a ScoringResult with all scorer data for this example
           return new ScoringResult({
             dataObject: example,
-            scorersData: [],
+            scorersData: scorersData,
             error: undefined
           });
-        });
+        }));
+        
         logger.log(`Local evaluation complete with ${localResults.length} results`);
       } catch (error: any) {
         logger.error(`Error executing local evaluation: ${error?.message || String(error)}`);
