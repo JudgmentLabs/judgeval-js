@@ -1,5 +1,7 @@
 import { APIJudgmentScorer } from './base-scorer';
 import { APIScorer, UNBOUNDED_SCORERS } from '../constants';
+import { Example } from '../data/example';
+import { ScorerData } from '../data/result';
 
 /**
  * Implementation of API-based scorers
@@ -9,6 +11,10 @@ export class AnswerCorrectnessScorer extends APIJudgmentScorer {
     super('answer_correctness', threshold, metadata);
     this.validateThreshold();
   }
+
+  async a_score_example(example: Example): Promise<ScorerData> {
+    throw new Error('API scorers are evaluated on the server side');
+  }
 }
 
 export class AnswerRelevancyScorer extends APIJudgmentScorer {
@@ -16,15 +22,43 @@ export class AnswerRelevancyScorer extends APIJudgmentScorer {
     super('answer_relevancy', threshold, metadata);
     this.validateThreshold();
   }
+
+  async a_score_example(example: Example): Promise<ScorerData> {
+    throw new Error('API scorers are evaluated on the server side');
+  }
 }
 
 export class ComparisonScorer extends APIJudgmentScorer {
-  constructor(threshold: number = 0, metadata?: Record<string, any>) {
+  criteria: string[];
+  description: string;
+
+  constructor(
+    threshold: number = 0.5, 
+    criteria: string[] = ['Accuracy', 'Helpfulness', 'Relevance'], 
+    description: string = 'Compare the outputs based on the given criteria',
+    metadata?: Record<string, any>
+  ) {
     super('comparison', threshold, metadata);
+    this.criteria = criteria;
+    this.description = description;
     // Comparison is an unbounded scorer, only validate that threshold >= 0
     if (threshold < 0) {
       throw new Error(`Threshold for comparison must be greater than or equal to 0, got: ${threshold}`);
     }
+  }
+
+  toJSON(): Record<string, any> {
+    return {
+      score_type: 'comparison', 
+      threshold: this.threshold,
+      criteria: this.criteria,
+      description: this.description,
+      metadata: this.metadata
+    };
+  }
+
+  async a_score_example(example: Example): Promise<ScorerData> {
+    throw new Error('API scorers are evaluated on the server side');
   }
 }
 
@@ -33,12 +67,20 @@ export class ContextualPrecisionScorer extends APIJudgmentScorer {
     super('contextual_precision', threshold, metadata);
     this.validateThreshold();
   }
+
+  async a_score_example(example: Example): Promise<ScorerData> {
+    throw new Error('API scorers are evaluated on the server side');
+  }
 }
 
 export class ContextualRecallScorer extends APIJudgmentScorer {
   constructor(threshold: number = 0.7, metadata?: Record<string, any>) {
     super('contextual_recall', threshold, metadata);
     this.validateThreshold();
+  }
+
+  async a_score_example(example: Example): Promise<ScorerData> {
+    throw new Error('API scorers are evaluated on the server side');
   }
 }
 
@@ -47,12 +89,35 @@ export class ContextualRelevancyScorer extends APIJudgmentScorer {
     super('contextual_relevancy', threshold, metadata);
     this.validateThreshold();
   }
+
+  async a_score_example(example: Example): Promise<ScorerData> {
+    throw new Error('API scorers are evaluated on the server side');
+  }
 }
 
 export class ExecutionOrderScorer extends APIJudgmentScorer {
-  constructor(threshold: number = 0.7, metadata?: Record<string, any>) {
+  strictMode: boolean;
+  expectedTools?: string[];
+
+  constructor(threshold: number = 1.0, strictMode: boolean = true, expectedTools?: string[], metadata?: Record<string, any>) {
     super('execution_order', threshold, metadata);
+    this.strictMode = strictMode;
+    this.expectedTools = expectedTools;
     this.validateThreshold();
+  }
+
+  toJSON(): Record<string, any> {
+    return {
+      score_type: 'execution_order',
+      threshold: this.threshold,
+      strict_mode: this.strictMode,
+      expected_tools: this.expectedTools,
+      metadata: this.metadata
+    };
+  }
+
+  async a_score_example(example: Example): Promise<ScorerData> {
+    throw new Error('API scorers are evaluated on the server side');
   }
 }
 
@@ -61,12 +126,20 @@ export class FaithfulnessScorer extends APIJudgmentScorer {
     super('faithfulness', threshold, metadata);
     this.validateThreshold();
   }
+
+  async a_score_example(example: Example): Promise<ScorerData> {
+    throw new Error('API scorers are evaluated on the server side');
+  }
 }
 
 export class GroundednessScorer extends APIJudgmentScorer {
   constructor(threshold: number = 0.7, metadata?: Record<string, any>) {
     super('groundedness', threshold, metadata);
     this.validateThreshold();
+  }
+
+  async a_score_example(example: Example): Promise<ScorerData> {
+    throw new Error('API scorers are evaluated on the server side');
   }
 }
 
@@ -75,6 +148,10 @@ export class HallucinationScorer extends APIJudgmentScorer {
     super('hallucination', threshold, metadata);
     this.validateThreshold();
   }
+
+  async a_score_example(example: Example): Promise<ScorerData> {
+    throw new Error('API scorers are evaluated on the server side');
+  }
 }
 
 export class InstructionAdherenceScorer extends APIJudgmentScorer {
@@ -82,12 +159,36 @@ export class InstructionAdherenceScorer extends APIJudgmentScorer {
     super('instruction_adherence', threshold, metadata);
     this.validateThreshold();
   }
+
+  async a_score_example(example: Example): Promise<ScorerData> {
+    throw new Error('API scorers are evaluated on the server side');
+  }
 }
 
 export class JsonCorrectnessScorer extends APIJudgmentScorer {
-  constructor(threshold: number = 0.7, metadata?: Record<string, any>) {
+  jsonSchema?: Record<string, any>;
+
+  constructor(
+    threshold: number = 0.7, 
+    jsonSchema?: Record<string, any>,
+    metadata?: Record<string, any>
+  ) {
     super('json_correctness', threshold, metadata);
+    this.jsonSchema = jsonSchema;
     this.validateThreshold();
+  }
+
+  toJSON(): Record<string, any> {
+    return {
+      score_type: 'json_correctness', 
+      threshold: this.threshold,
+      json_schema: this.jsonSchema,
+      metadata: this.metadata
+    };
+  }
+
+  async a_score_example(example: Example): Promise<ScorerData> {
+    throw new Error('API scorers are evaluated on the server side');
   }
 }
 
@@ -96,12 +197,20 @@ export class SummarizationScorer extends APIJudgmentScorer {
     super('summarization', threshold, metadata);
     this.validateThreshold();
   }
+
+  async a_score_example(example: Example): Promise<ScorerData> {
+    throw new Error('API scorers are evaluated on the server side');
+  }
 }
 
 export class Text2SQLScorer extends APIJudgmentScorer {
   constructor(threshold: number = 0.7, metadata?: Record<string, any>) {
     super('text2sql', threshold, metadata);
     this.validateThreshold();
+  }
+
+  async a_score_example(example: Example): Promise<ScorerData> {
+    throw new Error('API scorers are evaluated on the server side');
   }
 }
 
@@ -136,7 +245,13 @@ export class ScorerWrapper {
       case 'answer_relevancy':
         return new AnswerRelevancyScorer(threshold, metadata);
       case 'comparison':
-        return new ComparisonScorer(threshold, metadata);
+        // For comparison, extract criteria and description from metadata if available
+        const criteria = metadata?.criteria as string[] || ['Accuracy', 'Helpfulness', 'Relevance'];
+        const description = metadata?.description as string || 'Compare the outputs based on the given criteria';
+        const comparisonMetadata = { ...metadata };
+        delete comparisonMetadata?.criteria;
+        delete comparisonMetadata?.description;
+        return new ComparisonScorer(threshold, criteria, description, comparisonMetadata);
       case 'contextual_precision':
         return new ContextualPrecisionScorer(threshold, metadata);
       case 'contextual_recall':
@@ -144,7 +259,13 @@ export class ScorerWrapper {
       case 'contextual_relevancy':
         return new ContextualRelevancyScorer(threshold, metadata);
       case 'execution_order':
-        return new ExecutionOrderScorer(threshold, metadata);
+        // For execution order, extract strict_mode and expected_tools from metadata if available
+        const strictMode = metadata?.strict_mode as boolean || true;
+        const expectedTools = metadata?.expected_tools as string[];
+        const executionOrderMetadata = { ...metadata };
+        delete executionOrderMetadata?.strict_mode;
+        delete executionOrderMetadata?.expected_tools;
+        return new ExecutionOrderScorer(threshold, strictMode, expectedTools, executionOrderMetadata);
       case 'faithfulness':
         return new FaithfulnessScorer(threshold, metadata);
       case 'groundedness':
@@ -154,7 +275,11 @@ export class ScorerWrapper {
       case 'instruction_adherence':
         return new InstructionAdherenceScorer(threshold, metadata);
       case 'json_correctness':
-        return new JsonCorrectnessScorer(threshold, metadata);
+        // For JSON correctness, extract json_schema from metadata if available
+        const jsonSchema = metadata?.json_schema;
+        const jsonMetadata = { ...metadata };
+        delete jsonMetadata?.json_schema;
+        return new JsonCorrectnessScorer(threshold, jsonSchema, jsonMetadata);
       case 'summarization':
         return new SummarizationScorer(threshold, metadata);
       case 'text2sql':

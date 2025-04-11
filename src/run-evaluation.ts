@@ -175,7 +175,7 @@ export async function pollEvaluationStatus(
 /**
  * Executes an evaluation of a list of Examples using one or more JudgmentScorers via the Judgment API
  */
-export async function executeApiEval(evaluationRun: EvaluationRun): Promise<{ results: any[] }> {
+export async function executeApiEval(evaluationRun: EvaluationRun): Promise<any> {
   try {
     logger.log('Executing API evaluation...');
     
@@ -208,8 +208,8 @@ export async function executeApiEval(evaluationRun: EvaluationRun): Promise<{ re
     }
     
     // Return the response data directly
-    // The response contains an array of results, one for each example
-    return response.data as { results: any[] };
+    // The response format might be { results: any[] } or just any[]
+    return response.data;
   } catch (error: any) {
     if (axios.isAxiosError(error) && error.response) {
       const errorMessage = error.response.data?.detail || JSON.stringify(error.response.data) || 'An unknown error occurred.';
@@ -527,28 +527,43 @@ export async function runEval(
         logger.log('Sending request to Judgment API');
         const responseData = await executeApiEval(apiEvaluationRun);
         
-        // Ensure responseData has a results property
-        if (!responseData || !Array.isArray(responseData.results)) {
-          throw new Error('Invalid response format from API: missing results array');
+        // Handle different response formats
+        // The API might return an array directly or an object with a results property
+        let resultsArray: any[];
+        if (Array.isArray(responseData)) {
+          resultsArray = responseData;
+        } else if (responseData && typeof responseData === 'object' && Array.isArray(responseData.results)) {
+          resultsArray = responseData.results;
+        } else {
+          throw new Error('Invalid response format from API: expected an array of results or an object with a results property');
         }
         
-        logger.log(`Received ${responseData.results.length} results from API`);
+        logger.log(`Received ${resultsArray.length} results from API`);
         
         // --- Convert the response data to ScoringResult objects ---
         // This transforms the raw API response into our internal format
         logger.log('Processing API results');
         
-        // Log the full response structure for debugging
-        logger.log('API response structure:', JSON.stringify(responseData.results[0], null, 2).substring(0, 500) + '...');
+        // Log the first result for debugging
+        if (resultsArray.length > 0) {
+          logger.log('API response structure:', JSON.stringify(resultsArray[0], null, 2).substring(0, 500) + '...');
+        }
         
-        apiResults = responseData.results.map((result: any, index: number) => {
+        apiResults = resultsArray.map((result: any, index: number) => {
           // Debug logging to understand the structure
           logger.log(`Processing result ${index}:`);
           logger.log(`- Keys: ${JSON.stringify(Object.keys(result))}`);
           
-          // Check if example exists
-          if (!result.example) {
-            logger.log(`- WARNING: No example data in result ${index}`);
+          // The expected structure based on the DB example:
+          // {
+          //   "success": true,
+          //   "scorers_data": [...],
+          //   "data_object": {...} (this contains the example data)
+          // }
+          
+          // Check if data_object exists
+          if (!result.data_object) {
+            logger.log(`- WARNING: No data_object in result ${index}`);
           }
           
           // Check if scorers_data exists and has content
@@ -562,9 +577,24 @@ export async function runEval(
             }
           }
           
+          // Get the original example for this result
+          const originalExample = evaluationRun.examples[index];
+          
+          // Create a merged data object that includes the original example data
+          // and any data from the API response
+          const mergedDataObject = {
+            ...originalExample,
+            ...result.data_object
+          };
+          
+          // Ensure actual_output is included
+          if (!mergedDataObject.actual_output && originalExample.actualOutput) {
+            mergedDataObject.actual_output = originalExample.actualOutput;
+          }
+          
           // Create a ScoringResult with the data from the API response
           return new ScoringResult({
-            dataObject: result.example || evaluationRun.examples[index],
+            dataObject: mergedDataObject,
             scorersData: result.scorers_data || [],
             error: result.error
           });
