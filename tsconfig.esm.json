@@ -1,18 +1,16 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "module": "ESNext",
-    "outDir": "./dist/esm",
+    "module": "esnext",
     "moduleResolution": "node",
-    "declaration": true,
-    "sourceMap": true,
-    "target": "ES2020",
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "strict": true,
-    "skipLibCheck": true
+    "outDir": "./dist/esm",
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": true
   },
-  "include": ["src/**/*"],
+  "include": [
+    "src/**/*"
+  ],
   "exclude": [
     "node_modules",
     "dist",
