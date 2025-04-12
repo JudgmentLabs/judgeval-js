@@ -1,11 +1,11 @@
 import * as dotenv from 'dotenv';
 import axios from 'axios';
-import { Example } from './data/example';
-import { ScoringResult } from './data/result';
-import { APIJudgmentScorer, JudgevalScorer, ScorerWrapper, Scorer } from './scorers/base-scorer';
-import { EvaluationRun } from './evaluation-run';
-import { Rule, Condition } from './rules';
-import { runEval, assertTest, JudgmentAPIError } from './run-evaluation';
+import { Example } from './data/example.js';
+import { ScoringResult } from './data/result.js';
+import { APIJudgmentScorer, JudgevalScorer, ScorerWrapper, Scorer } from './scorers/base-scorer.js';
+import { EvaluationRun } from './evaluation-run.js';
+import { Rule, Condition } from './rules.js';
+import { runEval, assertTest, JudgmentAPIError } from './run-evaluation.js';
 import {
   ROOT_API,
   JUDGMENT_EVAL_FETCH_API_URL,
@@ -13,8 +13,8 @@ import {
   JUDGMENT_EVAL_DELETE_PROJECT_API_URL,
   JUDGMENT_PROJECT_DELETE_API_URL,
   JUDGMENT_PROJECT_CREATE_API_URL
-} from './constants';
-import logger from './common/logger-instance';
+} from './constants.js';
+import logger from './common/logger-instance.js';
 
 // Load environment variables
 dotenv.config();

@@ -14,10 +14,10 @@ import {
     JUDGMENT_TRACES_DELETE_API_URL,
     JUDGMENT_TRACES_ADD_TO_EVAL_QUEUE_API_URL,
     // Add other necessary constants if needed
-} from '../constants';
+} from '../constants.js';
 
-import { APIJudgmentScorer } from '../scorers/base-scorer';
-import logger from './logger-instance'; // Use the shared winston logger instance
+import { APIJudgmentScorer } from '../scorers/base-scorer.js';
+import logger from './logger-instance.js'; // Use the shared winston logger instance
 
 // --- Type Aliases and Interfaces ---
 
@@ -49,7 +49,7 @@ interface Rule {
 }
 // <<< NEW: Rule and Notification Types END >>>
 
-type ApiClient = OpenAI | Anthropic | Together;
+type ApiClient = OpenAI | Anthropic | any; // Use 'any' for Together to bypass strict type check
 // type SpanType = 'span' | 'tool' | 'llm' | 'evaluation' | 'chain' | 'research';
 type SpanType = string; // Allow any string
 
@@ -1153,8 +1153,8 @@ function _getClientConfig(client: ApiClient): { spanName: string; originalMethod
     } else if (client instanceof Anthropic && typeof client?.messages?.create === 'function') {
         return { spanName: "ANTHROPIC_API_CALL", originalMethod: client.messages.create.bind(client.messages) };
     }
-    // Use type assertion for older Together AI version
-    else if (client instanceof Together && typeof (client as any)?.completions?.create === 'function') { 
+    // Use constructor name check instead of instanceof for Together
+    else if (client?.constructor?.name === 'Together' && typeof (client as any)?.completions?.create === 'function') { 
         return { spanName: "TOGETHER_API_CALL", originalMethod: (client as any).completions.create.bind((client as any).completions) }; 
     }
     logger.warn("Cannot wrap client: Unsupported type or incompatible SDK structure.", { clientType: client?.constructor?.name });
@@ -1164,8 +1164,8 @@ function _getClientConfig(client: ApiClient): { spanName: string; originalMethod
 function _formatInputData(client: ApiClient, args: any[]): Record<string, any> {
     const params = args[0] || {};
     try {
-        // Handle Together client potentially having different input structure
-        if (client instanceof OpenAI || client instanceof Together) {
+        // Use constructor name check instead of instanceof for Together
+        if (client instanceof OpenAI || client?.constructor?.name === 'Together') {
             return { model: params.model, messages: params.messages, /* other potential params */ } as Record<string, any>;
         } else if (client instanceof Anthropic) {
              return { model: params.model, messages: params.messages, max_tokens: params.max_tokens, } as Record<string, any>;
@@ -1183,7 +1183,7 @@ function _formatOutputData(client: ApiClient, response: any): Record<string, any
           if (client instanceof OpenAI && response?.choices?.[0]?.message) {
               const message = response.choices[0].message;
               return { content: message.content, usage: response.usage, };
-          } else if (client instanceof Together && response?.choices?.[0]?.message) {
+          } else if (client?.constructor?.name === 'Together' && response?.choices?.[0]?.message) {
               // Assume Together v0.5.1 has a similar structure for now, but access defensively
               const message = response.choices[0].message;
               return { content: message?.content, usage: response?.usage, }; // Optional chaining for safety
@@ -1252,7 +1252,7 @@ export function wrap<T extends ApiClient>(client: T): T {
         (client.messages as any).create = tracedMethod;
     }
     // Use type assertion for older Together AI version
-    else if (client instanceof Together && (client as any).completions) { 
+    else if (client?.constructor?.name === 'Together' && (client as any).completions) { 
         ((client as any).completions as any).create = tracedMethod;
     }
      else {

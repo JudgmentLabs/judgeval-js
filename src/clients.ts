@@ -33,10 +33,10 @@ if (process.env.ANTHROPIC_API_KEY) {
 }
 
 // Initialize optional Together client
-let togetherClient: Together | null = null;
+let togetherClient: any | null = null;
 if (process.env.TOGETHER_API_KEY) {
   try {
-    togetherClient = new Together({
+    togetherClient = new (Together as any)({
       auth: process.env.TOGETHER_API_KEY,
     });
   } catch (error) {

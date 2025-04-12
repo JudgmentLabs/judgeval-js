@@ -5,7 +5,7 @@
 // Remove fs and path imports if no longer needed
 // import * as fs from 'fs';
 // import * as path from 'path';
-import logger from './logger-instance'; // Import the configured winston logger
+import logger from './logger-instance.js'; // Import the configured winston logger
 
 // Track current example info (Keep for potential context integration)
 let currentExampleId: string | null = null;

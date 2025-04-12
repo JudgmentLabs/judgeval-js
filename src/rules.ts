@@ -2,7 +2,7 @@
  * Rules system for JudgEval that enables alerts based on metric thresholds.
  */
 import { v4 as uuidv4 } from 'uuid';
-import { Scorer, APIJudgmentScorer, JudgevalScorer, ScorerWrapper } from './scorers/base-scorer';
+import { Scorer, APIJudgmentScorer, JudgevalScorer, ScorerWrapper } from './scorers/base-scorer.js';
 
 /**
  * Status of an alert evaluation

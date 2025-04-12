@@ -1,9 +1,9 @@
 /**
  * ExactMatchScorer - A custom scorer that checks if the actual output exactly matches the expected output
  */
-import { Example } from '../data/example';
-import { JudgevalScorer } from './base-scorer';
-import { ScorerData } from '../data/result';
+import { Example } from '../data/example.js';
+import { JudgevalScorer } from './base-scorer.js';
+import { ScorerData } from '../data/result.js';
 
 export class ExactMatchScorer extends JudgevalScorer {
   constructor(threshold: number = 1.0, additionalMetadata?: Record<string, any>, verbose: boolean = false) {

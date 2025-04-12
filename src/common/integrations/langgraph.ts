@@ -16,7 +16,7 @@ import { BaseTracer } from "@langchain/core/tracers/base";
 import { getEnvironmentVariable } from "@langchain/core/utils/env";
 
 import { v4 as uuidv4 } from 'uuid';
-import { Tracer, TraceClient, SpanType, currentSpanAsyncLocalStorage, TraceEntry } from "../tracer"; // Adjust path
+import { Tracer, TraceClient, SpanType, currentSpanAsyncLocalStorage, TraceEntry } from "../tracer.js"; // Adjust path
 
 // --- Global Handler Setup (REMOVED - No longer needed with context propagation) ---
 
