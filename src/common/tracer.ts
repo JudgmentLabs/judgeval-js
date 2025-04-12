@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 // Installed SDKs
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
-import Together from 'together-ai';
+import Together from 'together-ai'; // Use default import
 
 // Local Imports
 import {
@@ -17,6 +17,7 @@ import {
 } from '../constants';
 
 import { APIJudgmentScorer } from '../scorers/base-scorer';
+import logger from './logger-instance'; // Use the shared winston logger instance
 
 // --- Type Aliases and Interfaces ---
 
@@ -654,31 +655,36 @@ class TraceClient {
 
          try {
              await this.traceManager.saveTrace(traceData, emptySave);
+             logger.info(`Trace ${this.traceId} saved successfully.`);
 
              if (!emptySave && this.enableEvaluations) {
                  try {
                      await this.traceManager.addTraceToEvalQueue(traceData);
+                     logger.info(`Trace ${this.traceId} added to evaluation queue.`);
                  } catch (evalError) {
-                     console.warn(`Failed to add trace ${this.traceId} to evaluation queue:`, evalError);
+                     logger.warn(`Failed to add trace ${this.traceId} to evaluation queue.`, { error: evalError instanceof Error ? evalError.message : String(evalError) });
                  }
              }
              return { traceId: this.traceId, traceData };
          } catch (error) {
-             console.error(`Failed to save trace ${this.traceId}:`, error);
+             logger.error(`Failed to save trace ${this.traceId}.`, { error: error instanceof Error ? error.message : String(error) });
               return null;
          }
      }
 
      print(): void {
          if (!this.enableMonitoring) {
+             // Keep console.log for direct user output when print() is called
              console.log("Monitoring was disabled. No trace entries recorded.");
              return;
          }
          if (this.entries.length === 0) {
+             // Keep console.log for direct user output when print() is called
              console.log("No trace entries recorded.");
              return;
          }
  
+         // Keep console.log for direct user output when print() is called
          console.log(`\n--- Trace Details: ${this.name} (ID: ${this.traceId}) ---`);
  
          this.entries.forEach(entry => {
@@ -694,11 +700,13 @@ class TraceClient {
                          break;
                      case 'exit':
                          const durationStr = entry.duration !== undefined ? `(${entry.duration.toFixed(3)}s)` : '';
+                         // Keep console.log
                          console.log(`${indent}← ${entry.function || 'unknown'} ${shortSpanId} ${durationStr} ${timeStr}`);
                          break;
                      case 'input':
                          let inputStr = JSON.stringify(entry.inputs);
                          if (inputStr && inputStr.length > 200) { inputStr = inputStr.substring(0, 197) + '...'; }
+                          // Keep console.log
                          console.log(`${indent}  Input (for ${shortSpanId}): ${inputStr || '{}'}`);
                          break;
                      case 'output':
@@ -706,37 +714,42 @@ class TraceClient {
                          let outputStr = JSON.stringify(entry.output);
                          if (outputStr && outputStr.length > 200) { outputStr = outputStr.substring(0, 197) + '...'; }
                          const prefix = entry.type === 'error' ? 'Error' : 'Output';
+                          // Keep console.log
                          console.log(`${indent}  ${prefix} (for ${shortSpanId}): ${outputStr || 'null'}`);
                          break;
                      case 'evaluation':
                          let evalStr = JSON.stringify(entry.evaluation_runs);
                           if (evalStr && evalStr.length > 200) { evalStr = evalStr.substring(0, 197) + '...'; }
+                          // Keep console.log
                          console.log(`${indent}  Evaluation (for ${shortSpanId}): ${evalStr || '[]'}`);
                          break;
                      default:
+                          // Keep console.log
                          console.log(`${indent}? Unknown entry type: ${JSON.stringify(entry)}`);
                  }
              } catch (stringifyError) {
                   const errorMessage = stringifyError instanceof Error ? stringifyError.message : String(stringifyError);
+                   // Keep console.log
                   console.log(`${indent}! Error formatting entry: ${errorMessage}`);
                   console.log(`${indent}  Raw entry:`, entry);
              }
          });
+          // Keep console.log
          console.log(`--- End Trace: ${this.name} ---`);
      }
 
      async delete(): Promise<any> {
          if (!this.enableMonitoring || !this.traceManager) {
-              console.warn(`Cannot delete trace ${this.traceId}, monitoring disabled or manager missing.`);
+              logger.warn(`Cannot delete trace ${this.traceId}, monitoring disabled or manager missing.`);
               return null;
          }
          try {
              const result = await this.traceManager.deleteTrace(this.traceId);
-             console.log(`Trace ${this.traceId} deleted successfully.`);
+             logger.info(`Trace ${this.traceId} deleted successfully.`);
              return result;
          } catch (error) {
-             console.error(`Failed to delete trace ${this.traceId}:`, error);
-             throw error;
+             logger.error(`Failed to delete trace ${this.traceId}.`, { error: error instanceof Error ? error.message : String(error) });
+             throw error; // Re-throw after logging
          }
      }
 
@@ -766,11 +779,11 @@ class TraceClient {
         } = {}
     ): Promise<void> {
         if (!this.enableEvaluations) {
-            console.warn("Evaluations are disabled. Skipping async evaluation.");
+            logger.warn("Evaluations are disabled. Skipping async evaluation.");
             return;
         }
         if (!scorers || scorers.length === 0) {
-            console.warn("No scorers provided. Skipping async evaluation.");
+            logger.warn("No scorers provided. Skipping async evaluation.");
             return;
         }
 
@@ -793,7 +806,7 @@ class TraceClient {
             // Get the current span ID from the context
             const currentSpanId = currentSpanAsyncLocalStorage.getStore();
             if (!currentSpanId) {
-                console.warn("No active span found for async evaluation. Evaluation will not be associated with a specific step.");
+                logger.warn("No active span found for async evaluation. Evaluation will not be associated with a specific step.");
                 // Decide if we should proceed or return. For now, proceed without span association.
                 // return;
             }
@@ -1140,23 +1153,25 @@ function _getClientConfig(client: ApiClient): { spanName: string; originalMethod
     } else if (client instanceof Anthropic && typeof client?.messages?.create === 'function') {
         return { spanName: "ANTHROPIC_API_CALL", originalMethod: client.messages.create.bind(client.messages) };
     }
-    else if (client instanceof Together && typeof client?.chat?.completions?.create === 'function') {
-        return { spanName: "TOGETHER_API_CALL", originalMethod: client.chat.completions.create.bind(client.chat.completions) };
+    // Use type assertion for older Together AI version
+    else if (client instanceof Together && typeof (client as any)?.completions?.create === 'function') { 
+        return { spanName: "TOGETHER_API_CALL", originalMethod: (client as any).completions.create.bind((client as any).completions) }; 
     }
-    console.warn("Cannot wrap client: Unsupported type or incompatible SDK structure.", client?.constructor?.name);
+    logger.warn("Cannot wrap client: Unsupported type or incompatible SDK structure.", { clientType: client?.constructor?.name });
     return null;
 }
 
 function _formatInputData(client: ApiClient, args: any[]): Record<string, any> {
     const params = args[0] || {};
     try {
+        // Handle Together client potentially having different input structure
         if (client instanceof OpenAI || client instanceof Together) {
-            return { model: params.model, messages: params.messages, } as Record<string, any>;
+            return { model: params.model, messages: params.messages, /* other potential params */ } as Record<string, any>;
         } else if (client instanceof Anthropic) {
              return { model: params.model, messages: params.messages, max_tokens: params.max_tokens, } as Record<string, any>;
         }
     } catch (e) {
-         console.error("Error formatting LLM input:", e);
+         logger.error("Error formatting LLM input:", { error: e instanceof Error ? e.message : String(e), params });
          return { raw_params: params } as Record<string, any>;
     }
     return { raw_params: params } as Record<string, any>;
@@ -1164,19 +1179,29 @@ function _formatInputData(client: ApiClient, args: any[]): Record<string, any> {
 
 function _formatOutputData(client: ApiClient, response: any): Record<string, any> {
      try {
-          if ((client instanceof OpenAI || client instanceof Together) && response?.choices?.[0]?.message) {
+          // Separate handling for OpenAI and Together, assuming Together might differ
+          if (client instanceof OpenAI && response?.choices?.[0]?.message) {
               const message = response.choices[0].message;
               return { content: message.content, usage: response.usage, };
-          }
-          else if (client instanceof Anthropic && response?.content?.[0]) {
+          } else if (client instanceof Together && response?.choices?.[0]?.message) {
+              // Assume Together v0.5.1 has a similar structure for now, but access defensively
+              const message = response.choices[0].message;
+              return { content: message?.content, usage: response?.usage, }; // Optional chaining for safety
+          } else if (client instanceof Anthropic && response?.content?.[0]) {
                const textContent = response.content.filter((block: any) => block.type === 'text').map((block: any) => block.text).join('');
-               const usage = { input_tokens: response.usage?.input_tokens, output_tokens: response.usage?.output_tokens, total_tokens: (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0) };
+               // Reconstruct usage for Anthropic if needed
+               const usage = { 
+                   input_tokens: response.usage?.input_tokens, 
+                   output_tokens: response.usage?.output_tokens, 
+                   total_tokens: (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0) 
+               };
                return { content: textContent, usage: usage, };
           }
      } catch (e) {
-          console.error("Error formatting LLM output:", e);
+          logger.error("Error formatting LLM output:", { error: e instanceof Error ? e.message : String(e) });
            return { formatting_error: String(e), raw_response: response };
      }
+      // Return raw if structure doesn't match known patterns
       return { raw_response: response };
 }
 
@@ -1186,7 +1211,7 @@ export function wrap<T extends ApiClient>(client: T): T {
     const tracer = Tracer.getInstance();
 
     if (!tracer.enableMonitoring) {
-        console.log("Global monitoring disabled, client wrapping skipped.");
+        logger.info("Global monitoring disabled, client wrapping skipped.");
         return client;
     }
 
@@ -1214,25 +1239,29 @@ export function wrap<T extends ApiClient>(client: T): T {
                  currentTrace.recordOutput(outputData);
                  return response;
             } catch (error) {
-                 currentTrace.recordOutput(error);
+                 currentTrace.recordOutput(error); // Record error object in output
                  throw error;
             }
         });
     };
 
+    // Apply the wrapper
     if (client instanceof OpenAI && client.chat?.completions) {
         (client.chat.completions as any).create = tracedMethod;
     } else if (client instanceof Anthropic && client.messages) {
         (client.messages as any).create = tracedMethod;
     }
-    else if (client instanceof Together && client.chat?.completions) {
-        (client.chat.completions as any).create = tracedMethod;
+    // Use type assertion for older Together AI version
+    else if (client instanceof Together && (client as any).completions) { 
+        ((client as any).completions as any).create = tracedMethod;
     }
      else {
-         console.error("Failed to apply wrapper: Could not find method to replace after config check.");
+         // Log if we couldn't apply the wrapper despite getting a config
+         logger.error("Failed to apply wrapper: Could not find method to replace after config check.", { clientType: client?.constructor?.name });
          return client;
     }
 
+    logger.info(`Successfully wrapped client: ${client?.constructor?.name}`);
     return client;
 }
 

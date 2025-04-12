@@ -9,7 +9,7 @@ import dotenv from 'dotenv';
 import { ExampleBuilder } from '../data/example';
 import { JudgmentClient } from '../judgment-client';
 import { FaithfulnessScorer } from '../scorers/api-scorer';
-import logger from '../common/logger';
+import * as logger from '../common/logger';
 
 // Load environment variables
 dotenv.config();

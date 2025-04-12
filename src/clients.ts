@@ -1,6 +1,7 @@
 import * as dotenv from 'dotenv';
-import { OpenAI } from 'openai';
-import { Together } from 'together-ai';
+import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
+import Together from 'together-ai';
 
 // Load environment variables
 dotenv.config();
@@ -18,12 +19,25 @@ if (process.env.OPENAI_API_KEY) {
   }
 }
 
+// Initialize optional Anthropic client
+let anthropicClient: Anthropic | null = null;
+if (process.env.ANTHROPIC_API_KEY) {
+  try {
+    anthropicClient = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    });
+  } catch (error) {
+    // Anthropic package not installed or error initializing
+    console.warn('Error initializing Anthropic client:', error);
+  }
+}
+
 // Initialize optional Together client
 let togetherClient: Together | null = null;
-if (process.env.TOGETHERAI_API_KEY) {
+if (process.env.TOGETHER_API_KEY) {
   try {
     togetherClient = new Together({
-      apiKey: process.env.TOGETHERAI_API_KEY as string,
+      auth: process.env.TOGETHER_API_KEY,
     });
   } catch (error) {
     // Together package not installed or error initializing
@@ -31,4 +45,4 @@ if (process.env.TOGETHERAI_API_KEY) {
   }
 }
 
-export { openaiClient, togetherClient };
+export { openaiClient, anthropicClient, togetherClient };

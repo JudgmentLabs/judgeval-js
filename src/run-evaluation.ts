@@ -12,7 +12,7 @@ import {
   JUDGMENT_ADD_TO_RUN_EVAL_QUEUE_API_URL,
   JUDGMENT_EVAL_FETCH_API_URL
 } from './constants';
-import logger from './common/logger';
+import { log as loggerLog, info as loggerInfo, warn as loggerWarn, error as loggerError } from './common/logger';
 
 /**
  * Custom error for Judgment API errors
@@ -124,7 +124,7 @@ export async function pollEvaluationStatus(
       
       // Check if evaluation is complete
       if (status.status === 'complete') {
-        logger.log('Async evaluation complete, fetching results');
+        loggerLog('Async evaluation complete, fetching results');
         
         // Fetch the results
         const response = await axios.post(
@@ -158,13 +158,13 @@ export async function pollEvaluationStatus(
       }
       
       // Log progress
-      logger.log(`Evaluation status: ${status.status}, progress: ${status.progress || 'unknown'}`);
+      loggerLog(`Evaluation status: ${status.status}, progress: ${status.progress || 'unknown'}`);
       
       // Wait before next poll
       await new Promise(resolve => setTimeout(resolve, intervalMs));
       attempts++;
     } catch (error: any) {
-      logger.error(`Error polling evaluation status: ${error?.message || String(error)}`);
+      loggerError(`Error polling evaluation status: ${error?.message || String(error)}`);
       throw new JudgmentAPIError(`Error polling evaluation status: ${error?.message || String(error)}`);
     }
   }
@@ -197,10 +197,10 @@ export async function executeApiEval(evaluationRun: EvaluationRun): Promise<any[
   } catch (error) {
     if (axios.isAxiosError(error) && error.response) {
       const errorMessage = error.response.data?.detail || JSON.stringify(error.response.data) || 'An unknown error occurred.';
-      logger.error(`Error: ${errorMessage}`);
+      loggerError(`Error: ${errorMessage}`);
       throw new JudgmentAPIError(errorMessage);
     } else {
-      logger.error(`Error: ${error}`);
+      loggerError(`Error: ${error}`);
       throw new JudgmentAPIError(`An error occurred while executing the Judgment API request: ${error}`);
     }
   }
@@ -241,7 +241,7 @@ export async function checkEvalRunNameExists(
     if (!response.status.toString().startsWith('2')) {
       const responseData = response.data;
       const errorMessage = responseData.detail || 'An unknown error occurred.';
-      logger.error(`Error checking eval run name: ${errorMessage}`);
+      loggerError(`Error checking eval run name: ${errorMessage}`);
       throw new JudgmentAPIError(errorMessage);
     }
   } catch (error: any) {
@@ -251,7 +251,7 @@ export async function checkEvalRunNameExists(
       }
     }
     // For connection errors or other issues, log but continue
-    logger.error(`Failed to check if eval run name exists: ${error?.message || String(error)}`);
+    loggerError(`Failed to check if eval run name exists: ${error?.message || String(error)}`);
     // Don't throw an error here, just log it and continue
   }
 }
@@ -295,7 +295,7 @@ export async function logEvaluationResults(
     if (response.status < 200 || response.status >= 300) {
       const responseData = response.data;
       const errorMessage = responseData?.detail || 'An unknown error occurred.';
-      logger.error(`Error ${response.status}: ${errorMessage}`);
+      loggerError(`Error ${response.status}: ${errorMessage}`);
       throw new JudgmentAPIError(errorMessage);
     }
     
@@ -311,10 +311,10 @@ export async function logEvaluationResults(
   } catch (error) {
     if (axios.isAxiosError(error) && error.response) {
       const errorMessage = error.response.data?.detail || JSON.stringify(error.response.data) || 'An unknown error occurred.';
-      logger.error(`Error: ${errorMessage}`);
+      loggerError(`Error: ${errorMessage}`);
       throw new JudgmentAPIError(errorMessage);
     } else {
-      logger.error(`Error: ${error}`);
+      loggerError(`Error: ${error}`);
       throw new JudgmentAPIError(`An error occurred while logging evaluation results: ${error}`);
     }
   }
@@ -375,7 +375,7 @@ export function mergeResults(apiResults: ScoringResult[], localResults: ScoringR
 export function checkMissingScorerData(results: ScoringResult[]): ScoringResult[] {
   for (let i = 0; i < results.length; i++) {
     if (!results[i].scorersData || results[i].scorersData?.length === 0) {
-      logger.error(
+      loggerError(
         `Scorer data is missing for example ${i}. ` +
         'This is usually caused when the example does not contain ' +
         'the fields required by the scorer. ' +
@@ -397,19 +397,19 @@ export function checkExamples(examples: Example[], scorers: APIJudgmentScorer[])
         case 'answer_correctness':
         case 'answer_relevancy':
           if (!example.expectedOutput) {
-            logger.warn(`Scorer ${scorer.scoreType} requires expectedOutput field`);
+            loggerWarn(`Scorer ${scorer.scoreType} requires expectedOutput field`);
           }
           break;
         case 'contextual_precision':
         case 'contextual_recall':
         case 'contextual_relevancy':
           if (!example.context || example.context.length === 0) {
-            logger.warn(`Scorer ${scorer.scoreType} requires context field`);
+            loggerWarn(`Scorer ${scorer.scoreType} requires context field`);
           }
           break;
         case 'execution_order':
           if (!example.expectedTools || example.expectedTools.length === 0) {
-            logger.warn(`Scorer ${scorer.scoreType} requires expectedTools field`);
+            loggerWarn(`Scorer ${scorer.scoreType} requires expectedTools field`);
           }
           break;
         // Add more checks for other scorer types as needed
@@ -427,37 +427,6 @@ export async function runEval(
   ignoreErrors: boolean = true,
   asyncExecution: boolean = false
 ): Promise<ScoringResult[]> {
-  // Disable all logging to match Python SDK output format
-  process.env.DISABLE_LOGGING = 'true';
-  
-  // Completely disable console output for internal logging
-  // This is needed to match the Python SDK's output format exactly
-  const originalConsoleLog = console.log;
-  const originalConsoleInfo = console.info;
-  const originalConsoleWarn = console.warn;
-  const originalConsoleError = console.error;
-  
-  // Override console methods to only allow specific messages through
-  console.log = function(...args) {
-    // Allow all console.log messages to pass through
-    originalConsoleLog.apply(console, args);
-  };
-  console.info = function(...args) {
-    // Allow all console.info messages to pass through
-    originalConsoleInfo.apply(console, args);
-  };
-  console.warn = function(...args) {
-    // Allow all console.warn messages to pass through
-    originalConsoleWarn.apply(console, args);
-  };
-  console.error = function(...args) {
-    // Allow all console.error messages to pass through
-    originalConsoleError.apply(console, args);
-  };
-
-  // Enable logging by default
-  logger.enableLogging('judgeval', './logs');
-
   // Check if the evaluation run name already exists
   // This prevents accidentally overwriting existing evaluation results
   if (!override && evaluationRun.logResults) {
@@ -471,41 +440,41 @@ export async function runEval(
 
   // --- Set example IDs and timestamps if not already set ---
   // This is important for tracking and debugging purposes
-  logger.log("Initializing examples with IDs and timestamps");
+  loggerLog("Initializing examples with IDs and timestamps");
   evaluationRun.examples.forEach((example, idx) => {
     example.exampleIndex = idx;  // Set numeric index
     example.timestamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0];
-    logger.log(`Initialized example ${example.exampleId} (index: ${example.exampleIndex})`);
-    logger.log(`Input: ${example.input}`);
-    logger.log(`Actual output: ${example.actualOutput || ''}`);
+    loggerLog(`Initialized example ${example.exampleId} (index: ${example.exampleIndex})`);
+    loggerLog(`Input: ${example.input}`);
+    loggerLog(`Actual output: ${example.actualOutput || ''}`);
     if (example.expectedOutput) {
-      logger.log(`Expected output: ${example.expectedOutput}`);
+      loggerLog(`Expected output: ${example.expectedOutput}`);
     }
     if (example.context) {
-      logger.log(`Context: ${example.context}`);
+      loggerLog(`Context: ${example.context}`);
     }
   });
 
-  logger.log(`Starting evaluation run with ${evaluationRun.examples.length} examples`);
+  loggerLog(`Starting evaluation run with ${evaluationRun.examples.length} examples`);
 
   // --- Split scorers into API and local ---
   // API scorers run on the Judgment API server
   // Local scorers run in this process
-  logger.log("Grouping scorers by type");
+  loggerLog("Grouping scorers by type");
   const apiScorers: APIJudgmentScorer[] = [];
   const localScorers: JudgevalScorer[] = [];
 
   evaluationRun.scorers.forEach(scorer => {
     if (scorer instanceof APIJudgmentScorer) {
       apiScorers.push(scorer);
-      logger.log(`Added judgment scorer: ${scorer.constructor.name}`);
+      loggerLog(`Added judgment scorer: ${scorer.constructor.name}`);
     } else {
       localScorers.push(scorer as JudgevalScorer);
-      logger.log(`Added local scorer: ${scorer.constructor.name}`);
+      loggerLog(`Added local scorer: ${scorer.constructor.name}`);
     }
   });
 
-  logger.log(`Found ${apiScorers.length} judgment scorers and ${localScorers.length} local scorers`);
+  loggerLog(`Found ${apiScorers.length} judgment scorers and ${localScorers.length} local scorers`);
 
   let apiResults: ScoringResult[] = [];
   let localResults: ScoringResult[] = [];
@@ -515,7 +484,7 @@ export async function runEval(
   // Useful for large-scale evaluations that might take a long time
   if (asyncExecution) {
     checkExamples(evaluationRun.examples, evaluationRun.scorers as APIJudgmentScorer[]);
-    logger.log("Starting async evaluation");
+    loggerLog("Starting async evaluation");
     
     // Add the evaluation to the RabbitMQ queue for async processing
     // The server will pick it up and process it in the background
@@ -532,15 +501,16 @@ export async function runEval(
         }
       );
       
-      console.log("Successfully added evaluation to queue");
+      loggerInfo("Successfully added evaluation to queue");
     } catch (error: unknown) {
       // Log the error but don't throw it - this matches Python SDK behavior
-      console.error("Error adding evaluation to queue:", error instanceof Error ? error.message : String(error));
+      // Combine error message into the first argument
+      loggerError(`Error adding evaluation to queue: ${error instanceof Error ? error.message : String(error)}`);
       
       // Always print success message to match Python SDK behavior
       // This is important because the Python SDK always prints this message
       // even when there's an error connecting to RabbitMQ
-      console.log("Successfully added evaluation to queue");
+      loggerInfo("Successfully added evaluation to queue (Note: Previous error occurred)");
     }
     
     // Return empty results for async execution
@@ -551,7 +521,7 @@ export async function runEval(
     // These run on the Judgment API server
     if (apiScorers.length > 0) {
       try {
-        console.log('Executing API evaluation...');
+        loggerLog('Executing API evaluation...');
         const apiResponseData = await executeApiEval(evaluationRun);
         
         // Create ScoringResult objects from API response
@@ -574,9 +544,9 @@ export async function runEval(
           });
         });
         
-        logger.log(`API evaluation complete with ${apiResults.length} results`);
+        loggerLog(`API evaluation complete with ${apiResults.length} results`);
       } catch (error) {
-        logger.error(`Error executing API evaluation: ${error}`);
+        loggerError(`Error executing API evaluation: ${error}`);
         if (!ignoreErrors) {
           throw error;
         }
@@ -586,7 +556,7 @@ export async function runEval(
     // --- Execute local scorers ---
     // These run in this process
     if (localScorers.length > 0) {
-      logger.log('Starting local evaluation');
+      loggerLog('Starting local evaluation');
       try {
         // Process each example with each local scorer
         localResults = await Promise.all(evaluationRun.examples.map(async (example) => {
@@ -595,12 +565,12 @@ export async function runEval(
           // Run each local scorer on the example
           for (const scorer of localScorers) {
             try {
-              logger.log(`Running local scorer ${scorer.type} on example ${example.exampleId}`);
+              loggerLog(`Running local scorer ${scorer.type} on example ${example.exampleId}`);
               const scorerData = await scorer.scoreExample(example);
               scorersData.push(scorerData);
-              logger.log(`Scorer ${scorer.type} result: score=${scorerData.score}, success=${scorerData.success}`);
+              loggerLog(`Scorer ${scorer.type} result: score=${scorerData.score}, success=${scorerData.success}`);
             } catch (scorerError: any) {
-              logger.error(`Error running scorer ${scorer.type} on example ${example.exampleId}: ${scorerError?.message || String(scorerError)}`);
+              loggerError(`Error running scorer ${scorer.type} on example ${example.exampleId}: ${scorerError?.message || String(scorerError)}`);
               // Add failed scorer data
               scorersData.push({
                 name: scorer.type,
@@ -626,9 +596,9 @@ export async function runEval(
           });
         }));
         
-        logger.log(`Local evaluation complete with ${localResults.length} results`);
+        loggerLog(`Local evaluation complete with ${localResults.length} results`);
       } catch (error: any) {
-        logger.error(`Error executing local evaluation: ${error?.message || String(error)}`);
+        loggerError(`Error executing local evaluation: ${error?.message || String(error)}`);
         if (!ignoreErrors) {
           throw error;
         }
@@ -647,13 +617,13 @@ export async function runEval(
     // --- Merge results from API and local scorers ---
     // This combines the results from both types of scorers
     // Align with Python - only record content and usage base
-    logger.log('Merging API and local results');
+    loggerLog('Merging API and local results');
     const mergedResults = mergeResults(apiResults, localResults);
     
     // Check for missing scorer data
     // This helps identify examples that couldn't be evaluated
     const checkedResults = checkMissingScorerData(mergedResults);
-    logger.log(`Successfully merged ${checkedResults.length} results`);
+    loggerLog(`Successfully merged ${checkedResults.length} results`);
 
     // --- Log results to Judgment API if requested ---
     // This saves the results to the database for later viewing
@@ -666,9 +636,9 @@ export async function runEval(
           evaluationRun.judgmentApiKey || '', 
           evaluationRun.organizationId || ''
         );
-        logger.log(`Results logged to Judgment API: ${url}`);
+        loggerLog(`Results logged to Judgment API: ${url}`);
       } catch (error: any) {
-        logger.error(`Error logging evaluation results: ${error?.message || String(error)}`);
+        loggerError(`Error logging evaluation results: ${error?.message || String(error)}`);
         if (!ignoreErrors) {
           throw error;
         }
@@ -680,15 +650,9 @@ export async function runEval(
     for (let i = 0; i < checkedResults.length; i++) {
       const result = checkedResults[i];
       if (!result.scorersData || result.scorersData.length === 0) {
-        logger.log(`None of the scorers could be executed on example ${i}. This is usually because the Example is missing the fields needed by the scorers. Try checking that the Example has the necessary fields for your scorers.`);
+        loggerLog(`None of the scorers could be executed on example ${i}. This is usually because the Example is missing the fields needed by the scorers. Try checking that the Example has the necessary fields for your scorers.`);
       }
     }
-
-    // Restore original console methods
-    console.log = originalConsoleLog;
-    console.info = originalConsoleInfo;
-    console.warn = originalConsoleWarn;
-    console.error = originalConsoleError;
 
     return checkedResults;
   }

@@ -16,7 +16,7 @@ import {
 import { ScoringResult } from '../data/result';
 import { Tracer } from '../common/tracer';
 import { v4 as uuidv4 } from 'uuid';
-import logger from '../common/logger';
+import * as logger from '../common/logger';
 
 // Load environment variables
 dotenv.config();
@@ -76,7 +76,7 @@ async function runCustomerServiceLLMWorkflow() {
 
   const client = JudgmentClient.getInstance();
 
-  const tracer = Tracer.getInstance({
+  const tracerInstance = Tracer.getInstance({
     projectName,
     enableEvaluations: true
   });
@@ -108,7 +108,7 @@ async function runCustomerServiceLLMWorkflow() {
   let traceId = '';
   let traceUrl = '';
   
-  await tracer.runInTrace({
+  await tracerInstance.runInTrace({
     name: traceName,
     projectName
   }, async (trace) => {

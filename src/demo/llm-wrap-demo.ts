@@ -20,9 +20,9 @@ function checkEnvVar(varName: string, isRequired: boolean = false): boolean {
   return true;
 }
 
-const hasOpenAIKey = checkEnvVar('OPENAI_API_KEY', true); // Assume OpenAI is primary for demo
-const hasAnthropicKey = checkEnvVar('ANTHROPIC_API_KEY');
-const hasTogetherKey = checkEnvVar('TOGETHER_API_KEY');
+const hasOpenAIKey = !!process.env.OPENAI_API_KEY;
+const hasAnthropicKey = !!process.env.ANTHROPIC_API_KEY;
+const hasTogetherKey = !!process.env.TOGETHER_API_KEY;
 
 if (!checkEnvVar('JUDGMENT_API_KEY')) {
   console.warn("Warning: JUDGMENT_API_KEY environment variable is not set. Tracing will be disabled.");
@@ -43,17 +43,35 @@ async function runDemo() {
   let anthropic: Anthropic | null = null;
   let together: Together | null = null;
 
-  if (hasOpenAIKey) {
-    openai = wrap(new OpenAI({ apiKey: process.env.OPENAI_API_KEY }));
-    console.log('OpenAI client wrapped.');
+  try {
+    if (hasOpenAIKey) {
+      openai = wrap(new OpenAI());
+      console.log('OpenAI client wrapped.');
+    } else {
+      console.warn('OpenAI API key missing, skipping wrap.');
+    }
+  } catch (e) {
+    console.error('Failed to initialize or wrap OpenAI client:', e);
   }
-  if (hasAnthropicKey) {
-    anthropic = wrap(new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }));
-    console.log('Anthropic client wrapped.');
+  try {
+    if (hasAnthropicKey) {
+      anthropic = wrap(new Anthropic());
+      console.log('Anthropic client wrapped.');
+    } else {
+      console.warn('Anthropic API key missing, skipping wrap.');
+    }
+  } catch (e) {
+    console.error('Failed to initialize or wrap Anthropic client:', e);
   }
-  if (hasTogetherKey) {
-    together = wrap(new Together({ apiKey: process.env.TOGETHER_API_KEY }));
-    console.log('Together client wrapped.');
+  try {
+    if (hasTogetherKey) {
+      together = wrap(new Together({ auth: process.env.TOGETHER_API_KEY ?? '' }));
+      console.log('Together client wrapped.');
+    } else {
+      console.warn('Together API key missing, skipping wrap.');
+    }
+  } catch (e) {
+    console.error('Failed to initialize or wrap Together client:', e);
   }
 
   // 3. Use the wrapped clients within a trace context
@@ -107,13 +125,12 @@ async function runDemo() {
         if (together) {
           try {
             console.log('\nMaking Together AI API call...');
-            // Adjust model name as needed for Together AI
             const params = {
               model: 'meta-llama/Llama-3-8b-chat-hf',
-              messages: [{ role: 'user', content: 'Write a short poem about clouds.' } as const],
-              max_tokens: 70,
+              messages: [{ role: 'user', content: 'Tell me a short story about a brave dog.' }],
+              max_tokens: 150,
             };
-            const response = await together.chat.completions.create(params);
+            const response = await (together as any).completions.create(params);
             console.log('Together AI Response:', response.choices[0]?.message?.content?.trim());
           } catch (error) {
             console.error('Together AI call failed:', error);

@@ -15,7 +15,7 @@ import {
   JsonCorrectnessScorer,
   SummarizationScorer
 } from '../scorers/api-scorer';
-import logger from '../common/logger';
+import * as logger from '../common/logger';
 
 // Load environment variables
 dotenv.config();

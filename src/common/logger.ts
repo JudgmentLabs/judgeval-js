@@ -1,140 +1,65 @@
 /**
- * Logger implementation for the JudgEval TypeScript SDK
- * Based on the Python SDK's logger implementation
+ * Logger utilities and result printing for the JudgEval TypeScript SDK
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
+// Remove fs and path imports if no longer needed
+// import * as fs from 'fs';
+// import * as path from 'path';
+import logger from './logger-instance'; // Import the configured winston logger
 
-// Define logging state
-class LoggingState {
-  enabled: boolean = false;
-  path: string | null = null;
-}
-
-const LOGGING_STATE = new LoggingState();
-
-// Track current example info
+// Track current example info (Keep for potential context integration)
 let currentExampleId: string | null = null;
 let currentTimestamp: string | null = null;
-
-// Define a simple logger interface
-interface SimpleLogger {
-  info: (message: string) => void;
-  warn: (message: string) => void;
-  error: (message: string) => void;
-  debug: (message: string) => void;
-}
-
-// Create a simple logger that writes to console
-const logger: SimpleLogger = {
-  debug: (message: string) => {
-    if (LOGGING_STATE.enabled) {
-      console.debug(`[DEBUG] ${message}`);
-    }
-  },
-  info: (message: string) => {
-    if (LOGGING_STATE.enabled) {
-      console.info(`[INFO] ${message}`);
-    }
-  },
-  warn: (message: string) => {
-    if (LOGGING_STATE.enabled) {
-      console.warn(`[WARN] ${message}`);
-    }
-  },
-  error: (message: string) => {
-    if (LOGGING_STATE.enabled) {
-      console.error(`[ERROR] ${message}`);
-    }
-  }
-};
-
-/**
- * Enable logging
- * @param name The namespace to use for logging
- * @param logDir The directory to store logs in
- */
-export function enableLogging(name: string = 'judgeval', logDir: string = './logs'): void {
-  LOGGING_STATE.enabled = true;
-  LOGGING_STATE.path = logDir;
-  
-  // Create log directory if it doesn't exist
-  if (!fs.existsSync(logDir)) {
-    fs.mkdirSync(logDir, { recursive: true });
-  }
-  
-  logger.info("Logging enabled");
-}
-
-/**
- * Disable logging
- */
-export function disableLogging(): void {
-  if (LOGGING_STATE.enabled) {
-    logger.info("Logging disabled");
-  }
-  LOGGING_STATE.enabled = false;
-}
-
-/**
- * Check if logging is enabled
- */
-export function isLoggingEnabled(): boolean {
-  return LOGGING_STATE.enabled;
-}
 
 /**
  * Log a debug message
  */
-export function debug(message: string): void {
-  logger.debug(message);
+export function debug(message: string, meta?: Record<string, any>): void {
+  logger.debug(message, { ...meta, exampleId: currentExampleId, timestamp: currentTimestamp });
 }
 
 /**
  * Log an info message (alias for info)
  */
 export function log(message: string, ...args: any[]): void {
+  // Simple handling for additional args, could be improved
+  let meta: Record<string, any> = { args: [] }; 
   if (args.length > 0) {
-    const formattedArgs = args.map(arg => 
-      typeof arg === 'object' ? JSON.stringify(arg) : arg
-    ).join(' ');
-    logger.info(`${message} ${formattedArgs}`);
-  } else {
-    logger.info(message);
+    meta = { args: args }; 
   }
+  logger.info(message, { ...meta, exampleId: currentExampleId, timestamp: currentTimestamp });
 }
 
 /**
  * Log an info message
  */
-export function info(message: string): void {
-  logger.info(message);
+export function info(message: string, meta?: Record<string, any>): void {
+  logger.info(message, { ...meta, exampleId: currentExampleId, timestamp: currentTimestamp });
 }
 
 /**
  * Log a warning message
  */
-export function warning(message: string): void {
-  logger.warn(message);
+export function warning(message: string, meta?: Record<string, any>): void {
+  logger.warn(message, { ...meta, exampleId: currentExampleId, timestamp: currentTimestamp });
 }
 
 /**
  * Alias for warning
  */
-export function warn(message: string): void {
-  warning(message);
+export function warn(message: string, meta?: Record<string, any>): void {
+  warning(message, meta);
 }
 
 /**
  * Log an error message
  */
-export function error(message: string): void {
-  logger.error(message);
+export function error(message: string, meta?: Record<string, any>): void {
+  logger.error(message, { ...meta, exampleId: currentExampleId, timestamp: currentTimestamp });
 }
 
 /**
- * Set the current example context for logging
+ * Set the current example context for logging (Keep for potential context integration)
  */
 export function setExampleContext(exampleId: string, timestamp: string): void {
   currentExampleId = exampleId;
@@ -142,7 +67,7 @@ export function setExampleContext(exampleId: string, timestamp: string): void {
 }
 
 /**
- * Clear the current example context
+ * Clear the current example context (Keep for potential context integration)
  */
 export function clearExampleContext(): void {
   currentExampleId = null;
@@ -150,7 +75,7 @@ export function clearExampleContext(): void {
 }
 
 /**
- * Create a context for example-specific logging
+ * Create a context for example-specific logging (Keep for potential context integration)
  */
 export function withExampleContext<T>(exampleId: string, timestamp: string, fn: () => T): T {
   setExampleContext(exampleId, timestamp);
@@ -305,22 +230,3 @@ export function print(data: any): void {
     console.log(JSON.stringify(data, null, 2));
   }
 }
-
-// Export all functions
-export default {
-  enableLogging,
-  disableLogging,
-  isLoggingEnabled,
-  debug,
-  log,
-  info,
-  warning,
-  warn,
-  error,
-  setExampleContext,
-  clearExampleContext,
-  withExampleContext,
-  formatEvaluationResults,
-  printResults,
-  print
-};
