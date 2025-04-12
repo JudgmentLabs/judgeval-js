@@ -1,5 +1,4 @@
 // Core Node.js imports
-import { AsyncLocalStorage } from 'async_hooks';
 import { v4 as uuidv4 } from 'uuid';
 
 // Installed SDKs
@@ -18,7 +17,6 @@ import {
 
 import { APIJudgmentScorer } from '../scorers/base-scorer';
 import logger from './logger-instance'; // Use the shared winston logger instance
-import { isPromise } from 'util/types';
 
 // --- Type Aliases and Interfaces ---
 
@@ -330,7 +328,7 @@ class TraceClient {
     recordInput(inputs: any): void {
         const currentEntry = this.entryStack.at(-1);
         if (!currentEntry) {
-            console.warn("No current entry to record input to");
+            console.warn(`No current entry to record input to\nStack trace: ${new Error().stack}`);
             return;
         }
 
@@ -347,7 +345,7 @@ class TraceClient {
     recordOutput(output: any): void {
         const currentEntry = this.entryStack.at(-1);
         if (!currentEntry) {
-            console.warn("No current entry to record output to");
+            console.warn(`No current entry to record output to\nStack trace: ${new Error().stack}`);
             return;
         }
 
@@ -364,7 +362,7 @@ class TraceClient {
     recordError(error: any): void {
         const currentEntry = this.entryStack.at(-1);
         if (!currentEntry) {
-            console.warn("No current entry to record error to");
+            console.warn(`No current entry to record error to\nStack trace: ${new Error().stack}`);
             return;
         }
 
@@ -806,7 +804,7 @@ class TraceClient {
         try {
             const currentEntry = this.entryStack.at(-1);
             if (!currentEntry) {
-                logger.warn("No current entry to record evaluation to");
+                logger.warn(`No current entry to record evaluation to\nStack trace: ${new Error().stack}`);
                 return;
             }
 
@@ -859,7 +857,7 @@ class TraceClient {
     private _addEvalRun(evalRunPayload: EvaluationRunPayload, startTime: number): void {
         const currentEntry = this.entryStack.at(-1);
         if (!currentEntry) {
-            logger.warn("No current entry to record evaluation to");
+            logger.warn(`No current entry to record evaluation to\nStack trace: ${new Error().stack}`);
             return;
         }
 
@@ -967,42 +965,44 @@ class Tracer {
         return this.currentTrace;
     }
 
-     private _startTraceInternal(config: {
-         name: string,
-         projectName?: string,
-         overwrite?: boolean,
-         rules?: Rule[]
-     }): TraceClient {
-         const parentTrace = this.getCurrentTrace();
+    startTrace(name: string, config: {
+        projectName?: string,
+        overwrite?: boolean,
+        rules?: Rule[]
+    }): TraceClient {
+        const parentTrace = this.getCurrentTrace();
 
-         const traceSpecificRules = config.rules ?? [];
-         const effectiveRulesMap = new Map<string, Rule>();
-         this.defaultRules.forEach(rule => effectiveRulesMap.set(rule.rule_id ?? rule.name, rule));
-         traceSpecificRules.forEach(rule => effectiveRulesMap.set(rule.rule_id ?? rule.name, rule));
-         const effectiveRules = Array.from(effectiveRulesMap.values());
+        const projectName = config.projectName ?? this.projectName;
+        const effectiveRules =
+            Object.values(
+                Object.fromEntries(
+                    [...this.defaultRules, ...(config.rules ?? [])]
+                        .map(rule => [rule.rule_id ?? rule.name, rule])
+                )
+            );
 
-         const traceClient = new TraceClient({
-             tracer: this,
-             name: config.name,
-             projectName: config.projectName ?? this.projectName,
-             overwrite: config.overwrite,
-             rules: effectiveRules,
-             enableMonitoring: this.enableMonitoring,
-             enableEvaluations: this.enableEvaluations,
-             parentTraceId: parentTrace?.traceId,
-             parentName: parentTrace?.name,
-             apiKey: this.apiKey,
-             organizationId: this.organizationId,
-         });
+        const traceClient = new TraceClient({
+            tracer: this,
+            name: name,
+            projectName: projectName,
+            overwrite: config.overwrite,
+            rules: effectiveRules,
+            enableMonitoring: this.enableMonitoring,
+            enableEvaluations: this.enableEvaluations,
+            parentTraceId: parentTrace?.traceId,
+            parentName: parentTrace?.name,
+            apiKey: this.apiKey,
+            organizationId: this.organizationId,
+        });
 
-         if (traceClient.enableMonitoring) {
-              traceClient.save(true).catch(err => {
-                   console.error(`>>> Tracer: Error saving empty trace for ${traceClient.traceId}:`, err);
-              });
-         }
+        if (traceClient.enableMonitoring) {
+            traceClient.save(true).catch(err => {
+                logger.error(`Failed to save empty trace (${traceClient.traceId}):`, err);
+            });
+        }
 
-         return traceClient;
-     }
+        return traceClient;
+    }
 
      *trace(
         name: string,
@@ -1013,7 +1013,7 @@ class Tracer {
             rules?: Rule[]
         } = {}
     ): Generator<TraceClient> {
-        const trace = this._startTraceInternal({ name, ...options });
+        const trace = this.startTrace(name, { ...options });
         const shouldCreateRootSpan = options.createRootSpan ?? true;
         const prevTrace = this.currentTrace;
 
@@ -1036,19 +1036,19 @@ class Tracer {
         }
      }
 
-     observe<T extends any[], S>(options?: {
-         name?: string;
-         spanType?: SpanType;
-     }): (func: (...args: T) => S) => (...args: T) => Promise<S> {
-         if (!this.enableMonitoring) {
-             return (func: (...args: T) => S) => (...args: T) => Promise.resolve(func(...args));
-         }
+    observe<T extends any[], S>(options?: {
+        name?: string;
+        spanType?: SpanType;
+    }): (func: (...args: T) => S) => (...args: T) => Promise<S> {
+        if (!this.enableMonitoring) {
+            return (func: (...args: T) => S) => (...args: T) => Promise.resolve(func(...args));
+        }
 
-         return (func: (...args: T) => S): ((...args: T) => Promise<S>) => {
-             const spanName = options?.name || func.name || 'anonymous_function';
-             const spanType = options?.spanType || 'span';
+        return (func: (...args: T) => S): ((...args: T) => Promise<S>) => {
+            const spanName = options?.name ?? func.name ?? 'anonymous_function';
+            const spanType = options?.spanType ?? 'span';
 
-             return (async (...args: T) => {
+            return (async (...args: T) => {
                 const currentTrace = this.getCurrentTrace();
 
                 let output: S;
@@ -1079,8 +1079,8 @@ class Tracer {
                 }
                 // @ts-expect-error output is assigned
                 return output;
-             }).bind(func);
-         };
+            }).bind(func);
+        };
      }
 }
 
