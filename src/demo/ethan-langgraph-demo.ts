@@ -118,13 +118,11 @@ async function runAgent(prompt: string) {
 
   let result;
   for (const trace of judgment.trace("langchain")) {
-    console.log(trace.entryStack.length);
     result = await graph.invoke({
       messages: [new HumanMessage({ content: prompt })],
     }, {
       callbacks: [handler],
     });
-    console.log(trace.entryStack.length);
   }
   return { result, handler };
 }

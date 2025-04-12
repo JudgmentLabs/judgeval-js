@@ -44,7 +44,6 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         name?: string | undefined,
         options?: Record<string, any>
     ): Promise<void> {
-        console.log("handleRetrieverStart");
         let name_ = "RETRIEVER_CALL";
         if (serialized?.name) {
             name_ = `RETRIEVER_${serialized.name.toUpperCase()}`;
@@ -69,7 +68,6 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         tags?: string[] | undefined,
         options?: Record<string, any>
     ): Promise<void> {
-        console.log("handleRetrieverEnd");
         const docSummary = documents.map((doc, i) => ({
             index: i,
             page_content: doc.pageContent.length > 100
@@ -95,7 +93,6 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         tags?: string[] | undefined,
         options?: Record<string, any>
     ): Promise<void> {
-        console.log("handleRetrieverError");
         const traceClient = this.getTraceClient();
         if (!traceClient) return;
 
@@ -114,7 +111,6 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         runType?: string | undefined,
         options?: Record<string, any>
     ): Promise<void> {
-        console.log("handleChainStart");
         let traceClient = this.getTraceClient();
         if (!traceClient) {
             console.warn("No trace client found");
@@ -132,8 +128,6 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         tags?: string[] | undefined,
         options?: Record<string, any>
     ): Promise<void> {
-        console.log("handleChainEnd");
-
         const traceClient = this.getTraceClient();
         if (!traceClient) return;
 
@@ -148,7 +142,6 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         tags?: string[] | undefined,
         options?: Record<string, any>
     ): Promise<void> {
-        console.log("handleChainError");
         console.log(`Chain error: ${error}`);
 
         const traceClient = this.getTraceClient();
@@ -170,8 +163,6 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         runName?: string | undefined,
         options?: Record<string, any>
     ): Promise<void> {
-        console.log("handleToolStart");
-        
         const traceClient = this.getTraceClient();
         if (!traceClient) return;
 
@@ -193,7 +184,6 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         parentRunId?: string | undefined,
         options?: Record<string, any>
     ): Promise<void> {
-        console.log("handleToolEnd");
         const traceClient = this.getTraceClient();
         if (!traceClient) return;
 
@@ -207,7 +197,6 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         parentRunId?: string | undefined,
         options?: Record<string, any>
     ): Promise<void> {
-        console.log("handleToolError");
         console.log(`Tool error: ${error}`);
 
         const traceClient = this.getTraceClient();
@@ -224,7 +213,6 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         tags?: string[] | undefined,
         options?: Record<string, any>
     ): Promise<void> {
-        console.log("handleAgentAction");
         console.log(`Agent action: ${action}`);
     }
 
@@ -235,7 +223,6 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         tags?: string[] | undefined,
         options?: Record<string, any>
     ): Promise<void> {
-        console.log("handleAgentFinish");
         console.log(`Agent finish: ${finish}`);
     }
 
@@ -250,7 +237,6 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         runName?: string | undefined,
         options?: Record<string, any>
     ): Promise<void> {
-        console.log("handleLLMStart");
         const name = "LLM call";
         
         const traceClient = this.getTraceClient();
@@ -276,7 +262,6 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         tags?: string[] | undefined,
         options?: Record<string, any>
     ): Promise<void> {
-        console.log("handleLLMEnd");
         const traceClient = this.getTraceClient();
         if (!traceClient) return;
 
@@ -291,7 +276,6 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         tags?: string[] | undefined,
         options?: Record<string, any>
     ): Promise<void> {  
-        console.log("handleLLMError");
         console.log(`LLM error: ${error}`);
 
         const traceClient = this.getTraceClient();
@@ -315,7 +299,6 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         runName?: string | undefined,
         options?: Record<string, any>
     ): Promise<void> {
-        console.log("handleChatModelStart");
         let name_ = "LLM call";
         if (serialized.id.includes("openai")) {
             name_ = "OPENAI_API_CALL";
