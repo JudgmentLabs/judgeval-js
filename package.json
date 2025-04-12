@@ -1,10 +1,11 @@
 {
-  "name": "@judgment/judgeval-js",
+  "name": "judgeval",
   "version": "0.1.33",
   "description": "Judgment SDK for TypeScript/JavaScript",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "directories": {
+    "doc": "docs",
     "test": "tests"
   },
   "files": [
@@ -69,7 +70,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Judgment-AI/judgment-dev.git"
+    "url": "git+https://github.com/JudgmentLabs/judgeval-js.git"
   },
   "keywords": [
     "judgment",
@@ -81,7 +82,7 @@
   "author": "Judgment AI",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/Judgment-AI/judgment-dev/issues"
+    "url": "https://github.com/JudgmentLabs/judgeval-js/issues"
   },
-  "homepage": "https://github.com/Judgment-AI/judgment-dev#readme"
+  "homepage": "https://judgmentlabs.ai"
 }
