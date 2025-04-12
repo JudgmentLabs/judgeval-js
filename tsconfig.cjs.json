@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    /* Visit https://aka.ms/tsconfig to read more about this file */
+
+    /* Projects */
+    // ... (rest of comments)
+
+    /* Language and Environment */
+    "target": "ES2020",
+    // ... (rest of comments)
+
+    /* Modules */
+    "module": "commonjs",
+    "rootDir": "./src",
+    // ... (rest of comments)
+
+    /* Emit */
+    "declaration": true,
+    "sourceMap": true,
+    "outDir": "./dist/cjs",
+    // ... (rest of comments)
+
+    /* Interop Constraints */
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+
+    /* Type Checking */
+    "strict": true,
+    // ... (rest of comments)
+
+    /* Completeness */
+    "skipLibCheck": true
+  },
+  "include": ["**/*"]
+} 
