@@ -13,12 +13,12 @@ console.log(output);
 
 /**
  * JS equivalent of:
- * with tracer.trace("myTool") as span:
- *   print(span)
+ * with tracer.trace("myTool") as trace:
+ *   print(trace)
  * 
  * Functions exactly the same. You can yield or return stuff inside it and it will
  * really yield/return! (versus callbacks, which require a little extra)
  */
-for (const span of tracer.trace("say")) {
-  console.log(span);
+for (const trace of tracer.trace("say")) {
+  console.log(trace);
 }
