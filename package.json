@@ -14,7 +14,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.22.0",
+    "@anthropic-ai/sdk": "latest",
     "@langchain/core": "^0.3.44",
     "@langchain/langgraph": "^0.2.63",
     "@langchain/openai": "^0.5.5",
@@ -29,7 +29,7 @@
     "json2csv": "^5.0.7",
     "langchain": "^0.3.21",
     "node-fetch": "^2.7.0",
-    "openai": "^4.47.3",
+    "openai": "latest",
     "papaparse": "^5.4.1",
     "together-ai": "^0.5.1",
     "undici-types": "^6.21.0",
