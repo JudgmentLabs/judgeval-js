@@ -14,7 +14,6 @@
     "README.md"
   ],
   "dependencies": {
-    "@anthropic-ai/sdk": "latest",
     "@langchain/core": "^0.3.44",
     "@langchain/langgraph": "^0.2.63",
     "@langchain/openai": "^0.5.5",
@@ -29,13 +28,16 @@
     "json2csv": "^5.0.7",
     "langchain": "^0.3.21",
     "node-fetch": "^2.7.0",
-    "openai": "latest",
     "papaparse": "^5.4.1",
-    "together-ai": "^0.5.1",
     "undici-types": "^6.21.0",
     "uuid": "^11.1.0",
     "winston": "^3.17.0",
     "ws": "^8.18.1"
+  },
+  "peerDependencies": {
+    "@anthropic-ai/sdk": "^0.22.0",
+    "openai": "^4.0.0",
+    "together-ai": "^0.5.1 || ^0.7.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
