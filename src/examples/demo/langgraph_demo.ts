@@ -3,8 +3,8 @@ import { StateGraph, END } from "@langchain/langgraph";
 import { ChatOpenAI } from "@langchain/openai";
 import { BaseMessage } from "@langchain/core/messages";
 import { RunnableConfig } from "@langchain/core/runnables"; // Import RunnableConfig
-import { JudgevalLanggraphCallbackHandler } from "../common/integrations/langgraph"; // Adjust path if needed
-import { Tracer } from "../common/tracer"; // Adjust path if needed
+import { JudgevalLanggraphCallbackHandler } from "../../common/integrations/langgraph"; // Adjust path if needed
+import { Tracer } from "../../common/tracer"; // Adjust path if needed
 import { getEnvironmentVariable } from "@langchain/core/utils/env";
 
 // Load environment variables from .env.local BEFORE accessing them

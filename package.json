@@ -7,6 +7,11 @@
   "directories": {
     "test": "tests"
   },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
   "dependencies": {
     "@anthropic-ai/sdk": "^0.22.0",
     "@langchain/core": "^0.3.44",
@@ -47,14 +52,16 @@
   },
   "scripts": {
     "build": "tsc",
+    "build:examples": "tsc -p tsconfig.examples.json",
     "test": "jest",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
     "prepublishOnly": "npm run build",
     "docs": "typedoc --out docs src/index.ts",
-    "demo:basic": "npm run build && node dist/demo/basic-bot.js",
-    "demo:llm-wrap": "npm run build && node dist/demo/llm-wrap-demo.js",
-    "demo:openai-wrap": "npm run build && node dist/demo/openai-wrap-demo.js",
+    "demo:basic": "npx ts-node src/demo/basic-bot.ts",
+    "demo:llm-wrap": "npx ts-node src/demo/llm-wrap-demo.ts",
+    "demo:openai-wrap": "npx ts-node src/demo/openai-wrap-demo.ts",
+    "demo:complex-async": "npx ts-node src/demo/demo_complex_async.ts",
     "example:basic": "npm run build && node dist/examples/basic-usage.js",
     "example:result-retrieval": "npm run build && node dist/examples/result-retrieval.js",
     "example:custom-scorer": "npm run build && node dist/examples/custom-scorer.js",

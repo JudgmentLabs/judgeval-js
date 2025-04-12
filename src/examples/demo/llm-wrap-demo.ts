@@ -2,7 +2,7 @@ import * as dotenv from 'dotenv';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import Together from 'together-ai';
-import { Tracer, wrap } from '../common/tracer'; // Adjust path as necessary
+import { Tracer, wrap } from '../../common/tracer'; // Adjust path as necessary
 
 // Load environment variables from .env file
 dotenv.config({ path: '.env.local' });

@@ -5,7 +5,7 @@ import { setTimeout } from 'timers/promises';
 
 // Assuming tracer.ts is compiled to ./dist/common/tracer.js
 // Adjust the import path based on your actual project structure and build output
-import { Tracer, SpanType } from '../common/tracer'; // Use relative path
+import { Tracer, SpanType } from '../../common/tracer'; // Use relative path
 
 // Initialize the tracer singleton
 // Environment variables JUDGMENT_API_KEY and JUDGMENT_ORG_ID should be set
@@ -154,22 +154,8 @@ async function main() {
     try {
         console.log("Starting complex async demo...");
 
-        // Explicitly use runInTrace to get access to the traceClient
-        const finalResult = await tracer.runInTrace(
-            { name: "complex_async_ts_run" }, // Name for the overall run trace
-            async (traceClient) => { // Function receives traceClient
-                // The root function is already observed, so it will create its own span
-                const result = await root_function(); 
-                
-                // --- Add pretty print after execution --- 
-                console.log("\n--- Calling traceClient.print() ---");
-                traceClient.print(); 
-                console.log("--- Finished traceClient.print() ---");
-                // --- End pretty print --- 
-                
-                return result; // Return the result from root_function
-            }
-        );
+        // Call root_function directly as it's already observed
+        const finalResult = await root_function();
 
         console.log(`\nAsync Final result: ${finalResult}`);
     } catch (error) {
@@ -177,10 +163,12 @@ async function main() {
     } finally {
         const endTime = Date.now();
         console.log(`Async Total execution time: ${((endTime - startTime) / 1000).toFixed(2)} seconds`);
-        // Note: Trace saving happens asynchronously by runInTrace after the main function finishes
-        // Wait slightly for the background save triggered by runInTrace
-        console.log("Waiting slightly for runInTrace background save...");
-        await setTimeout(2000); // Wait 2 seconds
+        // Note: Trace saving happens asynchronously for observed functions.
+        // We might need a way to ensure all traces are sent before exiting.
+        // Let's remove the explicit wait for now, as runInTrace is gone.
+        // If traces seem incomplete, we might need to add a tracer.shutdown() or similar mechanism.
+        // console.log("Waiting slightly for trace saving..."); 
+        // await setTimeout(2000); // Adjust or replace with proper shutdown if needed
         console.log("Demo finished.");
     }
 }

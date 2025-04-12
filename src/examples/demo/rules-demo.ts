@@ -2,8 +2,8 @@ import * as dotenv from 'dotenv';
 import OpenAI from 'openai';
 // No longer need base-scorer import directly if using concrete scorer
 // import { APIJudgmentScorer } from '../scorers/base-scorer';
-import { AnswerRelevancyScorer } from '../scorers/api-scorer'; // <<< Import concrete scorer
-import { Tracer, wrap, Rule, Condition } from '../common/tracer'; // Adjust path as necessary
+import { AnswerRelevancyScorer } from '../../scorers/api-scorer'; // <<< Import concrete scorer
+import { Tracer, wrap, Rule, Condition } from '../../common/tracer'; // Adjust path as necessary
 
 // Load environment variables from .env file
 dotenv.config({ path: '.env.local' });
