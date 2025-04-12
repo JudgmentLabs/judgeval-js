@@ -18,6 +18,7 @@ import {
 
 import { APIJudgmentScorer } from '../scorers/base-scorer';
 import logger from './logger-instance'; // Use the shared winston logger instance
+import { isPromise } from 'util/types';
 
 // --- Type Aliases and Interfaces ---
 
@@ -238,12 +239,6 @@ class TraceManagerClient {
      // async deleteProject(projectName: string): Promise<any> { ... }
 }
 
-// --- Context Management ---
-// Holds the active TraceClient instance for the current async context
-const currentTraceAsyncLocalStorage = new AsyncLocalStorage<TraceClient>();
-// Holds the ID of the currently active span within a trace
-const currentSpanAsyncLocalStorage = new AsyncLocalStorage<string>();
-
 // --- Helper Functions ---
 
 // Helper function to sanitize names (e.g., replace spaces with underscores)
@@ -277,6 +272,7 @@ class TraceClient {
     private apiKey: string;
     private organizationId: string;
     private originalName: string; // Keep the original name if needed for display purposes
+    private currentSpanId?: string;
 
     constructor(
          config: {
@@ -333,7 +329,7 @@ class TraceClient {
     }
 
     recordInput(inputs: any): void {
-        const spanId = currentSpanAsyncLocalStorage.getStore();
+        const spanId = this.currentSpanId;
         if (!spanId || !this.enableMonitoring) return;
 
         const enterEntry = this.entries.find(e => e.span_id === spanId && e.type === 'enter');
@@ -352,7 +348,7 @@ class TraceClient {
     }
 
     recordOutput(output: any): void {
-        const spanId = currentSpanAsyncLocalStorage.getStore();
+        const spanId = this.currentSpanId;
         if (!spanId || !this.enableMonitoring) return;
 
         const enterEntry = this.entries.find(e => e.span_id === spanId && e.type === 'enter');
@@ -385,64 +381,52 @@ class TraceClient {
          });
     }
 
-    async runInSpan<T>(
+    *span(
         name: string,
-        options: { spanType?: SpanType },
-        func: () => Promise<T> | T
-    ): Promise<T> {
+        options: {
+            spanType?: SpanType
+        } = {}
+    ): Generator<TraceClient> {
         if (!this.enableMonitoring) {
-             const result = func();
-             return result instanceof Promise ? await result : result;
-        }
+            yield this;
+        } else {
+            const startTime = Date.now() / 1000;
+            const spanId = uuidv4();
+            const parentSpanId = this.currentSpanId;
+            const spanType = options.spanType || 'span';
 
-        const startTime = Date.now() / 1000;
-        const spanId = uuidv4();
-        const parentSpanId = currentSpanAsyncLocalStorage.getStore();
-        const spanType = options.spanType || 'span';
+            let currentDepth = 0;
+            if (parentSpanId && this.spanDepths[parentSpanId] !== undefined) {
+                currentDepth = this.spanDepths[parentSpanId] + 1;
+            }
+            this.spanDepths[spanId] = currentDepth;
 
-        let currentDepth = 0;
-        if (parentSpanId && this.spanDepths[parentSpanId] !== undefined) {
-            currentDepth = this.spanDepths[parentSpanId] + 1;
-        }
-        this.spanDepths[spanId] = currentDepth;
-
-        this.addEntry({
-             type: 'enter',
-             function: name,
-             span_id: spanId,
-             depth: currentDepth,
-             timestamp: startTime,
-             span_type: spanType,
-             parent_span_id: parentSpanId
-         });
-
-        let result: T;
-        try {
-            result = await currentSpanAsyncLocalStorage.run(spanId, async () => {
-                 const res = func();
-                 return res instanceof Promise ? await res : res;
+            this.addEntry({
+                type: 'enter',
+                function: name,
+                span_id: spanId,
+                depth: currentDepth,
+                timestamp: startTime,
+                span_type: spanType,
+                parent_span_id: parentSpanId
             });
-            return result;
-        } catch (error) {
-             this.recordOutput({
-                 error: String(error),
-                 error_details: error instanceof Error
-                     ? { name: error.name, message: error.message, stack: error.stack?.substring(0, 500) }
-                     : { detail: String(error) }
-             });
-             throw error;
-        } finally {
+
+            this.currentSpanId = spanId;
+            yield this;
+            this.currentSpanId = parentSpanId;
+
             const endTime = Date.now() / 1000;
             const duration = endTime - startTime;
             this.addEntry({
-                 type: 'exit',
-                 function: name,
-                 span_id: spanId,
-                 depth: currentDepth,
-                 timestamp: endTime,
-                 duration: duration,
-                 span_type: spanType
+                type: 'exit',
+                function: name,
+                span_id: spanId,
+                depth: currentDepth,
+                timestamp: endTime,
+                duration: duration,
+                span_type: spanType
             });
+
             delete this.spanDepths[spanId];
         }
     }
@@ -804,7 +788,7 @@ class TraceClient {
 
         try {
             // Get the current span ID from the context
-            const currentSpanId = currentSpanAsyncLocalStorage.getStore();
+            const currentSpanId = this.currentSpanId;
             if (!currentSpanId) {
                 logger.warn("No active span found for async evaluation. Evaluation will not be associated with a specific step.");
                 // Decide if we should proceed or return. For now, proceed without span association.
@@ -874,7 +858,7 @@ class TraceClient {
      * @param startTime The start time (in seconds) of the evaluation process.
      */
     private _addEvalRun(evalRunPayload: EvaluationRunPayload, startTime: number): void {
-        const currentSpanId = currentSpanAsyncLocalStorage.getStore();
+        const currentSpanId = this.currentSpanId;
         if (!currentSpanId) {
             // If no span ID, the evaluation entry won't be linked to a specific span
             // This might happen if asyncEvaluate is called outside a runInSpan context
@@ -929,6 +913,7 @@ class Tracer {
     public readonly enableMonitoring: boolean;
     public readonly enableEvaluations: boolean;
     private initialized: boolean = false;
+    private currentTrace?: TraceClient;
 
     private constructor(config?: {
          apiKey?: string,
@@ -994,7 +979,7 @@ class Tracer {
     }
 
     getCurrentTrace(): TraceClient | undefined {
-        return currentTraceAsyncLocalStorage.getStore();
+        return this.currentTrace;
     }
 
      private _startTraceInternal(config: {
@@ -1034,55 +1019,42 @@ class Tracer {
          return traceClient;
      }
 
-      async runInTrace<T>(
-          config: {
-              name: string,
-              projectName?: string,
-              overwrite?: boolean,
-              createRootSpan?: boolean;
-              rules?: Rule[]
-          },
-          func: (traceClient: TraceClient) => Promise<T> | T
-      ): Promise<T> {
-          const traceClient = this._startTraceInternal(config);
-          const shouldCreateRootSpan = config.createRootSpan ?? true;
+     *trace(
+        name: string,
+        options: {
+            projectName?: string,
+            overwrite?: boolean,
+            createRootSpan?: boolean,
+            rules?: Rule[]
+        } = {}
+    ): Generator<TraceClient> {
+        const trace = this._startTraceInternal({ name, ...options });
+        const shouldCreateRootSpan = options.createRootSpan ?? true;
+        const prevTrace = this.currentTrace;
 
-          return await currentTraceAsyncLocalStorage.run(traceClient, async () => {
-              let result: T;
-              try {
-                  if (shouldCreateRootSpan) {
-                       result = await traceClient.runInSpan(config.name, { spanType: 'chain' }, async () => {
-                           const funcResult = func(traceClient);
-                           return funcResult instanceof Promise ? await funcResult : funcResult;
-                       });
-                  } else {
-                       const funcResult = func(traceClient);
-                       result = funcResult instanceof Promise ? await funcResult : funcResult;
-                  }
+        if (shouldCreateRootSpan) {
+            for (const span of trace.span(name, { spanType: 'chain' })) {
+                this.currentTrace = trace;
+                yield trace;
+                this.currentTrace = prevTrace;
+            }
+        } else {
+            this.currentTrace = trace;
+            yield trace;
+            this.currentTrace = prevTrace;
+        }
 
-                  if (traceClient.enableMonitoring) {
-                       await traceClient.save(false).catch(saveErr => {
-                           console.error(`Failed to save completed trace '${config.name}' (${traceClient.traceId}):`, saveErr);
-                       });
-                  }
-                  return result;
-
-              } catch (error) {
-                   console.error(`Error during traced execution of '${config.name}' (${traceClient.traceId}):`, error);
-                   if (traceClient.enableMonitoring) {
-                        await traceClient.save(false).catch(saveErr => {
-                             console.error(`Failed to save trace '${config.name}' after error:`, saveErr);
-                        });
-                   }
-                   throw error;
-              }
-          });
-      }
+        if (trace.enableMonitoring) {
+            trace.save(false).catch(saveErr => {
+                console.error(`Failed to save completed trace '${name}' (${trace.traceId}):`, saveErr);
+            });
+        }
+     }
 
      observe<T extends (...args: any[]) => any>(options?: {
          name?: string;
          spanType?: SpanType;
-     }) {
+     }): (func: T) => T {
          if (!this.enableMonitoring) {
              return (func: T): T => func;
          }
@@ -1091,56 +1063,33 @@ class Tracer {
              const spanName = options?.name || func.name || 'anonymous_function';
              const spanType = options?.spanType || 'span';
 
-             const wrapper = (...args: Parameters<T>): ReturnType<T> | Promise<ReturnType<T>> => {
+             return ((async (...args) => {
                  const currentTrace = this.getCurrentTrace();
 
                  if (!currentTrace) {
-                     return this.runInTrace({
-                         name: spanName,
-                         createRootSpan: false
-                     }, async (traceClient) => {
-                         const executionLogic = () => {
-                             const result = func(...args);
-                             return result instanceof Promise ? result : Promise.resolve(result);
-                         };
-
-                         return traceClient.runInSpan(spanName, { spanType }, async () => {
-                             const serializableArgs = args.map(arg => { try { return JSON.parse(JSON.stringify(arg)); } catch { return String(arg); } });
-                             traceClient.recordInput({ args: serializableArgs });
-                             try {
-                                 const finalResult = await executionLogic();
-                                 traceClient.recordOutput(finalResult);
-                                 return finalResult;
-                             } catch (error) {
-                                 console.error(`Error captured by observe decorator (root) in span '${spanName}':`, error);
-                                 throw error;
-                             }
-                         });
-                     }) as Promise<ReturnType<T>>;
-                 }
-                 else {
-                      const executionLogic = () => {
-                          const result = func(...args);
-                          return result instanceof Promise ? result : Promise.resolve(result);
-                      };
-
-                      return currentTrace.runInSpan(spanName, { spanType }, async () => {
-                          const serializableArgs = args.map(arg => { try { return JSON.parse(JSON.stringify(arg)); } catch { return String(arg); } });
-                          currentTrace.recordInput({ args: serializableArgs });
-                          try {
-                              const finalResult = await executionLogic();
-                              currentTrace.recordOutput(finalResult);
-                              return finalResult;
-                          } catch (error) {
-                              console.error(`Error captured by observe decorator (nested) in span '${spanName}':`, error);
-                              throw error;
-                          }
-                      }) as Promise<ReturnType<T>>;
-                 }
-             };
-
-             Object.defineProperty(wrapper, 'name', { value: func.name, configurable: true });
-             return wrapper as T;
+                    for (const trace of this.trace(spanName, { createRootSpan: false })) {
+                        for (const span of trace.span(spanName, { spanType })) {
+                            span.recordInput({ args: args });
+                            try {
+                                span.recordOutput(await func(...args));
+                            } catch (error) {
+                                span.recordOutput({ error });
+                                throw error;
+                            }
+                        }
+                    }
+                } else {
+                    for (const span of currentTrace.span(spanName, { spanType })) {
+                        span.recordInput({ args: args });
+                        try {
+                            span.recordOutput(await func(...args));
+                        } catch (error) {
+                            span.recordOutput({ error });
+                            throw error;
+                        }
+                    }
+                }
+             }) as T).bind(func) as T;
          };
      }
 }
@@ -1229,20 +1178,23 @@ export function wrap<T extends ApiClient>(client: T): T {
             return originalMethod(...args);
         }
 
-        return await currentTrace.runInSpan(spanName, { spanType: 'llm' }, async () => {
+        let response;
+        for (const span of currentTrace.span(spanName, { spanType: 'llm' })) {
             const inputData = _formatInputData(client, args);
             currentTrace.recordInput(inputData);
 
             try {
-                 const response = await originalMethod(...args);
-                 const outputData = _formatOutputData(client, response);
-                 currentTrace.recordOutput(outputData);
-                 return response;
+                response = await originalMethod(...args);
             } catch (error) {
-                 currentTrace.recordOutput(error); // Record error object in output
-                 throw error;
+                currentTrace.recordOutput({ error });
+                throw error;
             }
-        });
+
+            const outputData = _formatOutputData(client, response);
+            currentTrace.recordOutput(outputData);
+        }
+        
+        return response;
     };
 
     // Apply the wrapper
@@ -1270,8 +1222,6 @@ export {
     Tracer,
     TraceClient,
     TraceManagerClient,
-    currentTraceAsyncLocalStorage,
-    currentSpanAsyncLocalStorage,
     Rule,
     Condition,
     NotificationConfig,
