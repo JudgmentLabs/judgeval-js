@@ -110,32 +110,27 @@ async function runDemo() {
   // console.log("--- Invoking Graph within runInTrace --- "); // Removed
   try {
     // Wrap the invocation in tracer.runInTrace
-    const result = await tracer.runInTrace(
-        {
-            name: "langgraph-demo-trace", // Name for the overall trace
-        },
-        async (traceClient) => { // runInTrace provides the active client
-            // console.log(`>>> Main: Inside trace context: ${traceClient.traceId}`); // Removed
+    for (const trace of tracer.trace("langgraph-demo-trace")) {
+      // console.log(`>>> Main: Inside trace context: ${traceClient.traceId}`); // Removed
 
-            // *** Instantiate handler INSIDE the trace context ***
-            const judgevalHandler = new JudgevalLanggraphCallbackHandler(tracer);
+      // *** Instantiate handler INSIDE the trace context ***
+      const judgevalHandler = new JudgevalLanggraphCallbackHandler(tracer);
 
-            // Invoke the graph *within* the established trace context
-            const graphResult = await app.invoke(inputs, {
-                callbacks: [judgevalHandler],
-            }) as AgentState; // Assert the final state shape
+      // Invoke the graph *within* the established trace context
+      const graphResult = await app.invoke(inputs, {
+          callbacks: [judgevalHandler],
+      }) as AgentState; // Assert the final state shape
 
-            // console.log("\n--- Graph Result (inside trace) ---"); // Removed
-            // console.log(JSON.stringify(graphResult, null, 2)); // Removed
+      // console.log("\n--- Graph Result (inside trace) ---"); // Removed
+      // console.log(JSON.stringify(graphResult, null, 2)); // Removed
 
-            // Access messages safely after type assertion
-            const finalMessages = graphResult.messages || [];
-            const finalAiMessage = finalMessages.length > 0 ? finalMessages[finalMessages.length - 1] : null;
-            console.log("\nFinal AI Message Content:", finalAiMessage?.content); // Keep final output log
+      // Access messages safely after type assertion
+      const finalMessages = graphResult.messages || [];
+      const finalAiMessage = finalMessages.length > 0 ? finalMessages[finalMessages.length - 1] : null;
+      console.log("\nFinal AI Message Content:", finalAiMessage?.content); // Keep final output log
 
-            return graphResult; // Return the result from the traced function
-        }
-    );
+      return graphResult; // Return the result from the traced function
+    }
 
     // Handler should save the trace upon completion (when root span ends)
     // runInTrace handles saving the trace upon completion

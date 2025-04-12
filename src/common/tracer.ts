@@ -263,14 +263,10 @@ class TraceClient {
     public readonly enableEvaluations: boolean;
     public readonly parentTraceId?: string | null;
     public readonly parentName?: string | null;
-    private _currentSpanId?: string;
-    get currentSpanId() {
-        return this._currentSpanId;
-    }
 
     // Internal state
     public entries: Partial<TraceEntry>[] = [];
-    public spanDepths: Record<string, number> = {};
+    private entryStack: Partial<TraceEntry>[] = [];
     private startTime: number; // Unix timestamp (seconds)
     private traceManager: TraceManagerClient | null = null; // Can be null if monitoring disabled
     private apiKey: string;
@@ -326,62 +322,115 @@ class TraceClient {
     }
 
     addEntry(entry: Partial<TraceEntry>): void {
-        if (!this.enableMonitoring) return;
-        entry.timestamp = entry.timestamp || Date.now() / 1000;
-        this.entries.push(entry);
+        if (this.enableMonitoring) {
+            this.entries.push(entry);
+        }
     }
 
     recordInput(inputs: any): void {
-        const spanId = this.currentSpanId;
-        if (!spanId || !this.enableMonitoring) return;
-
-        const enterEntry = this.entries.find(e => e.span_id === spanId && e.type === 'enter');
-        const functionName = enterEntry?.function || 'unknown_function';
-        const depth = enterEntry?.depth ?? this.spanDepths[spanId] ?? 0;
-        const spanType = enterEntry?.span_type || 'span';
+        const currentEntry = this.entryStack.at(-1);
+        if (!currentEntry) {
+            console.warn("No current entry to record input to");
+            return;
+        }
 
         this.addEntry({
-             type: 'input',
-             span_id: spanId,
-             inputs,
-             function: functionName,
-             depth: depth,
-             span_type: spanType
+            type: 'input',
+            span_id: currentEntry.span_id,
+            inputs,
+            function: currentEntry.function,
+            depth: currentEntry.depth,
+            span_type: currentEntry.span_type
          });
     }
 
     recordOutput(output: any): void {
-        const spanId = this.currentSpanId;
-        if (!spanId || !this.enableMonitoring) return;
-
-        const enterEntry = this.entries.find(e => e.span_id === spanId && e.type === 'enter');
-        const functionName = enterEntry?.function || 'unknown_function';
-        const depth = enterEntry?.depth ?? this.spanDepths[spanId] ?? 0;
-        const spanType = enterEntry?.span_type || 'span';
-
-        let entryType: TraceEntry['type'] = 'output';
-        let outputData = output;
-        if (output instanceof Error) {
-            entryType = 'error';
-            outputData = {
-                 name: output.name,
-                 message: output.message,
-                 stack: output.stack?.substring(0, 1000)
-            };
-        } else if (output?.error) {
-             entryType = 'error';
-             outputData = output;
+        const currentEntry = this.entryStack.at(-1);
+        if (!currentEntry) {
+            console.warn("No current entry to record output to");
+            return;
         }
 
+        this.addEntry({
+            type: 'output',
+            span_id: currentEntry.span_id,
+            output,
+            function: currentEntry.function,
+            depth: currentEntry.depth,
+            span_type: currentEntry.span_type
+         });
+    }
+
+    recordError(error: any): void {
+        const currentEntry = this.entryStack.at(-1);
+        if (!currentEntry) {
+            console.warn("No current entry to record error to");
+            return;
+        }
+
+        let output = error;
+        if (error instanceof Error) {
+            output = {
+                name: error.name,
+                message: error.message,
+                stack: error.stack?.substring(0, 1000)
+            };
+        }
 
         this.addEntry({
-             type: entryType,
-             span_id: spanId,
-             output: outputData,
-             function: functionName,
-             depth: depth,
-             span_type: spanType
-         });
+            type: 'error',
+            span_id: currentEntry.span_id,
+            output,
+            function: currentEntry.function,
+            depth: currentEntry.depth,
+            span_type: currentEntry.span_type
+        });
+    }
+
+    startSpan(name: string, options: { spanType?: SpanType } = {}): void {
+        const parentEntry = this.entryStack.at(-1);
+
+        const spanId = uuidv4();
+        const spanType = options.spanType ?? 'span';
+        const startTime = Date.now() / 1000;
+        let depth = 0, parentSpanId = undefined;
+        if (parentEntry) {
+            depth = parentEntry.depth! + 1;
+            parentSpanId = parentEntry.span_id;
+        }
+
+        const entry: TraceEntry = {
+            type: 'enter',
+            function: name,
+            span_id: spanId,
+            depth: depth,
+            timestamp: startTime,
+            span_type: spanType,
+            parent_span_id: parentSpanId
+        };
+        this.addEntry(entry);
+        this.entryStack.push(entry);
+    }
+
+    endSpan(): void {
+        const enterEntry = this.entryStack.pop();
+        if (!enterEntry) {
+            console.warn("No enter entry to end");
+            return;
+        }
+        
+        const endTime = Date.now() / 1000;
+        const duration = endTime - enterEntry.timestamp!;
+
+        this.addEntry({
+            type: 'exit',
+            function: enterEntry.function,
+            span_id: enterEntry.span_id,
+            depth: enterEntry.depth,
+            timestamp: endTime,
+            duration: duration,
+            span_type: enterEntry.span_type
+        });
     }
 
     *span(
@@ -393,44 +442,9 @@ class TraceClient {
         if (!this.enableMonitoring) {
             yield this;
         } else {
-            const startTime = Date.now() / 1000;
-            const spanId = uuidv4();
-            const parentSpanId = this.currentSpanId;
-            const spanType = options.spanType || 'span';
-
-            let currentDepth = 0;
-            if (parentSpanId && this.spanDepths[parentSpanId] !== undefined) {
-                currentDepth = this.spanDepths[parentSpanId] + 1;
-            }
-            this.spanDepths[spanId] = currentDepth;
-
-            this.addEntry({
-                type: 'enter',
-                function: name,
-                span_id: spanId,
-                depth: currentDepth,
-                timestamp: startTime,
-                span_type: spanType,
-                parent_span_id: parentSpanId
-            });
-
-            this._currentSpanId = spanId;
+            this.startSpan(name, options);
             yield this;
-            this._currentSpanId = parentSpanId;
-
-            const endTime = Date.now() / 1000;
-            const duration = endTime - startTime;
-            this.addEntry({
-                type: 'exit',
-                function: name,
-                span_id: spanId,
-                depth: currentDepth,
-                timestamp: endTime,
-                duration: duration,
-                span_type: spanType
-            });
-
-            delete this.spanDepths[spanId];
+            this.endSpan();
         }
     }
 
@@ -790,28 +804,10 @@ class TraceClient {
         };
 
         try {
-            // Get the current span ID from the context
-            const currentSpanId = this.currentSpanId;
-            if (!currentSpanId) {
-                logger.warn("No active span found for async evaluation. Evaluation will not be associated with a specific step.");
-                // Decide if we should proceed or return. For now, proceed without span association.
-                // return;
-            }
-
-            // Determine function name and depth (best effort if spanId is missing)
-            let functionName = "unknown_function";
-            let entrySpanType = "evaluation";
-            let currentDepth = 0;
-            if (currentSpanId) {
-                currentDepth = this.spanDepths[currentSpanId] ?? 0;
-                for (let i = this.entries.length - 1; i >= 0; i--) {
-                    const entry = this.entries[i];
-                    if (entry.span_id === currentSpanId && entry.type === 'enter') {
-                        functionName = entry.function || "unknown_function";
-                        // Keep span_type as 'evaluation' for the entry itself
-                        break;
-                    }
-                }
+            const currentEntry = this.entryStack.at(-1);
+            if (!currentEntry) {
+                logger.warn("No current entry to record evaluation to");
+                return;
             }
 
             // --- Create evaluation run name (similar to Python) ---
@@ -822,7 +818,7 @@ class TraceClient {
                 return name.charAt(0).toUpperCase() + name.slice(1);
             }).join(',');
             // Use trace name and shortened span ID (or trace ID if no span)
-            const idPart = currentSpanId ? currentSpanId.substring(0, 8) : this.traceId.substring(0, 8);
+            const idPart = currentEntry ? currentEntry.span_id!.substring(0, 8) : this.traceId.substring(0, 8);
             const evalName = `${this.name.charAt(0).toUpperCase() + this.name.slice(1)}-${idPart}-[${scorerNames}]`;
             // --- End eval name creation ---
 
@@ -861,36 +857,22 @@ class TraceClient {
      * @param startTime The start time (in seconds) of the evaluation process.
      */
     private _addEvalRun(evalRunPayload: EvaluationRunPayload, startTime: number): void {
-        const currentSpanId = this.currentSpanId;
-        if (!currentSpanId) {
-            // If no span ID, the evaluation entry won't be linked to a specific span
-            // This might happen if asyncEvaluate is called outside a runInSpan context
-            console.warn("Adding evaluation entry without an active span ID.");
+        const currentEntry = this.entryStack.at(-1);
+        if (!currentEntry) {
+            logger.warn("No current entry to record evaluation to");
+            return;
         }
 
-        let functionName = "unknown_function";
-        let currentDepth = 0; // Default depth if no span
-
-        if (currentSpanId) {
-            currentDepth = this.spanDepths[currentSpanId] ?? 0;
-            // Find the function name associated with the current span_id
-            for (let i = this.entries.length - 1; i >= 0; i--) {
-                const entry = this.entries[i];
-                if (entry.span_id === currentSpanId && entry.type === 'enter') {
-                    functionName = entry.function || "unknown_function";
-                    break;
-                }
-            }
-        }
-
-        const duration = (Date.now() / 1000) - startTime;
+        const function_ = currentEntry.function ?? "unknown_function";
+        const depth = currentEntry.depth ?? 0;
+        const duration = Date.now() / 1000 - startTime;
 
         // Add evaluation entry to the trace
         this.addEntry({
             type: "evaluation",
-            function: functionName,
-            span_id: currentSpanId, // May be undefined
-            depth: currentDepth,
+            function: function_,
+            span_id: currentEntry.span_id, // May be undefined
+            depth: depth,
             timestamp: Date.now() / 1000,
             evaluation_runs: [evalRunPayload], // Embed the payload
             duration: duration,
@@ -1078,7 +1060,7 @@ class Tracer {
                             try {
                                 span.recordOutput(output = await func(...args));
                             } catch (e) {
-                                span.recordOutput({ error: error = e });
+                                span.recordError(error = e);
                             }
                         }
                     }
@@ -1088,7 +1070,7 @@ class Tracer {
                         try {
                             span.recordOutput(output = await func(...args));
                         } catch (e) {
-                            span.recordOutput({ error: error = e });
+                            span.recordError(error = e);
                         }
                     }
                 }
@@ -1194,7 +1176,7 @@ export function wrap<T extends ApiClient>(client: T): T {
             try {
                 response = await originalMethod(...args);
             } catch (error) {
-                currentTrace.recordOutput({ error });
+                currentTrace.recordError(error);
                 throw error;
             }
 

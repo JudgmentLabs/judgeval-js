@@ -24,8 +24,6 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
     name = "judgeval_langgraph_callback_handler"; // Identifier for the handler
 
     private tracer: Tracer;
-    private spanStartTimes: Record<string, number> = {}; // Store start time per spanId (using Judgeval spanId)
-    private runIdToSpanId: Record<string, string> = {}; // Map Langchain runId to Judgeval spanId
 
     // Optional: Track executed nodes/tools if needed for external use cases like evaluation
     // public executedNodes: string[] = [];
@@ -39,7 +37,7 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
     }
 
     // Helper to safely get the current TraceClient from context
-    private _getActiveTraceClient(): TraceClient | null {
+    private _getTraceClient(): TraceClient | null {
         if (!this.tracer.enableMonitoring) {
             // console.log("Judgeval Handler: Monitoring disabled."); // Reduce noise
             return null;
@@ -55,109 +53,6 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
     // Helper to create a unique span ID
     private _generateSpanId(): string {
         return uuidv4();
-    }
-
-    // Start a new span, associating it with the LangChain runId
-    private _startSpan(lcRunId: string, name: string, spanType: SpanType = "span"): void {
-        const traceClient = this._getActiveTraceClient();
-        if (!traceClient) return;
-
-        const startTime = Date.now() / 1000;
-        const spanId = this._generateSpanId();
-        this.runIdToSpanId[lcRunId] = spanId; // Map Langchain runId to our new spanId
-
-        // Get parent span ID from the current async context
-        const parentSpanId = this.tracer.getCurrentTrace()?.currentSpanId;
-        // Calculate depth based on parent
-        let depth = 0;
-        if (parentSpanId) {
-             const parentEntry = traceClient.entries.find(
-                 (e) => e.span_id === parentSpanId && e.type === 'enter'
-             );
-             if (parentEntry) {
-                 depth = (parentEntry.depth ?? -1) + 1; // Increment parent depth
-             } else {
-                  // If parent entry not found (should be rare in async context), start at 0
-                 console.warn(`Judgeval Handler: Parent span entry ${parentSpanId} not found for child ${spanId}. Defaulting depth to 0.`);
-                 depth = 0;
-             }
-        } else {
-             // No parent in context, this is a root span (relative to this handler's context)
-             depth = 0;
-        }
-
-        // console.log(`>>> _startSpan: Creating span ${spanId} ('${name}') depth: ${depth}, parent: ${parentSpanId ?? 'None'}, lcRunId: ${lcRunId}`); // Debug log
-
-        traceClient.addEntry({
-            type: 'enter',
-            function: name,
-            span_id: spanId,
-            depth: depth,
-            timestamp: startTime,
-            span_type: spanType,
-            parent_span_id: parentSpanId
-        });
-
-        this.spanStartTimes[spanId] = startTime;
-
-        // Set this new span as the current one in the context *for child operations*
-        // Note: This relies on Langchain's async flow preserving the context.
-        // If Langchain breaks context, this might not propagate correctly.
-        // It's generally better to *read* the parent from context when starting a span,
-        // rather than trying to manage pushing/popping onto the context here.
-        // The Tracer's observe/runInTrace methods handle setting the context.
-    }
-
-    // End the span corresponding to the LangChain runId
-    private _endSpan(lcRunId: string, output?: any, error?: Error | any): void {
-        const traceClient = this._getActiveTraceClient();
-        // Retrieve the spanId using the LangChain runId
-        const spanId = this.runIdToSpanId[lcRunId];
-
-        if (!traceClient || !spanId || !(spanId in this.spanStartTimes)) {
-            // console.log(`>>> _endSpan: Skipping endSpan for lcRunId ${lcRunId} / spanId ${spanId} - ID/trace/time missing or monitoring disabled.`); // Debug log
-            // Clean up the map even if we can't end the span fully
-            if (lcRunId in this.runIdToSpanId) delete this.runIdToSpanId[lcRunId];
-            return;
-        }
-
-        const startTime = this.spanStartTimes[spanId];
-        const endTime = Date.now() / 1000;
-        const duration = endTime - startTime;
-
-        // Find the original 'enter' entry to get details like name and depth
-        const enterEntry = traceClient.entries.find(e => e.span_id === spanId && e.type === 'enter');
-        if (!enterEntry) {
-            console.warn(`Judgeval Handler: Could not find 'enter' entry for span ${spanId} (lcRunId: ${lcRunId}) during _endSpan.`);
-            // Clean up maps even if entry isn't found
-            delete this.spanStartTimes[spanId];
-            delete this.runIdToSpanId[lcRunId];
-            return;
-        }
-
-        // Record output or error *before* the exit entry
-        if (error) {
-            traceClient.recordOutput(error instanceof Error ? error : new Error(String(error)));
-        } else if (output !== undefined) {
-            // Avoid recording 'undefined' as output explicitly
-            traceClient.recordOutput(output);
-        }
-
-        traceClient.addEntry({
-            type: 'exit',
-            function: enterEntry.function, // Use name from 'enter' entry
-            span_id: spanId,
-            depth: enterEntry.depth, // Use depth from 'enter' entry
-            timestamp: endTime,
-            duration: duration,
-            span_type: enterEntry.span_type // Use type from 'enter' entry
-        });
-
-        // Clean up maps
-        delete this.spanStartTimes[spanId];
-        delete this.runIdToSpanId[lcRunId];
-
-        // console.log(`>>> _endSpan: Ended span ${spanId} ('${enterEntry.function}'), lcRunId: ${lcRunId}`); // Debug log
     }
 
     // --- Chain Events ---
