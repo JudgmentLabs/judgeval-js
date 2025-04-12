@@ -2,6 +2,9 @@
 export { Example, ExampleBuilder, ExampleOptions } from './data/example';
 export { ScoringResult, ScoringResultBuilder, ScorerData, ScoringResultOptions } from './data/result';
 
+// Export common utilities (like Tracer)
+export { Tracer, SpanType } from './common/tracer';
+
 // Export scorers
 export { 
   Scorer, 
@@ -25,6 +28,8 @@ export {
   JsonCorrectnessScorer,
   SummarizationScorer
 } from './scorers/api-scorer';
+
+export { ExactMatchScorer } from './scorers/exact-match-scorer';
 
 // Export rules system
 export {
