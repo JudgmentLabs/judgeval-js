@@ -16,7 +16,7 @@ import { BaseTracer } from "@langchain/core/tracers/base";
 import { getEnvironmentVariable } from "@langchain/core/utils/env";
 
 import { v4 as uuidv4 } from 'uuid';
-import { Tracer, TraceClient, SpanType, currentSpanAsyncLocalStorage, TraceEntry } from "../tracer"; // Adjust path
+import { Tracer, TraceClient, SpanType, TraceEntry } from "../tracer"; // Adjust path
 
 // --- Global Handler Setup (REMOVED - No longer needed with context propagation) ---
 
@@ -67,7 +67,7 @@ export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
         this.runIdToSpanId[lcRunId] = spanId; // Map Langchain runId to our new spanId
 
         // Get parent span ID from the current async context
-        const parentSpanId = currentSpanAsyncLocalStorage.getStore();
+        const parentSpanId = this.tracer.getCurrentTrace()?.currentSpanId;
         // Calculate depth based on parent
         let depth = 0;
         if (parentSpanId) {

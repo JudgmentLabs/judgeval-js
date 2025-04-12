@@ -263,6 +263,10 @@ class TraceClient {
     public readonly enableEvaluations: boolean;
     public readonly parentTraceId?: string | null;
     public readonly parentName?: string | null;
+    private _currentSpanId?: string;
+    get currentSpanId() {
+        return this._currentSpanId;
+    }
 
     // Internal state
     public entries: Partial<TraceEntry>[] = [];
@@ -272,7 +276,6 @@ class TraceClient {
     private apiKey: string;
     private organizationId: string;
     private originalName: string; // Keep the original name if needed for display purposes
-    private currentSpanId?: string;
 
     constructor(
          config: {
@@ -411,9 +414,9 @@ class TraceClient {
                 parent_span_id: parentSpanId
             });
 
-            this.currentSpanId = spanId;
+            this._currentSpanId = spanId;
             yield this;
-            this.currentSpanId = parentSpanId;
+            this._currentSpanId = parentSpanId;
 
             const endTime = Date.now() / 1000;
             const duration = endTime - startTime;
@@ -1051,30 +1054,31 @@ class Tracer {
         }
      }
 
-     observe<T extends (...args: any[]) => any>(options?: {
+     observe<T extends any[], S>(options?: {
          name?: string;
          spanType?: SpanType;
-     }): (func: T) => T {
+     }): (func: (...args: T) => S) => (...args: T) => Promise<S> {
          if (!this.enableMonitoring) {
-             return (func: T): T => func;
+             return (func: (...args: T) => S) => (...args: T) => Promise.resolve(func(...args));
          }
 
-         return (func: T): T => {
+         return (func: (...args: T) => S): ((...args: T) => Promise<S>) => {
              const spanName = options?.name || func.name || 'anonymous_function';
              const spanType = options?.spanType || 'span';
 
-             return ((async (...args) => {
-                 const currentTrace = this.getCurrentTrace();
+             return (async (...args: T) => {
+                const currentTrace = this.getCurrentTrace();
 
-                 if (!currentTrace) {
+                let output: S;
+                let error: unknown;
+                if (!currentTrace) {
                     for (const trace of this.trace(spanName, { createRootSpan: false })) {
                         for (const span of trace.span(spanName, { spanType })) {
                             span.recordInput({ args: args });
                             try {
-                                span.recordOutput(await func(...args));
-                            } catch (error) {
-                                span.recordOutput({ error });
-                                throw error;
+                                span.recordOutput(output = await func(...args));
+                            } catch (e) {
+                                span.recordOutput({ error: error = e });
                             }
                         }
                     }
@@ -1082,14 +1086,18 @@ class Tracer {
                     for (const span of currentTrace.span(spanName, { spanType })) {
                         span.recordInput({ args: args });
                         try {
-                            span.recordOutput(await func(...args));
-                        } catch (error) {
-                            span.recordOutput({ error });
-                            throw error;
+                            span.recordOutput(output = await func(...args));
+                        } catch (e) {
+                            span.recordOutput({ error: error = e });
                         }
                     }
                 }
-             }) as T).bind(func) as T;
+                if (error) {
+                    throw error;
+                }
+                // @ts-expect-error output is assigned
+                return output;
+             }).bind(func);
          };
      }
 }
