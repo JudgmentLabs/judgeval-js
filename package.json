@@ -1,6 +1,6 @@
 {
   "name": "judgeval",
-  "version": "0.1.34",
+  "version": "0.1.35",
   "description": "Judgment SDK for TypeScript/JavaScript",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
