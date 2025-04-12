@@ -3,7 +3,7 @@ export { Example, ExampleBuilder, ExampleOptions } from './data/example';
 export { ScoringResult, ScoringResultBuilder, ScorerData, ScoringResultOptions } from './data/result';
 
 // Export common utilities (like Tracer)
-export { Tracer, SpanType } from './common/tracer';
+export { Tracer, SpanType, wrap, TraceClient } from './common/tracer';
 
 // Export scorers
 export { 
