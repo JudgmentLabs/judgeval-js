@@ -131,12 +131,17 @@ const tracer = Tracer.getInstance({
   enableEvaluations: true
 });
 
-await tracer.runInTrace({ name: "my-trace" }, async (trace) => {
-  // Run operations within the trace
-  await trace.runInSpan("operation", { spanType: "tool" }, async () => {
+// Analogous to Python SDK's with, e.g.
+//
+// with tracer.trace("my-trace") as trace:
+//   with trace.span("operation") as span:
+//     # Perform operations
+//
+for (const trace of tracer.trace("my-trace")) {
+  for (const span of trace.span("operation")) {
     // Perform operations
-  });
-});
+  }
+}
 ```
 
 ## Result Retrieval

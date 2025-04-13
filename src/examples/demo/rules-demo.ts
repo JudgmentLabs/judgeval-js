@@ -65,59 +65,50 @@ async function runRulesDemo() {
 
   try {
     // Assign the result of runInTrace to a variable (it will be void)
-    await tracer.runInTrace(
-      {
-        name: traceName,
-        rules: [sampleRule],
-      },
-      async (traceClient: TraceClient) => { // Ensure the callback is async and type traceClient
-        console.log("Trace started...");
+    for (const trace of tracer.trace(traceName, { rules: [sampleRule] })) {
+      console.log("Trace started...");
 
-        // Run the evaluation (could be async or sync)
-        // Use the evaluate method for simplicity
-        const spanResult = await traceClient.runInSpan("evaluation_step", { spanType: "tool" }, async () => {
-          const openAIResponse = await openai.chat.completions.create({
-            model: 'gpt-3.5-turbo',
-            messages: [
-              { role: 'system', content: 'You are a helpful assistant.' },
-              { role: 'user', content: userInput },
-            ],
-            temperature: 0.7,
-            max_tokens: 50,
-          });
-
-          const responseContent = openAIResponse.choices[0].message?.content ?? "";
-          console.log('OpenAI API call successful.');
-
-          // Log the response *within* the span where it's available
-          console.log("\n--- OpenAI Response (within span) ---");
-          if (openAIResponse && openAIResponse.choices && openAIResponse.choices.length > 0) {
-            console.log('Assistant:', openAIResponse.choices[0].message?.content);
-            console.log('Usage:', openAIResponse.usage);
-          } else {
-            console.log('No response content found.');
-            console.log('Full Response:', JSON.stringify(openAIResponse, null, 2));
-          }
-          console.log('-----------------------------------');
-
-          // *** ADDING asyncEvaluate call ***
-          console.log('Calling asyncEvaluate...');
-          await traceClient.asyncEvaluate(
-            [answerRelevancyScorer], // <<< Use the actual scorer instance
-            {
-              input: userInput,
-              actualOutput: "Lies", // Using hardcoded "Lies" for testing rule failure
-              model: 'gpt-3.5-turbo', // <<< ADDED model name
-            }
-          );
-          console.log('asyncEvaluate finished.');
-          // **********************************
-
-          return openAIResponse; // Return the actual response from the span if needed later
+      // Run the evaluation (could be async or sync)
+      // Use the evaluate method for simplicity
+      for (const span of trace.span("evaluation_step", { spanType: "tool" })) {
+        const openAIResponse = await openai.chat.completions.create({
+          model: 'gpt-3.5-turbo',
+          messages: [
+            { role: 'system', content: 'You are a helpful assistant.' },
+            { role: 'user', content: userInput },
+          ],
+          temperature: 0.7,
+          max_tokens: 50,
         });
 
+        const responseContent = openAIResponse.choices[0].message?.content ?? "";
+        console.log('OpenAI API call successful.');
+
+        // Log the response *within* the span where it's available
+        console.log("\n--- OpenAI Response (within span) ---");
+        if (openAIResponse && openAIResponse.choices && openAIResponse.choices.length > 0) {
+          console.log('Assistant:', openAIResponse.choices[0].message?.content);
+          console.log('Usage:', openAIResponse.usage);
+        } else {
+          console.log('No response content found.');
+          console.log('Full Response:', JSON.stringify(openAIResponse, null, 2));
+        }
+        console.log('-----------------------------------');
+
+        // *** ADDING asyncEvaluate call ***
+        console.log('Calling asyncEvaluate...');
+        await trace.asyncEvaluate(
+          [answerRelevancyScorer], // <<< Use the actual scorer instance
+          {
+            input: userInput,
+            actualOutput: "Lies", // Using hardcoded "Lies" for testing rule failure
+            model: 'gpt-3.5-turbo', // <<< ADDED model name
+          }
+        );
+        console.log('asyncEvaluate finished.');
+        // **********************************
       }
-    );
+    }
 
   } catch (error) {
     console.error("\n--- Error during demo execution ---");

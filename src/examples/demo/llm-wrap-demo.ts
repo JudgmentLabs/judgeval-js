@@ -82,9 +82,10 @@ async function runDemo() {
   }
   try {
     if (hasTogetherKey) {
-      // Use standard init for 0.7.0 (with 'apiKey') and wrap
+      console.log('Creating wrapped Together AI client...');
+      // Use apiKey instead of auth
       together = wrap(new Together({ apiKey: process.env.TOGETHER_API_KEY ?? '' }));
-      console.log('Together client wrapped.');
+      console.log('Together AI client wrapped.');
     } else {
       console.warn('Together API key missing, skipping wrap.');
     }
@@ -97,67 +98,60 @@ async function runDemo() {
   console.log(`\nStarting trace: ${traceName}`);
 
   try {
-    await tracer.runInTrace(
-      {
-        name: traceName,
-        overwrite: true, // Overwrite if running multiple times
-      },
-      async (traceClient) => {
-        console.log(`Inside trace context for ${traceClient.name} (ID: ${traceClient.traceId})`);
+    for (const trace of tracer.trace(traceName, { overwrite: true })) {
+      console.log(`Inside trace context for ${trace.name} (ID: ${trace.traceId})`);
 
-        // --- OpenAI Call ---
-        if (openai) {
-          try {
-            console.log('\nMaking OpenAI API call...');
-            const params: OpenAI.Chat.ChatCompletionCreateParams = {
-              model: 'gpt-3.5-turbo',
-              messages: [{ role: 'user', content: 'Explain the concept of API wrapping briefly.' }],
-              max_tokens: 60,
-            };
-            const response = await openai.chat.completions.create(params);
-            console.log('OpenAI Response:', response.choices[0]?.message?.content?.trim());
-          } catch (error) {
-            console.error('OpenAI call failed:', error);
-          }
+      // --- OpenAI Call ---
+      if (openai) {
+        try {
+          console.log('\nMaking OpenAI API call...');
+          const params: OpenAI.Chat.ChatCompletionCreateParams = {
+            model: 'gpt-3.5-turbo',
+            messages: [{ role: 'user', content: 'Explain the concept of API wrapping briefly.' }],
+            max_tokens: 60,
+          };
+          const response = await openai.chat.completions.create(params);
+          console.log('OpenAI Response:', response.choices[0]?.message?.content?.trim());
+        } catch (error) {
+          console.error('OpenAI call failed:', error);
         }
-
-        // --- Anthropic Call ---
-        if (anthropic) {
-          try {
-            console.log('\nMaking Anthropic API call...');
-            const params: Anthropic.Messages.MessageCreateParams = {
-              model: 'claude-3-haiku-20240307', // Use a valid Anthropic model
-              messages: [{ role: 'user', content: 'What is the capital of France?' }],
-              max_tokens: 50,
-            };
-            const response = await anthropic.messages.create(params);
-            // Anthropic response content is often in an array
-            const responseText = response.content.map(block => block.type === 'text' ? block.text : '').join('');
-            console.log('Anthropic Response:', responseText.trim());
-          } catch (error) {
-            console.error('Anthropic call failed:', error);
-          }
-        }
-
-        // --- Together AI Call --- (Uncomment and use documented structure)
-        if (together) {
-          try {
-            console.log('\nMaking Together AI API call...');
-            const params = {
-              model: 'meta-llama/Llama-3-8b-chat-hf',
-              messages: [{ role: 'user', content: 'Tell me a short story about a brave dog.' }],
-              max_tokens: 150,
-            };
-            // Use documented chat.completions endpoint for 0.7.0
-            const response = await together.chat.completions.create(params);
-            console.log('Together AI Response:', response.choices[0]?.message?.content?.trim());
-          } catch (error) {
-            console.error('Together AI call failed:', error);
-          }
-        }
-
       }
-    );
+
+      // --- Anthropic Call ---
+      if (anthropic) {
+        try {
+          console.log('\nMaking Anthropic API call...');
+          const params: Anthropic.Messages.MessageCreateParams = {
+            model: 'claude-3-haiku-20240307', // Use a valid Anthropic model
+            messages: [{ role: 'user', content: 'What is the capital of France?' }],
+            max_tokens: 50,
+          };
+          const response = await anthropic.messages.create(params);
+          // Anthropic response content is often in an array
+          const responseText = response.content.map(block => block.type === 'text' ? block.text : '').join('');
+          console.log('Anthropic Response:', responseText.trim());
+        } catch (error) {
+          console.error('Anthropic call failed:', error);
+        }
+      }
+
+      // --- Together AI Call --- (Uncomment and use documented structure)
+      if (together) {
+        try {
+          console.log('\nMaking Together AI API call...');
+          const params = {
+            model: 'meta-llama/Llama-3-8b-chat-hf',
+            messages: [{ role: 'user', content: 'Tell me a short story about a brave dog.' }],
+            max_tokens: 150,
+          };
+          // Use documented chat.completions endpoint for 0.7.0
+          const response = await together.chat.completions.create(params);
+          console.log('Together AI Response:', response.choices[0]?.message?.content?.trim());
+        } catch (error) {
+          console.error('Together AI call failed:', error);
+        }
+      }
+    }
 
   } catch (error) {
     // Errors during runInTrace setup or saving (less likely)

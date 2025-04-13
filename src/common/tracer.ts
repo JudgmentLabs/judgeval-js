@@ -1,6 +1,6 @@
 // Core Node.js imports
-import { AsyncLocalStorage } from 'async_hooks';
 import { v4 as uuidv4 } from 'uuid';
+import { AsyncLocalStorage } from 'async_hooks';
 
 // Installed SDKs
 import OpenAI from 'openai';
@@ -18,6 +18,37 @@ import {
 
 import { APIJudgmentScorer, Scorer } from '../scorers/base-scorer.js';
 import logger from './logger-instance.js'; // Use the shared winston logger instance
+
+// On their own, span() and trace() are fully synchronous
+// The issue is with asynchronous functions
+// To address this, I made a wrapper for async functions that'll handle all the context stuff
+class TraceClientContext {
+    entries: Partial<TraceEntry>[] = [];
+    entryStack: Partial<TraceEntry>[] = [];
+}
+const traceClientContextAsyncLocalStorage = new AsyncLocalStorage<TraceClientContext>();
+// We could use .enterWith(), but the documentation advises against it
+let rootTraceClientContext: TraceClientContext = new TraceClientContext();
+function getTraceClientContext(): TraceClientContext {
+    return traceClientContextAsyncLocalStorage.getStore() ?? rootTraceClientContext;
+}
+function asyncFunctionWrapper<T extends any[], S>(func: (...args: T) => Promise<S>): (...args: T) => Promise<S> {
+    return async (...args: T): Promise<S> => {
+        const parentTraceClientContext = getTraceClientContext();
+
+        const traceClientContext = new TraceClientContext();
+        const lastEntry = parentTraceClientContext.entryStack.at(-1);
+        if (lastEntry) {
+            traceClientContext.entryStack.push(lastEntry);
+        }
+
+        const result = await traceClientContextAsyncLocalStorage
+            .run(traceClientContext, () => func(...args));
+        parentTraceClientContext.entries.push(...traceClientContext.entries);
+
+        return result;
+    }
+}
 
 // --- Type Aliases and Interfaces ---
 
@@ -238,12 +269,6 @@ class TraceManagerClient {
      // async deleteProject(projectName: string): Promise<any> { ... }
 }
 
-// --- Context Management ---
-// Holds the active TraceClient instance for the current async context
-const currentTraceAsyncLocalStorage = new AsyncLocalStorage<TraceClient>();
-// Holds the ID of the currently active span within a trace
-const currentSpanAsyncLocalStorage = new AsyncLocalStorage<string>();
-
 // --- Helper Functions ---
 
 // Helper function to sanitize names (e.g., replace spaces with underscores)
@@ -270,8 +295,6 @@ class TraceClient {
     public readonly parentName?: string | null;
 
     // Internal state
-    public entries: Partial<TraceEntry>[] = [];
-    public spanDepths: Record<string, number> = {};
     private startTime: number; // Unix timestamp (seconds)
     private traceManager: TraceManagerClient | null = null; // Can be null if monitoring disabled
     private apiKey: string;
@@ -327,123 +350,135 @@ class TraceClient {
     }
 
     addEntry(entry: Partial<TraceEntry>): void {
-        if (!this.enableMonitoring) return;
-        entry.timestamp = entry.timestamp || Date.now() / 1000;
-        this.entries.push(entry);
+        const traceClientContext = getTraceClientContext();
+        if (this.enableMonitoring) {
+            traceClientContext.entries.push(entry);
+        }
     }
 
     recordInput(inputs: any): void {
-        const spanId = currentSpanAsyncLocalStorage.getStore();
-        if (!spanId || !this.enableMonitoring) return;
-
-        const enterEntry = this.entries.find(e => e.span_id === spanId && e.type === 'enter');
-        const functionName = enterEntry?.function || 'unknown_function';
-        const depth = enterEntry?.depth ?? this.spanDepths[spanId] ?? 0;
-        const spanType = enterEntry?.span_type || 'span';
+        const traceClientContext = getTraceClientContext();
+        const currentEntry = traceClientContext.entryStack.at(-1);
+        if (!currentEntry) {
+            console.warn(`No current entry to record input to\nStack trace: ${new Error().stack}`);
+            return;
+        }
 
         this.addEntry({
-             type: 'input',
-             span_id: spanId,
-             inputs,
-             function: functionName,
-             depth: depth,
-             span_type: spanType
+            type: 'input',
+            span_id: currentEntry.span_id,
+            inputs,
+            function: currentEntry.function,
+            depth: currentEntry.depth,
+            span_type: currentEntry.span_type
          });
     }
 
     recordOutput(output: any): void {
-        const spanId = currentSpanAsyncLocalStorage.getStore();
-        if (!spanId || !this.enableMonitoring) return;
-
-        const enterEntry = this.entries.find(e => e.span_id === spanId && e.type === 'enter');
-        const functionName = enterEntry?.function || 'unknown_function';
-        const depth = enterEntry?.depth ?? this.spanDepths[spanId] ?? 0;
-        const spanType = enterEntry?.span_type || 'span';
-
-        let entryType: TraceEntry['type'] = 'output';
-        let outputData = output;
-        if (output instanceof Error) {
-            entryType = 'error';
-            outputData = {
-                 name: output.name,
-                 message: output.message,
-                 stack: output.stack?.substring(0, 1000)
-            };
-        } else if (output?.error) {
-             entryType = 'error';
-             outputData = output;
+        const traceClientContext = getTraceClientContext();
+        const currentEntry = traceClientContext.entryStack.at(-1);
+        if (!currentEntry) {
+            console.warn(`No current entry to record output to\nStack trace: ${new Error().stack}`);
+            return;
         }
 
-
         this.addEntry({
-             type: entryType,
-             span_id: spanId,
-             output: outputData,
-             function: functionName,
-             depth: depth,
-             span_type: spanType
+            type: 'output',
+            span_id: currentEntry.span_id,
+            output,
+            function: currentEntry.function,
+            depth: currentEntry.depth,
+            span_type: currentEntry.span_type
          });
     }
 
-    async runInSpan<T>(
-        name: string,
-        options: { spanType?: SpanType },
-        func: () => Promise<T> | T
-    ): Promise<T> {
-        if (!this.enableMonitoring) {
-             const result = func();
-             return result instanceof Promise ? await result : result;
+    recordError(error: any): void {
+        const traceClientContext = getTraceClientContext();
+        const currentEntry = traceClientContext.entryStack.at(-1);
+        if (!currentEntry) {
+            console.warn(`No current entry to record error to\nStack trace: ${new Error().stack}`);
+            return;
         }
 
-        const startTime = Date.now() / 1000;
-        const spanId = uuidv4();
-        const parentSpanId = currentSpanAsyncLocalStorage.getStore();
-        const spanType = options.spanType || 'span';
-
-        let currentDepth = 0;
-        if (parentSpanId && this.spanDepths[parentSpanId] !== undefined) {
-            currentDepth = this.spanDepths[parentSpanId] + 1;
+        let output = error;
+        if (error instanceof Error) {
+            output = {
+                name: error.name,
+                message: error.message,
+                stack: error.stack?.substring(0, 1000)
+            };
         }
-        this.spanDepths[spanId] = currentDepth;
 
         this.addEntry({
-             type: 'enter',
-             function: name,
-             span_id: spanId,
-             depth: currentDepth,
-             timestamp: startTime,
-             span_type: spanType,
-             parent_span_id: parentSpanId
-         });
+            type: 'error',
+            span_id: currentEntry.span_id,
+            output,
+            function: currentEntry.function,
+            depth: currentEntry.depth,
+            span_type: currentEntry.span_type
+        });
+    }
 
-        let result: T;
-        try {
-            result = await currentSpanAsyncLocalStorage.run(spanId, async () => {
-                 const res = func();
-                 return res instanceof Promise ? await res : res;
-            });
-            return result;
-        } catch (error) {
-             this.recordOutput({
-                 error: String(error),
-                 error_details: error instanceof Error
-                     ? { name: error.name, message: error.message, stack: error.stack?.substring(0, 500) }
-                     : { detail: String(error) }
-             });
-             throw error;
-        } finally {
-            const endTime = Date.now() / 1000;
-            const duration = endTime - startTime;
-            this.addEntry({
-                 type: 'exit',
-                 function: name,
-                 span_id: spanId,
-                 depth: currentDepth,
-                 timestamp: endTime,
-                 duration: duration,
-                 span_type: spanType
-            });
-            delete this.spanDepths[spanId];
+    startSpan(name: string, options: { spanType?: SpanType } = {}): void {
+        const traceClientContext = getTraceClientContext();
+        const parentEntry = traceClientContext.entryStack.at(-1);
+
+        const spanId = uuidv4();
+        const spanType = options.spanType ?? 'span';
+        const startTime = Date.now() / 1000;
+        let depth = 0, parentSpanId = undefined;
+        if (parentEntry) {
+            depth = parentEntry.depth! + 1;
+            parentSpanId = parentEntry.span_id;
+        }
+
+        const entry: TraceEntry = {
+            type: 'enter',
+            function: name,
+            span_id: spanId,
+            depth: depth,
+            timestamp: startTime,
+            span_type: spanType,
+            parent_span_id: parentSpanId
+        };
+        this.addEntry(entry);
+        traceClientContext.entryStack.push(entry);
+    }
+
+    endSpan(): void {
+        const traceClientContext = getTraceClientContext();
+        const enterEntry = traceClientContext.entryStack.pop();
+        if (!enterEntry) {
+            console.warn("No enter entry to end");
+            return;
+        }
+        
+        const endTime = Date.now() / 1000;
+        const duration = endTime - enterEntry.timestamp!;
+
+        this.addEntry({
+            type: 'exit',
+            function: enterEntry.function,
+            span_id: enterEntry.span_id,
+            depth: enterEntry.depth,
+            timestamp: endTime,
+            duration: duration,
+            span_type: enterEntry.span_type
+        });
+    }
+
+    *span(
+        name: string,
+        options: {
+            spanType?: SpanType
+        } = {}
+    ): Generator<TraceClient> {
+        if (!this.enableMonitoring) {
+            yield this;
+        } else {
+            this.startSpan(name, options);
+            yield this;
+            this.endSpan();
         }
     }
 
@@ -574,8 +609,9 @@ class TraceClient {
               return null;
          }
 
+         const traceClientContext = getTraceClientContext();
          const totalDuration = this.getDuration();
-         const condensedEntries: CondensedSpanEntry[] = this.condenseTrace(this.entries);
+         const condensedEntries: CondensedSpanEntry[] = this.condenseTrace(traceClientContext.entries);
 
          const tokenCounts = {
              prompt_tokens: 0, completion_tokens: 0, total_tokens: 0,
@@ -678,7 +714,8 @@ class TraceClient {
              console.log("Monitoring was disabled. No trace entries recorded.");
              return;
          }
-         if (this.entries.length === 0) {
+         const traceClientContext = getTraceClientContext();
+         if (traceClientContext.entries.length === 0) {
              // Keep console.log for direct user output when print() is called
              console.log("No trace entries recorded.");
              return;
@@ -686,8 +723,8 @@ class TraceClient {
  
          // Keep console.log for direct user output when print() is called
          console.log(`\n--- Trace Details: ${this.name} (ID: ${this.traceId}) ---`);
- 
-         this.entries.forEach(entry => {
+         
+         traceClientContext.entries.forEach(entry => {
              const indent = "  ".repeat(entry.depth ?? 0);
              const timeStr = entry.timestamp ? `@ ${new Date(entry.timestamp * 1000).toISOString()}` : '';
              const shortSpanId = entry.span_id ? `(id: ${entry.span_id.substring(0, 8)}...)` : '';
@@ -810,28 +847,11 @@ class TraceClient {
         };
 
         try {
-            // Get the current span ID from the context
-            const currentSpanId = currentSpanAsyncLocalStorage.getStore();
-            if (!currentSpanId) {
-                logger.warn("No active span found for async evaluation. Evaluation will not be associated with a specific step.");
-                // Decide if we should proceed or return. For now, proceed without span association.
-                // return;
-            }
-
-            // Determine function name and depth (best effort if spanId is missing)
-            let functionName = "unknown_function";
-            let entrySpanType = "evaluation";
-            let currentDepth = 0;
-            if (currentSpanId) {
-                currentDepth = this.spanDepths[currentSpanId] ?? 0;
-                for (let i = this.entries.length - 1; i >= 0; i--) {
-                    const entry = this.entries[i];
-                    if (entry.span_id === currentSpanId && entry.type === 'enter') {
-                        functionName = entry.function || "unknown_function";
-                        // Keep span_type as 'evaluation' for the entry itself
-                        break;
-                    }
-                }
+            const traceClientContext = getTraceClientContext();
+            const currentEntry = traceClientContext.entryStack.at(-1);
+            if (!currentEntry) {
+                logger.warn(`No current entry to record evaluation to\nStack trace: ${new Error().stack}`);
+                return;
             }
 
             // --- Create evaluation run name (similar to Python) ---
@@ -842,7 +862,7 @@ class TraceClient {
                 return name.charAt(0).toUpperCase() + name.slice(1);
             }).join(',');
             // Use trace name and shortened span ID (or trace ID if no span)
-            const idPart = currentSpanId ? currentSpanId.substring(0, 8) : this.traceId.substring(0, 8);
+            const idPart = currentEntry ? currentEntry.span_id!.substring(0, 8) : this.traceId.substring(0, 8);
             const evalName = `${this.name.charAt(0).toUpperCase() + this.name.slice(1)}-${idPart}-[${scorerNames}]`;
             // --- End eval name creation ---
 
@@ -881,36 +901,23 @@ class TraceClient {
      * @param startTime The start time (in seconds) of the evaluation process.
      */
     private _addEvalRun(evalRunPayload: EvaluationRunPayload, startTime: number): void {
-        const currentSpanId = currentSpanAsyncLocalStorage.getStore();
-        if (!currentSpanId) {
-            // If no span ID, the evaluation entry won't be linked to a specific span
-            // This might happen if asyncEvaluate is called outside a runInSpan context
-            console.warn("Adding evaluation entry without an active span ID.");
+        const traceClientContext = getTraceClientContext();
+        const currentEntry = traceClientContext.entryStack.at(-1);
+        if (!currentEntry) {
+            logger.warn(`No current entry to record evaluation to\nStack trace: ${new Error().stack}`);
+            return;
         }
 
-        let functionName = "unknown_function";
-        let currentDepth = 0; // Default depth if no span
-
-        if (currentSpanId) {
-            currentDepth = this.spanDepths[currentSpanId] ?? 0;
-            // Find the function name associated with the current span_id
-            for (let i = this.entries.length - 1; i >= 0; i--) {
-                const entry = this.entries[i];
-                if (entry.span_id === currentSpanId && entry.type === 'enter') {
-                    functionName = entry.function || "unknown_function";
-                    break;
-                }
-            }
-        }
-
-        const duration = (Date.now() / 1000) - startTime;
+        const function_ = currentEntry.function ?? "unknown_function";
+        const depth = currentEntry.depth ?? 0;
+        const duration = Date.now() / 1000 - startTime;
 
         // Add evaluation entry to the trace
         this.addEntry({
             type: "evaluation",
-            function: functionName,
-            span_id: currentSpanId, // May be undefined
-            depth: currentDepth,
+            function: function_,
+            span_id: currentEntry.span_id, // May be undefined
+            depth: depth,
             timestamp: Date.now() / 1000,
             evaluation_runs: [evalRunPayload], // Embed the payload
             duration: duration,
@@ -928,7 +935,7 @@ class TraceClient {
  * Singleton Tracer class. Manages overall tracing configuration and trace creation.
  */
 class Tracer {
-    private static instance: Tracer;
+    private static instance: Tracer | null = null;
     public readonly apiKey: string;
     public readonly organizationId: string;
     public readonly projectName: string;
@@ -936,6 +943,7 @@ class Tracer {
     public readonly enableMonitoring: boolean;
     public readonly enableEvaluations: boolean;
     private initialized: boolean = false;
+    private currentTrace?: TraceClient;
 
     private constructor(config?: {
          apiKey?: string,
@@ -1001,154 +1009,125 @@ class Tracer {
     }
 
     getCurrentTrace(): TraceClient | undefined {
-        return currentTraceAsyncLocalStorage.getStore();
+        return this.currentTrace;
     }
 
-     private _startTraceInternal(config: {
-         name: string,
-         projectName?: string,
-         overwrite?: boolean,
-         rules?: Rule[]
-     }): TraceClient {
-         const parentTrace = this.getCurrentTrace();
+    startTrace(name: string, config: {
+        projectName?: string,
+        overwrite?: boolean,
+        rules?: Rule[]
+    }): TraceClient {
+        const parentTrace = this.getCurrentTrace();
 
-         const traceSpecificRules = config.rules ?? [];
-         const effectiveRulesMap = new Map<string, Rule>();
-         this.defaultRules.forEach(rule => effectiveRulesMap.set(rule.rule_id ?? rule.name, rule));
-         traceSpecificRules.forEach(rule => effectiveRulesMap.set(rule.rule_id ?? rule.name, rule));
-         const effectiveRules = Array.from(effectiveRulesMap.values());
+        const projectName = config.projectName ?? this.projectName;
+        const effectiveRules =
+            Object.values(
+                Object.fromEntries(
+                    [...this.defaultRules, ...(config.rules ?? [])]
+                        .map(rule => [rule.rule_id ?? rule.name, rule])
+                )
+            );
 
-         const traceClient = new TraceClient({
-             tracer: this,
-             name: config.name,
-             projectName: config.projectName ?? this.projectName,
-             overwrite: config.overwrite,
-             rules: effectiveRules,
-             enableMonitoring: this.enableMonitoring,
-             enableEvaluations: this.enableEvaluations,
-             parentTraceId: parentTrace?.traceId,
-             parentName: parentTrace?.name,
-             apiKey: this.apiKey,
-             organizationId: this.organizationId,
-         });
+        const traceClient = new TraceClient({
+            tracer: this,
+            name: name,
+            projectName: projectName,
+            overwrite: config.overwrite,
+            rules: effectiveRules,
+            enableMonitoring: this.enableMonitoring,
+            enableEvaluations: this.enableEvaluations,
+            parentTraceId: parentTrace?.traceId,
+            parentName: parentTrace?.name,
+            apiKey: this.apiKey,
+            organizationId: this.organizationId,
+        });
 
-         if (traceClient.enableMonitoring) {
-              traceClient.save(true).catch(err => {
-                   console.error(`>>> Tracer: Error saving empty trace for ${traceClient.traceId}:`, err);
-              });
-         }
+        if (traceClient.enableMonitoring) {
+            traceClient.save(true).catch(err => {
+                logger.error(`Failed to save empty trace (${traceClient.traceId}):`, err);
+            });
+        }
 
-         return traceClient;
-     }
+        return traceClient;
+    }
 
-      async runInTrace<T>(
-          config: {
-              name: string,
-              projectName?: string,
-              overwrite?: boolean,
-              createRootSpan?: boolean;
-              rules?: Rule[]
-          },
-          func: (traceClient: TraceClient) => Promise<T> | T
-      ): Promise<T> {
-          const traceClient = this._startTraceInternal(config);
-          const shouldCreateRootSpan = config.createRootSpan ?? true;
+     *trace(
+        name: string,
+        options: {
+            projectName?: string,
+            overwrite?: boolean,
+            createRootSpan?: boolean,
+            rules?: Rule[]
+        } = {}
+    ): Generator<TraceClient> {
+        const trace = this.startTrace(name, { ...options });
+        const shouldCreateRootSpan = options.createRootSpan ?? true;
+        const prevTrace = this.currentTrace;
 
-          return await currentTraceAsyncLocalStorage.run(traceClient, async () => {
-              let result: T;
-              try {
-                  if (shouldCreateRootSpan) {
-                       result = await traceClient.runInSpan(config.name, { spanType: 'chain' }, async () => {
-                           const funcResult = func(traceClient);
-                           return funcResult instanceof Promise ? await funcResult : funcResult;
-                       });
-                  } else {
-                       const funcResult = func(traceClient);
-                       result = funcResult instanceof Promise ? await funcResult : funcResult;
-                  }
+        if (shouldCreateRootSpan) {
+            for (const span of trace.span(name, { spanType: 'chain' })) {
+                this.currentTrace = trace;
+                yield trace;
+                this.currentTrace = prevTrace;
+            }
+        } else {
+            this.currentTrace = trace;
+            yield trace;
+            this.currentTrace = prevTrace;
+        }
 
-                  if (traceClient.enableMonitoring) {
-                       await traceClient.save(false).catch(saveErr => {
-                           console.error(`Failed to save completed trace '${config.name}' (${traceClient.traceId}):`, saveErr);
-                       });
-                  }
-                  return result;
+        if (trace.enableMonitoring) {
+            trace.save(false).catch(saveErr => {
+                console.error(`Failed to save completed trace '${name}' (${trace.traceId}):`, saveErr);
+            });
+        }
+    }
 
-              } catch (error) {
-                   console.error(`Error during traced execution of '${config.name}' (${traceClient.traceId}):`, error);
-                   if (traceClient.enableMonitoring) {
-                        await traceClient.save(false).catch(saveErr => {
-                             console.error(`Failed to save trace '${config.name}' after error:`, saveErr);
-                        });
-                   }
-                   throw error;
-              }
-          });
-      }
+    observe(options?: {
+        name?: string;
+        spanType?: SpanType;
+    }): <T extends any[], S>(func: (...args: T) => S) => (...args: T) => Promise<S> {
+        if (!this.enableMonitoring) {
+            return <T extends any[], S>(func: (...args: T) => S) => (...args: T) => Promise.resolve(func(...args));
+        }
 
-     observe<T extends (...args: any[]) => any>(options?: {
-         name?: string;
-         spanType?: SpanType;
-     }) {
-         if (!this.enableMonitoring) {
-             return (func: T): T => func;
-         }
+        return <T extends any[], S>(func: (...args: T) => S): ((...args: T) => Promise<S>) => {
+            const spanName = options?.name ?? func.name ?? 'anonymous_function';
+            const spanType = options?.spanType ?? 'span';
 
-         return (func: T): T => {
-             const spanName = options?.name || func.name || 'anonymous_function';
-             const spanType = options?.spanType || 'span';
+            return asyncFunctionWrapper((async (...args: T): Promise<S> => {
+                const currentTrace = this.getCurrentTrace();
 
-             const wrapper = (...args: Parameters<T>): ReturnType<T> | Promise<ReturnType<T>> => {
-                 const currentTrace = this.getCurrentTrace();
-
-                 if (!currentTrace) {
-                     return this.runInTrace({
-                         name: spanName,
-                         createRootSpan: false
-                     }, async (traceClient) => {
-                         const executionLogic = () => {
-                             const result = func(...args);
-                             return result instanceof Promise ? result : Promise.resolve(result);
-                         };
-
-                         return traceClient.runInSpan(spanName, { spanType }, async () => {
-                             const serializableArgs = args.map(arg => { try { return JSON.parse(JSON.stringify(arg)); } catch { return String(arg); } });
-                             traceClient.recordInput({ args: serializableArgs });
-                             try {
-                                 const finalResult = await executionLogic();
-                                 traceClient.recordOutput(finalResult);
-                                 return finalResult;
-                             } catch (error) {
-                                 console.error(`Error captured by observe decorator (root) in span '${spanName}':`, error);
-                                 throw error;
-                             }
-                         });
-                     }) as Promise<ReturnType<T>>;
-                 }
-                 else {
-                      const executionLogic = () => {
-                          const result = func(...args);
-                          return result instanceof Promise ? result : Promise.resolve(result);
-                      };
-
-                      return currentTrace.runInSpan(spanName, { spanType }, async () => {
-                          const serializableArgs = args.map(arg => { try { return JSON.parse(JSON.stringify(arg)); } catch { return String(arg); } });
-                          currentTrace.recordInput({ args: serializableArgs });
-                          try {
-                              const finalResult = await executionLogic();
-                              currentTrace.recordOutput(finalResult);
-                              return finalResult;
-                          } catch (error) {
-                              console.error(`Error captured by observe decorator (nested) in span '${spanName}':`, error);
-                              throw error;
-                          }
-                      }) as Promise<ReturnType<T>>;
-                 }
-             };
-
-             Object.defineProperty(wrapper, 'name', { value: func.name, configurable: true });
-             return wrapper as T;
-         };
+                let output: S;
+                let error: unknown;
+                if (!currentTrace) {
+                    for (const trace of this.trace(spanName, { createRootSpan: false })) {
+                        for (const span of trace.span(spanName, { spanType })) {
+                            span.recordInput({ args: args });
+                            try {
+                                span.recordOutput(output = await func(...args));
+                            } catch (e) {
+                                span.recordError(error = e);
+                            }
+                        }
+                    }
+                } else {
+                    for (const span of currentTrace.span(spanName, { spanType })) {
+                        span.recordInput({ args: args });
+                        try {
+                            span.recordOutput(output = await func(...args));
+                        } catch (e) {
+                            span.recordError(error = e);
+                        }
+                    }
+                }
+                if (error) {
+                    throw error;
+                }
+                // @ts-expect-error output is assigned
+                return output;
+            }).bind(func));
+        };
      }
 }
 
@@ -1261,19 +1240,24 @@ export function wrap<T extends ApiClient>(client: T): T {
         if (!currentTrace || !currentTrace.enableMonitoring) {
             return boundOriginalMethod(...args);
         }
-        return await currentTrace.runInSpan(spanName, { spanType: 'llm' }, async () => {
-             const inputData = _formatInputData(client, args);
-             currentTrace.recordInput(inputData);
-             try {
-                 const response = await boundOriginalMethod(...args);
-                 const outputData = _formatOutputData(client, response);
-                 currentTrace.recordOutput(outputData);
-                 return response;
-             } catch (error) {
-                 currentTrace.recordOutput(error);
-                 throw error;
-             }
-        });
+
+        let response;
+        for (const span of currentTrace.span(spanName, { spanType: 'llm' })) {
+            const inputData = _formatInputData(client, args);
+            currentTrace.recordInput(inputData);
+
+            try {
+                response = await boundOriginalMethod(...args);
+            } catch (error) {
+                currentTrace.recordError(error);
+                throw error;
+            }
+
+            const outputData = _formatOutputData(client, response);
+            currentTrace.recordOutput(outputData);
+        }
+        
+        return response;
     };
 
     // Generic patching
@@ -1293,8 +1277,6 @@ export {
     Tracer,
     TraceClient,
     TraceManagerClient,
-    currentTraceAsyncLocalStorage,
-    currentSpanAsyncLocalStorage,
     Rule,
     Condition,
     NotificationConfig,

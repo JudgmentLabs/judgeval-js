@@ -101,26 +101,21 @@ async function runCustomerServiceLLMWorkflow() {
     new InstructionAdherenceScorer(0.95)    // Critical for following instructions
   ];
   
-  // Start the trace for the entire workflow
   const traceName = `customer-service-workflow-${runId}`;
   
-  // Store the trace ID and URL for later use
   let traceId = '';
   let traceUrl = '';
   
-  await tracerInstance.runInTrace({
-    name: traceName,
-    projectName
-  }, async (trace: TraceClient) => {
-    // Store the trace ID for later use
-    traceId = trace.traceId;
+  // Use tracer.trace() generator pattern
+  for (const traceClient of tracerInstance.trace(traceName, { projectName })) {
+    traceId = traceClient.traceId;
     traceUrl = `https://app.judgmentlabs.ai/app/monitor?project_name=${projectName}&trace_id=${traceId}&trace_name=${traceName}&show_trace=true`;
-    
-    // PART 1: Run async evaluation on all examples
-    await trace.runInSpan("batch_evaluation", { spanType: "tool" }, async () => {
-      
+    logger.info(`Trace started: ${traceName} (ID: ${traceId})`);
+
+    // PART 1: Run async evaluation on all examples using traceClient.span()
+    for (const span1 of traceClient.span("batch_evaluation", { spanType: "tool" })) {
+      logger.info("Starting span: batch_evaluation");
       try {
-        // Submit the async evaluation
         await client.aRunEvaluation(
           examples,
           scorers,
@@ -135,37 +130,49 @@ async function runCustomerServiceLLMWorkflow() {
           true  // ignoreErrors
         );
         
-        // In a real-world scenario, you would poll for status
-        // For this example, we'll simulate the progress
+        // Simulate progress
         for (let i = 1; i <= 5; i++) {
           const progress = i / 5;
           logger.info(`Progress: ${createProgressBar(progress)}`);
           await new Promise(resolve => setTimeout(resolve, 500));
         }
-        
       } catch (error) {
-        logger.error('Error running batch evaluation: ' + (error instanceof Error ? error.message : String(error)));
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        logger.error('Error running batch evaluation: ' + errorMsg);
+        if (span1) span1.recordError(error);
       }
-    });
-    
-    // PART 2: Process each customer query individually with tracing
+      logger.info("Finishing span: batch_evaluation");
+    } // Span batch_evaluation ends
+
+    // PART 2: Process each customer query individually
     for (let i = 0; i < customerServiceData.length; i++) {
       const data = customerServiceData[i];
       const queryId = uuidv4().substring(0, 8);
-      
-      await trace.runInSpan(`customer_query_${i+1}`, { spanType: "chain" }, async () => {
-        
-        // Step 1: Context retrieval
-        await trace.runInSpan("context_retrieval", { spanType: "tool" }, async () => {
-          trace.recordInput({ query: data.customer });
-          await new Promise(resolve => setTimeout(resolve, 300)); // Simulate retrieval time
-          trace.recordOutput({ context: data.context });
-        });
-        
-        // Step 2: LLM response generation
-        await trace.runInSpan("llm_generation", { spanType: "llm" }, async () => {
-          // Prepare the prompt with context
-          const prompt = `
+
+      // Outer span for the entire query processing using traceClient.span()
+      for (const span_chain of traceClient.span(`customer_query_${i+1}`, { spanType: "chain" })) {
+        logger.info(`Starting chain span: customer_query_${i+1}`);
+        try {
+          // Step 1: Context retrieval span using span_chain.span()
+          for (const span_retrieval of span_chain.span("context_retrieval", { spanType: "tool" })) {
+            logger.info("Starting span: context_retrieval");
+            try {
+              span_retrieval.recordInput({ query: data.customer });
+              await new Promise(resolve => setTimeout(resolve, 300)); // Simulate
+              span_retrieval.recordOutput({ context: data.context });
+            } catch (innerError) {
+              const errorMsg = innerError instanceof Error ? innerError.message : String(innerError);
+              logger.error('Error in context_retrieval span: ' + errorMsg);
+              if (span_retrieval) span_retrieval.recordError(innerError);
+            }
+            logger.info("Finishing span: context_retrieval");
+          } // Span context_retrieval ends
+
+          // Step 2: LLM response generation span using span_chain.span()
+          for (const span_llm of span_chain.span("llm_generation", { spanType: "llm" })) {
+            logger.info("Starting span: llm_generation");
+            try {
+              const prompt = `
 Customer query: ${data.customer}
 
 Context:
@@ -173,92 +180,88 @@ ${data.context.map(c => `- ${c}`).join('\n')}
 
 Respond to the customer query using the provided context. Be helpful, accurate, and concise.
 `;
-          
-          trace.recordInput({ prompt });
-          
-          await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate LLM processing time
-          
-          // In a real scenario, this would be the actual LLM call
-          // For this example, we'll use the pre-defined response
-          const response = data.agentResponse;
-          
-          trace.recordOutput({
-            response,
-            usage: {
-              prompt_tokens: prompt.length / 4, // Rough estimate
-              completion_tokens: response.length / 4, // Rough estimate
-              total_tokens: (prompt.length + response.length) / 4 // Rough estimate
+              span_llm.recordInput({ prompt });
+              await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate
+              const response = data.agentResponse;
+              span_llm.recordOutput({
+                response,
+                usage: {
+                  prompt_tokens: prompt.length / 4, // Rough estimate
+                  completion_tokens: response.length / 4, // Rough estimate
+                  total_tokens: (prompt.length + response.length) / 4 // Rough estimate
+                }
+              });
+
+              // Evaluate response using the traceClient from the outer loop
+              const responseScorers = [
+                new FaithfulnessScorer(0.8),
+                new AnswerRelevancyScorer(0.9),
+                new HallucinationScorer(0.95)
+              ];
+              await traceClient.asyncEvaluate(responseScorers, {
+                input: data.customer,
+                actualOutput: response,
+                expectedOutput: data.expectedResponse,
+                retrievalContext: data.context,
+                logResults: true
+              });
+            } catch (innerError) {
+              const errorMsg = innerError instanceof Error ? innerError.message : String(innerError);
+              logger.error('Error in llm_generation span: ' + errorMsg);
+              if (span_llm) span_llm.recordError(innerError);
             }
-          });
-          
-          // Evaluate the LLM response asynchronously within the trace
-          const example = new ExampleBuilder()
-            .input(data.customer)
-            .actualOutput(response)
-            .expectedOutput(data.expectedResponse)
-            .retrievalContext(data.context)
-            .build();
-          
-          // Use a subset of scorers for individual evaluations
-          const responseScorers = [
-            new FaithfulnessScorer(0.8),
-            new AnswerRelevancyScorer(0.9),
-            new HallucinationScorer(0.95)
-          ];
-          
-          await trace.asyncEvaluate(
-            responseScorers,
-            {
-              input: data.customer,
-              actualOutput: response,
-              expectedOutput: data.expectedResponse,
-              retrievalContext: data.context,
-              logResults: true
-            }
-          );
-        });
-      });
+            logger.info("Finishing span: llm_generation");
+          } // Span llm_generation ends
+
+        } catch (outerError) {
+           const errorMsg = outerError instanceof Error ? outerError.message : String(outerError);
+           logger.error(`Error in chain span customer_query_${i+1}: ` + errorMsg);
+           if (span_chain) span_chain.recordError(outerError);
+        }
+        logger.info(`Finishing chain span: customer_query_${i+1}`);
+      } // Span customer_query ends
     }
-    
-    // PART 3: Analyze the results
-    await trace.runInSpan("results_analysis", { spanType: "tool" }, async () => {
-      
-      // In a real scenario, you would fetch the actual results
-      // For this example, we'll simulate the analysis
-      
-      // Create a structured analysis result object
-      const analysisResults = {
-        title: "Workflow Analysis Results",
-        scorerPerformance: [
-          { name: "FaithfulnessScorer", score: 0.87, rating: "Good" },
-          { name: "AnswerCorrectnessScorer", score: 0.92, rating: "Excellent" },
-          { name: "AnswerRelevancyScorer", score: 0.95, rating: "Excellent" },
-          { name: "GroundednessScorer", score: 0.89, rating: "Good" },
-          { name: "HallucinationScorer", score: 0.94, rating: "Excellent" },
-          { name: "InstructionAdherenceScorer", score: 0.98, rating: "Excellent" }
-        ],
-        areasForImprovement: [
-          "Faithfulness: Ensure all context information is accurately reflected",
-          "Groundedness: Improve grounding in the provided context"
-        ],
-        strengths: [
-          "Relevancy: Responses directly address customer queries",
-          "Low Hallucination: No fabricated information detected",
-          "Correctness: Responses align well with expected outputs"
-        ]
-      };
-      
-      // Use the standardized logger.print to display the results
-      logger.print(analysisResults);
-    });
-    
-    // Display trace information
+
+    // PART 3: Analyze the results span using traceClient.span()
+    for (const span_analysis of traceClient.span("results_analysis", { spanType: "tool" })) {
+      logger.info("Starting span: results_analysis");
+      try {
+        const analysisResults = {
+          title: "Workflow Analysis Results",
+          scorerPerformance: [
+            { name: "FaithfulnessScorer", score: 0.87, rating: "Good" },
+            { name: "AnswerCorrectnessScorer", score: 0.92, rating: "Excellent" },
+            { name: "AnswerRelevancyScorer", score: 0.95, rating: "Excellent" },
+            { name: "GroundednessScorer", score: 0.89, rating: "Good" },
+            { name: "HallucinationScorer", score: 0.94, rating: "Excellent" },
+            { name: "InstructionAdherenceScorer", score: 0.98, rating: "Excellent" }
+          ],
+          areasForImprovement: [
+            "Faithfulness: Ensure all context information is accurately reflected",
+            "Groundedness: Improve grounding in the provided context"
+          ],
+          strengths: [
+            "Relevancy: Responses directly address customer queries",
+            "Low Hallucination: No fabricated information detected",
+            "Correctness: Responses align well with expected outputs"
+          ]
+        };
+        logger.print(analysisResults);
+        if (span_analysis) span_analysis.recordOutput(analysisResults);
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        logger.error('Error in results_analysis span: ' + errorMsg);
+        if (span_analysis) span_analysis.recordError(error);
+      }
+      logger.info("Finishing span: results_analysis");
+    } // Span results_analysis ends
+
     logger.info('\n=== Workflow Trace Complete ===');
     logger.info(`Trace ID: ${traceId}`);
     logger.info(`View trace details at: ${traceUrl}`);
-  });
-  
-  // Return the analysis results instead of logging them directly
+  } // Trace ends
+
+  // Return the analysis results and trace URL
   return {
     recommendations: [
       'Prompt Engineering: Add explicit instructions to include all context items',
