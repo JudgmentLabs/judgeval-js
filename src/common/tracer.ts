@@ -34,9 +34,18 @@ function getTraceClientContext(): TraceClientContext {
 }
 function asyncFunctionWrapper<T extends any[], S>(func: (...args: T) => Promise<S>): (...args: T) => Promise<S> {
     return async (...args: T): Promise<S> => {
-        const traceClientContext = getTraceClientContext();
+        const parentTraceClientContext = getTraceClientContext();
+
+        const traceClientContext = new TraceClientContext();
+        const lastEntry = parentTraceClientContext.entryStack.at(-1);
+        if (lastEntry) {
+            traceClientContext.entryStack.push(lastEntry);
+        }
+
         const result = await traceClientContextAsyncLocalStorage
             .run(traceClientContext, () => func(...args));
+        parentTraceClientContext.entries.push(...traceClientContext.entries);
+
         return result;
     }
 }
@@ -1071,21 +1080,6 @@ class Tracer {
             trace.save(false).catch(saveErr => {
                 console.error(`Failed to save completed trace '${name}' (${trace.traceId}):`, saveErr);
             });
-        }
-    }
-
-    wrapAsyncFunction<T extends any[], S>(func: (...args: T) => Promise<S>, options?: {
-        name?: string;
-        spanType?: SpanType;
-    }): (...args: T) => Promise<S> {
-        return async (...args: T): Promise<S> => {
-            const parentTraceClientContext = getTraceClientContext();
-            const traceClientContext = new TraceClientContext();
-            const result = await traceClientContextAsyncLocalStorage.run(traceClientContext, async () => {
-                return await func(...args);
-            });
-            parentTraceClientContext.entries.push(...traceClientContext.entries);
-            return result;
         }
     }
 
