@@ -1083,15 +1083,15 @@ class Tracer {
         }
     }
 
-    observe<T extends any[], S>(options?: {
+    observe(options?: {
         name?: string;
         spanType?: SpanType;
-    }): (func: (...args: T) => S) => (...args: T) => Promise<S> {
+    }): <T extends any[], S>(func: (...args: T) => S) => (...args: T) => Promise<S> {
         if (!this.enableMonitoring) {
-            return (func: (...args: T) => S) => (...args: T) => Promise.resolve(func(...args));
+            return <T extends any[], S>(func: (...args: T) => S) => (...args: T) => Promise.resolve(func(...args));
         }
 
-        return (func: (...args: T) => S): ((...args: T) => Promise<S>) => {
+        return <T extends any[], S>(func: (...args: T) => S): ((...args: T) => Promise<S>) => {
             const spanName = options?.name ?? func.name ?? 'anonymous_function';
             const spanType = options?.spanType ?? 'span';
 
