@@ -5,7 +5,7 @@ import { setTimeout } from 'timers/promises';
 
 // Assuming tracer.ts is compiled to ./dist/common/tracer.js
 // Adjust the import path based on your actual project structure and build output
-import { Tracer } from '../common/tracer'; // Use relative path
+import { Tracer, SpanType } from '../../common/tracer.js'; // Use relative path
 
 // Initialize the tracer singleton
 // Environment variables JUDGMENT_API_KEY and JUDGMENT_ORG_ID should be set
@@ -27,7 +27,7 @@ const level5_function = tracer.observe({ name: "level5_function" }) // Use obser
     });
 
 // Recursive Fibonacci example
-const fib = tracer.observe<[number], Promise<number>>({ name: "fib" })
+const fib = tracer.observe({ name: "fib" })
     (async (n: number): Promise<number> => {
         if (n <= 1) {
             return n;

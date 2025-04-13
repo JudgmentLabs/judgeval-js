@@ -1,8 +1,25 @@
+// REMOVE Shim import
+// import 'together-ai/shims/web';
+
 import * as dotenv from 'dotenv';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
+// import Together from 'together-ai'; // Keep commented out or remove
+
+// Use standard ES Module import
 import Together from 'together-ai';
-import { Tracer, wrap } from '../common/tracer'; // Adjust path as necessary
+
+// *** Remove inspection logs ***
+// console.log('--- Inspecting required Together module ---');
+// console.log(Together);
+// console.log('Keys:', Object.keys(Together || {}));
+// console.log('Type:', typeof Together);
+// console.log('-----------------------------------------');
+
+import { Tracer, wrap } from '../../common/tracer.js'; // Adjust path as necessary
+import { JudgmentClient } from '../../judgment-client.js';
+import { FaithfulnessScorer } from '../../scorers/api-scorer.js';
+import * as logger from '../../common/logger.js';
 
 // Load environment variables from .env file
 dotenv.config({ path: '.env.local' });
@@ -41,7 +58,7 @@ async function runDemo() {
   // 2. Create and Wrap Clients
   let openai: OpenAI | null = null;
   let anthropic: Anthropic | null = null;
-  let together: Together | null = null;
+  let together: any | null = null;
 
   try {
     if (hasOpenAIKey) {
@@ -65,7 +82,8 @@ async function runDemo() {
   }
   try {
     if (hasTogetherKey) {
-      together = wrap(new Together({ auth: process.env.TOGETHER_API_KEY ?? '' }));
+      // Use standard init for 0.7.0 (with 'apiKey') and wrap
+      together = wrap(new Together({ apiKey: process.env.TOGETHER_API_KEY ?? '' }));
       console.log('Together client wrapped.');
     } else {
       console.warn('Together API key missing, skipping wrap.');
@@ -121,7 +139,7 @@ async function runDemo() {
           }
         }
 
-        // --- Together AI Call ---
+        // --- Together AI Call --- (Uncomment and use documented structure)
         if (together) {
           try {
             console.log('\nMaking Together AI API call...');
@@ -130,7 +148,8 @@ async function runDemo() {
               messages: [{ role: 'user', content: 'Tell me a short story about a brave dog.' }],
               max_tokens: 150,
             };
-            const response = await (together as any).completions.create(params);
+            // Use documented chat.completions endpoint for 0.7.0
+            const response = await together.chat.completions.create(params);
             console.log('Together AI Response:', response.choices[0]?.message?.content?.trim());
           } catch (error) {
             console.error('Together AI call failed:', error);

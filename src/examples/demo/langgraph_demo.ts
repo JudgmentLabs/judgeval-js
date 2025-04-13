@@ -1,11 +1,13 @@
 import * as dotenv from 'dotenv';
-import { StateGraph, END } from "@langchain/langgraph";
+import { END, StateGraph } from "@langchain/langgraph";
 import { ChatOpenAI } from "@langchain/openai";
 import { BaseMessage } from "@langchain/core/messages";
 import { RunnableConfig } from "@langchain/core/runnables"; // Import RunnableConfig
-import { JudgevalLanggraphCallbackHandler } from "../common/integrations/langgraph"; // Adjust path if needed
-import { Tracer } from "../common/tracer"; // Adjust path if needed
+import { JudgevalLanggraphCallbackHandler } from "../../common/integrations/langgraph.js"; // Added .js extension
+import { Tracer } from "../../common/tracer.js"; // Ensure correct path
 import { getEnvironmentVariable } from "@langchain/core/utils/env";
+import { JudgmentClient } from "../../judgment-client.js";
+import { FaithfulnessScorer } from "../../scorers/api-scorer.js";
 
 // Load environment variables from .env.local BEFORE accessing them
 dotenv.config({ path: '.env.local' });

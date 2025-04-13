@@ -1,9 +1,9 @@
 import { v4 as uuidv4 } from 'uuid';
 import axios from 'axios';
-import { Example } from './data/example';
-import { EvaluationRun } from './evaluation-run';
-import { ScoringResult, ScorerData } from './data/result';
-import { APIJudgmentScorer, JudgevalScorer } from './scorers/base-scorer';
+import { Example } from './data/example.js';
+import { EvaluationRun } from './evaluation-run.js';
+import { ScoringResult, ScorerData } from './data/result.js';
+import { APIJudgmentScorer, JudgevalScorer } from './scorers/base-scorer.js';
 import { 
   ROOT_API,
   JUDGMENT_EVAL_API_URL,
@@ -11,8 +11,8 @@ import {
   MAX_CONCURRENT_EVALUATIONS,
   JUDGMENT_ADD_TO_RUN_EVAL_QUEUE_API_URL,
   JUDGMENT_EVAL_FETCH_API_URL
-} from './constants';
-import { log as loggerLog, info as loggerInfo, warn as loggerWarn, error as loggerError } from './common/logger';
+} from './constants.js';
+import { log as loggerLog, info as loggerInfo, warn as loggerWarn, error as loggerError } from './common/logger.js';
 
 /**
  * Custom error for Judgment API errors

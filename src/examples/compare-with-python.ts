@@ -22,10 +22,12 @@
  * ```
  */
 
-import { JudgmentClient } from '../judgment-client';
-import { ExampleBuilder } from '../data/example';
-import { ExactMatchScorer } from '../scorers/exact-match-scorer';
-import * as dotenv from 'dotenv';
+import dotenv from 'dotenv';
+import { JudgmentClient } from '../judgment-client.js';
+import { Example, ExampleBuilder } from '../data/example.js';
+import { FaithfulnessScorer } from '../scorers/api-scorer.js';
+import * as logger from '../common/logger.js';
+import { ExactMatchScorer } from '../scorers/exact-match-scorer.js';
 
 // Load environment variables
 dotenv.config();

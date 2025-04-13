@@ -5,8 +5,8 @@ import { stdin as input, stdout as output } from 'node:process';
 
 // Assuming Tracer, wrap, scorers are exported from the main index file
 // Adjust the path based on the final file location if needed
-import { Tracer, wrap, TraceClient } from '../common/tracer'; // Import Tracer, wrap, TraceClient
-import { AnswerRelevancyScorer, FaithfulnessScorer } from '../scorers/api-scorer'; // Import scorers directly
+import { Tracer, wrap, TraceClient } from '../../common/tracer.js'; // Import Tracer, wrap, TraceClient
+import { AnswerRelevancyScorer, FaithfulnessScorer } from '../../scorers/api-scorer.js'; // Import scorers directly
 
 dotenv.config();
 

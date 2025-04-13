@@ -1,6 +1,9 @@
 // Export data models
-export { Example, ExampleBuilder, ExampleOptions } from './data/example';
-export { ScoringResult, ScoringResultBuilder, ScorerData, ScoringResultOptions } from './data/result';
+export { Example, ExampleBuilder, ExampleOptions } from './data/example.js';
+export { ScoringResult, ScoringResultBuilder, ScorerData, ScoringResultOptions } from './data/result.js';
+
+// Export common utilities (like Tracer)
+export { Tracer, SpanType, wrap, TraceClient } from './common/tracer.js';
 
 // Export scorers
 export { 
@@ -8,7 +11,7 @@ export {
   APIJudgmentScorer, 
   JudgevalScorer, 
   ScorerWrapper 
-} from './scorers/base-scorer';
+} from './scorers/base-scorer.js';
 
 export {
   AnswerCorrectnessScorer,
@@ -24,7 +27,9 @@ export {
   InstructionAdherenceScorer,
   JsonCorrectnessScorer,
   SummarizationScorer
-} from './scorers/api-scorer';
+} from './scorers/api-scorer.js';
+
+export { ExactMatchScorer } from './scorers/exact-match-scorer.js';
 
 // Export rules system
 export {
@@ -34,10 +39,10 @@ export {
   Rule,
   AlertResult,
   RulesEngine
-} from './rules';
+} from './rules.js';
 
 // Export evaluation components
-export { EvaluationRun, EvaluationRunOptions } from './evaluation-run';
+export { EvaluationRun, EvaluationRunOptions } from './evaluation-run.js';
 export { 
   runEval, 
   assertTest, 
@@ -49,13 +54,13 @@ export {
   checkEvalRunNameExists,
   logEvaluationResults,
   checkExamples
-} from './run-evaluation';
+} from './run-evaluation.js';
 
 // Export client
-export { JudgmentClient } from './judgment-client';
+export { JudgmentClient } from './judgment-client.js';
 
 // Export constants
-export * from './constants';
+export * from './constants.js';
 
 // Export clients
-export * from './clients';
+export * from './clients.js';

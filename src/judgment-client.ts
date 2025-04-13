@@ -1,11 +1,11 @@
 import * as dotenv from 'dotenv';
 import axios from 'axios';
-import { Example } from './data/example';
-import { ScoringResult } from './data/result';
-import { APIJudgmentScorer, JudgevalScorer, ScorerWrapper, Scorer } from './scorers/base-scorer';
-import { EvaluationRun } from './evaluation-run';
-import { Rule, Condition } from './rules';
-import { runEval, assertTest, JudgmentAPIError } from './run-evaluation';
+import { Example } from './data/example.js';
+import { ScoringResult } from './data/result.js';
+import { APIJudgmentScorer, JudgevalScorer, ScorerWrapper, Scorer } from './scorers/base-scorer.js';
+import { EvaluationRun } from './evaluation-run.js';
+import { Rule, Condition } from './rules.js';
+import { runEval, assertTest, JudgmentAPIError } from './run-evaluation.js';
 import {
   ROOT_API,
   JUDGMENT_EVAL_FETCH_API_URL,
@@ -13,8 +13,8 @@ import {
   JUDGMENT_EVAL_DELETE_PROJECT_API_URL,
   JUDGMENT_PROJECT_DELETE_API_URL,
   JUDGMENT_PROJECT_CREATE_API_URL
-} from './constants';
-import logger from './common/logger-instance';
+} from './constants.js';
+import logger from './common/logger-instance.js';
 
 // Load environment variables
 dotenv.config();
@@ -185,7 +185,7 @@ export class JudgmentClient {
             const newRule = new Rule(
               rule.name,
               processedConditions,
-              rule.combineType,
+              rule.combine_type,
               rule.description,
               rule.notification,
               rule.ruleId
@@ -343,7 +343,7 @@ export class JudgmentClient {
             const newRule = new Rule(
               rule.name,
               processedConditions,
-              rule.combineType,
+              rule.combine_type,
               rule.description,
               rule.notification,
               rule.ruleId
@@ -654,12 +654,21 @@ export class JudgmentClient {
           return 'No results found';
         }
 
-        // Dynamically require json2csv only when needed
-        let Parser;
+        // Use csv-writer instead of json2csv
+        let createObjectCsvStringifier;
         try {
-           Parser = require('json2csv').Parser;
+           // Use dynamic import() for ES Modules
+           const csvWriterModule = await import('csv-writer');
+           createObjectCsvStringifier = csvWriterModule.createObjectCsvStringifier;
+           if (!createObjectCsvStringifier) { // Check if the function exists
+              throw new Error("Could not load createObjectCsvStringifier from csv-writer");
+           }
         } catch (e) {
-           throw new Error("The 'json2csv' package is required for CSV export. Please install it (`npm install json2csv`).");
+           // Provide a more helpful error message
+           const errorMsg = e instanceof Error ? e.message : String(e);
+           // Update error message to reflect import() failure
+           console.error(`Failed to dynamically import 'csv-writer': ${errorMsg}. Ensure it's installed (\`npm install csv-writer\`).`);
+           throw new Error("The 'csv-writer' package is required for CSV export but failed to load dynamically.");
         }
 
 
@@ -695,8 +704,19 @@ export class JudgmentClient {
              return flatResult;
            });
 
-          const parser = new Parser();
-          return parser.parse(processedResults);
+           // Define headers dynamically based on the keys of the first processed result
+           if (processedResults.length === 0) {
+                return 'No data to export after processing.'; // Handle case with no valid results after processing
+           }
+           const headers = Object.keys(processedResults[0]).map(key => ({ id: key, title: key }));
+
+           const csvStringifier = createObjectCsvStringifier({
+               header: headers
+           });
+
+           // Generate CSV string (header + records)
+           return csvStringifier.getHeaderString() + csvStringifier.stringifyRecords(processedResults);
+
         } catch (error) {
           console.error('Error converting to CSV:', error);
           const errorMessage = error instanceof Error ? error.message : String(error);

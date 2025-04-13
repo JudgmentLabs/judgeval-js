@@ -1,4 +1,4 @@
-import { Example } from './example';
+import { Example } from './example.js';
 
 /**
  * Represents the data for a single scorer

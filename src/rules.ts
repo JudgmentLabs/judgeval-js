@@ -2,7 +2,7 @@
  * Rules system for JudgEval that enables alerts based on metric thresholds.
  */
 import { v4 as uuidv4 } from 'uuid';
-import { Scorer, APIJudgmentScorer, JudgevalScorer, ScorerWrapper } from './scorers/base-scorer';
+import { Scorer, APIJudgmentScorer, JudgevalScorer, ScorerWrapper } from './scorers/base-scorer.js';
 
 /**
  * Status of an alert evaluation
@@ -113,13 +113,13 @@ export class Rule {
   name: string;
   description?: string;
   conditions: Condition[];
-  combineType: 'all' | 'any';
+  combine_type: 'all' | 'any';
   notification?: NotificationConfig;
 
   constructor(
     name: string,
     conditions: Condition[],
-    combineType: 'all' | 'any' = 'all',
+    combine_type: 'all' | 'any' = 'all',
     description?: string,
     notification?: NotificationConfig,
     ruleId?: string
@@ -128,14 +128,14 @@ export class Rule {
     this.name = name;
     this.description = description;
     this.conditions = conditions;
-    this.combineType = combineType;
+    this.combine_type = combine_type;
     this.notification = notification;
 
     // Validate
     if (!this.conditions || this.conditions.length === 0) {
       throw new Error('Conditions list cannot be empty');
     }
-    if (this.combineType !== 'all' && this.combineType !== 'any') {
+    if (this.combine_type !== 'all' && this.combine_type !== 'any') {
       throw new Error('Combine type must be "all" or "any"');
     }
   }
@@ -200,7 +200,7 @@ export class Rule {
         
         return conditionData;
       }),
-      combine_type: this.combineType,
+      combine_type: this.combine_type,
     };
 
     if (this.notification) {
@@ -388,8 +388,8 @@ export class RulesEngine {
 
       // Determine if the rule is triggered based on combine type
       const isTriggered = 
-        (rule.combineType === 'all' && allPassed) || 
-        (rule.combineType === 'any' && anyPassed);
+        (rule.combine_type === 'all' && allPassed) || 
+        (rule.combine_type === 'any' && anyPassed);
 
       results[ruleId] = new AlertResult(
         isTriggered ? AlertStatus.TRIGGERED : AlertStatus.NOT_TRIGGERED,

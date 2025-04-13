@@ -1,4 +1,4 @@
-import { Tracer } from "../common/tracer";
+import { Tracer } from "../../common/tracer";
 
 const tracer = Tracer.getInstance({ projectName: "ethan-judgeval-js-testing" });
 

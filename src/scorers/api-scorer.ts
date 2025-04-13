@@ -1,7 +1,7 @@
-import { APIJudgmentScorer } from './base-scorer';
-import { APIScorer, UNBOUNDED_SCORERS } from '../constants';
-import { Example } from '../data/example';
-import { ScorerData } from '../data/result';
+import { APIJudgmentScorer } from './base-scorer.js';
+import { APIScorer, UNBOUNDED_SCORERS } from '../constants.js';
+import { Example } from '../data/example.js';
+import { ScorerData } from '../data/result.js';
 
 /**
  * Implementation of API-based scorers

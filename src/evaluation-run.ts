@@ -1,7 +1,7 @@
-import { Example } from './data/example';
-import { APIJudgmentScorer, JudgevalScorer, Scorer } from './scorers/base-scorer';
-import { Rule } from './rules';
-import { ACCEPTABLE_MODELS } from './constants';
+import { Example } from './data/example.js';
+import { APIJudgmentScorer, JudgevalScorer, Scorer } from './scorers/base-scorer.js';
+import { Rule } from './rules.js';
+import { ACCEPTABLE_MODELS } from './constants.js';
 
 /**
  * Stores example and evaluation scorers together for running an eval task

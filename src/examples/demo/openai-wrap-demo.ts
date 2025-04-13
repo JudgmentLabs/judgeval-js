@@ -1,6 +1,7 @@
 import * as dotenv from 'dotenv';
 import OpenAI from 'openai';
-import { Tracer, wrap } from '../common/tracer'; // Adjust path as necessary
+import { Tracer, wrap } from '../../common/tracer.js'; // Import wrap function
+import { FaithfulnessScorer } from '../../scorers/api-scorer.js';
 
 // Load environment variables from .env file
 dotenv.config({ path: '.env.local' });
