@@ -112,6 +112,7 @@ async function runDemo() {
   // console.log("--- Invoking Graph within runInTrace --- "); // Removed
   try {
     // Wrap the invocation in tracer.runInTrace
+    let graphResult_: AgentState;
     for (const trace of tracer.trace("langgraph-demo-trace")) {
       // console.log(`>>> Main: Inside trace context: ${traceClient.traceId}`); // Removed
 
@@ -131,8 +132,10 @@ async function runDemo() {
       const finalAiMessage = finalMessages.length > 0 ? finalMessages[finalMessages.length - 1] : null;
       console.log("\nFinal AI Message Content:", finalAiMessage?.content); // Keep final output log
 
-      return graphResult; // Return the result from the traced function
+      graphResult_ = graphResult; // Return the result from the traced function
     }
+    // @ts-ignore graphResult_ is assigned
+    const graphResult = graphResult_;
 
     // Handler should save the trace upon completion (when root span ends)
     // runInTrace handles saving the trace upon completion
