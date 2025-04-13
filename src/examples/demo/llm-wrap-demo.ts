@@ -1,7 +1,21 @@
+// REMOVE Shim import
+// import 'together-ai/shims/web';
+
 import * as dotenv from 'dotenv';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
+// import Together from 'together-ai'; // Keep commented out or remove
+
+// Use standard ES Module import
 import Together from 'together-ai';
+
+// *** Remove inspection logs ***
+// console.log('--- Inspecting required Together module ---');
+// console.log(Together);
+// console.log('Keys:', Object.keys(Together || {}));
+// console.log('Type:', typeof Together);
+// console.log('-----------------------------------------');
+
 import { Tracer, wrap } from '../../common/tracer.js'; // Adjust path as necessary
 import { JudgmentClient } from '../../judgment-client.js';
 import { FaithfulnessScorer } from '../../scorers/api-scorer.js';
@@ -68,8 +82,8 @@ async function runDemo() {
   }
   try {
     if (hasTogetherKey) {
-      // Try accessing a potential '.Client' property on the default import
-      together = wrap(new (Together as any).Client({ auth: process.env.TOGETHER_API_KEY ?? '' }));
+      // Use standard init for 0.7.0 (with 'apiKey') and wrap
+      together = wrap(new Together({ apiKey: process.env.TOGETHER_API_KEY ?? '' }));
       console.log('Together client wrapped.');
     } else {
       console.warn('Together API key missing, skipping wrap.');
@@ -125,7 +139,7 @@ async function runDemo() {
           }
         }
 
-        // --- Together AI Call ---
+        // --- Together AI Call --- (Uncomment and use documented structure)
         if (together) {
           try {
             console.log('\nMaking Together AI API call...');
@@ -134,7 +148,7 @@ async function runDemo() {
               messages: [{ role: 'user', content: 'Tell me a short story about a brave dog.' }],
               max_tokens: 150,
             };
-            // Use the standard chat completions endpoint
+            // Use documented chat.completions endpoint for 0.7.0
             const response = await together.chat.completions.create(params);
             console.log('Together AI Response:', response.choices[0]?.message?.content?.trim());
           } catch (error) {

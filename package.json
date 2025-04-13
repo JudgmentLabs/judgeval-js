@@ -39,7 +39,7 @@
   "peerDependencies": {
     "@anthropic-ai/sdk": "^0.22.0",
     "openai": "^4.0.0",
-    "together-ai": "^0.5.1 || ^0.7.0"
+    "together-ai": "^0.7.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",

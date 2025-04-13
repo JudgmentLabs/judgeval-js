@@ -1174,24 +1174,18 @@ function _getClientConfig(client: ApiClient): { spanName: string; originalMethod
             methodName: 'create'
         };
     }
-    // Then, specifically check for Together AI's chat.completions.create structure
-    else if (
-         (client?.constructor?.name === 'Together' || typeof client === 'object') && // Check constructor or if it's a plain object
-         typeof (client as any)?.chat?.completions?.create === 'function'
-       ) {
+    // Check for Together structure (duck typing - looking for .chat.completions.create for v0.7.0)
+    else if (typeof (client as any)?.chat?.completions?.create === 'function') {
         const chatCompletionsObj = (client as any).chat.completions;
-        // Ensure the method exists before returning
-        if (chatCompletionsObj && typeof chatCompletionsObj.create === 'function') {
-            return {
-                spanName: "TOGETHER_API_CALL",
-                originalMethod: chatCompletionsObj.create,
-                methodOwner: chatCompletionsObj, // Owner is chat.completions
-                methodName: 'create'
-            };
-        }
+        return {
+             spanName: "TOGETHER_API_CALL",
+             originalMethod: chatCompletionsObj.create,
+             methodOwner: chatCompletionsObj, // Owner is chat.completions
+             methodName: 'create'
+        };
     }
 
-    // If none of the known structures match, log a warning and return null
+    // Fallback/Warning if none match
     logger.warn("Cannot wrap client: Unsupported type or incompatible SDK structure.", { clientType: client?.constructor?.name });
     return null;
 }
@@ -1254,44 +1248,38 @@ export function wrap<T extends ApiClient>(client: T): T {
         return client;
     }
 
+    // Generic logic for all clients (OpenAI, Anthropic, Together via duck-typing)
     const config = _getClientConfig(client);
     if (!config) {
-        // Warning already logged by _getClientConfig
-        return client;
+        return client; // Warning already logged
     }
-
     const { spanName, originalMethod, methodOwner, methodName } = config;
-
-    // Bind the original method to its owner to preserve 'this' context
     const boundOriginalMethod = originalMethod.bind(methodOwner);
 
     const tracedMethod = async (...args: any[]) => {
         const currentTrace = tracer.getCurrentTrace();
-
         if (!currentTrace || !currentTrace.enableMonitoring) {
             return boundOriginalMethod(...args);
         }
-
         return await currentTrace.runInSpan(spanName, { spanType: 'llm' }, async () => {
-            const inputData = _formatInputData(client, args);
-            currentTrace.recordInput(inputData);
-
-            try {
+             const inputData = _formatInputData(client, args);
+             currentTrace.recordInput(inputData);
+             try {
                  const response = await boundOriginalMethod(...args);
                  const outputData = _formatOutputData(client, response);
                  currentTrace.recordOutput(outputData);
                  return response;
-            } catch (error) {
+             } catch (error) {
                  currentTrace.recordOutput(error);
                  throw error;
-            }
+             }
         });
     };
 
-    // Generic patching logic - relies on _getClientConfig providing correct owner/method
+    // Generic patching
     if (methodOwner && methodName && typeof methodOwner[methodName] === 'function') {
         methodOwner[methodName] = tracedMethod;
-        logger.info(`Successfully wrapped method '${methodName}' on owner '${methodOwner.constructor.name}' for client: ${client?.constructor?.name}`);
+        logger.info(`Successfully wrapped method '${methodName}' on owner '${methodOwner.constructor?.name || '(unknown)'}' for client: ${client?.constructor?.name}`);
     } else {
          logger.error("Failed to apply wrapper: Could not find method owner or method name.", { clientType: client?.constructor?.name, methodName });
          return client; // Return unwrapped if patching fails
