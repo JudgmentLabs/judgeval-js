@@ -82,9 +82,10 @@ async function runDemo() {
   }
   try {
     if (hasTogetherKey) {
-      // Use standard init for 0.7.0 (with 'apiKey') and wrap
-      together = wrap(new Together({ auth: process.env.TOGETHER_API_KEY ?? '' }));
-      console.log('Together client wrapped.');
+      console.log('Creating wrapped Together AI client...');
+      // Use apiKey instead of auth
+      together = wrap(new Together({ apiKey: process.env.TOGETHER_API_KEY ?? '' }));
+      console.log('Together AI client wrapped.');
     } else {
       console.warn('Together API key missing, skipping wrap.');
     }

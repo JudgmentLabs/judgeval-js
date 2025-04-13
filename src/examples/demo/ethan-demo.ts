@@ -1,4 +1,7 @@
-import { Tracer } from "../../common/tracer";
+import { Tracer } from "../../common/tracer.js";
+import * as dotenv from 'dotenv';
+
+dotenv.config({ path: '.env.local' });
 
 const tracer = Tracer.getInstance({ projectName: "ethan-judgeval-js-testing" });
 

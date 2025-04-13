@@ -4,7 +4,9 @@ import type { LLMResult } from "@langchain/core/outputs";
 import { BaseMessage } from "@langchain/core/messages";
 import type { Document } from "@langchain/core/documents";
 import type { Serialized } from "@langchain/core/load/serializable";
-import { Tracer, TraceClient } from "../tracer";
+import { Tracer, TraceClient } from "../tracer.js";
+import { ChainValues } from "@langchain/core/utils/types";
+import { OpenAIAssistantRunnable } from "langchain/experimental/openai_assistant";
 
 // It's my understanding that you can only be on one node in the graph at a time
 // That means we don't need to worry about the async problem

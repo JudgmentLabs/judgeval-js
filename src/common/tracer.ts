@@ -16,8 +16,8 @@ import {
     // Add other necessary constants if needed
 } from '../constants.js';
 
-import { APIJudgmentScorer, Scorer } from '../scorers/base-scorer';
-import logger from './logger-instance'; // Use the shared winston logger instance
+import { APIJudgmentScorer, Scorer } from '../scorers/base-scorer.js';
+import logger from './logger-instance.js'; // Use the shared winston logger instance
 
 // On their own, span() and trace() are fully synchronous
 // The issue is with asynchronous functions
