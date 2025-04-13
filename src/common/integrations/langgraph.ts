@@ -1,7 +1,4 @@
-// judgeval-js/src/integrations/langgraph.ts
-
 import { BaseCallbackHandler, } from "@langchain/core/callbacks/base";
-import { CallbackManager } from '@langchain/core/callbacks/manager';
 import type { AgentAction, AgentFinish } from "@langchain/core/agents";
 import type { LLMResult } from "@langchain/core/outputs";
 import { BaseMessage } from "@langchain/core/messages";
@@ -9,6 +6,8 @@ import type { Document } from "@langchain/core/documents";
 import type { Serialized } from "@langchain/core/load/serializable";
 import { Tracer, TraceClient } from "../tracer";
 
+// It's my understanding that you can only be on one node in the graph at a time
+// That means we don't need to worry about the async problem
 export class JudgevalLanggraphCallbackHandler extends BaseCallbackHandler {
     name = "judgeval_langgraph_callback_handler";
 
