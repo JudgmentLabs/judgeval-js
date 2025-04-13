@@ -45,33 +45,30 @@ async function runDemo() {
 Starting trace: ${traceName}`);
 
   try {
-    const result = await tracer.runInTrace(
-      {
-        name: traceName,
-        // You can specify overwrite: true if needed
-      },
-      async (traceClient) => { // The callback receives the active TraceClient
-        console.log(`Inside trace context for ${traceClient.name} (ID: ${traceClient.traceId})`);
+    let result_: OpenAI.Chat.ChatCompletion;
+    for (const trace of tracer.trace(traceName)) {
+      console.log(`Inside trace context for ${trace.name} (ID: ${trace.traceId})`);
 
-        // Make the API call using the *wrapped* client
-        // This call will automatically be captured as an 'llm' span within the trace
-        const params: OpenAI.Chat.ChatCompletionCreateParams = {
-          model: 'gpt-3.5-turbo',
-          messages: [
-            { role: 'system', content: 'You are a helpful assistant.' },
-            { role: 'user', content: 'What is the capital of France?' },
-          ],
-          temperature: 0.7,
-          max_tokens: 50,
-        };
+      // Make the API call using the *wrapped* client
+      // This call will automatically be captured as an 'llm' span within the trace
+      const params: OpenAI.Chat.ChatCompletionCreateParams = {
+        model: 'gpt-3.5-turbo',
+        messages: [
+          { role: 'system', content: 'You are a helpful assistant.' },
+          { role: 'user', content: 'What is the capital of France?' },
+        ],
+        temperature: 0.7,
+        max_tokens: 50,
+      };
 
-        console.log('Making OpenAI API call...');
-        const response = await openai.chat.completions.create(params);
+      console.log('Making OpenAI API call...');
+      const response = await openai.chat.completions.create(params);
 
-        console.log('OpenAI API call successful.');
-        return response; // Return the response from the traced function
-      }
-    );
+      console.log('OpenAI API call successful.');
+      result_ = response; // Return the response from the traced function
+    }
+    // @ts-ignore result_ is assigned
+    const result = result_;
 
     console.log("\n--- OpenAI Response ---");
     // Log the response content (or the full object)
