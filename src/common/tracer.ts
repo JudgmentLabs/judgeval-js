@@ -16,7 +16,7 @@ import {
     // Add other necessary constants if needed
 } from '../constants.js';
 
-import { APIJudgmentScorer } from '../scorers/base-scorer.js';
+import { APIJudgmentScorer, Scorer } from '../scorers/base-scorer.js';
 import logger from './logger-instance.js'; // Use the shared winston logger instance
 
 // --- Type Aliases and Interfaces ---
@@ -32,7 +32,7 @@ interface NotificationConfig {
 
 // Represents a single condition within a rule.
 interface Condition {
-    metric: APIJudgmentScorer; // Use the scorer object directly
+    metric: Scorer;
 }
 
 // Defines how conditions within a rule are combined.
@@ -758,13 +758,13 @@ class TraceClient {
      * embedding the evaluation request into the trace data.
      * Ported from the Python SDK's async_evaluate method.
      *
-     * @param scorers Array of scorers to use for evaluation (currently assumes APIJudgmentScorer)
+     * @param scorers Array of scorers to use for evaluation
      * @param options Evaluation options including input, outputs, and metadata
      * @returns Promise that resolves when the evaluation entry has been added to the trace
      */
     async asyncEvaluate(
-        // TODO: Allow JudgevalScorer type if rules are not used?
-        scorers: APIJudgmentScorer[],
+        // Accept general Scorer type, but filter/check for API scorers internally
+        scorers: Scorer[], 
         options: {
             input?: string;
             actualOutput?: string;
@@ -784,6 +784,13 @@ class TraceClient {
         }
         if (!scorers || scorers.length === 0) {
             logger.warn("No scorers provided. Skipping async evaluation.");
+            return;
+        }
+
+        // Filter for APIJudgmentScorers as the backend evaluation needs them
+        const apiScorers = scorers.filter((s): s is APIJudgmentScorer => s instanceof APIJudgmentScorer);
+        if (apiScorers.length === 0) {
+            logger.warn("No APIJudgmentScorers found in the provided scorers list. Skipping async evaluation as backend requires API scorers.");
             return;
         }
 
@@ -829,7 +836,7 @@ class TraceClient {
 
             // --- Create evaluation run name (similar to Python) ---
             // Capitalize scorer names
-            const scorerNames = scorers.map(scorer => {
+            const scorerNames = apiScorers.map(scorer => {
                 // Attempt to get score_type, fallback to class name or Unknown
                 const name = scorer?.scoreType || scorer?.constructor?.name || "Unknown";
                 return name.charAt(0).toUpperCase() + name.slice(1);
@@ -849,7 +856,7 @@ class TraceClient {
                 project_name: this.projectName,
                 eval_name: evalName,
                 examples: [example],
-                scorers: scorers, // Pass scorers directly
+                scorers: apiScorers, // Use the filtered list of API scorers
                 model: options.model || "",
                 metadata: {}, // Matches Python tracer
                 judgment_api_key: this.apiKey,
@@ -1147,16 +1154,44 @@ class Tracer {
 
 // --- Helper Functions for Wrapping LLM Clients --- //
 
-function _getClientConfig(client: ApiClient): { spanName: string; originalMethod: (...args: any[]) => any } | null {
+// Return owner and method name for explicit patching
+function _getClientConfig(client: ApiClient): { spanName: string; originalMethod: (...args: any[]) => any; methodOwner: any; methodName: string } | null {
+    // Check OpenAI structure first
     if (client instanceof OpenAI && typeof client?.chat?.completions?.create === 'function') {
-        return { spanName: "OPENAI_API_CALL", originalMethod: client.chat.completions.create.bind(client.chat.completions) };
-    } else if (client instanceof Anthropic && typeof client?.messages?.create === 'function') {
-        return { spanName: "ANTHROPIC_API_CALL", originalMethod: client.messages.create.bind(client.messages) };
+        return {
+            spanName: "OPENAI_API_CALL",
+            originalMethod: client.chat.completions.create,
+            methodOwner: client.chat.completions,
+            methodName: 'create'
+        };
     }
-    // Use constructor name check instead of instanceof for Together
-    else if (client?.constructor?.name === 'Together' && typeof (client as any)?.completions?.create === 'function') { 
-        return { spanName: "TOGETHER_API_CALL", originalMethod: (client as any).completions.create.bind((client as any).completions) }; 
+    // Check Anthropic structure next
+    else if (client instanceof Anthropic && typeof client?.messages?.create === 'function') {
+        return {
+            spanName: "ANTHROPIC_API_CALL",
+            originalMethod: client.messages.create,
+            methodOwner: client.messages,
+            methodName: 'create'
+        };
     }
+    // Then, specifically check for Together AI's chat.completions.create structure
+    else if (
+         (client?.constructor?.name === 'Together' || typeof client === 'object') && // Check constructor or if it's a plain object
+         typeof (client as any)?.chat?.completions?.create === 'function'
+       ) {
+        const chatCompletionsObj = (client as any).chat.completions;
+        // Ensure the method exists before returning
+        if (chatCompletionsObj && typeof chatCompletionsObj.create === 'function') {
+            return {
+                spanName: "TOGETHER_API_CALL",
+                originalMethod: chatCompletionsObj.create,
+                methodOwner: chatCompletionsObj, // Owner is chat.completions
+                methodName: 'create'
+            };
+        }
+    }
+
+    // If none of the known structures match, log a warning and return null
     logger.warn("Cannot wrap client: Unsupported type or incompatible SDK structure.", { clientType: client?.constructor?.name });
     return null;
 }
@@ -1164,8 +1199,8 @@ function _getClientConfig(client: ApiClient): { spanName: string; originalMethod
 function _formatInputData(client: ApiClient, args: any[]): Record<string, any> {
     const params = args[0] || {};
     try {
-        // Use constructor name check instead of instanceof for Together
-        if (client instanceof OpenAI || client?.constructor?.name === 'Together') {
+        // Check for OpenAI or Together (assuming chat structure)
+        if (client instanceof OpenAI || (client?.constructor?.name === 'Together' && (client as any)?.chat?.completions)) {
             return { model: params.model, messages: params.messages, /* other potential params */ } as Record<string, any>;
         } else if (client instanceof Anthropic) {
              return { model: params.model, messages: params.messages, max_tokens: params.max_tokens, } as Record<string, any>;
@@ -1183,17 +1218,21 @@ function _formatOutputData(client: ApiClient, response: any): Record<string, any
           if (client instanceof OpenAI && response?.choices?.[0]?.message) {
               const message = response.choices[0].message;
               return { content: message.content, usage: response.usage, };
-          } else if (client?.constructor?.name === 'Together' && response?.choices?.[0]?.message) {
-              // Assume Together v0.5.1 has a similar structure for now, but access defensively
+          } else if ( // Check for Together (assuming chat structure)
+                (client?.constructor?.name === 'Together' && (client as any)?.chat?.completions) &&
+                response?.choices?.[0]?.message
+             ) {
               const message = response.choices[0].message;
-              return { content: message?.content, usage: response?.usage, }; // Optional chaining for safety
+              // Together API might return usage directly or nested, check defensively
+              const usage = response?.usage || response?.choices?.[0]?.usage || null;
+              return { content: message?.content, usage: usage, };
           } else if (client instanceof Anthropic && response?.content?.[0]) {
                const textContent = response.content.filter((block: any) => block.type === 'text').map((block: any) => block.text).join('');
                // Reconstruct usage for Anthropic if needed
-               const usage = { 
-                   input_tokens: response.usage?.input_tokens, 
-                   output_tokens: response.usage?.output_tokens, 
-                   total_tokens: (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0) 
+               const usage = {
+                   input_tokens: response.usage?.input_tokens,
+                   output_tokens: response.usage?.output_tokens,
+                   total_tokens: (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0)
                };
                return { content: textContent, usage: usage, };
           }
@@ -1217,16 +1256,20 @@ export function wrap<T extends ApiClient>(client: T): T {
 
     const config = _getClientConfig(client);
     if (!config) {
+        // Warning already logged by _getClientConfig
         return client;
     }
 
-    const { spanName, originalMethod } = config;
+    const { spanName, originalMethod, methodOwner, methodName } = config;
+
+    // Bind the original method to its owner to preserve 'this' context
+    const boundOriginalMethod = originalMethod.bind(methodOwner);
 
     const tracedMethod = async (...args: any[]) => {
         const currentTrace = tracer.getCurrentTrace();
 
         if (!currentTrace || !currentTrace.enableMonitoring) {
-            return originalMethod(...args);
+            return boundOriginalMethod(...args);
         }
 
         return await currentTrace.runInSpan(spanName, { spanType: 'llm' }, async () => {
@@ -1234,34 +1277,26 @@ export function wrap<T extends ApiClient>(client: T): T {
             currentTrace.recordInput(inputData);
 
             try {
-                 const response = await originalMethod(...args);
+                 const response = await boundOriginalMethod(...args);
                  const outputData = _formatOutputData(client, response);
                  currentTrace.recordOutput(outputData);
                  return response;
             } catch (error) {
-                 currentTrace.recordOutput(error); // Record error object in output
+                 currentTrace.recordOutput(error);
                  throw error;
             }
         });
     };
 
-    // Apply the wrapper
-    if (client instanceof OpenAI && client.chat?.completions) {
-        (client.chat.completions as any).create = tracedMethod;
-    } else if (client instanceof Anthropic && client.messages) {
-        (client.messages as any).create = tracedMethod;
-    }
-    // Use type assertion for older Together AI version
-    else if (client?.constructor?.name === 'Together' && (client as any).completions) { 
-        ((client as any).completions as any).create = tracedMethod;
-    }
-     else {
-         // Log if we couldn't apply the wrapper despite getting a config
-         logger.error("Failed to apply wrapper: Could not find method to replace after config check.", { clientType: client?.constructor?.name });
-         return client;
+    // Generic patching logic - relies on _getClientConfig providing correct owner/method
+    if (methodOwner && methodName && typeof methodOwner[methodName] === 'function') {
+        methodOwner[methodName] = tracedMethod;
+        logger.info(`Successfully wrapped method '${methodName}' on owner '${methodOwner.constructor.name}' for client: ${client?.constructor?.name}`);
+    } else {
+         logger.error("Failed to apply wrapper: Could not find method owner or method name.", { clientType: client?.constructor?.name, methodName });
+         return client; // Return unwrapped if patching fails
     }
 
-    logger.info(`Successfully wrapped client: ${client?.constructor?.name}`);
     return client;
 }
 

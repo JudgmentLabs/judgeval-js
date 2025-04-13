@@ -5,7 +5,7 @@ import { setTimeout } from 'timers/promises';
 
 // Assuming tracer.ts is compiled to ./dist/common/tracer.js
 // Adjust the import path based on your actual project structure and build output
-import { Tracer, SpanType } from '../../common/tracer'; // Use relative path
+import { Tracer, SpanType } from '../../common/tracer.js'; // Use relative path
 
 // Initialize the tracer singleton
 // Environment variables JUDGMENT_API_KEY and JUDGMENT_ORG_ID should be set

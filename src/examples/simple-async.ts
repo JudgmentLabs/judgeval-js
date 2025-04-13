@@ -6,10 +6,10 @@
  */
 
 import dotenv from 'dotenv';
-import { ExampleBuilder } from '../data/example';
-import { JudgmentClient } from '../judgment-client';
-import { FaithfulnessScorer } from '../scorers/api-scorer';
-import * as logger from '../common/logger';
+import { ExampleBuilder } from '../data/example.js';
+import { JudgmentClient } from '../judgment-client.js';
+import { FaithfulnessScorer } from '../scorers/api-scorer.js';
+import * as logger from '../common/logger.js';
 
 // Load environment variables
 dotenv.config();

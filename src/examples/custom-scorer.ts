@@ -6,12 +6,12 @@
  */
 
 import * as dotenv from 'dotenv';
-import { Example, ExampleBuilder } from '../data/example';
-import { JudgmentClient } from '../judgment-client';
-import { JudgevalScorer } from '../scorers/base-scorer';
-import { ScorerData, ScoringResult } from '../data/result';
+import { Example, ExampleBuilder } from '../data/example.js';
+import { JudgmentClient } from '../judgment-client.js';
+import { JudgevalScorer } from '../scorers/base-scorer.js';
+import { ScorerData, ScoringResult } from '../data/result.js';
 import axios from 'axios';
-import { JUDGMENT_EVAL_LOG_API_URL } from '../constants';
+import { JUDGMENT_EVAL_LOG_API_URL } from '../constants.js';
 
 // Load environment variables
 dotenv.config();

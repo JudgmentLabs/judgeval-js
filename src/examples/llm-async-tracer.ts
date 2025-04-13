@@ -3,8 +3,8 @@
  */
 
 import * as dotenv from 'dotenv';
-import { Example, ExampleBuilder } from '../data/example';
-import { JudgmentClient } from '../judgment-client';
+import { Example, ExampleBuilder } from '../data/example.js';
+import { JudgmentClient } from '../judgment-client.js';
 import { 
   FaithfulnessScorer,
   AnswerCorrectnessScorer,
@@ -12,11 +12,11 @@ import {
   GroundednessScorer,
   HallucinationScorer,
   InstructionAdherenceScorer
-} from '../scorers/api-scorer';
-import { ScoringResult } from '../data/result';
-import { Tracer } from '../common/tracer';
+} from '../scorers/api-scorer.js';
+import { ScoringResult } from '../data/result.js';
+import { Tracer, TraceClient } from '../common/tracer.js';
 import { v4 as uuidv4 } from 'uuid';
-import * as logger from '../common/logger';
+import * as logger from '../common/logger.js';
 
 // Load environment variables
 dotenv.config();
@@ -111,7 +111,7 @@ async function runCustomerServiceLLMWorkflow() {
   await tracerInstance.runInTrace({
     name: traceName,
     projectName
-  }, async (trace) => {
+  }, async (trace: TraceClient) => {
     // Store the trace ID for later use
     traceId = trace.traceId;
     traceUrl = `https://app.judgmentlabs.ai/app/monitor?project_name=${projectName}&trace_id=${traceId}&trace_name=${traceName}&show_trace=true`;

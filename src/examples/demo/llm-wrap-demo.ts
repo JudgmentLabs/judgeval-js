@@ -2,7 +2,10 @@ import * as dotenv from 'dotenv';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
 import Together from 'together-ai';
-import { Tracer, wrap } from '../../common/tracer'; // Adjust path as necessary
+import { Tracer, wrap } from '../../common/tracer.js'; // Adjust path as necessary
+import { JudgmentClient } from '../../judgment-client.js';
+import { FaithfulnessScorer } from '../../scorers/api-scorer.js';
+import * as logger from '../../common/logger.js';
 
 // Load environment variables from .env file
 dotenv.config({ path: '.env.local' });
@@ -41,7 +44,7 @@ async function runDemo() {
   // 2. Create and Wrap Clients
   let openai: OpenAI | null = null;
   let anthropic: Anthropic | null = null;
-  let together: Together | null = null;
+  let together: any | null = null;
 
   try {
     if (hasOpenAIKey) {
@@ -65,7 +68,8 @@ async function runDemo() {
   }
   try {
     if (hasTogetherKey) {
-      together = wrap(new Together({ auth: process.env.TOGETHER_API_KEY ?? '' }));
+      // Try accessing a potential '.Client' property on the default import
+      together = wrap(new (Together as any).Client({ auth: process.env.TOGETHER_API_KEY ?? '' }));
       console.log('Together client wrapped.');
     } else {
       console.warn('Together API key missing, skipping wrap.');
@@ -130,7 +134,8 @@ async function runDemo() {
               messages: [{ role: 'user', content: 'Tell me a short story about a brave dog.' }],
               max_tokens: 150,
             };
-            const response = await (together as any).completions.create(params);
+            // Use the standard chat completions endpoint
+            const response = await together.chat.completions.create(params);
             console.log('Together AI Response:', response.choices[0]?.message?.content?.trim());
           } catch (error) {
             console.error('Together AI call failed:', error);

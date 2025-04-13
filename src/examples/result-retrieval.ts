@@ -1,9 +1,9 @@
 /**
  * Example demonstrating how to retrieve evaluation results
  */
-import { JudgmentClient } from '../judgment-client';
-import { ExampleBuilder } from '../data/example';
-import { ExactMatchScorer } from '../scorers/exact-match-scorer';
+import { JudgmentClient } from '../judgment-client.js';
+import { ExampleBuilder } from '../data/example.js';
+import { ExactMatchScorer } from '../scorers/exact-match-scorer.js';
 import * as dotenv from 'dotenv';
 
 // Load environment variables
@@ -95,7 +95,7 @@ async function main() {
       // Display the most recent runs
       if (evalRuns.length > 0) {
         console.log("\nMost recent evaluation runs:");
-        evalRuns.slice(0, 3).forEach((run, index) => {
+        evalRuns.slice(0, 3).forEach((run: Record<string, any>, index: number) => {
           console.log(`${index + 1}. ${run.eval_name || run.name} (${run.created_at || 'unknown date'})`);
         });
       }

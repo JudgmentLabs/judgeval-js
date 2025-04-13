@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
-import { JudgmentClient } from '../judgment-client';
-import { Example, ExampleBuilder } from '../data/example';
+import { JudgmentClient } from '../judgment-client.js';
+import { ExampleBuilder } from '../data/example.js';
+import { ScoringResult } from '../data/result.js';
 import {
   AnswerCorrectnessScorer,
   AnswerRelevancyScorer,
@@ -14,8 +15,8 @@ import {
   InstructionAdherenceScorer,
   JsonCorrectnessScorer,
   SummarizationScorer
-} from '../scorers/api-scorer';
-import * as logger from '../common/logger';
+} from '../scorers/api-scorer.js';
+import * as logger from '../common/logger.js';
 
 // Load environment variables
 dotenv.config();
