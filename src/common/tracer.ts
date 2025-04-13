@@ -16,7 +16,7 @@ import {
     // Add other necessary constants if needed
 } from '../constants.js';
 
-import { APIJudgmentScorer } from '../scorers/base-scorer';
+import { APIJudgmentScorer, Scorer } from '../scorers/base-scorer';
 import logger from './logger-instance'; // Use the shared winston logger instance
 
 // On their own, span() and trace() are fully synchronous
@@ -1253,7 +1253,7 @@ export function wrap<T extends ApiClient>(client: T): T {
             currentTrace.recordInput(inputData);
 
             try {
-                response = await originalMethod(...args);
+                response = await boundOriginalMethod(...args);
             } catch (error) {
                 currentTrace.recordError(error);
                 throw error;

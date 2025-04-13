@@ -27,7 +27,7 @@ const level5_function = tracer.observe({ name: "level5_function" }) // Use obser
     });
 
 // Recursive Fibonacci example
-const fib = tracer.observe({ name: "fib" })
+const fib = tracer.observe<[number], Promise<number>>({ name: "fib" })
     (async (n: number): Promise<number> => {
         if (n <= 1) {
             return n;
