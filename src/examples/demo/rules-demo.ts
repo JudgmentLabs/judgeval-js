@@ -107,9 +107,7 @@ async function runRulesDemo() {
         );
         console.log('asyncEvaluate finished.');
         // **********************************
-
-        return openAIResponse; // Return the actual response from the span if needed later
-      };
+      }
     }
 
   } catch (error) {
