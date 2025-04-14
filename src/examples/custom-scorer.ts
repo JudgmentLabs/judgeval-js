@@ -149,6 +149,9 @@ async function main() {
     logger.info("Running evaluation with custom scorer...");
     
     // Run evaluation using the JudgmentClient
+    const evalRunName = `sample-scorer-test-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    logger.info(`Using evaluation run name: ${evalRunName}`);
+    
     const results = await client.runEvaluation(
       examples,
       [sampleScorer],
@@ -157,8 +160,8 @@ async function main() {
       {},               // metadata
       true,             // logResults
       "custom-scorer-example",  // projectName
-      `sample-scorer-test-${Date.now()}`,  // evalRunName
-      false,            // override
+      evalRunName,      // evalRunName
+      true,             // override
       false,            // useJudgment - run locally
       true,             // ignoreErrors
       false             // asyncExecution
