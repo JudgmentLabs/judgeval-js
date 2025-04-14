@@ -143,19 +143,31 @@ describe('Evaluation Operations', () => {
     const scorer = new FaithfulnessScorer(0.5);
     const scorer1 = new AnswerRelevancyScorer(0.5);
 
-    // This should fail with an assertion error
-    await expect(client.assertTest(
-      [example, example1, example2],
-      [scorer, scorer1],
-      "Qwen/Qwen2.5-72B-Instruct-Turbo",
-      undefined,
-      {},
-      true,
-      "test_project",
-      "test_eval",
-      true
-    )).rejects.toThrow();
-  }, 60000);
+    const projectName = `test_project_${generateRandomString(8)}`;
+    const evalName = `test_eval_${generateRandomString(8)}`;
+
+    try {
+      // This should fail with an assertion error
+      await expect(client.assertTest(
+        [example, example1, example2],
+        [scorer, scorer1],
+        "Qwen/Qwen2.5-72B-Instruct-Turbo",
+        undefined,
+        {},
+        true,
+        projectName,
+        evalName,
+        true
+      )).rejects.toThrow();
+    } finally {
+      // Clean up resources to prevent leaks
+      try {
+        await client.deleteProject(projectName);
+      } catch (error) {
+        console.warn(`Failed to clean up project ${projectName}:`, error);
+      }
+    }
+  }, 120000);
 
   test('Evaluate dataset', async () => {
     const example1 = new ExampleBuilder()
