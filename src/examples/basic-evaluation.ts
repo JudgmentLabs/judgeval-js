@@ -96,15 +96,6 @@ async function runBasicEvaluation() {
         .build()
     ],
     
-    // Examples for JSON Correctness scorer
-    jsonCorrectness: [
-      new ExampleBuilder()
-        .input("Convert this to JSON: Name: John, Age: 30, City: New York")
-        .actualOutput('{"name": "John", "age": 30, "city": "New York"}')
-        .expectedOutput('{"name": "John", "age": 30, "city": "New York"}')
-        .build()
-    ],
-    
     // Examples for Instruction Adherence scorer
     instructionAdherence: [
       new ExampleBuilder()
@@ -141,7 +132,7 @@ async function runBasicEvaluation() {
     // Test AnswerRelevancy scorer
     const arResults = await judgmentClient.evaluate({
       examples: examples.answerRelevancy,
-      scorers: [new AnswerRelevancyScorer(0.7, {}, true)],
+      scorers: [new AnswerRelevancyScorer(0.7, undefined, true, true, true, true)],
       evalName: `${evalRunName}-ar`,
       projectName: projectName,
       model: model
@@ -153,7 +144,7 @@ async function runBasicEvaluation() {
     // Test AnswerCorrectness scorer
     const acResults = await judgmentClient.evaluate({
       examples: examples.basic,
-      scorers: [new AnswerCorrectnessScorer(0.7, {}, true)],
+      scorers: [new AnswerCorrectnessScorer(0.7, undefined, true, true, true, true)],
       evalName: `${evalRunName}-ac`,
       projectName: projectName,
       model: model
@@ -165,7 +156,7 @@ async function runBasicEvaluation() {
     // Test Faithfulness scorer
     const faithResults = await judgmentClient.evaluate({
       examples: examples.faithfulness,
-      scorers: [new FaithfulnessScorer(0.7, {}, true)],
+      scorers: [new FaithfulnessScorer(0.7, undefined, true, true, true, true)],
       evalName: `${evalRunName}-faith`,
       projectName: projectName,
       model: model
@@ -177,7 +168,7 @@ async function runBasicEvaluation() {
     // Test Hallucination scorer
     const hallResults = await judgmentClient.evaluate({
       examples: examples.hallucination,
-      scorers: [new HallucinationScorer(0.7, {}, true)],
+      scorers: [new HallucinationScorer(0.7, undefined, true, true, true, true)],
       evalName: `${evalRunName}-hall`,
       projectName: projectName,
       model: model
@@ -188,9 +179,9 @@ async function runBasicEvaluation() {
 
     // Test Contextual scorers
     const contextualScorers = [
-      new ContextualRelevancyScorer(0.7, {}, true),
-      new ContextualPrecisionScorer(0.7, {}, true),
-      new ContextualRecallScorer(0.7, {}, true)
+      new ContextualRelevancyScorer(0.7, undefined, true, true, true, true),
+      new ContextualPrecisionScorer(0.7, undefined, true, true, true, true),
+      new ContextualRecallScorer(0.7, undefined, true, true, true, true)
     ];
     
     const contextResults = await judgmentClient.evaluate({
@@ -207,7 +198,7 @@ async function runBasicEvaluation() {
     // Test Summarization scorer
     const summResults = await judgmentClient.evaluate({
       examples: examples.summarization,
-      scorers: [new SummarizationScorer(0.7, {}, true)],
+      scorers: [new SummarizationScorer(0.7, undefined, true, true, true, true)],
       evalName: `${evalRunName}-summ`,
       projectName: projectName,
       model: model
@@ -217,9 +208,15 @@ async function runBasicEvaluation() {
     logger.print(summResults);
 
     // Test JSON Correctness scorer
+    const jsonExample = new ExampleBuilder()
+      .input("Convert this to JSON: Name: John, Age: 30, City: New York")
+      .actualOutput('{"name": "John", "age": 30, "city": "New York"}')
+      .expectedOutput('{"name": "John", "age": 30, "city": "New York"}')
+      .build();
+
     const jsonResults = await judgmentClient.evaluate({
-      examples: examples.jsonCorrectness,
-      scorers: [new JsonCorrectnessScorer(0.7, undefined, {}, true)],
+      examples: [jsonExample],
+      scorers: [new JsonCorrectnessScorer(0.7, undefined, undefined, true, true, true, true)],
       evalName: `${evalRunName}-json`,
       projectName: projectName,
       model: model
@@ -231,7 +228,7 @@ async function runBasicEvaluation() {
     // Test Instruction Adherence scorer
     const iaResults = await judgmentClient.evaluate({
       examples: examples.instructionAdherence,
-      scorers: [new InstructionAdherenceScorer(0.7, {}, true)],
+      scorers: [new InstructionAdherenceScorer(0.7, undefined, true, true, true, true)],
       evalName: `${evalRunName}-ia`,
       projectName: projectName,
       model: model
@@ -241,9 +238,15 @@ async function runBasicEvaluation() {
     logger.print(iaResults);
 
     // Test Comparison scorer
+    const compExample = new ExampleBuilder()
+      .input("Which is better for a beginner, Python or C++?")
+      .actualOutput("Python is generally considered better for beginners because of its simpler syntax and readability.")
+      .expectedOutput("Python is often recommended for beginners due to its readable syntax and gentle learning curve.")
+      .build();
+
     const compResults = await judgmentClient.evaluate({
-      examples: examples.comparison,
-      scorers: [new ComparisonScorer(0.5, ['Accuracy', 'Helpfulness', 'Relevance'], 'Compare the outputs based on the given criteria', {}, true)],
+      examples: [compExample],
+      scorers: [new ComparisonScorer(0.5, ['Accuracy', 'Helpfulness', 'Relevance'], 'Compare the outputs based on the given criteria', undefined, true, true, true, true)],
       evalName: `${evalRunName}-comp`,
       projectName: projectName,
       model: model
@@ -253,9 +256,17 @@ async function runBasicEvaluation() {
     logger.print(compResults);
 
     // Test Execution Order scorer
+    const eoExample = new ExampleBuilder()
+      .input("Describe the steps to make a sandwich.")
+      .actualOutput("1. Get bread. 2. Add condiments. 3. Add fillings. 4. Close the sandwich.")
+      .expectedOutput("1. Get bread. 2. Add condiments. 3. Add fillings. 4. Close the sandwich.")
+      .toolsCalled(["Get bread", "Add condiments", "Add fillings", "Close sandwich"])
+      .expectedTools(["Get bread", "Add condiments", "Add fillings", "Close sandwich"])
+      .build();
+
     const eoResults = await judgmentClient.evaluate({
-      examples: examples.executionOrder,
-      scorers: [new ExecutionOrderScorer(0.7, true, undefined, {}, true)],
+      examples: [eoExample],
+      scorers: [new ExecutionOrderScorer(0.7, ["Get bread", "Add condiments", "Add fillings", "Close sandwich"], undefined, true, true, true, true)],
       evalName: `${evalRunName}-eo`,
       projectName: projectName,
       model: model

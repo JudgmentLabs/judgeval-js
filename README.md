@@ -179,34 +179,49 @@ For a complete example of retrieving evaluation results, see `src/examples/resul
 
 ## Custom Scorers
 
-You can create custom scorers by extending the `JudgevalScorer` class. Here's an example of a custom scorer that checks for exact string matches:
+You can create custom scorers by extending the `JudgevalScorer` class. This implementation aligns with the Python SDK approach, making it easy to port scorers between languages.
+
+### Creating a Custom Scorer
+
+To create a custom scorer:
+
+1. **Extend the JudgevalScorer class**:
 
 ```typescript
-import { Example } from './data/example';
-import { JudgevalScorer } from './scorers/base-scorer';
-import { ScorerData } from './data/result';
+import { Example } from 'judgeval/data/example';
+import { JudgevalScorer } from 'judgeval/scorers/base-scorer';
+import { ScorerData } from 'judgeval/data/result';
 
-/**
- * ExactMatchScorer - A custom scorer that checks if the actual output exactly matches the expected output
- */
 class ExactMatchScorer extends JudgevalScorer {
-  constructor(threshold: number, additionalMetadata?: Record<string, any>, verbose: boolean = false) {
-    super('exact_match', threshold, additionalMetadata, verbose);
+  constructor(
+    threshold: number = 1.0, 
+    additional_metadata?: Record<string, any>, 
+    include_reason: boolean = true,
+    async_mode: boolean = true,
+    strict_mode: boolean = false,
+    verbose_mode: boolean = true
+  ) {
+    super('exact_match', threshold, additional_metadata, include_reason, async_mode, strict_mode, verbose_mode);
   }
 
   async scoreExample(example: Example): Promise<ScorerData> {
     try {
       // Check if the example has expected output
       if (!example.expectedOutput) {
+        this.error = "Missing expected output";
+        this.score = 0;
+        this.success = false;
+        this.reason = "Expected output is required for exact match scoring";
+        
         return {
           name: this.type,
           threshold: this.threshold,
           success: false,
           score: 0,
-          reason: "Expected output is required for exact match scoring",
-          strict_mode: null,
+          reason: this.reason,
+          strict_mode: this.strict_mode,
           evaluation_model: "exact-match",
-          error: "Missing expected output",
+          error: this.error,
           evaluation_cost: null,
           verbose_logs: null,
           additional_metadata: this.additional_metadata || {}
@@ -222,35 +237,48 @@ class ExactMatchScorer extends JudgevalScorer {
       this.score = isMatch ? 1 : 0;
       
       // Generate a reason for the score
-      const reason = isMatch
+      this.reason = isMatch
         ? "The actual output exactly matches the expected output."
         : `The actual output "${actualOutput}" does not match the expected output "${expectedOutput}".`;
+      
+      // Set success based on the score and threshold
+      this.success = this._successCheck();
+      
+      // Generate verbose logs if verbose mode is enabled
+      if (this.verbose_mode) {
+        this.verbose_logs = `Comparing: "${actualOutput}" with "${expectedOutput}"`;
+      }
       
       // Return the scorer data
       return {
         name: this.type,
         threshold: this.threshold,
-        success: this.successCheck(),
+        success: this.success,
         score: this.score,
-        reason: reason,
-        strict_mode: null,
+        reason: this.include_reason ? this.reason : null,
+        strict_mode: this.strict_mode,
         evaluation_model: "exact-match",
         error: null,
         evaluation_cost: null,
-        verbose_logs: this.verbose ? `Comparing: "${actualOutput}" with "${expectedOutput}"` : null,
+        verbose_logs: this.verbose_mode ? this.verbose_logs : null,
         additional_metadata: this.additional_metadata || {}
       };
     } catch (error) {
       // Handle any errors during scoring
       const errorMessage = error instanceof Error ? error.message : String(error);
       
+      this.error = errorMessage;
+      this.score = 0;
+      this.success = false;
+      this.reason = `Error during scoring: ${errorMessage}`;
+      
       return {
         name: this.type,
         threshold: this.threshold,
         success: false,
         score: 0,
-        reason: `Error during scoring: ${errorMessage}`,
-        strict_mode: null,
+        reason: this.reason,
+        strict_mode: this.strict_mode,
         evaluation_model: "exact-match",
         error: errorMessage,
         evaluation_cost: null,
@@ -259,8 +287,29 @@ class ExactMatchScorer extends JudgevalScorer {
       };
     }
   }
+  
+  /**
+   * Get the name of the scorer
+   * This is equivalent to Python's __name__ property
+   */
+  get name(): string {
+    return "Exact Match Scorer";
+  }
 }
 ```
+
+2. **Implement required methods**:
+
+- `scoreExample(example: Example)`: The core method that evaluates an example and returns a score
+- `name`: A getter property that returns the human-readable name of your scorer
+
+3. **Set internal state**:
+
+Your implementation should set these internal properties:
+- `this.score`: The numerical score (typically between 0 and 1)
+- `this.success`: Whether the example passed the evaluation
+- `this.reason`: A human-readable explanation of the score
+- `this.error`: Any error that occurred during scoring
 
 ### Using Custom Scorers
 
@@ -273,53 +322,40 @@ const examples = [
     .input("What is the capital of France?")
     .actualOutput("Paris is the capital of France.")
     .expectedOutput("Paris is the capital of France.")
-    .exampleIndex(0)
     .build(),
   // Add more examples...
 ];
 
 // Create a custom scorer
-const exactMatchScorer = new ExactMatchScorer(1.0, { description: "Checks for exact string match" }, true);
-
-// Initialize the JudgmentClient
-const client = JudgmentClient.getInstance();
+const exactMatchScorer = new ExactMatchScorer(
+  1.0, 
+  { description: "Checks for exact string match" },
+  true,  // include_reason
+  true,  // async_mode
+  false, // strict_mode
+  true   // verbose_mode
+);
 
 // Run evaluation with the custom scorer
-const results = await client.runEvaluation(
-  examples,
-  [exactMatchScorer],
-  "gpt-3.5-turbo", // Specify a valid model name
-  "my-project",
-  {
-    evalRunName: "custom-scorer-test",
-    logResults: true
-  }
-);
+const results = await client.runEvaluation({
+  examples: examples,
+  scorers: [exactMatchScorer],
+  projectName: "my-project",
+  evalRunName: "custom-scorer-test",
+  useJudgment: false // Run locally, don't use Judgment API
+});
 ```
 
-### Viewing Results
+### Custom Scorer Parameters
 
-After running an evaluation with custom scorers, you can view the results in the Judgment platform:
+- `threshold`: The minimum score required for success (0-1 for most scorers)
+- `additional_metadata`: Extra information to include with results
+- `include_reason`: Whether to include a reason for the score
+- `async_mode`: Whether to run the scorer asynchronously
+- `strict_mode`: If true, sets threshold to 1.0 for strict evaluation
+- `verbose_mode`: Whether to include detailed logs
 
-```
-https://app.judgmentlabs.ai/app/experiment?project_name=my-project&eval_run_name=custom-scorer-test
-```
-
-You can also access the results programmatically:
-
-```typescript
-// Print the results
-console.log(results);
-
-// Get success rate
-const successCount = results.filter(r => {
-  return r.scorersData?.every(s => s.success) ?? false;
-}).length;
-
-console.log(`Success rate: ${successCount}/${examples.length} (${(successCount/examples.length*100).toFixed(2)}%)`);
-```
-
-For a complete example of using custom scorers, see `src/examples/custom-scorer.ts`.
+For a complete example of creating and using custom scorers, see `src/examples/custom-scorer.ts`.
 
 ## Examples
 

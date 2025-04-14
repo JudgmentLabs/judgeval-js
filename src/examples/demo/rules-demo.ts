@@ -26,7 +26,7 @@ if (!process.env.JUDGMENT_ORG_ID) {
 
 // --- Instantiate the actual Scorer ---
 // Threshold can be defined here or overridden by rule condition processing on backend
-const answerRelevancyScorer = new AnswerRelevancyScorer(0.8);
+const answerRelevancyScorer = new AnswerRelevancyScorer(0.8, undefined, false, true, true, true);
 
 // --- Define a Sample Rule using the Rule class constructor ---
 const sampleRule = new Rule(

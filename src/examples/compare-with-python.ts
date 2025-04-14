@@ -24,10 +24,8 @@
 
 import dotenv from 'dotenv';
 import { JudgmentClient } from '../judgment-client.js';
-import { Example, ExampleBuilder } from '../data/example.js';
-import { FaithfulnessScorer } from '../scorers/api-scorer.js';
-import * as logger from '../common/logger.js';
-import { ExactMatchScorer } from '../scorers/exact-match-scorer.js';
+import { ExampleBuilder } from '../data/example.js';
+import { SampleScorer } from './custom-scorer.js';
 
 // Load environment variables
 dotenv.config();
@@ -65,12 +63,12 @@ async function main() {
     ];
 
     // Create a scorer (similar to Python SDK's ExactMatchScorer)
-    const exactMatchScorer = new ExactMatchScorer(1.0);
+    const sampleScorer = new SampleScorer(1.0);
 
     // Run evaluation (similar to Python SDK's run_evaluation)
     await client.runEvaluation(
       examples,
-      [exactMatchScorer],
+      [sampleScorer],
       "gpt-3.5-turbo",
       undefined,
       { description: "Comparison with Python SDK" },

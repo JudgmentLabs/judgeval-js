@@ -93,12 +93,12 @@ async function runCustomerServiceLLMWorkflow() {
   
   // Create scorers with different weights and thresholds
   const scorers = [
-    new FaithfulnessScorer(0.8),            // High importance on factual accuracy
-    new AnswerCorrectnessScorer(0.7),       // Important for customer service accuracy
-    new AnswerRelevancyScorer(0.9),         // Critical for customer service
-    new GroundednessScorer(0.6),            // Important but not critical
-    new HallucinationScorer(0.5),           // Check for hallucinations
-    new InstructionAdherenceScorer(0.95)    // Critical for following instructions
+    new FaithfulnessScorer(0.8, undefined, false, true, true, true),            // High importance on factual accuracy
+    new AnswerCorrectnessScorer(0.7, undefined, false, true, true, true),       // Important for customer service accuracy
+    new AnswerRelevancyScorer(0.9, undefined, false, true, true, true),         // Critical for customer service
+    new GroundednessScorer(0.6, undefined, false, true, true, true),            // Important but not critical
+    new HallucinationScorer(0.5, undefined, false, true, true, true),           // Check for hallucinations
+    new InstructionAdherenceScorer(0.95, undefined, false, true, true, true)    // Critical for following instructions
   ];
   
   const traceName = `customer-service-workflow-${runId}`;
@@ -194,9 +194,9 @@ Respond to the customer query using the provided context. Be helpful, accurate, 
 
               // Evaluate response using the traceClient from the outer loop
               const responseScorers = [
-                new FaithfulnessScorer(0.8),
-                new AnswerRelevancyScorer(0.9),
-                new HallucinationScorer(0.95)
+                new FaithfulnessScorer(0.8, undefined, false, true, true, true),
+                new AnswerRelevancyScorer(0.9, undefined, false, true, true, true),
+                new HallucinationScorer(0.95, undefined, false, true, true, true)
               ];
               await traceClient.asyncEvaluate(responseScorers, {
                 input: data.customer,

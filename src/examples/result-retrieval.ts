@@ -3,7 +3,7 @@
  */
 import { JudgmentClient } from '../judgment-client.js';
 import { ExampleBuilder } from '../data/example.js';
-import { ExactMatchScorer } from '../scorers/exact-match-scorer.js';
+import { SampleScorer } from './custom-scorer.js';
 import * as dotenv from 'dotenv';
 
 // Load environment variables
@@ -48,12 +48,12 @@ async function main() {
     ];
 
     // Create a scorer
-    const exactMatchScorer = new ExactMatchScorer(1.0);
+    const sampleScorer = new SampleScorer(1.0);
 
     // Run evaluation
     await client.runEvaluation(
       examples,
-      [exactMatchScorer],
+      [sampleScorer],
       "gpt-3.5-turbo", // Use a valid model name
       undefined,
       { description: "Example for result retrieval" },

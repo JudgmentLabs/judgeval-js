@@ -34,7 +34,7 @@ async function main() {
     .build();
 
   // Create a scorer
-  const scorer = new FaithfulnessScorer(0.5);
+  const scorer = new FaithfulnessScorer(0.5, undefined, false, true, true, true);
   
   logger.info(`Starting async evaluation with run name: ${evalRunName}`);
   

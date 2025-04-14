@@ -34,7 +34,7 @@ async function main() {
     .build();
 
   // Create a scorer
-  const scorer = new FaithfulnessScorer(0.5);
+  const scorer = new FaithfulnessScorer(0.5, undefined, false, true, true, true);
     
   try {
     // Run the async evaluation - exactly matching Python SDK's demo.py

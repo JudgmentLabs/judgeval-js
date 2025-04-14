@@ -10,8 +10,18 @@ export interface Scorer {
   scoreType: string; // For backward compatibility
   threshold: number;
   score?: number;
+  score_breakdown?: Record<string, any>;
+  reason?: string;
+  success?: boolean;
+  evaluation_model?: string;
+  strict_mode: boolean;
+  async_mode: boolean;
+  verbose_mode: boolean;
+  include_reason: boolean;
+  error?: string;
+  evaluation_cost?: number;
+  verbose_logs?: string;
   additional_metadata?: Record<string, any>;
-  verbose: boolean;
   validateThreshold(): void;
   toJSON(): Record<string, any>;
   successCheck(): boolean;
@@ -25,14 +35,21 @@ export abstract class APIJudgmentScorer implements Scorer {
   get scoreType(): string { return this.type; } // For backward compatibility
   readonly threshold: number;
   score?: number;
+  score_breakdown?: Record<string, any>;
   additional_metadata?: Record<string, any>;
-  verbose: boolean;
+  strict_mode: boolean;
+  async_mode: boolean;
+  verbose_mode: boolean;
+  include_reason: boolean;
 
-  constructor(type: string, threshold: number, additional_metadata?: Record<string, any>, verbose: boolean = false) {
+  constructor(type: string, threshold: number, additional_metadata?: Record<string, any>, strict_mode: boolean = false, async_mode: boolean = true, verbose_mode: boolean = true, include_reason: boolean = true) {
     this.type = type;
     this.threshold = threshold;
     this.additional_metadata = additional_metadata;
-    this.verbose = verbose;
+    this.strict_mode = strict_mode;
+    this.async_mode = async_mode;
+    this.verbose_mode = verbose_mode;
+    this.include_reason = include_reason;
   }
 
   /**
@@ -73,8 +90,12 @@ export abstract class APIJudgmentScorer implements Scorer {
       score_type: this.type,
       threshold: this.threshold,
       score: this.score,
+      score_breakdown: this.score_breakdown,
       additional_metadata: this.additional_metadata,
-      verbose: this.verbose,
+      strict_mode: this.strict_mode,
+      async_mode: this.async_mode,
+      verbose_mode: this.verbose_mode,
+      include_reason: this.include_reason,
     };
 
     return result;
@@ -93,25 +114,55 @@ export abstract class JudgevalScorer implements Scorer {
   scoreType: string; // For backward compatibility
   threshold: number;
   score?: number;
+  score_breakdown?: Record<string, any>;
+  reason?: string;
+  success?: boolean;
+  evaluation_model?: string;
+  strict_mode: boolean;
+  async_mode: boolean;
+  verbose_mode: boolean;
+  include_reason: boolean;
+  error?: string;
+  evaluation_cost?: number;
+  verbose_logs?: string;
   additional_metadata?: Record<string, any>;
-  verbose: boolean;
 
-  constructor(type: string, threshold: number, additional_metadata?: Record<string, any>, verbose: boolean = false) {
+  constructor(
+    type: string, 
+    threshold: number, 
+    additional_metadata?: Record<string, any>, 
+    include_reason: boolean = true,
+    async_mode: boolean = true,
+    strict_mode: boolean = false,
+    verbose_mode: boolean = true
+  ) {
     this.type = type;
     this.scoreType = type; // For backward compatibility
-    this.threshold = threshold;
+    this.threshold = strict_mode ? 1.0 : threshold;
+    this.strict_mode = strict_mode;
+    this.async_mode = async_mode;
+    this.verbose_mode = verbose_mode;
+    this.include_reason = include_reason;
     this.additional_metadata = additional_metadata;
-    this.verbose = verbose;
+    this.validateThreshold();
   }
 
   /**
    * Check if the score meets the threshold
    */
   successCheck(): boolean {
-    if (this.score === undefined) {
+    if (this.error !== undefined) {
       return false;
     }
-    return this.score >= this.threshold;
+    return this.score !== undefined && this.score >= this.threshold;
+  }
+
+  /**
+   * Internal method to check success
+   * This is equivalent to Python's _success_check method
+   */
+  protected _successCheck(): boolean {
+    return this.successCheck();
   }
 
   /**
@@ -135,13 +186,6 @@ export abstract class JudgevalScorer implements Scorer {
   }
 
   /**
-   * Score an example
-   * @param example The example to score
-   * @returns A ScorerData object with the score
-   */
-  abstract scoreExample(example: Example): Promise<ScorerData>;
-
-  /**
    * Convert the scorer to a plain object
    */
   toJSON(): Record<string, any> {
@@ -149,9 +193,33 @@ export abstract class JudgevalScorer implements Scorer {
       score_type: this.type,
       threshold: this.threshold,
       score: this.score,
+      score_breakdown: this.score_breakdown,
+      reason: this.reason,
+      success: this.success,
+      evaluation_model: this.evaluation_model,
+      strict_mode: this.strict_mode,
+      async_mode: this.async_mode,
+      verbose_mode: this.verbose_mode,
+      include_reason: this.include_reason,
+      error: this.error,
+      evaluation_cost: this.evaluation_cost,
+      verbose_logs: this.verbose_logs,
       additional_metadata: this.additional_metadata,
-      verbose: this.verbose,
     };
+  }
+
+  /**
+   * Score an example
+   * This must be implemented by subclasses
+   */
+  abstract scoreExample(example: Example): Promise<ScorerData>;
+
+  /**
+   * Get the name of the scorer
+   * This is equivalent to Python's __name__ property
+   */
+  get name(): string {
+    return this.type;
   }
 }
 
@@ -163,8 +231,18 @@ export class ScorerWrapper implements Scorer {
   scoreType: string; // For backward compatibility
   threshold: number;
   score?: number;
+  score_breakdown?: Record<string, any>;
+  reason?: string;
+  success?: boolean;
+  evaluation_model?: string;
+  strict_mode: boolean;
+  async_mode: boolean;
+  verbose_mode: boolean;
+  include_reason: boolean;
+  error?: string;
+  evaluation_cost?: number;
+  verbose_logs?: string;
   additional_metadata?: Record<string, any>;
-  verbose: boolean;
   scorer: any;
 
   constructor(scorer: any) {
@@ -173,8 +251,18 @@ export class ScorerWrapper implements Scorer {
     this.scoreType = scorer.scoreType || scorer.score_type; // For backward compatibility
     this.threshold = scorer.threshold;
     this.score = scorer.score;
+    this.score_breakdown = scorer.score_breakdown;
+    this.reason = scorer.reason;
+    this.success = scorer.success;
+    this.evaluation_model = scorer.evaluation_model;
+    this.strict_mode = scorer.strict_mode;
+    this.async_mode = scorer.async_mode;
+    this.verbose_mode = scorer.verbose_mode;
+    this.include_reason = scorer.include_reason;
+    this.error = scorer.error;
+    this.evaluation_cost = scorer.evaluation_cost;
+    this.verbose_logs = scorer.verbose_logs;
     this.additional_metadata = scorer.additional_metadata;
-    this.verbose = scorer.verbose;
   }
 
   /**
@@ -230,8 +318,18 @@ export class ScorerWrapper implements Scorer {
       score_type: this.type,
       threshold: this.threshold,
       score: this.score,
+      score_breakdown: this.score_breakdown,
+      reason: this.reason,
+      success: this.success,
+      evaluation_model: this.evaluation_model,
+      strict_mode: this.strict_mode,
+      async_mode: this.async_mode,
+      verbose_mode: this.verbose_mode,
+      include_reason: this.include_reason,
+      error: this.error,
+      evaluation_cost: this.evaluation_cost,
+      verbose_logs: this.verbose_logs,
       additional_metadata: this.additional_metadata,
-      verbose: this.verbose,
     };
   }
 }

@@ -122,7 +122,7 @@ const get_menu_highlights = judgment.observe({ spanType: 'research' })(
         if (traceClient && judgment.enableEvaluations) {
             traceClient.asyncEvaluate(
                 // Ensure scorers are correctly instantiated with necessary options (like threshold)
-                [new AnswerRelevancyScorer(0.5)],
+                [new AnswerRelevancyScorer(0.5, undefined, false, true, true, true)],
                 {
                     input: prompt,
                     actualOutput: actualOutput,
@@ -218,8 +218,8 @@ const get_food_recommendations = judgment.observe({ spanType: 'chain' })(
             traceClient.asyncEvaluate(
                 [
                     // Ensure scorers are correctly imported and instantiated
-                    new AnswerRelevancyScorer(0.5),
-                    new FaithfulnessScorer(0.8)
+                    new AnswerRelevancyScorer(0.5, undefined, false, true, true, true),
+                    new FaithfulnessScorer(0.8, undefined, false, true, true, true)
                 ],
                 {
                     input: evaluationInput,

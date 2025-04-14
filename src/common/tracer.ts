@@ -155,7 +155,6 @@ interface TraceSavePayload {
     overwrite: boolean;
     parent_trace_id?: string | null;
     parent_name?: string | null;
-    evaluation_runs: any[]; // Required field by the API
 }
 
 // Define the structure for a condensed span entry
@@ -783,8 +782,7 @@ class TraceClient {
              empty_save: emptySave,
              overwrite: this.overwrite,
              parent_trace_id: this.parentTraceId,
-             parent_name: this.parentName,
-             evaluation_runs: [] // Required field by the API
+             parent_name: this.parentName
          };
 
          try {

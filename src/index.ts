@@ -29,8 +29,6 @@ export {
   SummarizationScorer
 } from './scorers/api-scorer.js';
 
-export { ExactMatchScorer } from './scorers/exact-match-scorer.js';
-
 // Export rules system
 export {
   AlertStatus,
