@@ -35,16 +35,21 @@ export const UNBOUNDED_SCORERS = new Set<APIScorer>([
 ]);
 
 // API URLs
-export const ROOT_API = 'https://api.judgmentlabs.ai';
-export const JUDGMENT_EVAL_API_URL = `${ROOT_API}/evaluate/`;
+// Define ROOT_API directly as a constant string
+export const ROOT_API = 'https://api.judgmentlabs.ai'; 
+
+// Dataset API URLs (derive from ROOT_API)
 export const JUDGMENT_DATASETS_PUSH_API_URL = `${ROOT_API}/datasets/push/`;
 export const JUDGMENT_DATASETS_PULL_API_URL = `${ROOT_API}/datasets/pull/`;
 export const JUDGMENT_DATASETS_DELETE_API_URL = `${ROOT_API}/datasets/delete/`;
 export const JUDGMENT_DATASETS_EXPORT_JSONL_API_URL = `${ROOT_API}/datasets/export_jsonl/`;
 export const JUDGMENT_DATASETS_PROJECT_STATS_API_URL = `${ROOT_API}/datasets/fetch_stats_by_project/`;
 export const JUDGMENT_DATASETS_INSERT_API_URL = `${ROOT_API}/datasets/insert_examples/`;
-export const JUDGMENT_EVAL_LOG_API_URL = `${ROOT_API}/log_eval_results/`;
+
+// Evaluation API URLs (derive from ROOT_API)
 export const JUDGMENT_EVAL_FETCH_API_URL = `${ROOT_API}/fetch_eval_results/`;
+export const JUDGMENT_EVAL_API_URL = `${ROOT_API}/evaluate/`;
+export const JUDGMENT_EVAL_LOG_API_URL = `${ROOT_API}/log_eval_results/`;
 export const JUDGMENT_EVAL_DELETE_API_URL = `${ROOT_API}/delete_eval_results_by_project_and_run_names/`;
 export const JUDGMENT_EVAL_DELETE_PROJECT_API_URL = `${ROOT_API}/delete_eval_results_by_project/`;
 export const JUDGMENT_PROJECT_DELETE_API_URL = `${ROOT_API}/projects/delete/`;
@@ -54,7 +59,6 @@ export const JUDGMENT_TRACES_SAVE_API_URL = `${ROOT_API}/traces/save/`;
 export const JUDGMENT_TRACES_DELETE_API_URL = `${ROOT_API}/traces/delete/`;
 export const JUDGMENT_TRACES_ADD_TO_EVAL_QUEUE_API_URL = `${ROOT_API}/traces/add_to_eval_queue/`;
 export const JUDGMENT_CALCULATE_TOKEN_COSTS_API_URL = `${ROOT_API}/calculate-token-costs`;
-export const JUDGMENT_WEBSOCKET_URL = process.env.JUDGMENT_WEBSOCKET_URL || 'wss://api.judgmentlabs.ai/ws/traces/';
 export const JUDGMENT_ADD_TO_RUN_EVAL_QUEUE_API_URL = `${ROOT_API}/add_to_run_eval_queue/`;
 
 // RabbitMQ

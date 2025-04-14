@@ -1,8 +1,8 @@
 import * as dotenv from 'dotenv';
-import axios from 'axios';
-import { Example } from './data/example.js';
+import axios, { AxiosError, AxiosResponse } from 'axios';
+import { Example, ExampleOptions } from './data/example.js';
 import { ScoringResult } from './data/result.js';
-import { APIJudgmentScorer, JudgevalScorer, ScorerWrapper, Scorer } from './scorers/base-scorer.js';
+import { APIJudgmentScorer, JudgevalScorer, ScorerWrapper } from './scorers/base-scorer.js';
 import { EvaluationRun } from './evaluation-run.js';
 import { Rule, Condition } from './rules.js';
 import { runEval, assertTest, JudgmentAPIError } from './run-evaluation.js';
@@ -12,9 +12,13 @@ import {
   JUDGMENT_EVAL_DELETE_API_URL,
   JUDGMENT_EVAL_DELETE_PROJECT_API_URL,
   JUDGMENT_PROJECT_DELETE_API_URL,
-  JUDGMENT_PROJECT_CREATE_API_URL
+  JUDGMENT_PROJECT_CREATE_API_URL,
 } from './constants.js';
 import logger from './common/logger-instance.js';
+// Keep progress bar imports if used elsewhere (e.g., waitForEvaluation)
+import cliProgress from 'cli-progress'; 
+import colors from 'ansi-colors'; 
+import { EvalDatasetClient } from './data/datasets/eval-dataset-client.js';
 
 // Load environment variables
 dotenv.config();
@@ -284,169 +288,19 @@ export class JudgmentClient {
    * Evaluate a dataset
    */
   public async evaluateDataset(
-    dataset: any, // EvalDataset would be implemented separately
+    dataset: any, // Keep type loose for stub
     scorers: Array<ScorerWrapper | JudgevalScorer>,
     model: string | string[] | any,
     aggregator?: string,
     metadata?: Record<string, any>,
-    projectName: string = '',
-    evalRunName: string = '',
+    projectName: string = 'default_project',
+    evalRunName: string = 'default_eval_run',
     logResults: boolean = true,
     useJudgment: boolean = true,
     rules?: Rule[]
   ): Promise<ScoringResult[]> {
-    try {
-      // Load appropriate implementations for all scorers
-      const loadedScorers: Array<JudgevalScorer | APIJudgmentScorer> = [];
-      for (const scorer of scorers) {
-        try {
-          if (scorer instanceof ScorerWrapper) {
-            loadedScorers.push(scorer.loadImplementation(useJudgment));
-          } else {
-            // Assuming scorers passed are already JudgevalScorer or APIJudgmentScorer
-             loadedScorers.push(scorer as JudgevalScorer | APIJudgmentScorer);
-          }
-        } catch (error) {
-          throw new Error(`Failed to load implementation for scorer ${scorer.constructor.name}: ${error instanceof Error ? error.message : String(error)}`);
-        }
-      }
-
-      // Prevent using JudgevalScorer with rules - only APIJudgmentScorer allowed with rules
-      if (rules && loadedScorers.some(scorer => scorer instanceof JudgevalScorer)) {
-        throw new Error('Cannot use Judgeval scorers (only API scorers) when using rules. Please either remove rules or use only APIJudgmentScorer types.');
-      }
-
-      // Convert ScorerWrapper in rules to their implementations
-      let loadedRules: Rule[] | undefined;
-      if (rules) {
-        loadedRules = [];
-        for (const rule of rules) {
-          try {
-            const processedConditions: Condition[] = [];
-            for (const condition of rule.conditions) {
-              // Convert metric if it's a ScorerWrapper
-              if (condition.metric instanceof ScorerWrapper) {
-                try {
-                    const loadedMetric = condition.metric.loadImplementation(useJudgment);
-                    const newCondition = new Condition(loadedMetric);
-                    Object.assign(newCondition, { ...condition, metric: loadedMetric });
-                    processedConditions.push(newCondition);
-                } catch (error) {
-                  throw new Error(`Failed to convert ScorerWrapper to implementation in rule '${rule.name}', condition metric '${condition.metric.constructor.name}': ${error instanceof Error ? error.message : String(error)}`);
-                }
-              } else {
-                processedConditions.push(condition);
-              }
-            }
-
-            // Create new rule with processed conditions
-            const newRule = new Rule(
-              rule.name,
-              processedConditions,
-              rule.combine_type,
-              rule.description,
-              rule.notification,
-              rule.ruleId
-            );
-            loadedRules.push(newRule);
-          } catch (error) {
-             throw new Error(`Failed to process rule '${rule.name}': ${error instanceof Error ? error.message : String(error)}`);
-          }
-        }
-      }
-
-      const evaluationRun = new EvaluationRun({
-        logResults,
-        projectName,
-        evalName: evalRunName,
-        examples: dataset.examples, // Assuming dataset has an 'examples' property
-        scorers: loadedScorers,
-        model,
-        aggregator,
-        metadata,
-        judgmentApiKey: this.judgmentApiKey,
-        rules: loadedRules,
-        organizationId: this.organizationId
-      });
-
-       // Assuming override=false, ignoreErrors=true, asyncExecution=false as defaults for evaluateDataset
-      return runEval(evaluationRun, false, true, false);
-    } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('one or more fields are invalid')) {
-          throw new Error(`Please check your EvaluationRun object, one or more fields are invalid: \n${error.message}`);
-        } else {
-          throw new Error(`An unexpected error occurred during evaluation: ${error.message}`);
-        }
-      } else {
-        throw new Error(`An unexpected error occurred during evaluation: ${String(error)}`);
-      }
-    }
-  }
-
-  /**
-   * Create a dataset
-   */
-  public createDataset(): any {
-    // This would be implemented with EvalDataset
-    throw new Error('Not implemented yet');
-  }
-
-  /**
-   * Push a dataset to the Judgment platform
-   */
-  public async pushDataset(
-    alias: string,
-    dataset: any,
-    projectName: string,
-    overwrite: boolean = false
-  ): Promise<boolean> {
-    // This would be implemented with EvalDataset
-    throw new Error('Not implemented yet');
-  }
-
-  /**
-   * Pull a dataset from the Judgment platform
-   */
-  public async pullDataset(
-    alias: string,
-    projectName: string
-  ): Promise<any> {
-    // This would be implemented with EvalDataset
-    throw new Error('Not implemented yet');
-  }
-
-  /**
-   * Delete a dataset from the Judgment platform
-   */
-  public async deleteDataset(
-    alias: string,
-    projectName: string
-  ): Promise<boolean> {
-    // This would be implemented with EvalDataset
-    throw new Error('Not implemented yet');
-  }
-
-  /**
-   * Pull project dataset stats from the Judgment platform
-   */
-  public async pullProjectDatasetStats(
-    projectName: string
-  ): Promise<Record<string, any>> {
-    // This would be implemented with EvalDataset
-    throw new Error('Not implemented yet');
-  }
-
-  /**
-   * Insert examples into a dataset on the Judgment platform
-   */
-  public async insertDataset(
-    alias: string,
-    examples: Example[],
-    projectName: string
-  ): Promise<boolean> {
-    // This would be implemented with EvalDataset
-    throw new Error('Not implemented yet');
+    // Keep type loose for stub
+    throw new Error('Not implemented in JudgmentClient. Use EvalDatasetClient.');
   }
 
   /**
@@ -470,11 +324,7 @@ export class JudgmentClient {
         JUDGMENT_EVAL_FETCH_API_URL,
         evalRunRequestBody,
         {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.judgmentApiKey}`,
-            'X-Organization-Id': this.organizationId
-          }
+          headers: this.getAuthHeaders()
         }
       );
 
@@ -502,7 +352,8 @@ export class JudgmentClient {
           expectedTools: dataObject.expected_tools,
           exampleId: dataObject.example_id,
           exampleIndex: dataObject.example_index,
-          timestamp: dataObject.timestamp
+          timestamp: dataObject.timestamp,
+          example: dataObject.example // Include example boolean
         });
         
         evalRunResult[0].id = resultId;
@@ -515,10 +366,8 @@ export class JudgmentClient {
 
       return evalRunResult;
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response) {
-        throw new Error(`Error fetching eval results: ${JSON.stringify(error.response.data)}`);
-      }
-      throw new Error(`Error fetching eval results: ${String(error)}`);
+      this.handleApiError(error, 'pullEval');
+      throw error;
     }
   }
 
@@ -534,99 +383,73 @@ export class JudgmentClient {
     evalRunName: string,
     format: 'json' | 'csv' = 'json'
   ): Promise<string> {
+    logger.info(`Exporting eval results for project '${projectName}', run '${evalRunName}' as ${format}`);
     try {
-      const evalRunArray = await this.pullEval(projectName, evalRunName);
-      const evalRunData = evalRunArray[0]; // Get the first element containing id and results
+      const resultsData = await this.pullEval(projectName, evalRunName);
 
-      if (!evalRunData || !evalRunData.results) {
-         return format === 'json' ? JSON.stringify([], null, 2) : 'No results found';
+      if (!resultsData || resultsData.length === 0 || !resultsData[0].results) {
+        logger.warn('No results found to export.');
+        return '';
       }
 
+      const results = resultsData[0].results as ScoringResult[];
+
       if (format === 'json') {
-        // Return the whole structure including ID and results array
-        return JSON.stringify(evalRunData, null, 2);
+        // Pretty print JSON
+        return JSON.stringify(results.map(r => r.toJSON()), null, 2);
       } else if (format === 'csv') {
-        const results = evalRunData.results;
-        if (!Array.isArray(results) || results.length === 0) {
-          return 'No results found';
-        }
+        if (results.length === 0) return ''; // No data to export
 
-        // Use csv-writer instead of json2csv
-        let createObjectCsvStringifier;
-        try {
-           // Use dynamic import() for ES Modules
-           const csvWriterModule = await import('csv-writer');
-           createObjectCsvStringifier = csvWriterModule.createObjectCsvStringifier;
-           if (!createObjectCsvStringifier) { // Check if the function exists
-              throw new Error("Could not load createObjectCsvStringifier from csv-writer");
-           }
-        } catch (e) {
-           // Provide a more helpful error message
-           const errorMsg = e instanceof Error ? e.message : String(e);
-           // Update error message to reflect import() failure
-           console.error(`Failed to dynamically import 'csv-writer': ${errorMsg}. Ensure it's installed (\`npm install csv-writer\`).`);
-           throw new Error("The 'csv-writer' package is required for CSV export but failed to load dynamically.");
-        }
+        // Dynamically determine headers from the first result object
+        // Flatten the structure for CSV
+        const flatResults = results.map(result => {
+          const flat: Record<string, any> = {};
+          const exampleData = result.dataObject?.toJSON() ?? {}; // Use toJSON which gives snake_case
+          const scorersData = result.scorersData ?? [];
+          
+          // Add example data fields (snake_case)
+          for (const key in exampleData) {
+             // Prefix example fields to avoid collision, e.g., example_input
+            flat[`example_${key}`] = exampleData[key]; 
+          }
 
+          // Add scorers data
+          scorersData.forEach(scorer => {
+            flat[`scorer_${scorer.name}_score`] = scorer.score;
+            flat[`scorer_${scorer.name}_additional_metadata`] = JSON.stringify(scorer.additional_metadata);
+            flat[`scorer_${scorer.name}_error`] = scorer.error;
+          });
+          
+          // Add top-level error if present
+          flat['top_level_error'] = result.error;
 
-        try {
-          // Flatten the structure slightly for better CSV output
-          const processedResults = results.map((result: ScoringResult) => {
-             // Flatten dataObject properties and scorersData
-             const flatResult: Record<string, any> = {};
-             flatResult.eval_run_id = evalRunData.id; // Add eval run ID
+          return flat;
+        });
 
-             // Flatten dataObject
-             if (result.dataObject) {
-               for (const [key, value] of Object.entries(result.dataObject)) {
-                 // Prefix with 'data_' to avoid potential clashes
-                 flatResult[`data_${key}`] = (typeof value === 'object' && value !== null) ? JSON.stringify(value) : value;
-               }
-             }
+        // Get all unique keys from the flattened results for headers
+        const headers = Array.from(new Set(flatResults.flatMap(Object.keys)));
 
-             // Flatten scorersData - creates columns like scorer_0_name, scorer_0_score, etc.
-             if (Array.isArray(result.scorersData)) {
-                result.scorersData.forEach((scorerData, index) => {
-                    flatResult[`scorer_${index}_name`] = scorerData.name;
-                    flatResult[`scorer_${index}_score`] = (typeof scorerData.score === 'object' && scorerData.score !== null) ? JSON.stringify(scorerData.score) : scorerData.score;
-                    flatResult[`scorer_${index}_error`] = scorerData.error;
-                    // Add other scorer fields if necessary, e.g., metadata
-                    if (scorerData.additional_metadata) {
-                         flatResult[`scorer_${index}_metadata`] = JSON.stringify(scorerData.additional_metadata);
-                    }
-                });
-             }
+        // Use papaparse for robust CSV generation
+        const Papa = require('papaparse'); // Use require here if not imported at top
+        const csv = Papa.unparse({
+          fields: headers,
+          data: flatResults
+        }, {
+          header: true,
+          quotes: true, // Ensure fields with commas/newlines are quoted
+          quoteChar: '"',
+          escapeChar: '"',
+          delimiter: ','
+        });
 
-             flatResult.error = result.error; // Top-level error for the example processing
-             return flatResult;
-           });
-
-           // Define headers dynamically based on the keys of the first processed result
-           if (processedResults.length === 0) {
-                return 'No data to export after processing.'; // Handle case with no valid results after processing
-           }
-           const headers = Object.keys(processedResults[0]).map(key => ({ id: key, title: key }));
-
-           const csvStringifier = createObjectCsvStringifier({
-               header: headers
-           });
-
-           // Generate CSV string (header + records)
-           return csvStringifier.getHeaderString() + csvStringifier.stringifyRecords(processedResults);
-
-        } catch (error) {
-          console.error('Error converting to CSV:', error);
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          return `Error generating CSV: ${errorMessage}`;
-        }
+        return csv;
       } else {
         throw new Error(`Unsupported export format: ${format}`);
       }
     } catch (error) {
-       if (error instanceof Error) {
-           throw new Error(`Failed to export evaluation results: ${error.message}`);
-       }
-       throw new Error(`Failed to export evaluation results: ${String(error)}`);
+      logger.error(`Error exporting eval results: ${error}`);
+      this.handleApiError(error, 'exportEvalResults');
+      throw error;
     }
   }
 
@@ -637,48 +460,23 @@ export class JudgmentClient {
     projectName: string,
     evalRunNames: string[]
   ): Promise<boolean> {
-    if (!evalRunNames || evalRunNames.length === 0) {
-      throw new Error('No evaluation run names provided');
-    }
-
-    // Body matches Python's structure for this endpoint
-    const evalRunRequestBody: DeleteEvalRunRequestBody = {
+    logger.info(`Deleting eval runs: ${evalRunNames.join(', ')} from project: ${projectName}`);
+    const requestBody: DeleteEvalRunRequestBody = {
       project_name: projectName,
       eval_names: evalRunNames,
-      judgment_api_key: this.judgmentApiKey // Required by this specific API endpoint
+      judgment_api_key: this.judgmentApiKey,
     };
 
     try {
-      const response = await axios.delete(
-        JUDGMENT_EVAL_DELETE_API_URL, // Use constant
-        {
-          data: evalRunRequestBody,
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.judgmentApiKey}`,
-            'X-Organization-Id': this.organizationId
-          }
-        }
-      );
-
-      return Boolean(response.data);
+      await axios.post(JUDGMENT_EVAL_DELETE_API_URL, requestBody, {
+        headers: this.getAuthHeaders()
+      });
+      logger.info('Successfully deleted eval runs.');
+      return true;
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-         const status = error.response?.status;
-         const data = error.response?.data;
-        if (status === 404) {
-          throw new Error(`Eval results not found: ${JSON.stringify(data)}`);
-        } else if (status === 500) {
-          throw new Error(`Error deleting eval results: ${JSON.stringify(data)}`);
-        } else {
-           throw new Error(`Error deleting eval results (${status}): ${JSON.stringify(data)}`);
-        }
-      }
-      // Rethrow original or wrapped error
-       if (error instanceof Error) {
-          throw new Error(`Error deleting eval results: ${error.message}`);
-       }
-       throw new Error(`Error deleting eval results: ${String(error)}`);
+      logger.error(`Error deleting eval runs: ${error}`);
+      this.handleApiError(error, 'deleteEval');
+      return false;
     }
   }
 
@@ -688,42 +486,22 @@ export class JudgmentClient {
   public async deleteProjectEvals(
     projectName: string
   ): Promise<boolean> {
-    try {
-      const response = await axios.delete(
-        JUDGMENT_EVAL_DELETE_PROJECT_API_URL, // Use constant
-        {
-          // Remove judgment_api_key from body to match Python (uses header auth)
-          data: {
-            project_name: projectName,
-          },
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.judgmentApiKey}`,
-            'X-Organization-Id': this.organizationId
-          }
-        }
-      );
+    logger.info(`Deleting ALL eval runs for project: ${projectName}`);
+    const requestBody = {
+      project_name: projectName,
+      judgment_api_key: this.judgmentApiKey,
+    };
 
-      // Python returns response.json(), check if TS response needs similar handling
-      return Boolean(response.data); // Assuming response.data indicates success
+    try {
+      await axios.post(JUDGMENT_EVAL_DELETE_PROJECT_API_URL, requestBody, {
+        headers: this.getAuthHeaders()
+      });
+      logger.info(`Successfully deleted all eval runs for project ${projectName}.`);
+      return true;
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const status = error.response?.status;
-        const data = error.response?.data;
-        if (status === 404) {
-          // Assuming 404 might mean project not found or no evals to delete
-          console.warn(`Project '${projectName}' not found or no evals to delete.`);
-          return false; // Or true depending on desired idempotency behavior
-        } else if (status === 500) {
-          throw new Error(`Error deleting project evals: ${JSON.stringify(data)}`);
-        } else {
-           throw new Error(`Error deleting project evals (${status}): ${JSON.stringify(data)}`);
-        }
-      }
-       if (error instanceof Error) {
-           throw new Error(`Error deleting project evals: ${error.message}`);
-       }
-       throw new Error(`Error deleting project evals: ${String(error)}`);
+      logger.error(`Error deleting project evals: ${error}`);
+      this.handleApiError(error, 'deleteProjectEvals');
+      return false;
     }
   }
 
@@ -733,37 +511,33 @@ export class JudgmentClient {
   public async createProject(
     projectName: string
   ): Promise<boolean> {
-    try {
-      const response = await axios.post(
-        JUDGMENT_PROJECT_CREATE_API_URL, // Use constant
-        // Remove judgment_api_key from body to match Python (uses header auth)
-        {
-          project_name: projectName,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.judgmentApiKey}`,
-            'X-Organization-Id': this.organizationId
-          }
-        }
-      );
+    logger.info(`Creating project: ${projectName}`);
+    const requestBody = {
+      project_name: projectName,
+      judgment_api_key: this.judgmentApiKey,
+    };
 
-      // Python returns response.json(), check if TS response needs similar handling
-      return Boolean(response.data); // Assuming response.data indicates success
-    } catch (error) {
-      if (axios.isAxiosError(error) && error.response) {
-         // Check for specific conflict error (e.g., 409) if API provides it
-         if (error.response.status === 409) {
-              console.warn(`Project '${projectName}' already exists.`);
-              return false; // Or true if idempotent creation is desired
-         }
-        throw new Error(`Error creating project (${error.response.status}): ${JSON.stringify(error.response.data)}`);
-      } else if (error instanceof Error) {
-        throw new Error(`Error creating project: ${error.message}`);
+    try {
+      const response = await axios.post(JUDGMENT_PROJECT_CREATE_API_URL, requestBody, {
+         headers: this.getAuthHeaders()
+      });
+      
+      // Check for specific success message or status if API provides one
+      if (response.data && response.data.message === 'Project added successfully') {
+         logger.info(`Successfully created project: ${projectName}`);
+         return true;
+      } else if (response.data && response.data.message === 'Project already exists') {
+          logger.warn(`Project '${projectName}' already exists.`);
+          return true; // Or false, depending on desired behavior for existing projects
       } else {
-        throw new Error(`Error creating project: ${String(error)}`);
+          logger.error(`Failed to create project '${projectName}'. Response: ${JSON.stringify(response.data)}`);
+          return false;
       }
+
+    } catch (error) {
+      logger.error(`Error creating project: ${error}`);
+      this.handleApiError(error, 'createProject');
+      return false;
     }
   }
 
@@ -773,36 +547,28 @@ export class JudgmentClient {
   public async deleteProject(
     projectName: string
   ): Promise<boolean> {
-    try {
-      const response = await axios.delete(
-        JUDGMENT_PROJECT_DELETE_API_URL, // Use constant
-        {
-          // Remove judgment_api_key from body to match Python (uses header auth)
-          data: {
-            project_name: projectName,
-          },
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.judgmentApiKey}`,
-            'X-Organization-Id': this.organizationId
-          }
-        }
-      );
+    logger.info(`Deleting project: ${projectName}`);
+    const requestBody = {
+      project_name: projectName,
+      judgment_api_key: this.judgmentApiKey,
+    };
 
-       // Python returns response.json(), check if TS response needs similar handling
-      return Boolean(response.data); // Assuming response.data indicates success
-    } catch (error) {
-       if (axios.isAxiosError(error) && error.response) {
-          if (error.response.status === 404) {
-               console.warn(`Project '${projectName}' not found for deletion.`);
-               return false; // Or true depending on desired idempotency
-          }
-         throw new Error(`Error deleting project (${error.response.status}): ${JSON.stringify(error.response.data)}`);
-       } else if (error instanceof Error) {
-         throw new Error(`Error deleting project: ${error.message}`);
+    try {
+       const response = await axios.post(JUDGMENT_PROJECT_DELETE_API_URL, requestBody, {
+         headers: this.getAuthHeaders()
+      });
+
+       if (response.data && response.data.message === 'Project deleted successfully') {
+         logger.info(`Successfully deleted project: ${projectName}`);
+         return true;
        } else {
-         throw new Error(`Error deleting project: ${String(error)}`);
+         logger.error(`Failed to delete project '${projectName}'. Response: ${JSON.stringify(response.data)}`);
+         return false;
        }
+    } catch (error) {
+      logger.error(`Error deleting project: ${error}`);
+      this.handleApiError(error, 'deleteProject');
+      return false;
     }
   }
 
@@ -810,34 +576,31 @@ export class JudgmentClient {
    * Validate that the user API key is valid
    */
   private async validateApiKey(): Promise<[boolean, string]> {
+    logger.debug('Validating API Key...');
     try {
-      const response = await axios.post(
-        `${ROOT_API}/validate_api_key/`, // Use ROOT_API
-        {},  // Empty body
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.judgmentApiKey}`,
-            // Removed 'X-Organization-Id' header to match Python for this specific endpoint
-          }
-        }
-      );
-
-      if (response.status === 200) {
-        return [true, JSON.stringify(response.data)];
-      } else {
-        // Status might be non-200 but still valid JSON error response
-        return [false, response.data?.detail || `Error validating API key (Status: ${response.status})`];
-      }
+      // Instantiate EvalDatasetClient to perform the validation call
+      const datasetClient = new EvalDatasetClient(this.judgmentApiKey, this.organizationId);
+      // Use the dataset client to make the call
+      await datasetClient.pullProjectDatasetStats('__api_key_validation__'); 
+      logger.debug('API Key appears valid.');
+      return [true, 'API Key is valid.'];
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response) {
-        return [false, error.response.data?.detail || `Error validating API key (Status: ${error.response.status})`];
-      } else if (error instanceof Error) {
-         return [false, `Error validating API key: ${error.message}`];
+      let message = 'API Key validation failed.';
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          message = 'API Key is invalid or expired.';
+        } else if (error.response?.status === 404) {
+          // If validation endpoint returns 404, key might be valid but endpoint wrong/project not found
+          // This depends on the specific validation endpoint behavior
+          message = 'API Key might be valid, but validation endpoint returned 404.'; 
+        } else {
+          message = `API Key validation failed with status ${error.response?.status}: ${error.message}`;
+        }
+      } else {
+        message = `API Key validation failed: ${String(error)}`;
       }
-       else {
-        return [false, `Unknown error validating API key: ${String(error)}`];
-      }
+      logger.error(message);
+      return [false, message];
     }
   }
 
@@ -882,15 +645,12 @@ export class JudgmentClient {
    * @returns The results of the evaluation run as ScoringResult[] or empty array on error/no results.
    */
   async pullEvalResults(projectName: string, evalRunName: string): Promise<ScoringResult[]> {
-    try {
-      const evalRunArray = await this.pullEval(projectName, evalRunName);
-      // pullEval returns [{ id: ..., results: [...] }], extract results
-      return evalRunArray[0]?.results || [];
-    } catch (error) {
-       // Log error but return empty array to allow waitForEvaluation to potentially retry
-       logger.error(`Failed to pull evaluation results for '${evalRunName}': ${error instanceof Error ? error.message : String(error)}`);
-       return [];
+    const rawResults = await this.pullEval(projectName, evalRunName);
+    if (!rawResults || rawResults.length === 0 || !rawResults[0].results) {
+      return [];
     }
+    // Assuming pullEval correctly returns results in the expected format
+    return rawResults[0].results as ScoringResult[];
   }
 
   /**
@@ -901,94 +661,82 @@ export class JudgmentClient {
    * @returns An object representing the status { status: string, progress: number, message: string }
    */
   public async checkEvalStatus(projectName: string, evalRunName: string): Promise<{ status: string; progress: number; message: string; error?: string }> {
-     // Using 'eval_name' in body for consistency with pullEval/fetch endpoint.
     const requestBody: EvalRunRequestBody = {
         project_name: projectName,
-        eval_name: evalRunName, // Use 'eval_name'
+        eval_name: evalRunName,
         judgment_api_key: this.judgmentApiKey,
     };
 
     try {
-      const response = await axios.post(
-        JUDGMENT_EVAL_FETCH_API_URL, // Use fetch URL
-        requestBody,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.judgmentApiKey}`,
-            'X-Organization-Id': this.organizationId
-          },
-          timeout: 15000 // Slightly increased timeout for status checks
+        const response = await axios.post<{ 
+            status?: string;
+            progress?: number;
+            message?: string;
+            error?: string;
+            // Also handle case where full results are returned
+            results?: any[]; 
+            id?: string; 
+        }>(JUDGMENT_EVAL_FETCH_API_URL, requestBody, {
+            headers: this.getAuthHeaders(),
+            // Add a shorter timeout for status checks?
+            // timeout: 5000 
+        });
+
+        const data = response.data;
+
+        // Check if the response looks like a status object
+        if (data && typeof data.status === 'string') {
+            return { 
+                status: data.status || 'unknown',
+                progress: typeof data.progress === 'number' ? data.progress : 0,
+                message: data.message || '',
+                error: data.error
+            };
+        } 
+        // Check if the response looks like completed results (array format from pullEval)
+        else if (Array.isArray(data) && data.length > 0 && data[0].results) {
+             return {
+                 status: 'completed',
+                 progress: 100,
+                 message: 'Evaluation completed.'
+             };
         }
-      );
+        // Check if response looks like completed results (single object format)
+         else if (data && typeof data.id === 'string' && Array.isArray(data.results)) { // Adjust based on actual API response for single result fetch
+             return {
+                 status: 'completed',
+                 progress: 100,
+                 message: 'Evaluation completed.'
+             };
+         } 
+         // Handle other potential responses or assume pending/unknown
+         else {
+            logger.warn(`Unexpected response format when checking status for ${evalRunName}:`, data);
+            return { 
+                status: 'unknown', 
+                progress: 0, 
+                message: 'Could not determine status from API response.'
+             };
+        }
 
-       // Interpret response: API might return status object or full results array
-       let statusData: any = { status: 'unknown', progress: 0, message: '' };
-
-       if (Array.isArray(response.data)) {
-           // If it's an array, assume results are complete unless explicitly stated otherwise
-           if (response.data.length > 0 && response.data[0]?.result?.status) {
-                // Check if the first result object contains status info
-               statusData = response.data[0].result; // Assuming status is within the 'result' field
-           } else if (response.data.length > 0) {
-               // Assume complete if we get results array without specific status fields
-               statusData = { status: 'complete', progress: 1.0, message: 'Results received' };
-           } else {
-                // Empty array might mean still processing or no results yet
-               statusData = { status: 'processing', progress: 0, message: 'Waiting for results...' };
-           }
-       } else if (typeof response.data === 'object' && response.data !== null && response.data.status) {
-           // Might be a direct status object from the API
-           statusData = response.data;
-       } else {
-           // Unexpected response format
-           statusData = { status: 'unknown', progress: 0, message: `Unexpected response format: ${JSON.stringify(response.data)}` };
-       }
-
-      // Normalize the progress value
-      let progress = 0;
-      if (statusData.progress !== undefined && statusData.progress !== null) {
-          const parsedProgress = parseFloat(statusData.progress);
-          if (!isNaN(parsedProgress)) {
-              progress = Math.max(0, Math.min(1, parsedProgress)); // Ensure progress is between 0 and 1
-          }
+    } catch (error) {
+      // Don't throw here, return status indicating error
+      let errorMessage = 'Failed to fetch evaluation status.';
+      let status = 'error';
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+           status = 'not_found';
+           errorMessage = 'Evaluation run not found.';
+           logger.warn(`Evaluation run ${evalRunName} not found.`);
+      } else {
+          this.handleApiError(error, 'checkEvalStatus');
+          errorMessage = `Error fetching status: ${String(error)}`;
       }
-
-      const normalizedStatus = {
-          status: statusData.status || 'unknown',
-          progress: progress,
-          message: statusData.message || '',
-          error: statusData.error // Include error field if present
-      };
-
-      // Only log status if it's not being called from waitForEvaluation
-      // Check stack trace for caller function name
-      const stack = new Error().stack;
-      const isCalledByWaitForEvaluation = stack?.includes('waitForEvaluation');
-
-      if (!isCalledByWaitForEvaluation) {
-          // Use logger for status updates when called directly
-          logger.info(`Evaluation Status: ${normalizedStatus.status}`);
-          logger.info(`Progress: ${Math.round(normalizedStatus.progress * 100)}%`);
-          if (normalizedStatus.message) {
-              logger.info(`Message: ${normalizedStatus.message}`);
-          }
-           if (normalizedStatus.error) {
-              logger.error(`Error in status: ${normalizedStatus.error}`);
-          }
-      }
-
-      return normalizedStatus;
-    } catch (error: unknown) {
-      // Don't throw errors from status check, just return default 'unknown' status
-      // This allows waitForEvaluation to continue polling even on transient network issues
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error(`Error checking evaluation status for '${evalRunName}': ${errorMessage}`);
-      return {
-        status: 'unknown',
-        progress: 0,
-        message: `Error checking status: ${errorMessage}`
-      };
+       return {
+         status: status,
+         progress: 0,
+         message: errorMessage,
+         error: String(error) // Include error string
+       };
     }
   }
 
@@ -1008,103 +756,78 @@ export class JudgmentClient {
       showProgress?: boolean
     } = {}
   ): Promise<ScoringResult[]> {
-    const {
-      intervalMs = 3000,  // Slightly longer interval
-      maxAttempts = 200, // ~10 minutes total wait time (200 * 3s)
-      showProgress = true
-    } = options;
+    const { intervalMs = 5000, maxAttempts = 120, showProgress = true } = options; // Default: check every 5s for 10 mins
 
-    let attempts = 0;
-    let lastProgressPercent = -1;
-    let lastStatus = '';
-
+    let progressBar: cliProgress.SingleBar | undefined;
     if (showProgress) {
-        // Use logger for initial message
-        logger.info(`Waiting for evaluation "${evalRunName}" in project "${projectName}" to complete...`);
+        progressBar = new cliProgress.SingleBar({
+            format: `Waiting for ${colors.magenta(evalRunName)}... | ${colors.cyan('{bar}')} | {percentage}% || {status}`,
+            barCompleteChar: '\u2588',
+            barIncompleteChar: '\u2591',
+            hideCursor: true,
+            clearOnComplete: false,
+            stopOnComplete: true,
+        }, cliProgress.Presets.shades_classic);
+        progressBar.start(100, 0, { status: 'Initiating...' });
     }
 
-    while (attempts < maxAttempts) {
-      attempts++;
-      try {
-        const status = await this.checkEvalStatus(projectName, evalRunName); // Call internal status check
-        const currentProgressPercent = Math.round(status.progress * 100);
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            const statusResult = await this.checkEvalStatus(projectName, evalRunName);
+            const progress = Math.max(0, Math.min(100, statusResult.progress || 0)); // Clamp progress
+            const statusText = statusResult.message || statusResult.status;
 
-        // Show progress/status updates only when they change significantly
-        if (showProgress && (currentProgressPercent !== lastProgressPercent || status.status !== lastStatus)) {
-           const progressBar = this._createProgressBar(currentProgressPercent >= 0 ? currentProgressPercent : 0);
-           // Use process.stdout.write to potentially overwrite the line (works best in standard terminals)
-           process.stdout.write('\rAttempt ' + attempts + '/' + maxAttempts + ' | Status: ' + status.status + ' | Progress: ' + progressBar + ' ' + currentProgressPercent + '% ');
-           lastProgressPercent = currentProgressPercent;
-           lastStatus = status.status;
-        }
-
-        // Check evaluation status
-        if (status.status === 'complete') {
-           if (showProgress) {
-               process.stdout.write('\n'); // Keep direct console output for progress bar newline
-               // Use logger for status update
-               logger.info('Evaluation complete! Fetching results...');
-           }
-          try {
-            // Use the dedicated results fetching method
-            const results = await this.pullEvalResults(projectName, evalRunName);
-            if (results.length > 0) {
-                // Use logger for status update
-                logger.info(`Successfully fetched ${results.length} results.`);
-                return results;
-            } else {
-                 // If complete status but no results, might be an issue. Log and return empty.
-                 logger.warn(`Evaluation reported complete, but no results were fetched for '${evalRunName}'.`);
-                 return [];
+            if (progressBar) {
+                progressBar.update(progress, { status: statusText });
             }
-          } catch (fetchError) {
-            if (showProgress) process.stdout.write('\n'); // Keep direct console output
-            logger.error(`Error fetching results after completion for '${evalRunName}': ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`);
-            return []; // Return empty array on error
-          }
-        } else if (status.status === 'failed') {
-           if (showProgress) process.stdout.write('\n'); // Keep direct console output
-           logger.error(`Evaluation failed for '${evalRunName}': ${status.error || status.message || 'Unknown error'}`);
-          return []; // Return empty array on failure
-        } else if (status.status === 'unknown') {
-             // Log unknown status but continue polling
-             // Avoid flooding logs if status remains unknown
-             if (lastStatus !== 'unknown') {
-                 if (showProgress) process.stdout.write('\n'); // Keep direct console output
-                 logger.warn(`Evaluation status unknown for '${evalRunName}' (attempt ${attempts}). Retrying...`);
-                 lastProgressPercent = -1; // Reset progress display
+
+            if (statusResult.status === 'completed') {
+                if (progressBar) {
+                     progressBar.update(100, { status: colors.green('Completed! Fetching results...') });
+                }
+                // Fetch final results using pullEval
+                const finalResults = await this.pullEvalResults(projectName, evalRunName);
+                logger.info(`Evaluation run ${evalRunName} completed successfully.`);
+                return finalResults;
+            } else if (statusResult.status === 'error' || statusResult.status === 'failed') {
+                 // Concatenate error details into a single message string
+                 const errorMsg = `Evaluation run ${evalRunName} failed or encountered an error: ${statusResult.error ? String(statusResult.error) : statusResult.message}`;
+                 logger.error(errorMsg);
+                 if (progressBar) progressBar.stop();
+                 // Pass only the combined message to the constructor
+                 throw new JudgmentAPIError(errorMsg);
+            } else if (statusResult.status === 'not_found') {
+                const errorMsg = `Evaluation run ${evalRunName} not found.`;
+                logger.error(errorMsg);
+                if (progressBar) progressBar.stop();
+                // Pass only the message to the constructor
+                throw new JudgmentAPIError(errorMsg);
+            }
+
+            // Wait for the next interval
+            await new Promise(resolve => setTimeout(resolve, intervalMs));
+
+        } catch (error) {
+             // Handle errors during the wait loop (e.g., network issues during checkEvalStatus)
+             logger.error(`Error during waitForEvaluation loop (attempt ${attempt}): ${error}`);
+             // Option: Rethrow immediately vs. retry vs. specific handling
+             if (error instanceof JudgmentAPIError) { // If it was already a processed API error, rethrow
+                 if (progressBar) progressBar.stop();
+                 throw error;
              }
-             lastStatus = 'unknown';
-         } else {
-              // Still processing (e.g., 'processing', 'running', 'pending')
-              lastStatus = status.status;
-         }
-      } catch (error) {
-        // Log the error but continue polling (checkEvalStatus should handle internal errors gracefully)
-        if (showProgress) process.stdout.write('\n'); // Keep direct console output
-        logger.error(`Error during status check loop (attempt ${attempts}/${maxAttempts}): ${error instanceof Error ? error.message : String(error)}`);
-         lastProgressPercent = -1; // Reset progress display
-         lastStatus = 'error_in_loop'; // Indicate issue in the loop itself
-      }
-
-      // Wait before next poll only if not completed/failed
-      if (lastStatus !== 'complete' && lastStatus !== 'failed') {
-          await new Promise(resolve => setTimeout(resolve, intervalMs));
-      } else {
-           // Break loop if already completed or failed to avoid unnecessary delay
-           break;
-      }
-    } // End while loop
-
-    // If loop finished without completing/failing
-    if (lastStatus !== 'complete' && lastStatus !== 'failed') {
-        if (showProgress) process.stdout.write('\n'); // Keep direct console output
-        logger.error(`Evaluation polling timed out after ${attempts} attempts for "${evalRunName}". Last known status: ${lastStatus}`);
-        return []; // Return empty array on timeout
+              // For other errors, wait and retry (up to maxAttempts)
+             if (attempt === maxAttempts) {
+                  if (progressBar) progressBar.stop();
+                  throw new Error(`waitForEvaluation failed after ${maxAttempts} attempts: ${error}`);
+             }
+             // Still retryable, wait for interval
+             await new Promise(resolve => setTimeout(resolve, intervalMs));
+        }
     }
 
-    // Should technically be unreachable if break conditions work, but safeguard return
-    return [];
+    // If loop finishes without completion or error
+    if (progressBar) progressBar.stop();
+    throw new Error(`Evaluation run ${evalRunName} did not complete after ${maxAttempts} attempts.`);
   }
 
   /**
@@ -1113,12 +836,45 @@ export class JudgmentClient {
    * @returns A string representing the progress bar
    */
   private _createProgressBar(percent: number): string {
-    const width = 25; // Slightly wider bar
-    // Clamp percent between 0 and 100
-    const clampedPercent = Math.max(0, Math.min(100, percent));
-    const completed = Math.round(width * (clampedPercent / 100)); // Use round for potentially smoother look
-    const remaining = width - completed;
+    const width = 20; // Width of the progress bar
+    const filled = Math.round(width * (percent / 100));
+    const empty = width - filled;
+    return `[${'#'.repeat(filled)}${'.'.repeat(empty)}] ${percent.toFixed(1)}%`;
+  }
 
-    return '[' + '#'.repeat(completed) + '-'.repeat(remaining) + ']'; // Use different chars
+  // Keep helper methods private
+  private getAuthHeaders(): Record<string, string> {
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${this.judgmentApiKey}`,
+      'X-Organization-Id': this.organizationId,
+    };
+  }
+  
+  // Ensure this handles errors from Eval/Project API calls correctly
+  private handleApiError(error: unknown, context: string): void {
+    logger.error(`API Error during ${context}:`); 
+    if (axios.isAxiosError(error)) {
+      const axiosError = error as AxiosError;
+      const response = axiosError.response;
+
+      if (response) {
+        logger.error(`Status: ${response.status} ${response.statusText}`);
+        logger.debug('Response Data:', response.data); 
+        if (response.status === 422) {
+          logger.error('Validation Error Detail:', response.data);
+        } else if (context === 'pullEval' && response.status === 404) { // Keep eval-specific handling
+           logger.error(`Evaluation run not found.`);
+        } else if (context.startsWith('delete') && response.status === 404) { // Keep generic delete handling
+           logger.warn(`${context}: Resource not found, may have already been deleted.`);
+        } 
+      } else if (axiosError.request) {
+        logger.error('No response received from server.');
+      } else {
+        logger.error(`Error setting up API request for ${context}`);
+      }
+    } else {
+      logger.error(`Unexpected error during ${context}`);
+    }
   }
 }

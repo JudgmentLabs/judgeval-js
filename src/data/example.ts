@@ -3,30 +3,36 @@
  */
 export interface ExampleOptions {
   input: string;
-  actualOutput?: string;
-  expectedOutput?: string;
+  actualOutput?: string | string[];
+  expectedOutput?: string | string[];
   context?: string[];
   retrievalContext?: string[];
   additionalMetadata?: Record<string, any>;
-  toolsCalled?: any[];
-  expectedTools?: any[];
+  toolsCalled?: string[];
+  expectedTools?: string[];
+  name?: string;
   exampleId?: string;
   exampleIndex?: number;
   timestamp?: string;
+  traceId?: string;
+  example?: boolean;
 }
 
 export class Example {
   input: string;
-  actualOutput?: string;
-  expectedOutput?: string;
+  actualOutput?: string | string[];
+  expectedOutput?: string | string[];
   context?: string[];
   retrievalContext?: string[];
   additionalMetadata?: Record<string, any>;
-  toolsCalled?: any[];
-  expectedTools?: any[];
+  toolsCalled?: string[];
+  expectedTools?: string[];
+  name?: string;
   exampleId: string;
   exampleIndex?: number;
   timestamp?: string;
+  traceId?: string;
+  example?: boolean;
 
   constructor(options: ExampleOptions) {
     this.input = options.input;
@@ -37,9 +43,12 @@ export class Example {
     this.additionalMetadata = options.additionalMetadata;
     this.toolsCalled = options.toolsCalled;
     this.expectedTools = options.expectedTools;
+    this.name = options.name;
     this.exampleId = options.exampleId || this.generateUUID();
     this.exampleIndex = options.exampleIndex;
-    this.timestamp = options.timestamp;
+    this.timestamp = options.timestamp || new Date().toISOString();
+    this.traceId = options.traceId;
+    this.example = options.example;
   }
 
   /**
@@ -73,9 +82,12 @@ export class Example {
       additional_metadata: this.additionalMetadata,
       tools_called: this.toolsCalled,
       expected_tools: this.expectedTools,
+      name: this.name,
       example_id: this.exampleId,
       example_index: this.exampleIndex,
       timestamp: this.timestamp,
+      trace_id: this.traceId,
+      example: this.example,
     };
   }
 }
@@ -85,28 +97,31 @@ export class Example {
  */
 export class ExampleBuilder {
   private _input: string = '';
-  private _actualOutput?: string;
-  private _expectedOutput?: string;
+  private _actualOutput?: string | string[];
+  private _expectedOutput?: string | string[];
   private _context?: string[];
   private _retrievalContext?: string[];
   private _additionalMetadata?: Record<string, any>;
-  private _toolsCalled?: any[];
-  private _expectedTools?: any[];
+  private _toolsCalled?: string[];
+  private _expectedTools?: string[];
+  private _name?: string;
   private _exampleId?: string;
   private _exampleIndex?: number;
   private _timestamp?: string;
+  private _traceId?: string;
+  private _example?: boolean;
 
   input(input: string): ExampleBuilder {
     this._input = input;
     return this;
   }
 
-  actualOutput(actualOutput: string): ExampleBuilder {
+  actualOutput(actualOutput: string | string[]): ExampleBuilder {
     this._actualOutput = actualOutput;
     return this;
   }
 
-  expectedOutput(expectedOutput: string): ExampleBuilder {
+  expectedOutput(expectedOutput: string | string[]): ExampleBuilder {
     this._expectedOutput = expectedOutput;
     return this;
   }
@@ -126,13 +141,18 @@ export class ExampleBuilder {
     return this;
   }
 
-  toolsCalled(toolsCalled: any[]): ExampleBuilder {
+  toolsCalled(toolsCalled: string[]): ExampleBuilder {
     this._toolsCalled = toolsCalled;
     return this;
   }
 
-  expectedTools(expectedTools: any[]): ExampleBuilder {
+  expectedTools(expectedTools: string[]): ExampleBuilder {
     this._expectedTools = expectedTools;
+    return this;
+  }
+
+  name(name: string): ExampleBuilder {
+    this._name = name;
     return this;
   }
 
@@ -151,6 +171,16 @@ export class ExampleBuilder {
     return this;
   }
 
+  traceId(traceId: string): ExampleBuilder {
+    this._traceId = traceId;
+    return this;
+  }
+
+  example(example: boolean): ExampleBuilder {
+    this._example = example;
+    return this;
+  }
+
   build(): Example {
     if (!this._input) {
       throw new Error('Input is required for an Example');
@@ -165,9 +195,12 @@ export class ExampleBuilder {
       additionalMetadata: this._additionalMetadata,
       toolsCalled: this._toolsCalled,
       expectedTools: this._expectedTools,
+      name: this._name,
       exampleId: this._exampleId,
       exampleIndex: this._exampleIndex,
       timestamp: this._timestamp,
+      traceId: this._traceId,
+      example: this._example,
     });
   }
 }
