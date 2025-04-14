@@ -116,6 +116,7 @@
     "dist",
     "src/demo/**/*",
     "src/examples/**/*",
+    "src/e2etests/**/*",
     "tests/**/*"
   ]
 }

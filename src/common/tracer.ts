@@ -90,13 +90,15 @@ interface TraceEntry {
     function: string;
     span_id: string;
     depth: number;
-    timestamp: number; // Unix timestamp (seconds)
+    created_at: number; // Unix timestamp (seconds)
     duration?: number; // Seconds
     output?: any;
     inputs?: Record<string, any>;
     span_type: SpanType;
     parent_span_id?: string;
-    evaluation_runs?: any[]; // Placeholder for evaluation results
+    evaluation_runs?: any[]; // Array of evaluation results (should be objects, not arrays of objects)
+    trace_id?: string;
+    message?: string;
 }
 
 // <<< NEW: Interface for the Evaluation Run Payload START >>>
@@ -150,8 +152,7 @@ interface TraceSavePayload {
         total_cost_usd: number;
     };
     entries: CondensedSpanEntry[];
-    rules?: Record<string, Rule>;
-    empty_save: boolean;
+    evaluation_runs: any[];
     overwrite: boolean;
     parent_trace_id?: string | null;
     parent_name?: string | null;
@@ -162,13 +163,14 @@ interface CondensedSpanEntry {
     span_id: string;
     function: string;
     depth: number;
-    timestamp: number; // Start timestamp of the span
+    created_at: string; // Ensure type is string
     parent_span_id?: string | null;
     span_type: SpanType;
     inputs: Record<string, any> | null;
     output: any | null;
     evaluation_runs: any[]; // Array of evaluation results
     duration: number | null; // Duration in seconds
+    trace_id?: string; // Add trace_id field
     // Add children property for hierarchical structure
     children?: CondensedSpanEntry[];
 }
@@ -219,18 +221,15 @@ class TraceManagerClient {
                 headers: headers,
             });
 
-            if (!response.ok) {
-                const errorBody = await response.text();
-                console.error(`API Error (${response.status}) for ${options.method || 'GET'} ${url}: ${errorBody}`);
-                throw new Error(`Judgment API request failed: ${response.status} ${response.statusText} - ${errorBody}`);
-            }
+            // We will return the response object even if !response.ok
+            // The caller (e.g., saveTrace) is responsible for checking response.ok or response.status
 
             // Handle cases where the response might be empty (e.g., 204 No Content on DELETE)
             if (response.status === 204) {
                 return null; // Indicate success with no content
             }
 
-            return await response.json();
+            return response;
         } catch (error) {
             console.error(`Network or fetch error during ${options.method || 'GET'} ${url}:`, error);
             // Re-throw or handle as appropriate for the application context
@@ -245,21 +244,53 @@ class TraceManagerClient {
         });
     }
 
-    async saveTrace(traceData: TraceSavePayload, emptySave: boolean): Promise<any> {
-         const response = await this._fetch(JUDGMENT_TRACES_SAVE_API_URL, {
-             method: 'POST',
-             body: JSON.stringify(traceData),
-         });
+    async saveTrace(traceData: TraceSavePayload): Promise<any> {
+        // _fetch now returns the raw response object or throws on network error
+        const response = await this._fetch(JUDGMENT_TRACES_SAVE_API_URL, {
+            method: 'POST',
+            body: JSON.stringify(traceData), // Stringify directly here again
+        });
+ 
+        // Check if _fetch threw a network error (caught below) or returned an invalid object
+        if (!response) { 
+            // This case should ideally be caught by _fetch's catch block, but double-check
+            throw new Error('Failed to save trace data: No response received from API.');
+        }
 
-         // Optionally log the UI URL like the Python version
-         if (!emptySave && response?.ui_results_url) {
-              // Use console.info or a dedicated logger for user-facing messages
-              // Note: We can't replicate Rich library's colored link easily in standard console
-              console.info(`
-🔍 View trace: ${response.ui_results_url}
+        // Now, check the status code on the received response object
+        if (response.status === 400) {
+            // Attempt to get error body for more info
+            const errorBody = await response.text();
+            throw new Error(`Failed to save trace data: Check your Trace name for conflicts, set overwrite=True to overwrite existing traces: ${response.status} ${response.statusText || ''} - ${errorBody}`);
+        } else if (!response.ok) { // Handles other errors (5xx, 4xx except 400)
+            const errorBody = await response.text();
+            throw new Error(`Failed to save trace data: Status ${response.status} ${response.statusText || '(No status text)'} - ${errorBody}`);
+        }
+
+        // --- Success Path --- 
+        // Optionally log the UI URL (needs JSON parsing)
+        let responseData = null;
+        try {
+            // Handle 204 No Content specifically
+            if (response.status === 204) {
+                responseData = null; // Or maybe { success: true }?
+            } else {
+                responseData = await response.json(); // Parse JSON only on success
+            }
+        } catch (parseError) {
+            logger.warn("Failed to parse successful API response JSON.", { error: parseError });
+            // Depending on requirements, maybe throw, maybe return a default success object
+            throw new Error(`API request succeeded (${response.status}), but failed to parse JSON response.`);
+        }
+
+        if (responseData?.ui_results_url) {
+             console.info(`
+🔍 View trace: ${responseData.ui_results_url}
 `);
-         }
-         return response;
+        }
+        
+        // Return the parsed data (or null for 204)
+        return responseData; 
     }
 
     async deleteTrace(traceId: string): Promise<any> {
@@ -271,11 +302,11 @@ class TraceManagerClient {
     }
 
     async deleteTraces(traceIds: string[]): Promise<any> {
-         return this._fetch(JUDGMENT_TRACES_DELETE_API_URL, {
-             method: 'DELETE',
-             body: JSON.stringify({ trace_ids: traceIds }),
-         });
-     }
+        return this._fetch(JUDGMENT_TRACES_DELETE_API_URL, {
+            method: 'DELETE',
+            body: JSON.stringify({ trace_ids: traceIds }),
+        });
+    }
 
     async addTraceToEvalQueue(traceData: TraceSavePayload): Promise<any> {
         // Ensure traceData has the necessary structure for the queue endpoint
@@ -350,6 +381,7 @@ class TraceClient {
     private apiKey: string;
     private organizationId: string;
     private originalName: string; // Keep the original name if needed for display purposes
+    private _spanDepths: Record<string, number> = {}; // Track depth of active spans
 
     constructor(
          config: {
@@ -409,7 +441,7 @@ class TraceClient {
     recordInput(inputs: any): void {
         const traceClientContext = getTraceClientContext();
         const currentEntry = traceClientContext.entryStack.at(-1);
-        if (!currentEntry) {
+        if (!currentEntry || !currentEntry.span_id) {
             console.warn(`No current entry to record input to\nStack trace: ${new Error().stack}`);
             return;
         }
@@ -419,15 +451,17 @@ class TraceClient {
             span_id: currentEntry.span_id,
             inputs,
             function: currentEntry.function,
-            depth: currentEntry.depth,
-            span_type: currentEntry.span_type
-         });
+            depth: this._spanDepths[currentEntry.span_id],
+            created_at: Date.now() / 1000,
+            span_type: currentEntry.span_type,
+            message: `Inputs to ${currentEntry.function}`
+        });
     }
 
     recordOutput(output: any): void {
         const traceClientContext = getTraceClientContext();
         const currentEntry = traceClientContext.entryStack.at(-1);
-        if (!currentEntry) {
+        if (!currentEntry || !currentEntry.span_id) {
             console.warn(`No current entry to record output to\nStack trace: ${new Error().stack}`);
             return;
         }
@@ -437,35 +471,30 @@ class TraceClient {
             span_id: currentEntry.span_id,
             output,
             function: currentEntry.function,
-            depth: currentEntry.depth,
-            span_type: currentEntry.span_type
-         });
+            depth: this._spanDepths[currentEntry.span_id],
+            created_at: Date.now() / 1000,
+            span_type: currentEntry.span_type,
+            message: `Output from ${currentEntry.function}`
+        });
     }
 
     recordError(error: any): void {
         const traceClientContext = getTraceClientContext();
         const currentEntry = traceClientContext.entryStack.at(-1);
-        if (!currentEntry) {
+        if (!currentEntry || !currentEntry.span_id) {
             console.warn(`No current entry to record error to\nStack trace: ${new Error().stack}`);
             return;
-        }
-
-        let output = error;
-        if (error instanceof Error) {
-            output = {
-                name: error.name,
-                message: error.message,
-                stack: error.stack?.substring(0, 1000)
-            };
         }
 
         this.addEntry({
             type: 'error',
             span_id: currentEntry.span_id,
-            output,
+            output: error,
             function: currentEntry.function,
-            depth: currentEntry.depth,
-            span_type: currentEntry.span_type
+            depth: this._spanDepths[currentEntry.span_id],
+            created_at: Date.now() / 1000,
+            span_type: currentEntry.span_type,
+            message: `Error from ${currentEntry.function}`
         });
     }
 
@@ -477,19 +506,22 @@ class TraceClient {
         const spanType = options.spanType ?? 'span';
         const startTime = Date.now() / 1000;
         let depth = 0, parentSpanId = undefined;
-        if (parentEntry) {
-            depth = parentEntry.depth! + 1;
+        if (parentEntry && parentEntry.span_id) {
+            depth = this._spanDepths[parentEntry.span_id] + 1;
             parentSpanId = parentEntry.span_id;
         }
+
+        this._spanDepths[spanId] = depth;
 
         const entry: TraceEntry = {
             type: 'enter',
             function: name,
             span_id: spanId,
             depth: depth,
-            timestamp: startTime,
+            created_at: startTime,
             span_type: spanType,
-            parent_span_id: parentSpanId
+            parent_span_id: parentSpanId,
+            message: name
         };
         this.addEntry(entry);
         traceClientContext.entryStack.push(entry);
@@ -498,23 +530,27 @@ class TraceClient {
     endSpan(): void {
         const traceClientContext = getTraceClientContext();
         const enterEntry = traceClientContext.entryStack.pop();
-        if (!enterEntry) {
+        if (!enterEntry || !enterEntry.span_id) {
             console.warn("No enter entry to end");
             return;
         }
         
         const endTime = Date.now() / 1000;
-        const duration = endTime - enterEntry.timestamp!;
+        const duration = endTime - enterEntry.created_at!;
 
         this.addEntry({
             type: 'exit',
             function: enterEntry.function,
             span_id: enterEntry.span_id,
-            depth: enterEntry.depth,
-            timestamp: endTime,
+            depth: this._spanDepths[enterEntry.span_id],
+            created_at: endTime,
             duration: duration,
-            span_type: enterEntry.span_type
+            span_type: enterEntry.span_type,
+            message: `← ${enterEntry.function}`
         });
+
+        // Clean up depth tracking
+        delete this._spanDepths[enterEntry.span_id];
     }
 
     *span(
@@ -536,8 +572,9 @@ class TraceClient {
          return (Date.now() / 1000) - this.startTime;
      }
 
-     private condenseTrace(rawEntries: Partial<TraceEntry>[]): CondensedSpanEntry[] {
+     private condenseTrace(rawEntries: Partial<TraceEntry>[]): [CondensedSpanEntry[], any[]] {
          const spansById: Record<string, CondensedSpanEntry & { start_time?: number; end_time?: number }> = {};
+         const allEvaluationRuns: any[] = []; // To collect all eval runs
 
          for (const entry of rawEntries) {
              const spanId = entry.span_id;
@@ -548,7 +585,8 @@ class TraceClient {
                      span_id: spanId,
                      function: entry.function || 'unknown',
                      depth: entry.depth ?? 0,
-                     timestamp: entry.timestamp ?? 0,
+                     created_at: new Date((entry.created_at ?? 0) * 1000).toISOString(), // Convert number to ISO string
+                     trace_id: this.traceId, // Add trace_id
                      parent_span_id: entry.parent_span_id,
                      span_type: entry.span_type || 'span',
                      inputs: null,
@@ -565,14 +603,14 @@ class TraceClient {
                  case 'enter':
                      currentSpanData.function = entry.function || currentSpanData.function;
                      currentSpanData.depth = entry.depth ?? currentSpanData.depth;
-                     currentSpanData.timestamp = entry.timestamp ?? currentSpanData.timestamp;
+                     currentSpanData.created_at = new Date((entry.created_at ?? 0) * 1000).toISOString(); // Ensure created_at is string on update
                      currentSpanData.parent_span_id = entry.parent_span_id;
                      currentSpanData.span_type = entry.span_type || currentSpanData.span_type;
-                     currentSpanData.start_time = entry.timestamp;
+                     currentSpanData.start_time = entry.created_at; // Keep original number for duration calc
                      break;
                  case 'exit':
                      currentSpanData.duration = entry.duration ?? currentSpanData.duration;
-                     currentSpanData.end_time = entry.timestamp;
+                     currentSpanData.end_time = entry.created_at; // Keep original number for duration calc
                      if (currentSpanData.duration === null && currentSpanData.start_time && currentSpanData.end_time) {
                           currentSpanData.duration = currentSpanData.end_time - currentSpanData.start_time;
                      }
@@ -589,10 +627,13 @@ class TraceClient {
                      currentSpanData.output = entry.output;
                      break;
                  case 'evaluation':
-                     if (entry.evaluation_runs) {
-                         currentSpanData.evaluation_runs.push(...entry.evaluation_runs);
-                     }
-                     break;
+                      // Check if evaluation_runs is an array and has at least one element
+                      if (Array.isArray(entry.evaluation_runs) && entry.evaluation_runs.length > 0) {
+                          const evalPayload = entry.evaluation_runs[0]; // Extract the payload object
+                          currentSpanData.evaluation_runs.push(evalPayload); // Add the object to the span's list
+                          allEvaluationRuns.push(evalPayload); // Add the object to the central list
+                      }
+                      break;
              }
          }
 
@@ -624,9 +665,11 @@ class TraceClient {
              }
          }
 
-         roots.sort((a, b) => a.timestamp - b.timestamp);
+         // Sort using parsed dates
+         roots.sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
          for (const parentId in childrenMap) {
-             childrenMap[parentId].sort((a, b) => a.timestamp - b.timestamp);
+             // Sort using parsed dates
+             childrenMap[parentId].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
          }
 
          function buildFlatListDfs(span: CondensedSpanEntry) {
@@ -651,7 +694,7 @@ class TraceClient {
              }
          }
 
-         return sortedCondensedList;
+         return [sortedCondensedList, allEvaluationRuns]; // Return both
      }
 
      async save(emptySave: boolean = false): Promise<{ traceId: string; traceData: TraceSavePayload } | null> {
@@ -661,7 +704,8 @@ class TraceClient {
 
          const traceClientContext = getTraceClientContext();
          const totalDuration = this.getDuration();
-         const condensedEntries: CondensedSpanEntry[] = this.condenseTrace(traceClientContext.entries);
+         // Use the tuple returned by condenseTrace
+         const [condensedEntries, evaluationRuns] = this.condenseTrace(traceClientContext.entries);
 
          const tokenCounts = {
              prompt_tokens: 0,
@@ -735,29 +779,31 @@ class TraceClient {
                              entry.output.usage.total_cost_usd = costs.total_cost_usd;
                          }
                          
-                         // Add to the total costs
-                         tokenCounts.prompt_tokens_cost_usd += costs.prompt_tokens_cost_usd;
-                         tokenCounts.completion_tokens_cost_usd += costs.completion_tokens_cost_usd;
-                         tokenCounts.total_cost_usd += costs.total_cost_usd;
+                         // Add to the total costs, ensuring values are numbers (default to 0)
+                         tokenCounts.prompt_tokens_cost_usd += costs.prompt_tokens_cost_usd ?? 0.0;
+                         tokenCounts.completion_tokens_cost_usd += costs.completion_tokens_cost_usd ?? 0.0;
+                         tokenCounts.total_cost_usd += costs.total_cost_usd ?? 0.0;
                      } else {
-                         // If calculation failed, set costs to null
+                         // If calculation failed, set costs to null in the entry (matching Python behavior)
                          const entry = condensedEntries[call.entryIndex];
                          if (entry.output?.usage) {
                              entry.output.usage.prompt_tokens_cost_usd = null;
                              entry.output.usage.completion_tokens_cost_usd = null;
                              entry.output.usage.total_cost_usd = null;
                          }
+                         // Log warning, but totals remain 0 for this call
                          logger.warn(`Token cost calculation failed for model '${call.modelName}'. Cost information will not be available.`);
                      }
                  } catch (e) {
                      logger.warn(`Error calculating cost for model '${call.modelName}':`, e);
-                     // Set costs to null for this entry
+                     // Set costs to null in the entry
                      const entry = condensedEntries[call.entryIndex];
                      if (entry.output?.usage) {
                          entry.output.usage.prompt_tokens_cost_usd = null;
                          entry.output.usage.completion_tokens_cost_usd = null;
                          entry.output.usage.total_cost_usd = null;
                      }
+                     // Totals remain unchanged (effectively adding 0)
                  }
              }
          }
@@ -778,18 +824,17 @@ class TraceClient {
              duration: totalDuration,
              token_counts: tokenCounts,
              entries: condensedEntries,
-             rules: rulesDict,
-             empty_save: emptySave,
+             evaluation_runs: evaluationRuns,
              overwrite: this.overwrite,
              parent_trace_id: this.parentTraceId,
              parent_name: this.parentName
          };
 
          try {
-             await this.traceManager.saveTrace(traceData, emptySave);
+             await this.traceManager.saveTrace(traceData);
              logger.info(`Trace ${this.traceId} saved successfully.`);
 
-             if (!emptySave && this.enableEvaluations) {
+             if (this.enableEvaluations) { 
                  try {
                      await this.traceManager.addTraceToEvalQueue(traceData);
                      logger.info(`Trace ${this.traceId} added to evaluation queue.`);
@@ -822,7 +867,7 @@ class TraceClient {
          
          traceClientContext.entries.forEach(entry => {
              const indent = "  ".repeat(entry.depth ?? 0);
-             const timeStr = entry.timestamp ? `@ ${new Date(entry.timestamp * 1000).toISOString()}` : '';
+             const timeStr = entry.created_at ? `@ ${new Date(entry.created_at * 1000).toISOString()}` : '';
              const shortSpanId = entry.span_id ? `(id: ${entry.span_id.substring(0, 8)}...)` : '';
              const shortParentId = entry.parent_span_id ? `(parent: ${entry.parent_span_id.substring(0, 8)}...)` : '';
  
@@ -896,7 +941,6 @@ class TraceClient {
      * @returns Promise that resolves when the evaluation entry has been added to the trace
      */
     async asyncEvaluate(
-        // Accept general Scorer type, but filter/check for API scorers internally
         scorers: Scorer[], 
         options: {
             input?: string;
@@ -925,6 +969,14 @@ class TraceClient {
         if (apiScorers.length === 0) {
             logger.warn("No APIJudgmentScorers found in the provided scorers list. Skipping async evaluation as backend requires API scorers.");
             return;
+        }
+
+        // Process rules (currently just using this.rules directly)
+        const loadedRules = this.rules; // TODO: Add ScorerWrapper-like processing if needed in TS
+
+        // Prevent using JudgevalScorer with rules - only APIJudgmentScorer allowed with rules
+        if (loadedRules && loadedRules.length > 0 && scorers.some(s => !(s instanceof APIJudgmentScorer))) {
+            throw new Error("Cannot use Judgeval scorers, you can only use API scorers when using rules. Please either remove rules or use only APIJudgmentScorer types.");
         }
 
         const startTime = Date.now() / 1000; // Record start time in seconds
@@ -962,9 +1014,6 @@ class TraceClient {
             const evalName = `${this.name.charAt(0).toUpperCase() + this.name.slice(1)}-${idPart}-[${scorerNames}]`;
             // --- End eval name creation ---
 
-            // Process rules (currently just using this.rules directly)
-            const loadedRules = this.rules; // TODO: Add ScorerWrapper-like processing if needed in TS
-
             // Construct the evaluation payload
             const evalRunPayload: EvaluationRunPayload = {
                 organization_id: this.organizationId,
@@ -980,45 +1029,22 @@ class TraceClient {
                 rules: loadedRules // Pass the processed rules
             };
 
-            // Add evaluation entry using the helper method
-            this._addEvalRun(evalRunPayload, startTime);
+            // Add evaluation entry to the trace
+            this.addEntry({
+                type: "evaluation",
+                function: currentEntry.function,
+                span_id: currentEntry.span_id, // May be undefined
+                depth: currentEntry.depth ?? 0,
+                created_at: Date.now() / 1000,
+                evaluation_runs: [evalRunPayload], // Store the object back in an array to match interface
+                duration: Date.now() / 1000 - startTime,
+                span_type: currentEntry.span_type
+            });
 
         } catch (error) {
-            console.error(`Failed during asyncEvaluate execution: ${error instanceof Error ? error.message : String(error)}`);
-            // Decide if we should re-throw or just log
+            logger.error(`Failed during asyncEvaluate execution: ${error instanceof Error ? error.message : String(error)}`);
+            throw error; // Re-throw after logging
         }
-    }
-
-    /**
-     * Private helper to add an evaluation entry to the trace.
-     * This mirrors the structure of Python's add_eval_run.
-     *
-     * @param evalRunPayload The constructed payload for the evaluation.
-     * @param startTime The start time (in seconds) of the evaluation process.
-     */
-    private _addEvalRun(evalRunPayload: EvaluationRunPayload, startTime: number): void {
-        const traceClientContext = getTraceClientContext();
-        const currentEntry = traceClientContext.entryStack.at(-1);
-        if (!currentEntry) {
-            logger.warn(`No current entry to record evaluation to\nStack trace: ${new Error().stack}`);
-            return;
-        }
-
-        const function_ = currentEntry.function ?? "unknown_function";
-        const depth = currentEntry.depth ?? 0;
-        const duration = Date.now() / 1000 - startTime;
-
-        // Add evaluation entry to the trace
-        this.addEntry({
-            type: "evaluation",
-            function: function_,
-            span_id: currentEntry.span_id, // May be undefined
-            depth: depth,
-            timestamp: Date.now() / 1000,
-            evaluation_runs: [evalRunPayload], // Embed the payload
-            duration: duration,
-            span_type: "evaluation"
-        });
     }
 
     // OPTIONAL: Add a method to get the original name if needed elsewhere
@@ -1137,12 +1163,6 @@ class Tracer {
             apiKey: this.apiKey,
             organizationId: this.organizationId,
         });
-
-        if (traceClient.enableMonitoring) {
-            traceClient.save(true).catch(err => {
-                logger.error(`Failed to save empty trace (${traceClient.traceId}):`, err);
-            });
-        }
 
         return traceClient;
     }

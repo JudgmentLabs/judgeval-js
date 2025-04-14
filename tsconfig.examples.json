@@ -11,7 +11,8 @@
   },
   "include": [
     "src/demo/**/*",
-    "src/examples/**/*"
+    "src/examples/**/*",
+    "src/e2etests/**/*"
   ],
   "exclude": [
     "node_modules",
