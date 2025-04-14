@@ -152,11 +152,8 @@ You can retrieve past evaluation results using several methods:
 // Initialize the JudgmentClient
 const client = JudgmentClient.getInstance();
 
-// Method 1: Using pullEval
+// Using pullEval
 const results = await client.pullEval('my-project', 'my-eval-run');
-
-// Method 2: Using getEvalRun (alias for pullEval)
-const results = await client.getEvalRun('my-project', 'my-eval-run');
 
 // List all evaluation runs for a project
 const evalRuns = await client.listEvalRuns('my-project', 100, 0); // limit=100, offset=0

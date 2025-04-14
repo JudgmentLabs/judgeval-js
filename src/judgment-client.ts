@@ -459,7 +459,6 @@ export class JudgmentClient {
     projectName: string,
     evalRunName: string // Consistent parameter name, but API uses eval_name
   ): Promise<Array<Record<string, any | ScoringResult[]>>> {
-     // Body matches Python's structure for this endpoint
     const evalRunRequestBody: EvalRunRequestBody = {
       project_name: projectName,
       eval_name: evalRunName, // Use eval_name in the body for the API
@@ -530,19 +529,6 @@ export class JudgmentClient {
        }
        throw new Error(`Failed to pull evaluation results: ${String(error)}`);
     }
-  }
-
-  /**
-   * Get evaluation run results (alias for pullEval with a more intuitive name)
-   * @param projectName Name of the project
-   * @param evalRunName Name of the evaluation run
-   * @returns Array containing one object with 'id' and 'results' (list of ScoringResult)
-   */
-  public async getEvalRun(
-    projectName: string,
-    evalRunName: string
-  ): Promise<Array<Record<string, any | ScoringResult[]>>> {
-    return this.pullEval(projectName, evalRunName);
   }
 
   /**

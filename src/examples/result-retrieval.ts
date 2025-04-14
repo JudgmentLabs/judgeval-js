@@ -67,7 +67,7 @@ async function main() {
     // Step 2: Retrieve the evaluation results
     console.log("\nStep 2: Retrieving evaluation results...");
     
-    // Method 1: Using pullEval
+    // Using pullEval
     console.log("\nMethod 1: Using pullEval()");
     try {
       const results1 = await client.pullEval(projectName, evalRunName);
@@ -75,15 +75,6 @@ async function main() {
       console.log(`Evaluation ID: ${results1[0]?.id}`);
     } catch (error) {
       console.error(`Error retrieving results with pullEval(): ${error}`);
-    }
-
-    // Method 2: Using getEvalRun (alias for pullEval)
-    console.log("\nMethod 2: Using getEvalRun()");
-    try {
-      const results2 = await client.getEvalRun(projectName, evalRunName);
-      console.log(`Retrieved ${results2[0]?.results?.length || 0} results using getEvalRun()`);
-    } catch (error) {
-      console.error(`Error retrieving results with getEvalRun(): ${error}`);
     }
 
     // Step 3: List all evaluation runs for the project

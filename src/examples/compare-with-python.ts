@@ -119,9 +119,6 @@ async function main() {
       // Demonstrate other result retrieval methods
       console.log("\nOther result retrieval methods (also match Python SDK):");
       
-      // getEvalRun (alias for pullEval, similar to Python's pull_eval)
-      console.log("- getEvalRun() → Same structure as pullEval()");
-      
       // listEvalRuns (similar to Python's list_eval_runs if it existed)
       console.log("- listEvalRuns() → Lists all evaluation runs for a project");
       
