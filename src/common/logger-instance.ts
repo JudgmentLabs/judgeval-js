@@ -1,25 +1,28 @@
 import winston from 'winston';
 
 // Define the logger configuration
+const isProduction = process.env.NODE_ENV === 'production';
+// Removed forceConsoleLog as `silent` option handles production override
+
 const logger = winston.createLogger({
-  level: process.env.JUDGMENT_LOG_LEVEL || 'info', // Default to 'info', allow override via env var
+  // Set silent: true in production to completely disable logging regardless of level or transports
+  silent: isProduction,
+
+  // Level setting only matters when not silent (i.e., in development)
+  level: process.env.JUDGMENT_LOG_LEVEL || 'info', // Default to 'info' in dev
+
   format: winston.format.combine(
     winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     winston.format.printf(({ timestamp, level, message, ...meta }) => {
       // Simple format: Timestamp [LEVEL]: message {meta}
       let metaString = '';
-      if (Object.keys(meta).length > 0) {
+      // Only attempt to stringify meta if it's not empty
+      if (meta && Object.keys(meta).length > 0) {
         try {
-          // Attempt to stringify metadata, handle potential circular references
-          metaString = ` ${JSON.stringify(meta, (key, value) => {
-            if (typeof value === 'object' && value !== null) {
-              // Basic check for circular reference, might need refinement
-              if (key === '') return value; // Root object
-              if (metaString.includes(JSON.stringify(value))) return '[Circular]';
-            }
-            return value;
-          })}`;
+          // Use a basic stringify, handle potential errors (like circular refs)
+          metaString = ` ${JSON.stringify(meta)}`;
         } catch (error) {
+          // Log a simple indicator if stringify fails
           metaString = ' [Meta stringify error]';
         }
       }
@@ -27,20 +30,21 @@ const logger = winston.createLogger({
     }),
     winston.format.colorize({ all: true }) // Optional: Add colors
   ),
+
+  // Transports are only added if not in production (since silent: true handles production)
   transports: [
-    // Log to the console
-    new winston.transports.Console(),
+    ...(!isProduction ? [new winston.transports.Console()] : []),
     // Future enhancement: Add file transport
     // new winston.transports.File({ filename: 'judgeval.log' })
   ],
-  // Handle exceptions
+  // Exception handlers only added if not in production
   exceptionHandlers: [
-    new winston.transports.Console()
+    ...(!isProduction ? [new winston.transports.Console()] : []),
     // new winston.transports.File({ filename: 'exceptions.log' })
   ],
-  // Handle promise rejections
+  // Rejection handlers only added if not in production
   rejectionHandlers: [
-    new winston.transports.Console()
+    ...(!isProduction ? [new winston.transports.Console()] : []),
     // new winston.transports.File({ filename: 'rejections.log' })
   ]
 });
