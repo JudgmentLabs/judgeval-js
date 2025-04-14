@@ -53,7 +53,6 @@ export const JUDGMENT_TRACES_FETCH_API_URL = `${ROOT_API}/traces/fetch/`;
 export const JUDGMENT_TRACES_SAVE_API_URL = `${ROOT_API}/traces/save/`;
 export const JUDGMENT_TRACES_DELETE_API_URL = `${ROOT_API}/traces/delete/`;
 export const JUDGMENT_TRACES_ADD_TO_EVAL_QUEUE_API_URL = `${ROOT_API}/traces/add_to_eval_queue/`;
-export const JUDGMENT_TOKEN_COSTS_API_URL = `${ROOT_API}/token-costs`;
 export const JUDGMENT_CALCULATE_TOKEN_COSTS_API_URL = `${ROOT_API}/calculate-token-costs`;
 export const JUDGMENT_WEBSOCKET_URL = process.env.JUDGMENT_WEBSOCKET_URL || 'wss://api.judgmentlabs.ai/ws/traces/';
 export const JUDGMENT_ADD_TO_RUN_EVAL_QUEUE_API_URL = `${ROOT_API}/add_to_run_eval_queue/`;

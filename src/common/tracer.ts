@@ -13,7 +13,6 @@ import {
     JUDGMENT_TRACES_FETCH_API_URL,
     JUDGMENT_TRACES_DELETE_API_URL,
     JUDGMENT_TRACES_ADD_TO_EVAL_QUEUE_API_URL,
-    JUDGMENT_TOKEN_COSTS_API_URL,
     JUDGMENT_CALCULATE_TOKEN_COSTS_API_URL,
     // Add other necessary constants if needed
 } from '../constants.js';
@@ -174,6 +173,17 @@ interface CondensedSpanEntry {
     children?: CondensedSpanEntry[];
 }
 
+// Update the interface definitions
+interface TokenCostResponse {
+    model: string;
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    prompt_tokens_cost_usd: number;
+    completion_tokens_cost_usd: number;
+    total_cost_usd: number;
+}
+
 // --- API Interaction Client ---
 
 /**
@@ -182,7 +192,6 @@ interface CondensedSpanEntry {
 class TraceManagerClient {
     private apiKey: string;
     private organizationId: string;
-    private tokenCostsCache: TokenCostData | null = null; // Cache for token costs
 
     constructor(apiKey: string, organizationId: string) {
         if (!apiKey) {
@@ -276,24 +285,8 @@ class TraceManagerClient {
         });
     }
 
-    async fetchTokenCosts(): Promise<TokenCostData | null> {
-        // Return cached costs if available
-        if (this.tokenCostsCache) {
-            return this.tokenCostsCache;
-        }
-
-        try {
-            const costs = await this._fetch(JUDGMENT_TOKEN_COSTS_API_URL, { method: 'GET' });
-            this.tokenCostsCache = costs as TokenCostData; // Store in cache
-            return this.tokenCostsCache;
-        } catch (error) {
-            logger.warn("Failed to fetch token costs from Judgment API. Cost calculation will be skipped.", { error: error instanceof Error ? error.message : String(error) });
-            return null; // Return null if fetching fails
-        }
-    }
-
     /**
-     * Calculate token costs directly using the new API endpoint.
+     * Calculate token costs directly using the API endpoint.
      * This is more accurate than client-side calculation as it uses the most up-to-date pricing.
      * 
      * @param model The model name (e.g. 'gpt-4', 'claude-3-opus-20240229')
@@ -305,15 +298,7 @@ class TraceManagerClient {
         model: string,
         promptTokens: number,
         completionTokens: number
-    ): Promise<{
-        model: string;
-        prompt_tokens: number;
-        completion_tokens: number;
-        total_tokens: number;
-        prompt_tokens_cost_usd: number;
-        completion_tokens_cost_usd: number;
-        total_cost_usd: number;
-    } | null> {
+    ): Promise<TokenCostResponse | null> {
         try {
             // Use the new calculation endpoint
             const result = await this._fetch(JUDGMENT_CALCULATE_TOKEN_COSTS_API_URL, {
@@ -327,14 +312,11 @@ class TraceManagerClient {
             
             return result;
         } catch (error) {
-            logger.warn(`Failed to calculate token costs for model ${model}. Falling back to cached costs if available.`, 
+            logger.warn(`Failed to calculate token costs for model ${model}.`, 
                 { error: error instanceof Error ? error.message : String(error) });
             return null;
         }
     }
-
-     // deleteProject method can be added here if needed, similar to Python client
-     // async deleteProject(projectName: string): Promise<any> { ... }
 }
 
 // --- Helper Functions ---
@@ -368,8 +350,6 @@ class TraceClient {
     private apiKey: string;
     private organizationId: string;
     private originalName: string; // Keep the original name if needed for display purposes
-    private tokenCosts: TokenCostData | null = null; // Store fetched token costs
-    private fetchCostsPromise: Promise<TokenCostData | null> | null = null; // Promise for fetching costs
 
     constructor(
          config: {
@@ -416,16 +396,6 @@ class TraceClient {
 
          if (this.enableMonitoring) {
               this.traceManager = new TraceManagerClient(this.apiKey, this.organizationId);
-              // Fetch token costs asynchronously, don't block constructor
-              // Store the promise to await later if needed
-              this.fetchCostsPromise = this.traceManager.fetchTokenCosts().then(costs => {
-                  this.tokenCosts = costs;
-                  return costs; // Return costs for potential chaining/awaiting
-              }).catch(err => {
-                  // Error is already logged in fetchTokenCosts
-                  this.tokenCosts = null; // Ensure tokenCosts is null on error
-                  return null;
-              });
          }
     }
 
@@ -689,21 +659,27 @@ class TraceClient {
               return null;
          }
 
-         // We don't need to fetch token costs in advance anymore since we'll use direct calculation
-
          const traceClientContext = getTraceClientContext();
          const totalDuration = this.getDuration();
          const condensedEntries: CondensedSpanEntry[] = this.condenseTrace(traceClientContext.entries);
 
          const tokenCounts = {
-             prompt_tokens: 0, completion_tokens: 0, total_tokens: 0,
-             prompt_tokens_cost_usd: 0.0, completion_tokens_cost_usd: 0.0, total_cost_usd: 0.0
+             prompt_tokens: 0,
+             completion_tokens: 0,
+             total_tokens: 0,
+             prompt_tokens_cost_usd: 0.0,
+             completion_tokens_cost_usd: 0.0,
+             total_cost_usd: 0.0
          };
 
-         // First pass: collect token counts from all LLM calls
+         // First pass: collect all LLM calls with their token counts
+         const llmCalls: { modelName: string, promptTokens: number, completionTokens: number, entryIndex: number }[] = [];
+         let index = 0;
+         
          for (const entry of condensedEntries) {
              if (entry.span_type === 'llm' && entry.output?.usage) {
                  const usage = entry.output.usage;
+                 const modelName = entry.inputs?.model || "";
                  let promptTokens = 0;
                  let completionTokens = 0;
 
@@ -724,73 +700,64 @@ class TraceClient {
                  tokenCounts.prompt_tokens += promptTokens;
                  tokenCounts.completion_tokens += completionTokens;
                  tokenCounts.total_tokens += usage.total_tokens || (promptTokens + completionTokens);
+                 
+                 // Add to list of calls for cost calculation
+                 if (modelName) {
+                     llmCalls.push({
+                         modelName,
+                         promptTokens,
+                         completionTokens,
+                         entryIndex: index
+                     });
+                 }
              }
+             index++;
          }
 
-         // Second pass: calculate costs for each LLM call
-         for (const entry of condensedEntries) {
-             if (entry.span_type === 'llm' && entry.output?.usage) {
-                 const usage = entry.output.usage;
-                 const modelName = entry.inputs?.model || "";
-                 
-                 if (modelName && this.traceManager) {
-                     try {
-                         // Get token counts for this specific call
-                         const promptTokens = usage.prompt_tokens || 0;
-                         const completionTokens = usage.completion_tokens || 0;
-                         
-                         // Calculate costs using the direct calculation endpoint
-                         const costs = await this.traceManager.calculateTokenCosts(
-                             modelName, 
-                             promptTokens, 
-                             completionTokens
-                         );
-                         
-                         if (costs) {
-                             // Assign costs to the usage object for this specific call
-                             usage.prompt_tokens_cost_usd = costs.prompt_tokens_cost_usd;
-                             usage.completion_tokens_cost_usd = costs.completion_tokens_cost_usd;
-                             usage.total_cost_usd = costs.total_cost_usd;
-                             
-                             // Add to total trace costs
-                             tokenCounts.prompt_tokens_cost_usd += costs.prompt_tokens_cost_usd;
-                             tokenCounts.completion_tokens_cost_usd += costs.completion_tokens_cost_usd;
-                             tokenCounts.total_cost_usd += costs.total_cost_usd;
-                         } else {
-                             // If calculation failed, try fallback to cached costs
-                             if (this.tokenCosts && this.tokenCosts[modelName]) {
-                                 const modelCosts = this.tokenCosts[modelName];
-                                 // Calculate costs using cached data (per MILLION tokens)
-                                 const promptCost = (promptTokens / 1000000) * (modelCosts.input_cost_per_token || 0);
-                                 const completionCost = (completionTokens / 1000000) * (modelCosts.output_cost_per_token || 0);
-                                 const callTotalCost = promptCost + completionCost;
-                                 
-                                 usage.prompt_tokens_cost_usd = promptCost;
-                                 usage.completion_tokens_cost_usd = completionCost;
-                                 usage.total_cost_usd = callTotalCost;
-                                 
-                                 tokenCounts.prompt_tokens_cost_usd += promptCost;
-                                 tokenCounts.completion_tokens_cost_usd += completionCost;
-                                 tokenCounts.total_cost_usd += callTotalCost;
-                             } else {
-                                 logger.warn(`Token cost data not available for model '${modelName}'. Cost calculation skipped for this call.`);
-                                 usage.prompt_tokens_cost_usd = null;
-                                 usage.completion_tokens_cost_usd = null;
-                                 usage.total_cost_usd = null;
-                             }
+         // Second pass: calculate costs for each LLM call using the API
+         if (this.traceManager && llmCalls.length > 0) {
+             // Process each LLM call
+             for (const call of llmCalls) {
+                 try {
+                     // Get costs from the API
+                     const costs = await this.traceManager.calculateTokenCosts(
+                         call.modelName, 
+                         call.promptTokens, 
+                         call.completionTokens
+                     );
+                     
+                     if (costs) {
+                         // Update the entry with the costs
+                         const entry = condensedEntries[call.entryIndex];
+                         if (entry.output?.usage) {
+                             entry.output.usage.prompt_tokens_cost_usd = costs.prompt_tokens_cost_usd;
+                             entry.output.usage.completion_tokens_cost_usd = costs.completion_tokens_cost_usd;
+                             entry.output.usage.total_cost_usd = costs.total_cost_usd;
                          }
-                     } catch (e) {
-                         logger.warn(`Error calculating cost for model '${modelName}':`, e);
-                         usage.prompt_tokens_cost_usd = null;
-                         usage.completion_tokens_cost_usd = null;
-                         usage.total_cost_usd = null;
+                         
+                         // Add to the total costs
+                         tokenCounts.prompt_tokens_cost_usd += costs.prompt_tokens_cost_usd;
+                         tokenCounts.completion_tokens_cost_usd += costs.completion_tokens_cost_usd;
+                         tokenCounts.total_cost_usd += costs.total_cost_usd;
+                     } else {
+                         // If calculation failed, set costs to null
+                         const entry = condensedEntries[call.entryIndex];
+                         if (entry.output?.usage) {
+                             entry.output.usage.prompt_tokens_cost_usd = null;
+                             entry.output.usage.completion_tokens_cost_usd = null;
+                             entry.output.usage.total_cost_usd = null;
+                         }
+                         logger.warn(`Token cost calculation failed for model '${call.modelName}'. Cost information will not be available.`);
                      }
-                 } else {
-                     // Model name is missing or traceManager is not available
-                     logger.warn(`Cannot calculate costs: ${!modelName ? 'Missing model name' : 'Trace manager unavailable'}`);
-                     usage.prompt_tokens_cost_usd = null;
-                     usage.completion_tokens_cost_usd = null;
-                     usage.total_cost_usd = null;
+                 } catch (e) {
+                     logger.warn(`Error calculating cost for model '${call.modelName}':`, e);
+                     // Set costs to null for this entry
+                     const entry = condensedEntries[call.entryIndex];
+                     if (entry.output?.usage) {
+                         entry.output.usage.prompt_tokens_cost_usd = null;
+                         entry.output.usage.completion_tokens_cost_usd = null;
+                         entry.output.usage.total_cost_usd = null;
+                     }
                  }
              }
          }
@@ -809,7 +776,7 @@ class TraceClient {
              project_name: this.projectName,
              created_at: new Date(this.startTime * 1000).toISOString(),
              duration: totalDuration,
-             token_counts: tokenCounts, // Updated tokenCounts with costs
+             token_counts: tokenCounts,
              entries: condensedEntries,
              rules: rulesDict,
              empty_save: emptySave,
@@ -833,7 +800,7 @@ class TraceClient {
              return { traceId: this.traceId, traceData };
          } catch (error) {
              logger.error(`Failed to save trace ${this.traceId}.`, { error: error instanceof Error ? error.message : String(error) });
-              return null;
+             return null;
          }
      }
 
