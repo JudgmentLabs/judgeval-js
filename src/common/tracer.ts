@@ -13,6 +13,7 @@ import {
     JUDGMENT_TRACES_FETCH_API_URL,
     JUDGMENT_TRACES_DELETE_API_URL,
     JUDGMENT_TRACES_ADD_TO_EVAL_QUEUE_API_URL,
+    JUDGMENT_CALCULATE_TOKEN_COSTS_API_URL,
     // Add other necessary constants if needed
 } from '../constants.js';
 
@@ -125,6 +126,14 @@ interface EvaluationRunPayload {
 }
 // <<< NEW: Interface for the Evaluation Run Payload END >>>
 
+// Interface for the data structure of token costs
+interface TokenCostData {
+    [modelName: string]: {
+        input_cost_per_token: number;
+        output_cost_per_token: number;
+    };
+}
+
 // Interface for the data structure sent to the save endpoint
 interface TraceSavePayload {
     trace_id: string;
@@ -146,6 +155,7 @@ interface TraceSavePayload {
     overwrite: boolean;
     parent_trace_id?: string | null;
     parent_name?: string | null;
+    evaluation_runs: any[]; // Required field by the API
 }
 
 // Define the structure for a condensed span entry
@@ -162,6 +172,17 @@ interface CondensedSpanEntry {
     duration: number | null; // Duration in seconds
     // Add children property for hierarchical structure
     children?: CondensedSpanEntry[];
+}
+
+// Update the interface definitions
+interface TokenCostResponse {
+    model: string;
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    prompt_tokens_cost_usd: number;
+    completion_tokens_cost_usd: number;
+    total_cost_usd: number;
 }
 
 // --- API Interaction Client ---
@@ -265,8 +286,38 @@ class TraceManagerClient {
         });
     }
 
-     // deleteProject method can be added here if needed, similar to Python client
-     // async deleteProject(projectName: string): Promise<any> { ... }
+    /**
+     * Calculate token costs directly using the API endpoint.
+     * This is more accurate than client-side calculation as it uses the most up-to-date pricing.
+     * 
+     * @param model The model name (e.g. 'gpt-4', 'claude-3-opus-20240229')
+     * @param promptTokens Number of tokens in the prompt/input
+     * @param completionTokens Number of tokens in the completion/output
+     * @returns Object containing token counts and calculated costs in USD
+     */
+    async calculateTokenCosts(
+        model: string,
+        promptTokens: number,
+        completionTokens: number
+    ): Promise<TokenCostResponse | null> {
+        try {
+            // Use the new calculation endpoint
+            const result = await this._fetch(JUDGMENT_CALCULATE_TOKEN_COSTS_API_URL, {
+                method: 'POST',
+                body: JSON.stringify({
+                    model,
+                    prompt_tokens: promptTokens,
+                    completion_tokens: completionTokens
+                })
+            });
+            
+            return result;
+        } catch (error) {
+            logger.warn(`Failed to calculate token costs for model ${model}.`, 
+                { error: error instanceof Error ? error.message : String(error) });
+            return null;
+        }
+    }
 }
 
 // --- Helper Functions ---
@@ -614,57 +665,103 @@ class TraceClient {
          const condensedEntries: CondensedSpanEntry[] = this.condenseTrace(traceClientContext.entries);
 
          const tokenCounts = {
-             prompt_tokens: 0, completion_tokens: 0, total_tokens: 0,
-             prompt_tokens_cost_usd: 0.0, completion_tokens_cost_usd: 0.0, total_cost_usd: 0.0
+             prompt_tokens: 0,
+             completion_tokens: 0,
+             total_tokens: 0,
+             prompt_tokens_cost_usd: 0.0,
+             completion_tokens_cost_usd: 0.0,
+             total_cost_usd: 0.0
          };
-         condensedEntries.forEach(entry => {
+
+         // First pass: collect all LLM calls with their token counts
+         const llmCalls: { modelName: string, promptTokens: number, completionTokens: number, entryIndex: number }[] = [];
+         let index = 0;
+         
+         for (const entry of condensedEntries) {
              if (entry.span_type === 'llm' && entry.output?.usage) {
                  const usage = entry.output.usage;
+                 const modelName = entry.inputs?.model || "";
                  let promptTokens = 0;
                  let completionTokens = 0;
 
+                 // Handle different token naming conventions
                  if (usage.prompt_tokens !== undefined || usage.completion_tokens !== undefined) {
                      promptTokens = usage.prompt_tokens || 0;
                      completionTokens = usage.completion_tokens || 0;
                  } else if (usage.input_tokens !== undefined || usage.output_tokens !== undefined) {
                      promptTokens = usage.input_tokens || 0;
                      completionTokens = usage.output_tokens || 0;
+                     // Standardize naming
                      usage.prompt_tokens = promptTokens;
                      usage.completion_tokens = completionTokens;
                      delete usage.input_tokens;
                      delete usage.output_tokens;
                  }
+                 
                  tokenCounts.prompt_tokens += promptTokens;
                  tokenCounts.completion_tokens += completionTokens;
                  tokenCounts.total_tokens += usage.total_tokens || (promptTokens + completionTokens);
-
-                 const modelName = entry.inputs?.model || "";
+                 
+                 // Add to list of calls for cost calculation
                  if (modelName) {
-                      try {
-                          const promptCost = 0.0;
-                          const completionCost = 0.0;
-                          const callTotalCost = promptCost + completionCost;
-
-                          usage.prompt_tokens_cost_usd = promptCost;
-                          usage.completion_tokens_cost_usd = completionCost;
-                          usage.total_cost_usd = callTotalCost;
-
-                          tokenCounts.prompt_tokens_cost_usd += promptCost;
-                          tokenCounts.completion_tokens_cost_usd += completionCost;
-                          tokenCounts.total_cost_usd += callTotalCost;
-                      } catch (e) {
-                          console.warn(`Error calculating cost for model '${modelName}':`, e);
-                          usage.prompt_tokens_cost_usd = null;
-                          usage.completion_tokens_cost_usd = null;
-                          usage.total_cost_usd = null;
-                      }
-                 } else {
-                      usage.prompt_tokens_cost_usd = null;
-                      usage.completion_tokens_cost_usd = null;
-                      usage.total_cost_usd = null;
+                     llmCalls.push({
+                         modelName,
+                         promptTokens,
+                         completionTokens,
+                         entryIndex: index
+                     });
                  }
              }
-         });
+             index++;
+         }
+
+         // Second pass: calculate costs for each LLM call using the API
+         if (this.traceManager && llmCalls.length > 0) {
+             // Process each LLM call
+             for (const call of llmCalls) {
+                 try {
+                     // Get costs from the API
+                     const costs = await this.traceManager.calculateTokenCosts(
+                         call.modelName, 
+                         call.promptTokens, 
+                         call.completionTokens
+                     );
+                     
+                     if (costs) {
+                         // Update the entry with the costs
+                         const entry = condensedEntries[call.entryIndex];
+                         if (entry.output?.usage) {
+                             entry.output.usage.prompt_tokens_cost_usd = costs.prompt_tokens_cost_usd;
+                             entry.output.usage.completion_tokens_cost_usd = costs.completion_tokens_cost_usd;
+                             entry.output.usage.total_cost_usd = costs.total_cost_usd;
+                         }
+                         
+                         // Add to the total costs
+                         tokenCounts.prompt_tokens_cost_usd += costs.prompt_tokens_cost_usd;
+                         tokenCounts.completion_tokens_cost_usd += costs.completion_tokens_cost_usd;
+                         tokenCounts.total_cost_usd += costs.total_cost_usd;
+                     } else {
+                         // If calculation failed, set costs to null
+                         const entry = condensedEntries[call.entryIndex];
+                         if (entry.output?.usage) {
+                             entry.output.usage.prompt_tokens_cost_usd = null;
+                             entry.output.usage.completion_tokens_cost_usd = null;
+                             entry.output.usage.total_cost_usd = null;
+                         }
+                         logger.warn(`Token cost calculation failed for model '${call.modelName}'. Cost information will not be available.`);
+                     }
+                 } catch (e) {
+                     logger.warn(`Error calculating cost for model '${call.modelName}':`, e);
+                     // Set costs to null for this entry
+                     const entry = condensedEntries[call.entryIndex];
+                     if (entry.output?.usage) {
+                         entry.output.usage.prompt_tokens_cost_usd = null;
+                         entry.output.usage.completion_tokens_cost_usd = null;
+                         entry.output.usage.total_cost_usd = null;
+                     }
+                 }
+             }
+         }
 
          // Convert rules array to a dictionary (Record<string, Rule>)
          const rulesDict: Record<string, Rule> = {};
@@ -686,7 +783,8 @@ class TraceClient {
              empty_save: emptySave,
              overwrite: this.overwrite,
              parent_trace_id: this.parentTraceId,
-             parent_name: this.parentName
+             parent_name: this.parentName,
+             evaluation_runs: [] // Required field by the API
          };
 
          try {
@@ -704,7 +802,7 @@ class TraceClient {
              return { traceId: this.traceId, traceData };
          } catch (error) {
              logger.error(`Failed to save trace ${this.traceId}.`, { error: error instanceof Error ? error.message : String(error) });
-              return null;
+             return null;
          }
      }
 
