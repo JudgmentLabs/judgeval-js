@@ -119,12 +119,6 @@ async function main() {
       // Demonstrate other result retrieval methods
       console.log("\nOther result retrieval methods (also match Python SDK):");
       
-      // listEvalRuns (similar to Python's list_eval_runs if it existed)
-      console.log("- listEvalRuns() → Lists all evaluation runs for a project");
-      
-      // getEvalRunStats (similar to Python's get_eval_run_stats if it existed)
-      console.log("- getEvalRunStats() → Gets statistics for an evaluation run");
-      
       // exportEvalResults (similar to Python's export_eval_results if it existed)
       console.log("- exportEvalResults() → Exports results in JSON or CSV format");
       

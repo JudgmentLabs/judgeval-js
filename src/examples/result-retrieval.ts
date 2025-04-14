@@ -68,61 +68,29 @@ async function main() {
     console.log("\nStep 2: Retrieving evaluation results...");
     
     // Using pullEval
-    console.log("\nMethod 1: Using pullEval()");
+    console.log("\nUsing pullEval()");
     try {
       const results1 = await client.pullEval(projectName, evalRunName);
       console.log(`Retrieved ${results1[0]?.results?.length || 0} results using pullEval()`);
-      console.log(`Evaluation ID: ${results1[0]?.id}`);
     } catch (error) {
       console.error(`Error retrieving results with pullEval(): ${error}`);
     }
 
-    // Step 3: List all evaluation runs for the project
-    console.log("\nStep 3: Listing all evaluation runs for the project...");
-    try {
-      const evalRuns = await client.listEvalRuns(projectName);
-      console.log(`Found ${evalRuns.length} evaluation runs for project "${projectName}"`);
-      
-      // Display the most recent runs
-      if (evalRuns.length > 0) {
-        console.log("\nMost recent evaluation runs:");
-        evalRuns.slice(0, 3).forEach((run: Record<string, any>, index: number) => {
-          console.log(`${index + 1}. ${run.eval_name || run.name} (${run.created_at || 'unknown date'})`);
-        });
-      }
-    } catch (error) {
-      console.error(`Error listing evaluation runs: ${error}`);
-    }
-
-    // Step 4: Get statistics for the evaluation run
-    console.log("\nStep 4: Getting statistics for the evaluation run...");
-    try {
-      const stats = await client.getEvalRunStats(projectName, evalRunName);
-      console.log("Evaluation run statistics:");
-      console.log(`- Total examples: ${stats.total_examples || 'N/A'}`);
-      console.log(`- Success rate: ${stats.success_rate || 'N/A'}`);
-      console.log(`- Average score: ${stats.average_score || 'N/A'}`);
-    } catch (error) {
-      console.error(`Error getting evaluation run statistics: ${error}`);
-    }
-
-    // Step 5: Export the evaluation results
-    console.log("\nStep 5: Exporting evaluation results...");
+    // Step 3: Export the evaluation results
+    console.log("\nStep 3: Exporting evaluation results...");
     try {
       // Export as JSON
-      const jsonExport = await client.exportEvalResults(projectName, evalRunName, 'json');
-      console.log("Exported JSON results (first 100 characters):");
-      console.log(jsonExport.substring(0, 100) + "...");
+      const jsonResults = await client.exportEvalResults(projectName, evalRunName, 'json');
+      console.log(`Exported JSON results (${jsonResults.length} characters)`);
       
       // Export as CSV
-      const csvExport = await client.exportEvalResults(projectName, evalRunName, 'csv');
-      console.log("Exported CSV results (first 100 characters):");
-      console.log(csvExport);
+      const csvResults = await client.exportEvalResults(projectName, evalRunName, 'csv');
+      console.log(`Exported CSV results (${csvResults.length} characters)`);
     } catch (error) {
       console.error(`Error exporting evaluation results: ${error}`);
     }
 
-    console.log("\nResult retrieval example completed!");
+    console.log("\nResult retrieval example completed.");
     
   } catch (error) {
     console.error("Error in result retrieval example:", error);

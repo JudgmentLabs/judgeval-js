@@ -457,17 +457,17 @@ export class JudgmentClient {
    */
   public async pullEval(
     projectName: string,
-    evalRunName: string // Consistent parameter name, but API uses eval_name
+    evalRunName: string
   ): Promise<Array<Record<string, any | ScoringResult[]>>> {
     const evalRunRequestBody: EvalRunRequestBody = {
       project_name: projectName,
-      eval_name: evalRunName, // Use eval_name in the body for the API
+      eval_name: evalRunName,
       judgment_api_key: this.judgmentApiKey
     };
 
     try {
       const response = await axios.post(
-        JUDGMENT_EVAL_FETCH_API_URL, // Use constant
+        JUDGMENT_EVAL_FETCH_API_URL,
         evalRunRequestBody,
         {
           headers: {
@@ -478,23 +478,21 @@ export class JudgmentClient {
         }
       );
 
-      // Process the response to match the Python SDK's format
-      // Python returns [{ 'id': ..., 'results': [ScoringResult, ...]}]
-      // The API response is a list of results, each with an 'id' and 'result'
       if (!Array.isArray(response.data) || response.data.length === 0) {
-        return [{ id: '', results: [] }]; // Return empty structure if no data
+        return [{ id: '', results: [] }];
       }
 
-      const evalRunResult = { id: '', results: [] as ScoringResult[] };
-      evalRunResult.id = response.data[0]?.id || ''; // Assume ID is same for all results in run
-
+      const evalRunResult: Array<Record<string, any>> = [{}];
       for (const result of response.data) {
+        const resultId = result.id || '';
         const resultData = result.result || {};
+        
+        // Extract data object from result data
         const dataObject = resultData.data_object || {};
-
-        // Create Example from data_object
+        
+        // Create Example with required input field
         const example = new Example({
-          input: dataObject.input,
+          input: dataObject.input || '',
           actualOutput: dataObject.actual_output,
           expectedOutput: dataObject.expected_output,
           context: dataObject.context,
@@ -506,108 +504,21 @@ export class JudgmentClient {
           exampleIndex: dataObject.example_index,
           timestamp: dataObject.timestamp
         });
-
-        // Create ScoringResult
-        const scoringResult = new ScoringResult({
+        
+        evalRunResult[0].id = resultId;
+        evalRunResult[0].results = [new ScoringResult({
           dataObject: example,
           scorersData: resultData.scorers_data || [],
           error: resultData.error
-        });
-
-        evalRunResult.results.push(scoringResult);
+        })];
       }
 
-      return [evalRunResult]; // Wrap in array to match Python return type [{...}]
+      return evalRunResult;
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const statusCode = error.response?.status;
-        const errorMessage = error.response?.data?.detail || error.message;
-        throw new Error(`Failed to pull evaluation results: ${statusCode} - ${errorMessage}`);
+      if (axios.isAxiosError(error) && error.response) {
+        throw new Error(`Error fetching eval results: ${JSON.stringify(error.response.data)}`);
       }
-       if (error instanceof Error) {
-           throw new Error(`Failed to pull evaluation results: ${error.message}`);
-       }
-       throw new Error(`Failed to pull evaluation results: ${String(error)}`);
-    }
-  }
-
-  /**
-   * List all evaluation runs for a project
-   * @param projectName Name of the project
-   * @param limit Maximum number of evaluation runs to return (default: 100)
-   * @param offset Offset for pagination (default: 0)
-   * @returns List of evaluation run metadata
-   */
-  public async listEvalRuns(
-    projectName: string,
-    limit: number = 100,
-    offset: number = 0
-  ): Promise<Array<Record<string, any>>> {
-    try {
-      // Use ROOT_API for the base URL
-      const url = `${ROOT_API}/projects/${projectName}/eval-runs`;
-      const response = await axios.get(
-        url,
-        {
-          params: {
-            limit,
-            offset
-          },
-          headers: {
-            'Authorization': `Bearer ${this.judgmentApiKey}`,
-            'X-Organization-Id': this.organizationId
-          }
-        }
-      );
-
-      return response.data || [];
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const statusCode = error.response?.status;
-        const errorMessage = error.response?.data?.detail || error.message;
-        throw new Error(`Failed to list evaluation runs: ${statusCode} - ${errorMessage}`);
-      }
-       if (error instanceof Error) {
-            throw new Error(`Failed to list evaluation runs: ${error.message}`);
-       }
-       throw new Error(`Failed to list evaluation runs: ${String(error)}`);
-    }
-  }
-
-  /**
-   * Get evaluation run statistics
-   * @param projectName Name of the project
-   * @param evalRunName Name of the evaluation run
-   * @returns Statistics for the evaluation run
-   */
-  public async getEvalRunStats(
-    projectName: string,
-    evalRunName: string
-  ): Promise<Record<string, any>> {
-    try {
-      // Use ROOT_API for the base URL
-      const url = `${ROOT_API}/projects/${projectName}/eval-runs/${evalRunName}/stats`;
-      const response = await axios.get(
-         url,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.judgmentApiKey}`,
-            'X-Organization-Id': this.organizationId
-          }
-        }
-      );
-
-      return response.data || {};
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const statusCode = error.response?.status;
-        const errorMessage = error.response?.data?.detail || error.message;
-        throw new Error(`Failed to get evaluation run statistics: ${statusCode} - ${errorMessage}`);
-      }
-       if (error instanceof Error) {
-           throw new Error(`Failed to get evaluation run statistics: ${error.message}`);
-       }
-       throw new Error(`Failed to get evaluation run statistics: ${String(error)}`);
+      throw new Error(`Error fetching eval results: ${String(error)}`);
     }
   }
 

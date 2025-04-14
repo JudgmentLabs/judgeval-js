@@ -155,15 +155,9 @@ const client = JudgmentClient.getInstance();
 // Using pullEval
 const results = await client.pullEval('my-project', 'my-eval-run');
 
-// List all evaluation runs for a project
-const evalRuns = await client.listEvalRuns('my-project', 100, 0); // limit=100, offset=0
-
-// Get statistics for an evaluation run
-const stats = await client.getEvalRunStats('my-project', 'my-eval-run');
-
-// Export evaluation results to JSON or CSV
-const jsonExport = await client.exportEvalResults('my-project', 'my-eval-run', 'json');
-const csvExport = await client.exportEvalResults('my-project', 'my-eval-run', 'csv');
+// Export evaluation results to different formats
+const jsonData = await client.exportEvalResults('my-project', 'my-eval-run', 'json');
+const csvData = await client.exportEvalResults('my-project', 'my-eval-run', 'csv');
 ```
 
 The returned results include the evaluation run ID and a list of scoring results:
