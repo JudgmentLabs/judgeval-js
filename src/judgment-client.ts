@@ -468,10 +468,8 @@ export class JudgmentClient {
     };
 
     try {
-      // Use DELETE method and pass requestBody in the 'data' field
-      await axios.delete(JUDGMENT_EVAL_DELETE_API_URL, {
-        headers: this.getAuthHeaders(),
-        data: requestBody
+      await axios.post(JUDGMENT_EVAL_DELETE_API_URL, requestBody, {
+        headers: this.getAuthHeaders()
       });
       logger.info('Successfully deleted eval runs.');
       return true;
@@ -490,15 +488,13 @@ export class JudgmentClient {
   ): Promise<boolean> {
     logger.info(`Deleting ALL eval runs for project: ${projectName}`);
     const requestBody = {
-            project_name: projectName,
+      project_name: projectName,
       judgment_api_key: this.judgmentApiKey,
     };
 
     try {
-      // Use DELETE method and pass requestBody in the 'data' field
-      await axios.delete(JUDGMENT_EVAL_DELETE_PROJECT_API_URL, {
-        headers: this.getAuthHeaders(),
-        data: requestBody
+      await axios.post(JUDGMENT_EVAL_DELETE_PROJECT_API_URL, requestBody, {
+        headers: this.getAuthHeaders()
       });
       logger.info(`Successfully deleted all eval runs for project ${projectName}.`);
       return true;
@@ -517,7 +513,7 @@ export class JudgmentClient {
   ): Promise<boolean> {
     logger.info(`Creating project: ${projectName}`);
     const requestBody = {
-          project_name: projectName,
+      project_name: projectName,
       judgment_api_key: this.judgmentApiKey,
     };
 
@@ -553,25 +549,21 @@ export class JudgmentClient {
   ): Promise<boolean> {
     logger.info(`Deleting project: ${projectName}`);
     const requestBody = {
-            project_name: projectName,
+      project_name: projectName,
       judgment_api_key: this.judgmentApiKey,
     };
 
     try {
-       // Use DELETE method, passing body via 'data'
-       const response = await axios.delete(JUDGMENT_PROJECT_DELETE_API_URL, {
-         headers: this.getAuthHeaders(),
-         data: requestBody // Pass request body in 'data' for DELETE
-       });
+       const response = await axios.post(JUDGMENT_PROJECT_DELETE_API_URL, requestBody, {
+         headers: this.getAuthHeaders()
+      });
 
-       // Check status code for success (2xx)
-       if (response.status >= 200 && response.status < 300) {
+       if (response.data && response.data.message === 'Project deleted successfully') {
          logger.info(`Successfully deleted project: ${projectName}`);
          return true;
        } else {
-         // Log unexpected success status codes as warnings, maybe?
-         logger.warn(`Delete project request for '${projectName}' returned status ${response.status}, expected 2xx. Response: ${JSON.stringify(response.data)}`);
-         return false; // Treat non-2xx as failure
+         logger.error(`Failed to delete project '${projectName}'. Response: ${JSON.stringify(response.data)}`);
+         return false;
        }
     } catch (error) {
       logger.error(`Error deleting project: ${error}`);
@@ -655,7 +647,7 @@ export class JudgmentClient {
   async pullEvalResults(projectName: string, evalRunName: string): Promise<ScoringResult[]> {
     const rawResults = await this.pullEval(projectName, evalRunName);
     if (!rawResults || rawResults.length === 0 || !rawResults[0].results) {
-       return [];
+      return [];
     }
     // Assuming pullEval correctly returns results in the expected format
     return rawResults[0].results as ScoringResult[];
@@ -739,12 +731,12 @@ export class JudgmentClient {
           this.handleApiError(error, 'checkEvalStatus');
           errorMessage = `Error fetching status: ${String(error)}`;
       }
-      return {
+       return {
          status: status,
-        progress: 0,
+         progress: 0,
          message: errorMessage,
          error: String(error) // Include error string
-      };
+       };
     }
   }
 
@@ -815,7 +807,7 @@ export class JudgmentClient {
             // Wait for the next interval
             await new Promise(resolve => setTimeout(resolve, intervalMs));
 
-      } catch (error) {
+        } catch (error) {
              // Handle errors during the wait loop (e.g., network issues during checkEvalStatus)
              logger.error(`Error during waitForEvaluation loop (attempt ${attempt}): ${error}`);
              // Option: Rethrow immediately vs. retry vs. specific handling
@@ -829,7 +821,7 @@ export class JudgmentClient {
                   throw new Error(`waitForEvaluation failed after ${maxAttempts} attempts: ${error}`);
              }
              // Still retryable, wait for interval
-          await new Promise(resolve => setTimeout(resolve, intervalMs));
+             await new Promise(resolve => setTimeout(resolve, intervalMs));
         }
     }
 

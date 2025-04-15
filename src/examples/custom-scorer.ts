@@ -39,28 +39,39 @@ export class SampleScorer extends JudgevalScorer {
   async scoreExample(example: Example): Promise<ScorerData> {
     try {
       // Implement your scoring logic here
-      // For this example, we'll check if the actual output contains the expected output
-      const actualOutput = example.actualOutput?.toLowerCase() || '';
-      const expectedOutput = example.expectedOutput?.toLowerCase() || '';
-      
-      // Calculate score (simple contains check - 1.0 if contains, 0.0 if not)
-      this.score = actualOutput.includes(expectedOutput) ? 1.0 : 0.0;
-      
+      // Handle potential string arrays by joining them
+      let actualOutputStr = example.actualOutput;
+      if (Array.isArray(actualOutputStr)) {
+        actualOutputStr = actualOutputStr.join('\\\\n');
+      }
+
+      let expectedOutputStr = example.expectedOutput;
+      if (Array.isArray(expectedOutputStr)) {
+        expectedOutputStr = expectedOutputStr.join('\\\\n');
+      }
+
+      // Convert to lowercase, handling null/undefined
+      const actualOutputProcessed = actualOutputStr?.toLowerCase() || '';
+      const expectedOutputProcessed = expectedOutputStr?.toLowerCase() || '';
+
+      // Calculate score (strict equality check)
+      this.score = actualOutputProcessed === expectedOutputProcessed ? 1.0 : 0.0;
+
       // Set reason if include_reason is true
       if (this.include_reason) {
-        this.reason = this.score === 1.0 
-          ? "The actual output contains the expected output."
-          : "The actual output does not contain the expected output.";
+        this.reason = this.score === 1.0
+          ? "The processed actual output exactly matches the processed expected output."
+          : "The processed actual output does not exactly match the processed expected output.";
       }
-      
+
       // Generate verbose logs if verbose_mode is true
       if (this.verbose_mode) {
-        this.verbose_logs = `Comparing: "${actualOutput}" with "${expectedOutput}"`;
+        this.verbose_logs = `Comparing processed: \\"${actualOutputProcessed}\\" === \\"${expectedOutputProcessed}\\"`;
       }
-      
+
       // Set success based on threshold
       this.success = this._successCheck();
-      
+
       return {
         name: this.type,
         threshold: this.threshold,
@@ -68,7 +79,7 @@ export class SampleScorer extends JudgevalScorer {
         score: this.score,
         reason: this.reason || null,
         strict_mode: this.strict_mode,
-        evaluation_model: "sample-scorer",
+        evaluation_model: "exact-match-scorer",
         error: null,
         evaluation_cost: null,
         verbose_logs: this.verbose_logs || null,
@@ -78,7 +89,7 @@ export class SampleScorer extends JudgevalScorer {
       // Handle errors
       this.error = error instanceof Error ? error.message : String(error);
       this.success = false;
-      
+
       return {
         name: this.type,
         threshold: this.threshold,
@@ -86,7 +97,7 @@ export class SampleScorer extends JudgevalScorer {
         score: 0,
         reason: `Error during scoring: ${this.error}`,
         strict_mode: this.strict_mode,
-        evaluation_model: "sample-scorer",
+        evaluation_model: "exact-match-scorer",
         error: this.error,
         evaluation_cost: null,
         verbose_logs: null,

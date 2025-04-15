@@ -125,6 +125,7 @@ interface EvaluationRunPayload {
     judgment_api_key: string;
     override?: boolean;
     rules?: Rule[]; // Rules associated with this specific eval run
+    trace_span_id?: string; // <<< RENAMED: Link evaluation run to the specific span (matching backend)
 }
 // <<< NEW: Interface for the Evaluation Run Payload END >>>
 
@@ -168,7 +169,6 @@ interface CondensedSpanEntry {
     span_type: SpanType;
     inputs: Record<string, any> | null;
     output: any | null;
-    evaluation_runs: any[]; // Array of evaluation results
     duration: number | null; // Duration in seconds
     trace_id?: string; // Add trace_id field
     // Add children property for hierarchical structure
@@ -332,7 +332,7 @@ class TraceManagerClient {
     ): Promise<TokenCostResponse | null> {
         try {
             // Use the new calculation endpoint
-            const result = await this._fetch(JUDGMENT_CALCULATE_TOKEN_COSTS_API_URL, {
+            const response = await this._fetch(JUDGMENT_CALCULATE_TOKEN_COSTS_API_URL, {
                 method: 'POST',
                 body: JSON.stringify({
                     model,
@@ -340,10 +340,24 @@ class TraceManagerClient {
                     completion_tokens: completionTokens
                 })
             });
-            
-            return result;
+
+            // Check if the response is okay and parse JSON
+            if (response && response.ok) {
+                const data: TokenCostResponse = await response.json();
+                return data;
+            } else if (response) {
+                // Log error if response was not ok
+                const errorBody = await response.text();
+                logger.warn(`API error calculating token costs for model ${model}: ${response.status} ${response.statusText}`, { errorBody });
+                return null;
+            } else {
+                // Handle cases where _fetch might return null or undefined (though it shouldn't with current implementation)
+                logger.warn(`No response received when calculating token costs for model ${model}.`);
+                return null;
+            }
+
         } catch (error) {
-            logger.warn(`Failed to calculate token costs for model ${model}.`, 
+            logger.warn(`Failed to calculate token costs for model ${model}.`,
                 { error: error instanceof Error ? error.message : String(error) });
             return null;
         }
@@ -574,7 +588,7 @@ class TraceClient {
 
      private condenseTrace(rawEntries: Partial<TraceEntry>[]): [CondensedSpanEntry[], any[]] {
          const spansById: Record<string, CondensedSpanEntry & { start_time?: number; end_time?: number }> = {};
-         const allEvaluationRuns: any[] = []; // To collect all eval runs
+         const allEvaluationRuns: any[] = [];
 
          for (const entry of rawEntries) {
              const spanId = entry.span_id;
@@ -591,7 +605,6 @@ class TraceClient {
                      span_type: entry.span_type || 'span',
                      inputs: null,
                      output: null,
-                     evaluation_runs: [],
                      duration: null,
                      children: []
                  };
@@ -625,15 +638,10 @@ class TraceClient {
                  case 'output':
                  case 'error':
                      currentSpanData.output = entry.output;
+                     if (entry.type === 'output' && entry.output && typeof entry.output === 'object' && 'eval_name' in entry.output && 'scorers' in entry.output && 'trace_span_id' in entry.output) {
+                         allEvaluationRuns.push(entry.output);
+                     }
                      break;
-                 case 'evaluation':
-                      // Check if evaluation_runs is an array and has at least one element
-                      if (Array.isArray(entry.evaluation_runs) && entry.evaluation_runs.length > 0) {
-                          const evalPayload = entry.evaluation_runs[0]; // Extract the payload object
-                          currentSpanData.evaluation_runs.push(evalPayload); // Add the object to the span's list
-                          allEvaluationRuns.push(evalPayload); // Add the object to the central list
-                      }
-                      break;
              }
          }
 
@@ -694,7 +702,7 @@ class TraceClient {
              }
          }
 
-         return [sortedCondensedList, allEvaluationRuns]; // Return both
+         return [sortedCondensedList, allEvaluationRuns];
      }
 
      async save(emptySave: boolean = false): Promise<{ traceId: string; traceData: TraceSavePayload } | null> {
@@ -773,37 +781,56 @@ class TraceClient {
                      if (costs) {
                          // Update the entry with the costs
                          const entry = condensedEntries[call.entryIndex];
-                         if (entry.output?.usage) {
+                         
+                         // Ensure output and usage objects exist before assigning costs
+                         if (entry.output && entry.output.usage) {
+                             // --- This part assigns costs to the individual span ---
                              entry.output.usage.prompt_tokens_cost_usd = costs.prompt_tokens_cost_usd;
                              entry.output.usage.completion_tokens_cost_usd = costs.completion_tokens_cost_usd;
                              entry.output.usage.total_cost_usd = costs.total_cost_usd;
+                             logger.debug(`Assigned costs to span ${entry.span_id} (model: ${call.modelName})`, { costs }); // Added debug log
+                             // -----------------------------------------------------
+                         } else {
+                            logger.warn(`Could not assign costs to span ${entry.span_id} (model: ${call.modelName}): Missing 'output' or 'output.usage' object.`, { output: entry.output }); // Log if structure is missing
                          }
-                         
-                         // Add to the total costs, ensuring values are numbers (default to 0)
+
+                         // Add to the total costs for the trace
                          tokenCounts.prompt_tokens_cost_usd += costs.prompt_tokens_cost_usd ?? 0.0;
                          tokenCounts.completion_tokens_cost_usd += costs.completion_tokens_cost_usd ?? 0.0;
                          tokenCounts.total_cost_usd += costs.total_cost_usd ?? 0.0;
                      } else {
                          // If calculation failed, set costs to null in the entry (matching Python behavior)
                          const entry = condensedEntries[call.entryIndex];
-                         if (entry.output?.usage) {
+                         
+                         // Ensure output and usage objects exist before assigning null costs
+                         if (entry.output && entry.output.usage) {
+                             // --- Sets null costs on the individual span ---
                              entry.output.usage.prompt_tokens_cost_usd = null;
                              entry.output.usage.completion_tokens_cost_usd = null;
-                             entry.output.usage.total_cost_usd = null;
+                             entry.output.usage.total_cost_usd = null; 
+                             // ------------------------------------------
+                         } else {
+                             // Log if we can't even assign null because the structure is missing
+                             logger.warn(`Could not assign null costs to span ${entry.span_id} (model: ${call.modelName}): Missing 'output' or 'output.usage' object.`, { output: entry.output });
                          }
-                         // Log warning, but totals remain 0 for this call
-                         logger.warn(`Token cost calculation failed for model '${call.modelName}'. Cost information will not be available.`);
+                         logger.warn(`Token cost calculation failed for model '${call.modelName}'. Cost information will be null for this span.`); // More specific warning
                      }
                  } catch (e) {
-                     logger.warn(`Error calculating cost for model '${call.modelName}':`, e);
-                     // Set costs to null in the entry
+                     logger.warn(`Error during cost calculation loop for model '${call.modelName}':`, e); // Adjusted logging
+                     // Set costs to null in the entry if an error occurs during the loop iteration
                      const entry = condensedEntries[call.entryIndex];
-                     if (entry.output?.usage) {
+                     
+                     // Ensure output and usage objects exist before assigning null costs on error
+                     if (entry.output && entry.output.usage) {
+                          // --- Sets null costs on the individual span on error ---
                          entry.output.usage.prompt_tokens_cost_usd = null;
                          entry.output.usage.completion_tokens_cost_usd = null;
                          entry.output.usage.total_cost_usd = null;
+                         // ----------------------------------------------------
+                     } else {
+                          // Log if we can't assign null on error because the structure is missing
+                         logger.warn(`Could not assign null costs to span ${entry.span_id} (model: ${call.modelName}) on error: Missing 'output' or 'output.usage' object.`, { output: entry.output });
                      }
-                     // Totals remain unchanged (effectively adding 0)
                  }
              }
          }
@@ -895,15 +922,6 @@ class TraceClient {
                           // Keep console.log
                          console.log(`${indent}  ${prefix} (for ${shortSpanId}): ${outputStr || 'null'}`);
                          break;
-                     case 'evaluation':
-                         let evalStr = JSON.stringify(entry.evaluation_runs);
-                          if (evalStr && evalStr.length > 200) { evalStr = evalStr.substring(0, 197) + '...'; }
-                          // Keep console.log
-                         console.log(`${indent}  Evaluation (for ${shortSpanId}): ${evalStr || '[]'}`);
-                         break;
-                     default:
-                          // Keep console.log
-                         console.log(`${indent}? Unknown entry type: ${JSON.stringify(entry)}`);
                  }
              } catch (stringifyError) {
                   const errorMessage = stringifyError instanceof Error ? stringifyError.message : String(stringifyError);
@@ -979,8 +997,6 @@ class TraceClient {
             throw new Error("Cannot use Judgeval scorers, you can only use API scorers when using rules. Please either remove rules or use only APIJudgmentScorer types.");
         }
 
-        const startTime = Date.now() / 1000; // Record start time in seconds
-
         // Create example structure matching Python/backend expectations
         const example = {
             input: options.input || "",
@@ -1001,6 +1017,7 @@ class TraceClient {
                 logger.warn(`No current entry to record evaluation to\nStack trace: ${new Error().stack}`);
                 return;
             }
+            const currentSpanId = currentEntry.span_id; // Get the span ID
 
             // --- Create evaluation run name (similar to Python) ---
             // Capitalize scorer names
@@ -1010,7 +1027,7 @@ class TraceClient {
                 return name.charAt(0).toUpperCase() + name.slice(1);
             }).join(',');
             // Use trace name and shortened span ID (or trace ID if no span)
-            const idPart = currentEntry ? currentEntry.span_id!.substring(0, 8) : this.traceId.substring(0, 8);
+            const idPart = currentSpanId ? currentSpanId.substring(0, 8) : this.traceId.substring(0, 8);
             const evalName = `${this.name.charAt(0).toUpperCase() + this.name.slice(1)}-${idPart}-[${scorerNames}]`;
             // --- End eval name creation ---
 
@@ -1026,20 +1043,12 @@ class TraceClient {
                 metadata: {}, // Matches Python tracer
                 judgment_api_key: this.apiKey,
                 override: this.overwrite, // Use trace's overwrite setting
-                rules: loadedRules // Pass the processed rules
+                rules: loadedRules, // Pass the processed rules
+                trace_span_id: currentSpanId // <<< RENAMED: Assign the current span ID (matching backend)
             };
 
             // Add evaluation entry to the trace
-            this.addEntry({
-                type: "evaluation",
-                function: currentEntry.function,
-                span_id: currentEntry.span_id, // May be undefined
-                depth: currentEntry.depth ?? 0,
-                created_at: Date.now() / 1000,
-                evaluation_runs: [evalRunPayload], // Store the object back in an array to match interface
-                duration: Date.now() / 1000 - startTime,
-                span_type: currentEntry.span_type
-            });
+            this.recordOutput(evalRunPayload);
 
         } catch (error) {
             logger.error(`Failed during asyncEvaluate execution: ${error instanceof Error ? error.message : String(error)}`);

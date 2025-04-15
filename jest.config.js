@@ -12,7 +12,7 @@ const config = {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
   testMatch: ['**/src/e2etests/**/*.test.ts'],
-  testTimeout: 120000, // Increase timeout for e2e tests (2 minutes)
+  testTimeout: 30000, // Increase timeout for e2e tests
 };
 
 export default config;
