@@ -586,6 +586,27 @@ class TraceClient {
         }
     }
 
+    /**
+     * Retrieves the ID of the currently active span in this trace context.
+     * Relies on AsyncLocalStorage context established by observe/span.
+     * @returns {string | undefined} The ID of the current span, or undefined if none is active.
+     */
+    getCurrentSpanId(): string | undefined {
+        const traceClientContext = getTraceClientContext(); // Internal function using AsyncLocalStorage
+        if (!traceClientContext) {
+            // Should ideally not happen if called within an observe/trace context
+            console.warn("[Judgeval] getCurrentSpanId called outside of an active trace context.");
+            return undefined;
+        }
+        const currentEntry = traceClientContext.entryStack.at(-1); // Get the latest 'enter' entry
+        if (!currentEntry) {
+            // This might happen if called right at the start of a trace before the first span
+            // console.warn("[Judgeval] getCurrentSpanId called but span stack is empty.");
+            return undefined;
+        }
+        return currentEntry.span_id;
+    }
+
     getDuration(): number {
          return (Date.now() / 1000) - this.startTime;
      }
