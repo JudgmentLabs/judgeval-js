@@ -45,6 +45,10 @@ function asyncFunctionWrapper<T extends any[], S>(func: (...args: T) => Promise<
 
         const result = await traceClientContextAsyncLocalStorage
             .run(traceClientContext, () => func(...args));
+        if (traceClientContext.entries.length > parentTraceClientContext.entries.length) {
+                [traceClientContext.entries, parentTraceClientContext.entries] =
+                [parentTraceClientContext.entries, traceClientContext.entries];
+        }
         parentTraceClientContext.entries.push(...traceClientContext.entries);
 
         return result;
