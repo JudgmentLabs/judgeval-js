@@ -40,6 +40,7 @@ export const ROOT_API = 'https://api.judgmentlabs.ai';
 
 // Dataset API URLs (derive from ROOT_API)
 export const JUDGMENT_DATASETS_PUSH_API_URL = `${ROOT_API}/datasets/push/`;
+export const JUDGMENT_DATASETS_APPEND_API_URL = `${ROOT_API}/datasets/insert_examples/`;
 export const JUDGMENT_DATASETS_PULL_API_URL = `${ROOT_API}/datasets/pull/`;
 export const JUDGMENT_DATASETS_DELETE_API_URL = `${ROOT_API}/datasets/delete/`;
 export const JUDGMENT_DATASETS_EXPORT_JSONL_API_URL = `${ROOT_API}/datasets/export_jsonl/`;

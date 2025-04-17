@@ -8,6 +8,7 @@ import logger from '../../common/logger-instance.js'; // Adjust path as needed
 // Import constants (assuming they are correctly defined in constants.ts)
 import {
   JUDGMENT_DATASETS_PUSH_API_URL,
+  JUDGMENT_DATASETS_APPEND_API_URL,
   JUDGMENT_DATASETS_PULL_API_URL,
   JUDGMENT_DATASETS_DELETE_API_URL,
   JUDGMENT_DATASETS_PROJECT_STATS_API_URL,
@@ -360,6 +361,64 @@ export class EvalDatasetClient {
       this.handleApiError(error, 'exportJsonl');
       progressBar.stop();
       throw error;
+    }
+  }
+
+  /**
+   * Appends examples to an existing dataset on the Judgment platform.
+   * @returns True if successful, false otherwise.
+   */
+  public async append(
+    alias: string,
+    examples: Example[],
+    projectName: string
+  ): Promise<boolean> {
+    logger.debug(`Appending ${examples.length} examples to dataset '${alias}' for project '${projectName}'`);
+
+    const progressBar = new cliProgress.SingleBar({
+      format: `Appending to ${colors.magenta(alias)}... | ${colors.cyan('{bar}')} | {percentage}% || {status}`,
+      barCompleteChar: '\u2588',
+      barIncompleteChar: '\u2591',
+      hideCursor: true,
+      clearOnComplete: false,
+      stopOnComplete: true,
+    }, cliProgress.Presets.shades_classic);
+
+    progressBar.start(100, 0, { status: 'Starting...' });
+
+    const content = {
+      dataset_alias: alias,
+      examples: examples.map((e) => e.toJSON()),
+      project_name: projectName
+    };
+
+    try {
+      progressBar.update(30, { status: 'Sending request...' });
+      const response = await axios.post(
+        JUDGMENT_DATASETS_APPEND_API_URL,
+        content,
+        {
+          headers: this.getAuthHeaders()
+        }
+      );
+      progressBar.update(80, { status: 'Processing response...' });
+
+      if (response.status >= 200 && response.status < 300) {
+          logger.info(`Successfully appended examples to dataset '${alias}' in project '${projectName}'`);
+          progressBar.update(100, { status: colors.green('Done!') });
+          return true;
+      } else {
+          logger.error(
+              `Server error during append dataset: ${response.status} ${response.statusText}`,
+              response.data
+          );
+          progressBar.stop();
+          return false;
+      }
+    } catch (error) {
+      this.handleApiError(error, 'appendDataset');
+      progressBar.stop();
+      return false;
     }
   }
 
