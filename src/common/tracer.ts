@@ -731,15 +731,18 @@ class TraceClient {
      }
 
      async save(emptySave: boolean = false): Promise<{ traceId: string; traceData: TraceSavePayload } | null> {
-         if (!this.enableMonitoring || !this.traceManager) {
-              return null;
+         // If monitoring is disabled or trace hasn't started, don't save
+         if (!this.enableMonitoring || this.startTime === -1 || !this.traceManager) {
+             logger.info(`[TraceClient ${this.traceId}] Monitoring disabled or trace not started. Not saving.`);
+             return null;
          }
 
-         const traceClientContext = getTraceClientContext();
-         const totalDuration = this.getDuration();
-         // Use the tuple returned by condenseTrace
-         const [condensedEntries, evaluationRuns] = this.condenseTrace(traceClientContext.entries);
+         const endTime = Date.now() / 1000; // Current time in seconds
+         const duration = endTime - this.startTime;
 
+         const [condensedEntries, evalRuns] = this.condenseTrace(getTraceClientContext().entries);
+
+         // Calculate token counts and costs
          const tokenCounts = {
              prompt_tokens: 0,
              completion_tokens: 0,
@@ -749,155 +752,104 @@ class TraceClient {
              total_cost_usd: 0.0
          };
 
-         // First pass: collect all LLM calls with their token counts
-         const llmCalls: { modelName: string, promptTokens: number, completionTokens: number, entryIndex: number }[] = [];
-         let index = 0;
-         
-         for (const entry of condensedEntries) {
+         // Flatten the condensed entries for iteration
+         const flatEntries: CondensedSpanEntry[] = [];
+         function flatten(entry: CondensedSpanEntry) {
+             flatEntries.push(entry);
+             if (entry.children) {
+                 entry.children.forEach(flatten);
+             }
+         }
+         condensedEntries.forEach(flatten);
+
+
+         // Use a Set to avoid double-counting tokens from nested calls if structure is complex
+         // Note: Assuming span_ids are unique across the trace 
+         const processedSpanIds = new Set<string>();
+         let firstModel = null;
+
+         for (const entry of flatEntries) {
+             if (processedSpanIds.has(entry.span_id)) continue;
+             processedSpanIds.add(entry.span_id);
+
              if (entry.span_type === 'llm' && entry.output?.usage) {
-                 const usage = entry.output.usage;
-                 const modelName = entry.inputs?.model || "";
-                 let promptTokens = 0;
-                 let completionTokens = 0;
-
-                 // Handle different token naming conventions
-                 if (usage.prompt_tokens !== undefined || usage.completion_tokens !== undefined) {
-                     promptTokens = usage.prompt_tokens || 0;
-                     completionTokens = usage.completion_tokens || 0;
-                 } else if (usage.input_tokens !== undefined || usage.output_tokens !== undefined) {
-                     promptTokens = usage.input_tokens || 0;
-                     completionTokens = usage.output_tokens || 0;
-                     // Standardize naming
-                     usage.prompt_tokens = promptTokens;
-                     usage.completion_tokens = completionTokens;
-                     delete usage.input_tokens;
-                     delete usage.output_tokens;
-                 }
+                 tokenCounts.prompt_tokens += entry.output.usage.prompt_tokens || 0;
+                 tokenCounts.completion_tokens += entry.output.usage.completion_tokens || 0;
+                 // Total tokens are often directly provided, otherwise sum
+                 tokenCounts.total_tokens += entry.output.usage.total_tokens || 
+                                            ((entry.output.usage.prompt_tokens || 0) + 
+                                             (entry.output.usage.completion_tokens || 0));
                  
-                 tokenCounts.prompt_tokens += promptTokens;
-                 tokenCounts.completion_tokens += completionTokens;
-                 tokenCounts.total_tokens += usage.total_tokens || (promptTokens + completionTokens);
-                 
-                 // Add to list of calls for cost calculation
-                 if (modelName) {
-                     llmCalls.push({
-                         modelName,
-                         promptTokens,
-                         completionTokens,
-                         entryIndex: index
-                     });
-                 }
-             }
-             index++;
-         }
-
-         // Second pass: calculate costs for each LLM call using the API
-         if (this.traceManager && llmCalls.length > 0) {
-             // Process each LLM call
-             for (const call of llmCalls) {
-                 try {
-                     // Get costs from the API
-                     const costs = await this.traceManager.calculateTokenCosts(
-                         call.modelName, 
-                         call.promptTokens, 
-                         call.completionTokens
-                     );
-                     
-                     if (costs) {
-                         // Update the entry with the costs
-                         const entry = condensedEntries[call.entryIndex];
-                         
-                         // Ensure output and usage objects exist before assigning costs
-                         if (entry.output && entry.output.usage) {
-                             // --- This part assigns costs to the individual span ---
-                             entry.output.usage.prompt_tokens_cost_usd = costs.prompt_tokens_cost_usd;
-                             entry.output.usage.completion_tokens_cost_usd = costs.completion_tokens_cost_usd;
-                             entry.output.usage.total_cost_usd = costs.total_cost_usd;
-                             logger.debug(`Assigned costs to span ${entry.span_id} (model: ${call.modelName})`, { costs }); // Added debug log
-                             // -----------------------------------------------------
-                         } else {
-                            logger.warn(`Could not assign costs to span ${entry.span_id} (model: ${call.modelName}): Missing 'output' or 'output.usage' object.`, { output: entry.output }); // Log if structure is missing
-                         }
-
-                         // Add to the total costs for the trace
-                         tokenCounts.prompt_tokens_cost_usd += costs.prompt_tokens_cost_usd ?? 0.0;
-                         tokenCounts.completion_tokens_cost_usd += costs.completion_tokens_cost_usd ?? 0.0;
-                         tokenCounts.total_cost_usd += costs.total_cost_usd ?? 0.0;
-                     } else {
-                         // If calculation failed, set costs to null in the entry (matching Python behavior)
-                         const entry = condensedEntries[call.entryIndex];
-                         
-                         // Ensure output and usage objects exist before assigning null costs
-                         if (entry.output && entry.output.usage) {
-                             // --- Sets null costs on the individual span ---
-                             entry.output.usage.prompt_tokens_cost_usd = null;
-                             entry.output.usage.completion_tokens_cost_usd = null;
-                             entry.output.usage.total_cost_usd = null; 
-                             // ------------------------------------------
-                         } else {
-                             // Log if we can't even assign null because the structure is missing
-                             logger.warn(`Could not assign null costs to span ${entry.span_id} (model: ${call.modelName}): Missing 'output' or 'output.usage' object.`, { output: entry.output });
-                         }
-                         logger.warn(`Token cost calculation failed for model '${call.modelName}'. Cost information will be null for this span.`); // More specific warning
-                     }
-                 } catch (e) {
-                     logger.warn(`Error during cost calculation loop for model '${call.modelName}':`, e); // Adjusted logging
-                     // Set costs to null in the entry if an error occurs during the loop iteration
-                     const entry = condensedEntries[call.entryIndex];
-                     
-                     // Ensure output and usage objects exist before assigning null costs on error
-                     if (entry.output && entry.output.usage) {
-                          // --- Sets null costs on the individual span on error ---
-                         entry.output.usage.prompt_tokens_cost_usd = null;
-                         entry.output.usage.completion_tokens_cost_usd = null;
-                         entry.output.usage.total_cost_usd = null;
-                         // ----------------------------------------------------
-                     } else {
-                          // Log if we can't assign null on error because the structure is missing
-                         logger.warn(`Could not assign null costs to span ${entry.span_id} (model: ${call.modelName}) on error: Missing 'output' or 'output.usage' object.`, { output: entry.output });
-                     }
+                 // Capture the first model encountered in LLM spans
+                 if (!firstModel && entry.inputs?.model) {
+                     firstModel = entry.inputs.model;
                  }
              }
          }
 
-         // Convert rules array to a dictionary (Record<string, Rule>)
-         const rulesDict: Record<string, Rule> = {};
-         this.rules.forEach(rule => {
-             // Use rule_id if available, otherwise fallback to name
-             const key = rule.rule_id ?? rule.name;
-             rulesDict[key] = rule;
-         });
+         // <<< NEW: Fetch costs from backend if a model was found and tokens exist >>>
+         if (firstModel && (tokenCounts.prompt_tokens > 0 || tokenCounts.completion_tokens > 0)) {
+             try {
+                 const costResponse = await this.traceManager.calculateTokenCosts(
+                     firstModel,
+                     tokenCounts.prompt_tokens,
+                     tokenCounts.completion_tokens
+                 );
+                 if (costResponse) {
+                     tokenCounts.prompt_tokens_cost_usd = costResponse.prompt_tokens_cost_usd;
+                     tokenCounts.completion_tokens_cost_usd = costResponse.completion_tokens_cost_usd;
+                     tokenCounts.total_cost_usd = costResponse.total_cost_usd;
+                     logger.info(`[TraceClient ${this.traceId}] Calculated costs for model ${firstModel}: $${tokenCounts.total_cost_usd.toFixed(6)}`);
+                 } else {
+                     logger.warn(`[TraceClient ${this.traceId}] Could not fetch token costs for model ${firstModel}. Costs will be 0.`);
+                 }
+             } catch (error) {
+                 logger.error(`[TraceClient ${this.traceId}] Error fetching token costs: ${error}`);
+                 // Costs remain 0.0
+             }
+         }
+         // <<< END NEW >>>
 
          const traceData: TraceSavePayload = {
              trace_id: this.traceId,
-             name: this.name,
+             name: this.name, // Use the sanitized name
              project_name: this.projectName,
-             created_at: new Date(this.startTime * 1000).toISOString(),
-             duration: totalDuration,
+             created_at: new Date(this.startTime * 1000).toISOString(), // Convert start time to ISO string
+             duration: duration < 0 ? 0 : duration,
              token_counts: tokenCounts,
-             entries: condensedEntries,
-             evaluation_runs: evaluationRuns,
+             entries: condensedEntries, // Send the potentially nested structure from condenseTrace
+             evaluation_runs: evalRuns, // Send evaluation runs collected
              overwrite: this.overwrite,
              parent_trace_id: this.parentTraceId,
-             parent_name: this.parentName
+             parent_name: this.parentName,
          };
 
-         try {
-             await this.traceManager.saveTrace(traceData);
-             logger.info(`Trace ${this.traceId} saved successfully.`);
+         // <<< ADD LOGGING HERE >>>
+         logger.info(`[TraceClient ${this.traceId}] Payload to be saved:`, JSON.stringify(traceData, null, 2));
+         // <<< END LOGGING >>>
 
-             if (this.enableEvaluations) { 
-                 try {
-                     await this.traceManager.addTraceToEvalQueue(traceData);
-                     logger.info(`Trace ${this.traceId} added to evaluation queue.`);
-                 } catch (evalError) {
-                     logger.warn(`Failed to add trace ${this.traceId} to evaluation queue.`, { error: evalError instanceof Error ? evalError.message : String(evalError) });
-                 }
-             }
+         if (emptySave) {
+             // Skip actual saving if emptySave is true (used for context management in generators)
+              logger.info(`[TraceClient ${this.traceId}] emptySave=true, skipping actual save call.`);
              return { traceId: this.traceId, traceData };
+         }
+
+         try {
+             logger.info(`[TraceClient ${this.traceId}] Calling traceManager.saveTrace...`);
+             const response = await this.traceManager.saveTrace(traceData);
+             logger.info(`[TraceClient ${this.traceId}] Trace saved successfully. Response:`, response);
+             // Reset trace context after successful save
+             getTraceClientContext().entries = [];
+             getTraceClientContext().entryStack = [];
+             this.startTime = -1; // Reset start time
+             return { traceId: this.traceId, traceData: traceData }; // Return payload on success
          } catch (error) {
-             logger.error(`Failed to save trace ${this.traceId}.`, { error: error instanceof Error ? error.message : String(error) });
-             return null;
+             logger.error(`[TraceClient ${this.traceId}] Error saving trace:`, error);
+             // Optionally reset context even on error?
+             // getTraceClientContext().entries = [];
+             // getTraceClientContext().entryStack = [];
+             // this.startTime = -1;
+             return null; // Indicate save failure
          }
      }
 
