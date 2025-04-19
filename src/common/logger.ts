@@ -15,7 +15,9 @@ let currentTimestamp: string | null = null;
  * Log a debug message
  */
 export function debug(message: string, meta?: Record<string, any>): void {
-  logger.debug(message, { ...meta, exampleId: currentExampleId, timestamp: currentTimestamp });
+  // Prioritize meta.exampleId over currentExampleId
+  const exampleId = meta?.exampleId !== undefined ? meta.exampleId : currentExampleId;
+  logger.debug(message, { ...meta, exampleId, timestamp: currentTimestamp });
 }
 
 /**
@@ -27,21 +29,27 @@ export function log(message: string, ...args: any[]): void {
   if (args.length > 0) {
     meta = { args: args }; 
   }
-  logger.info(message, { ...meta, exampleId: currentExampleId, timestamp: currentTimestamp });
+  // Prioritize meta.exampleId over currentExampleId
+  const exampleId = meta?.exampleId !== undefined ? meta.exampleId : currentExampleId;
+  logger.info(message, { ...meta, exampleId, timestamp: currentTimestamp });
 }
 
 /**
  * Log an info message
  */
 export function info(message: string, meta?: Record<string, any>): void {
-  logger.info(message, { ...meta, exampleId: currentExampleId, timestamp: currentTimestamp });
+  // Prioritize meta.exampleId over currentExampleId
+  const exampleId = meta?.exampleId !== undefined ? meta.exampleId : currentExampleId;
+  logger.info(message, { ...meta, exampleId, timestamp: currentTimestamp });
 }
 
 /**
  * Log a warning message
  */
 export function warning(message: string, meta?: Record<string, any>): void {
-  logger.warn(message, { ...meta, exampleId: currentExampleId, timestamp: currentTimestamp });
+  // Prioritize meta.exampleId over currentExampleId
+  const exampleId = meta?.exampleId !== undefined ? meta.exampleId : currentExampleId;
+  logger.warn(message, { ...meta, exampleId, timestamp: currentTimestamp });
 }
 
 /**
@@ -55,7 +63,9 @@ export function warn(message: string, meta?: Record<string, any>): void {
  * Log an error message
  */
 export function error(message: string, meta?: Record<string, any>): void {
-  logger.error(message, { ...meta, exampleId: currentExampleId, timestamp: currentTimestamp });
+  // Prioritize meta.exampleId over currentExampleId
+  const exampleId = meta?.exampleId !== undefined ? meta.exampleId : currentExampleId;
+  logger.error(message, { ...meta, exampleId, timestamp: currentTimestamp });
 }
 
 /**
