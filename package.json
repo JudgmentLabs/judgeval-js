@@ -120,7 +120,6 @@
     }
   },
   "overrides": {
-    "@ai-sdk/provider": "0.0.26",
-    "@opentelemetry/sdk-trace-base": "1.25.1"
+    "@ai-sdk/provider": "0.0.26"
   }
 }
