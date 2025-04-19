@@ -12,7 +12,6 @@ import {
     JUDGMENT_TRACES_SAVE_API_URL,
     JUDGMENT_TRACES_FETCH_API_URL,
     JUDGMENT_TRACES_DELETE_API_URL,
-    JUDGMENT_TRACES_ADD_TO_EVAL_QUEUE_API_URL,
     JUDGMENT_CALCULATE_TOKEN_COSTS_API_URL,
     // Add other necessary constants if needed
 } from '../constants.js';
@@ -90,7 +89,7 @@ type ApiClient = OpenAI | Anthropic | any; // Use 'any' for Together to bypass s
 type SpanType = string; // Allow any string
 
 interface TraceEntry {
-    type: 'enter' | 'exit' | 'input' | 'output' | 'error' | 'evaluation';
+    type: 'enter' | 'exit' | 'input' | 'output' | 'error';
     function: string;
     span_id: string;
     depth: number;
@@ -100,7 +99,6 @@ interface TraceEntry {
     inputs?: Record<string, any>;
     span_type: SpanType;
     parent_span_id?: string;
-    evaluation_runs?: any[]; // Array of evaluation results (should be objects, not arrays of objects)
     trace_id?: string;
     message?: string;
 }
@@ -157,7 +155,7 @@ interface TraceSavePayload {
         total_cost_usd: number;
     };
     entries: CondensedSpanEntry[];
-    evaluation_runs: any[];
+    evaluation_runs: EvaluationRunPayload[];
     overwrite: boolean;
     parent_trace_id?: string | null;
     parent_name?: string | null;
@@ -312,14 +310,6 @@ class TraceManagerClient {
         });
     }
 
-    async addTraceToEvalQueue(traceData: TraceSavePayload): Promise<any> {
-        // Ensure traceData has the necessary structure for the queue endpoint
-        return this._fetch(JUDGMENT_TRACES_ADD_TO_EVAL_QUEUE_API_URL, {
-            method: 'POST',
-            body: JSON.stringify(traceData), // Send the full trace data as per Python impl
-        });
-    }
-
     /**
      * Calculate token costs directly using the API endpoint.
      * This is more accurate than client-side calculation as it uses the most up-to-date pricing.
@@ -395,11 +385,12 @@ class TraceClient {
 
     // Internal state
     private startTime: number; // Unix timestamp (seconds)
-    private traceManager: TraceManagerClient | null = null; // Can be null if monitoring disabled
+    public traceManager: TraceManagerClient | null = null; // Made public for wrap access
     private apiKey: string;
     private organizationId: string;
     private originalName: string; // Keep the original name if needed for display purposes
     private _spanDepths: Record<string, number> = {}; // Track depth of active spans
+    private pendingEvaluationRuns: EvaluationRunPayload[] = []; // <-- ADDED: Store pending evaluations
 
     constructor(
          config: {
@@ -611,9 +602,8 @@ class TraceClient {
          return (Date.now() / 1000) - this.startTime;
      }
 
-     private condenseTrace(rawEntries: Partial<TraceEntry>[]): [CondensedSpanEntry[], any[]] {
+     private condenseTrace(rawEntries: Partial<TraceEntry>[]): CondensedSpanEntry[] {
          const spansById: Record<string, CondensedSpanEntry & { start_time?: number; end_time?: number }> = {};
-         const allEvaluationRuns: any[] = [];
 
          for (const entry of rawEntries) {
              const spanId = entry.span_id;
@@ -663,9 +653,6 @@ class TraceClient {
                  case 'output':
                  case 'error':
                      currentSpanData.output = entry.output;
-                     if (entry.type === 'output' && entry.output && typeof entry.output === 'object' && 'eval_name' in entry.output && 'scorers' in entry.output && 'trace_span_id' in entry.output) {
-                         allEvaluationRuns.push(entry.output);
-                     }
                      break;
              }
          }
@@ -727,7 +714,7 @@ class TraceClient {
              }
          }
 
-         return [sortedCondensedList, allEvaluationRuns];
+         return sortedCondensedList;
      }
 
      async save(emptySave: boolean = false): Promise<{ traceId: string; traceData: TraceSavePayload } | null> {
@@ -740,7 +727,7 @@ class TraceClient {
          const endTime = Date.now() / 1000; // Current time in seconds
          const duration = endTime - this.startTime;
 
-         const [condensedEntries, evalRuns] = this.condenseTrace(getTraceClientContext().entries);
+         const condensedEntries = this.condenseTrace(getTraceClientContext().entries);
 
          // Calculate token counts and costs
          const tokenCounts = {
@@ -752,63 +739,39 @@ class TraceClient {
              total_cost_usd: 0.0
          };
 
-         // Flatten the condensed entries for iteration
-         const flatEntries: CondensedSpanEntry[] = [];
-         function flatten(entry: CondensedSpanEntry) {
-             flatEntries.push(entry);
-             if (entry.children) {
-                 entry.children.forEach(flatten);
-             }
-         }
-         condensedEntries.forEach(flatten);
-
-
          // Use a Set to avoid double-counting tokens from nested calls if structure is complex
          // Note: Assuming span_ids are unique across the trace 
          const processedSpanIds = new Set<string>();
-         let firstModel = null;
 
-         for (const entry of flatEntries) {
+         for (const entry of condensedEntries) {
              if (processedSpanIds.has(entry.span_id)) continue;
              processedSpanIds.add(entry.span_id);
 
              if (entry.span_type === 'llm' && entry.output?.usage) {
-                 tokenCounts.prompt_tokens += entry.output.usage.prompt_tokens || 0;
-                 tokenCounts.completion_tokens += entry.output.usage.completion_tokens || 0;
-                 // Total tokens are often directly provided, otherwise sum
-                 tokenCounts.total_tokens += entry.output.usage.total_tokens || 
-                                            ((entry.output.usage.prompt_tokens || 0) + 
-                                             (entry.output.usage.completion_tokens || 0));
+                 const usage = entry.output.usage; 
+                 // Sum tokens
+                 tokenCounts.prompt_tokens += usage.prompt_tokens || usage.input_tokens || 0;
+                 tokenCounts.completion_tokens += usage.completion_tokens || usage.output_tokens || 0;
+                 tokenCounts.total_tokens += usage.total_tokens || 
+                                            ((usage.prompt_tokens || usage.input_tokens || 0) + 
+                                             (usage.completion_tokens || usage.output_tokens || 0));
                  
-                 // Capture the first model encountered in LLM spans
-                 if (!firstModel && entry.inputs?.model) {
-                     firstModel = entry.inputs.model;
+                 // Sum costs embedded in the usage object (if they exist)
+                 if (usage.prompt_tokens_cost_usd !== undefined) {
+                     tokenCounts.prompt_tokens_cost_usd += usage.prompt_tokens_cost_usd;
+                 }
+                 if (usage.completion_tokens_cost_usd !== undefined) {
+                     tokenCounts.completion_tokens_cost_usd += usage.completion_tokens_cost_usd;
+                 }
+                 if (usage.total_cost_usd !== undefined) {
+                     tokenCounts.total_cost_usd += usage.total_cost_usd;
                  }
              }
          }
 
-         // <<< NEW: Fetch costs from backend if a model was found and tokens exist >>>
-         if (firstModel && (tokenCounts.prompt_tokens > 0 || tokenCounts.completion_tokens > 0)) {
-             try {
-                 const costResponse = await this.traceManager.calculateTokenCosts(
-                     firstModel,
-                     tokenCounts.prompt_tokens,
-                     tokenCounts.completion_tokens
-                 );
-                 if (costResponse) {
-                     tokenCounts.prompt_tokens_cost_usd = costResponse.prompt_tokens_cost_usd;
-                     tokenCounts.completion_tokens_cost_usd = costResponse.completion_tokens_cost_usd;
-                     tokenCounts.total_cost_usd = costResponse.total_cost_usd;
-                     logger.info(`[TraceClient ${this.traceId}] Calculated costs for model ${firstModel}: $${tokenCounts.total_cost_usd.toFixed(6)}`);
-                 } else {
-                     logger.warn(`[TraceClient ${this.traceId}] Could not fetch token costs for model ${firstModel}. Costs will be 0.`);
-                 }
-             } catch (error) {
-                 logger.error(`[TraceClient ${this.traceId}] Error fetching token costs: ${error}`);
-                 // Costs remain 0.0
-             }
-         }
-         // <<< END NEW >>>
+         // --- Retrieve and include pending evaluation runs ---
+         const evaluationRunsToSave = [...this.pendingEvaluationRuns];
+         // ----------------------------------------------------
 
          const traceData: TraceSavePayload = {
              trace_id: this.traceId,
@@ -818,7 +781,7 @@ class TraceClient {
              duration: duration < 0 ? 0 : duration,
              token_counts: tokenCounts,
              entries: condensedEntries, // Send the potentially nested structure from condenseTrace
-             evaluation_runs: evalRuns, // Send evaluation runs collected
+             evaluation_runs: evaluationRunsToSave, // <-- ADDED: Include collected evaluations
              overwrite: this.overwrite,
              parent_trace_id: this.parentTraceId,
              parent_name: this.parentName,
@@ -826,7 +789,9 @@ class TraceClient {
 
          // <<< ADD LOGGING HERE >>>
          logger.info(`[TraceClient ${this.traceId}] Payload to be saved:`, JSON.stringify(traceData, null, 2));
-         // <<< END LOGGING >>>
+         // <<< ADD SPECIFIC LOGGING FOR EVALUATION RUNS (using INFO level) >>>
+         logger.info(`[TraceClient ${this.traceId}] Evaluation runs included in payload:`, JSON.stringify(traceData.evaluation_runs, null, 2));
+         // <<< END SPECIFIC LOGGING >>>
 
          if (emptySave) {
              // Skip actual saving if emptySave is true (used for context management in generators)
@@ -841,6 +806,7 @@ class TraceClient {
              // Reset trace context after successful save
              getTraceClientContext().entries = [];
              getTraceClientContext().entryStack = [];
+             this.pendingEvaluationRuns = []; // <-- ADDED: Clear pending evaluations
              this.startTime = -1; // Reset start time
              return { traceId: this.traceId, traceData: traceData }; // Return payload on success
          } catch (error) {
@@ -991,7 +957,7 @@ class TraceClient {
             const traceClientContext = getTraceClientContext();
             const currentEntry = traceClientContext.entryStack.at(-1);
             if (!currentEntry) {
-                logger.warn(`No current entry to record evaluation to\nStack trace: ${new Error().stack}`);
+                logger.warn(`No current entry to associate evaluation with\\nStack trace: ${new Error().stack}`);
                 return;
             }
             const currentSpanId = currentEntry.span_id; // Get the span ID
@@ -1024,8 +990,14 @@ class TraceClient {
                 trace_span_id: currentSpanId // <<< RENAMED: Assign the current span ID (matching backend)
             };
 
-            // Add evaluation entry to the trace
-            this.recordOutput(evalRunPayload);
+            // --- Log the payload before storing (using INFO level) ---
+            logger.info(`[TraceClient ${this.traceId}] Storing EvaluationRunPayload for span ${currentSpanId}:`, JSON.stringify(evalRunPayload, null, 2));
+            // --- End log before store ---
+
+            // --- Store the payload instead of sending ---
+            this.pendingEvaluationRuns.push(evalRunPayload);
+            logger.info(`[TraceClient ${this.traceId}] Evaluation payload stored for span ${currentSpanId}`);
+            // --- End store payload ---
 
         } catch (error) {
             logger.error(`Failed during asyncEvaluate execution: ${error instanceof Error ? error.message : String(error)}`);
@@ -1344,6 +1316,8 @@ export function wrap<T extends ApiClient>(client: T): T {
         }
 
         let response;
+        let outputData: Record<string, any> | null = null; // Initialize outputData
+
         for (const span of currentTrace.span(spanName, { spanType: 'llm' })) {
             const inputData = _formatInputData(client, args);
             currentTrace.recordInput(inputData);
@@ -1355,11 +1329,50 @@ export function wrap<T extends ApiClient>(client: T): T {
                 throw error;
             }
 
-            const outputData = _formatOutputData(client, response);
-            currentTrace.recordOutput(outputData);
+            outputData = _formatOutputData(client, response);
+
+            // --- Calculate and Embed Costs --- 
+            const modelName = inputData.model;
+            const usage = outputData?.usage;
+            const traceManager = currentTrace.traceManager; // Get trace manager from current trace
+
+            if (modelName && usage && traceManager && 
+                (usage.prompt_tokens !== undefined || usage.input_tokens !== undefined) && 
+                (usage.completion_tokens !== undefined || usage.output_tokens !== undefined)) 
+            {
+                const promptTokens = usage.prompt_tokens ?? usage.input_tokens ?? 0;
+                const completionTokens = usage.completion_tokens ?? usage.output_tokens ?? 0;
+                
+                try {
+                    const costResponse = await traceManager.calculateTokenCosts(
+                        modelName,
+                        promptTokens,
+                        completionTokens
+                    );
+                    
+                    if (costResponse) {
+                        // Merge costs into the usage object
+                        outputData.usage = { 
+                            ...usage, 
+                            prompt_tokens_cost_usd: costResponse.prompt_tokens_cost_usd,
+                            completion_tokens_cost_usd: costResponse.completion_tokens_cost_usd,
+                            total_cost_usd: costResponse.total_cost_usd
+                        };
+                        logger.info(`[wrap] Calculated cost for ${modelName}: $${costResponse.total_cost_usd.toFixed(6)}`);
+                    } else {
+                         logger.warn(`[wrap] Could not fetch token costs for model ${modelName}. Costs will be missing for this span.`);
+                    }
+                } catch (costError) {
+                    logger.error(`[wrap] Error fetching token costs for ${modelName}:`, costError);
+                }
+            }
+            // --- End Cost Calculation ---
+
+            currentTrace.recordOutput(outputData); // Record output potentially enriched with costs
         }
         
-        return response;
+        // The response is returned outside the loop, after the span context has ended
+        return response; 
     };
 
     // Generic patching
