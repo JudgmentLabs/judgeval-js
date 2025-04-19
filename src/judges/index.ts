@@ -1,5 +1,9 @@
 import axios from 'axios';
 import { log, warn, error } from '../common/logger.js';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { execSync } from 'child_process';
 
 /**
  * Interface for judge models that can generate text
@@ -40,16 +44,51 @@ export class DefaultJudge implements Judge {
   }
   
   generate(prompt: string): string {
-    // Synchronous version just wraps the async version
-    const result = this.aGenerateInternal(prompt);
-    return result as unknown as string;
+    // For synchronous generation, we need to block until we get a response
+    // This is similar to how the Python SDK's fetch_litellm_api_response works
+    if (!this.apiKey) {
+      throw new Error('No API key provided for DefaultJudge');
+    }
+    
+    try {
+      // In Node.js, we can use a synchronous HTTP request via child_process
+      // Create a temporary file for the request and response
+      const tempDir = os.tmpdir();
+      const requestFile = path.join(tempDir, `openai-request-${Date.now()}.json`);
+      const responseFile = path.join(tempDir, `openai-response-${Date.now()}.json`);
+      
+      // Write request data to file
+      fs.writeFileSync(requestFile, JSON.stringify({
+        model: this.modelName,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.0,
+        ...(this.user ? { user: this.user } : {})
+      }));
+      
+      // Make the request using curl
+      const curlCommand = `curl -s -X POST https://api.openai.com/v1/chat/completions \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer ${this.apiKey}" \
+        -d @${requestFile} > ${responseFile}`;
+      
+      execSync(curlCommand);
+      
+      // Read the response
+      const responseData = JSON.parse(fs.readFileSync(responseFile, 'utf8'));
+      
+      // Clean up temporary files
+      fs.unlinkSync(requestFile);
+      fs.unlinkSync(responseFile);
+      
+      // Return the content
+      return responseData.choices[0].message.content;
+    } catch (e: any) {
+      error(`Error in synchronous generate: ${e.message}`);
+      throw new Error(`Failed to generate text: ${e.message}`);
+    }
   }
   
   async aGenerate(prompt: string): Promise<string> {
-    return this.aGenerateInternal(prompt);
-  }
-  
-  private async aGenerateInternal(prompt: string): Promise<string> {
     if (!this.apiKey) {
       throw new Error('No API key provided for DefaultJudge');
     }
@@ -61,7 +100,7 @@ export class DefaultJudge implements Judge {
           model: this.modelName,
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.0,
-          user: this.user
+          ...(this.user ? { user: this.user } : {})
         },
         {
           headers: {
@@ -100,9 +139,46 @@ export class TogetherJudge implements Judge {
   }
   
   generate(prompt: string): string {
-    // Synchronous version just wraps the async version
-    const result = this.aGenerate(prompt);
-    return result as unknown as string;
+    // For synchronous generation, we need to block until we get a response
+    if (!this.apiKey) {
+      throw new Error('No API key provided for TogetherJudge');
+    }
+    
+    try {
+      // In Node.js, we can use a synchronous HTTP request via child_process
+      const tempDir = os.tmpdir();
+      const requestFile = path.join(tempDir, `together-request-${Date.now()}.json`);
+      const responseFile = path.join(tempDir, `together-response-${Date.now()}.json`);
+      
+      // Write request data to file
+      fs.writeFileSync(requestFile, JSON.stringify({
+        model: this.modelName,
+        prompt: prompt,
+        temperature: 0.0,
+        max_tokens: 1024
+      }));
+      
+      // Make the request using curl
+      const curlCommand = `curl -s -X POST https://api.together.xyz/v1/completions \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer ${this.apiKey}" \
+        -d @${requestFile} > ${responseFile}`;
+      
+      execSync(curlCommand);
+      
+      // Read the response
+      const responseData = JSON.parse(fs.readFileSync(responseFile, 'utf8'));
+      
+      // Clean up temporary files
+      fs.unlinkSync(requestFile);
+      fs.unlinkSync(responseFile);
+      
+      // Return the content
+      return responseData.choices[0].text;
+    } catch (e: any) {
+      error(`Error in synchronous generate: ${e.message}`);
+      throw new Error(`Failed to generate text: ${e.message}`);
+    }
   }
   
   async aGenerate(prompt: string): Promise<string> {
@@ -117,8 +193,7 @@ export class TogetherJudge implements Judge {
           model: this.modelName,
           prompt: prompt,
           temperature: 0.0,
-          max_tokens: 1024,
-          stop: ["</answer>"]
+          max_tokens: 1024
         },
         {
           headers: {
@@ -130,7 +205,7 @@ export class TogetherJudge implements Judge {
       
       return response.data.choices[0].text;
     } catch (e: any) {
-      error(`Error generating text with Together AI API: ${e.message}`);
+      error(`Error generating text with Together API: ${e.message}`);
       throw new Error(`Failed to generate text: ${e.message}`);
     }
   }
@@ -148,32 +223,22 @@ export class TogetherJudge implements Judge {
  */
 export function createJudge(model?: string | Judge, user?: string): { judge: Judge, usingNativeModel: boolean } {
   if (!model) {
-    // Default to gpt-3.5-turbo if no model specified
-    return { 
-      judge: new DefaultJudge('gpt-3.5-turbo', undefined, user),
-      usingNativeModel: true
-    };
+    return { judge: new DefaultJudge(undefined, undefined, user), usingNativeModel: true };
   }
   
   if (typeof model === 'string') {
     // Check if it's a Together AI model
-    if (model.includes('llama') || model.includes('mistral') || model.includes('together')) {
-      return {
-        judge: new TogetherJudge(model),
-        usingNativeModel: true
-      };
+    if (model.startsWith('together/') || 
+        model.startsWith('meta-llama/') || 
+        model.startsWith('mistralai/') ||
+        model.includes('llama')) {
+      return { judge: new TogetherJudge(model), usingNativeModel: true };
     }
     
-    // Otherwise assume it's an OpenAI model
-    return { 
-      judge: new DefaultJudge(model, undefined, user),
-      usingNativeModel: true
-    };
+    // Default to OpenAI
+    return { judge: new DefaultJudge(model, undefined, user), usingNativeModel: true };
   }
   
-  // If model is already a Judge instance, use it directly
-  return { 
-    judge: model,
-    usingNativeModel: false
-  };
+  // It's already a Judge instance
+  return { judge: model, usingNativeModel: false };
 }
