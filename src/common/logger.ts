@@ -23,12 +23,7 @@ export function debug(message: string, meta?: Record<string, any>): void {
 /**
  * Log an info message (alias for info)
  */
-export function log(message: string, ...args: any[]): void {
-  // Simple handling for additional args, could be improved
-  let meta: Record<string, any> = { args: [] }; 
-  if (args.length > 0) {
-    meta = { args: args }; 
-  }
+export function log(message: string, meta?: Record<string, any>): void {
   // Prioritize meta.exampleId over currentExampleId
   const exampleId = meta?.exampleId !== undefined ? meta.exampleId : currentExampleId;
   logger.info(message, { ...meta, exampleId, timestamp: currentTimestamp });
