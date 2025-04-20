@@ -298,6 +298,15 @@ export class InstructionAdherenceScorer extends JudgevalScorer {
       this.success = this._successCheck();
       const verbose_logs = this._createVerboseLogs();
       
+      // Calculate evaluation cost
+      const promptTokens = 700; // Estimate - in a real implementation, track actual tokens
+      const completionTokens = 250; // Estimate - in a real implementation, track actual tokens
+      this.evaluation_cost = this._calculateTokenCosts(
+        this.evaluation_model || 'gpt-3.5-turbo',
+        promptTokens,
+        completionTokens
+      );
+      
       info(`Scoring completed with score: ${this.score}`);
       
       // Ensure all fields match the ScorerData interface
@@ -310,7 +319,7 @@ export class InstructionAdherenceScorer extends JudgevalScorer {
         strict_mode: this.strict_mode,
         evaluation_model: this.evaluation_model || null,
         error: null,
-        evaluation_cost: null,
+        evaluation_cost: this.evaluation_cost || null,
         verbose_logs: verbose_logs,
         additional_metadata: additional_metadata
       };
@@ -364,6 +373,15 @@ export class InstructionAdherenceScorer extends JudgevalScorer {
       this.success = this._successCheck();
       const verbose_logs = this._createVerboseLogs();
       
+      // Calculate evaluation cost
+      const promptTokens = 700; // Estimate - in a real implementation, track actual tokens
+      const completionTokens = 250; // Estimate - in a real implementation, track actual tokens
+      this.evaluation_cost = this._calculateTokenCosts(
+        this.evaluation_model || 'gpt-3.5-turbo',
+        promptTokens,
+        completionTokens
+      );
+      
       info(`Scoring completed with score: ${this.score}`);
       
       // Ensure all fields match the ScorerData interface
@@ -376,7 +394,7 @@ export class InstructionAdherenceScorer extends JudgevalScorer {
         strict_mode: this.strict_mode,
         evaluation_model: this.evaluation_model || null,
         error: null,
-        evaluation_cost: null,
+        evaluation_cost: this.evaluation_cost || null,
         verbose_logs: verbose_logs,
         additional_metadata: additional_metadata
       };

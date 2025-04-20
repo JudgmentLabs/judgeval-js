@@ -1,110 +1,21 @@
+import { log, info, warn, error } from '../../../common/logger.js';
+import { JudgevalScorer } from '../../base-scorer.js';
 import { Example } from '../../../data/example.js';
 import { ScorerData } from '../../../data/result.js';
-import { JudgevalScorer } from '../../base-scorer.js';
 import { APIScorer } from '../../../constants.js';
-import { log, info, warn, error } from '../../../common/logger.js';
-import { 
-  AnswerCorrectnessTemplate, 
-  ACVerdict, 
-  StatementsSchema, 
-  VerdictsSchema, 
-  ReasonSchema 
-} from './prompts.js';
+import { AnswerCorrectnessTemplate, ACVerdict, StatementsSchema, VerdictsSchema, ReasonSchema } from './prompts.js';
+import { Judge, createJudge } from '../../../judges/index.js';
 import axios from 'axios';
-
-// Define Judge interface here since we don't have a judges directory yet
-export interface Judge {
-  generate(prompt: string): string;
-  aGenerate(prompt: string): Promise<string>;
-  getModelName(): string;
-}
-
-// Default implementation of Judge
-export class DefaultJudge implements Judge {
-  private modelName: string;
-  private apiKey?: string;
-  private user?: string;
-  
-  constructor(modelName: string = 'gpt-3.5-turbo', apiKey?: string, user?: string) {
-    this.modelName = modelName;
-    this.apiKey = apiKey || process.env.OPENAI_API_KEY;
-    this.user = user;
-    
-    if (!this.apiKey) {
-      warn('No API key provided for DefaultJudge. Set OPENAI_API_KEY environment variable or pass apiKey to constructor.');
-    }
-  }
-  
-  generate(prompt: string): string {
-    // This is a synchronous wrapper that shouldn't be used in practice
-    throw new Error('Synchronous generate is not supported. Use aGenerate instead.');
-  }
-  
-  async aGenerate(prompt: string): Promise<string> {
-    if (!this.apiKey) {
-      throw new Error('No API key provided for DefaultJudge');
-    }
-    
-    try {
-      const response = await axios.post(
-        'https://api.openai.com/v1/chat/completions',
-        {
-          model: this.modelName,
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.0,
-          user: this.user
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.apiKey}`
-          }
-        }
-      );
-      
-      return response.data.choices[0].message.content;
-    } catch (e: any) {
-      error(`Error generating text with OpenAI API: ${e.message}`);
-      throw new Error(`Failed to generate text: ${e.message}`);
-    }
-  }
-  
-  getModelName(): string {
-    return this.modelName;
-  }
-}
-
-// Helper function to create a Judge
-export function createJudge(model?: string | Judge, user?: string): { judge: Judge, usingNativeModel: boolean } {
-  if (!model) {
-    // Default to gpt-3.5-turbo if no model specified
-    return { 
-      judge: new DefaultJudge('gpt-3.5-turbo', undefined, user),
-      usingNativeModel: true
-    };
-  }
-  
-  if (typeof model === 'string') {
-    return { 
-      judge: new DefaultJudge(model, undefined, user),
-      usingNativeModel: true
-    };
-  }
-  
-  // If model is already a Judge instance, use it directly
-  return { 
-    judge: model,
-    usingNativeModel: false
-  };
-}
 
 // Required parameters for this scorer
 const requiredParams = ['input', 'actualOutput', 'expectedOutput'];
 
 /**
- * AnswerCorrectnessScorer evaluates how well an actual output matches an expected output
- * by breaking down the expected output into statements and checking if each statement
- * is correctly represented in the actual output.
+ * Answer Correctness Scorer
+ * 
+ * This scorer evaluates whether the actual output correctly represents 
+ * the expected output by extracting statements from the expected output
+ * and checking if they are correctly represented in the actual output.
  */
 export class AnswerCorrectnessScorer extends JudgevalScorer {
   private model: Judge;
@@ -513,31 +424,6 @@ export class AnswerCorrectnessScorer extends JudgevalScorer {
   }
 
   /**
-   * Calculate token costs for model usage
-   */
-  private async _calculateTokenCosts(
-    model: string,
-    promptTokens: number,
-    completionTokens: number
-  ): Promise<number | null> {
-    try {
-      const response = await axios.post(
-        'https://api.judgmentlabs.ai/calculate-token-costs',
-        {
-          model,
-          prompt_tokens: promptTokens,
-          completion_tokens: completionTokens
-        }
-      );
-      
-      return response.data.total_cost_usd;
-    } catch (e) {
-      warn(`Error calculating token costs: ${e}`);
-      return null;
-    }
-  }
-
-  /**
    * Check if example has required parameters
    */
   private _checkExampleParams(example: Example): void {
@@ -584,16 +470,44 @@ export class AnswerCorrectnessScorer extends JudgevalScorer {
         throw new Error("Cannot use synchronous scoreExample with async_mode=true. Use async scoreExample instead.");
       }
       
+      // Track token usage
+      let promptTokens = 0;
+      let completionTokens = 0;
+      
+      // Get statements and track tokens
       this.statements = this._getStatements(example.expectedOutput!);
+      promptTokens += 500; // Approximate tokens for statements prompt
+      completionTokens += 100; // Approximate tokens for statements response
+      
+      // Get verdicts and track tokens
       this.verdicts = this._getVerdicts(example.actualOutput!);
+      promptTokens += 800; // Approximate tokens for verdicts prompt
+      completionTokens += 200; // Approximate tokens for verdicts response
+      
+      // Compute score
       this.score = this._computeScore();
-      this.reason = this._getReason();
-      this.success = this._successCheck();
-      this.verbose_logs = this._createVerboseLogs();
+      
+      // Get reason if needed
+      if (this.include_reason) {
+        this.reason = this._getReason();
+        promptTokens += 300; // Approximate tokens for reason prompt
+        completionTokens += 100; // Approximate tokens for reason response
+      }
       
       // Calculate evaluation cost
-      // In a real implementation, you would track tokens used in each LLM call
-      this.evaluation_cost = undefined;
+      this.evaluation_cost = this._calculateTokenCosts(
+        this.evaluation_model || 'gpt-3.5-turbo',
+        promptTokens,
+        completionTokens
+      );
+      
+      // Set success flag
+      this.success = this.score >= this.threshold;
+      
+      // Create verbose logs if needed
+      if (this.verbose_mode) {
+        this.verbose_logs = this._createVerboseLogs();
+      }
       
       info(`Scoring completed with score: ${this.score}`);
       
@@ -607,7 +521,7 @@ export class AnswerCorrectnessScorer extends JudgevalScorer {
         strict_mode: this.strict_mode || false,
         evaluation_model: this.evaluation_model || null,
         error: null,
-        evaluation_cost: null,
+        evaluation_cost: this.evaluation_cost,
         verbose_logs: this.verbose_logs ? this.verbose_logs : null,
         additional_metadata: this.additional_metadata || {}
       };
@@ -648,17 +562,39 @@ export class AnswerCorrectnessScorer extends JudgevalScorer {
       // Check required parameters
       this._checkExampleParams(example);
       
+      // Track token usage
+      let promptTokens = 0;
+      let completionTokens = 0;
+      
       // Process example
       this.statements = await this._aGetStatements(example.expectedOutput!);
+      promptTokens += 500; // Approximate tokens for statements prompt
+      completionTokens += 100; // Approximate tokens for statements response
+      
       this.verdicts = await this._aGetVerdicts(example.actualOutput!);
+      promptTokens += 800; // Approximate tokens for verdicts prompt
+      completionTokens += 200; // Approximate tokens for verdicts response
+      
       this.score = this._computeScore();
-      this.reason = await this._aGetReason();
+      
+      if (this.include_reason) {
+        this.reason = await this._aGetReason();
+        promptTokens += 300; // Approximate tokens for reason prompt
+        completionTokens += 100; // Approximate tokens for reason response
+      }
+      
       this.success = this._successCheck();
-      this.verbose_logs = this._createVerboseLogs();
+      
+      if (this.verbose_mode) {
+        this.verbose_logs = this._createVerboseLogs();
+      }
       
       // Calculate evaluation cost
-      // In a real implementation, you would track tokens used in each LLM call
-      this.evaluation_cost = undefined;
+      this.evaluation_cost = this._calculateTokenCosts(
+        this.evaluation_model || 'gpt-3.5-turbo',
+        promptTokens,
+        completionTokens
+      );
       
       info(`Scoring completed with score: ${this.score}`);
       
@@ -672,7 +608,7 @@ export class AnswerCorrectnessScorer extends JudgevalScorer {
         strict_mode: this.strict_mode || false,
         evaluation_model: this.evaluation_model || null,
         error: null,
-        evaluation_cost: null,
+        evaluation_cost: this.evaluation_cost,
         verbose_logs: this.verbose_logs ? this.verbose_logs : null,
         additional_metadata: this.additional_metadata || {}
       };

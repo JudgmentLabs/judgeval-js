@@ -1,6 +1,8 @@
 import { Example } from '../data/example.js';
 import { ScorerData } from '../data/result.js';
 import { APIScorer, UNBOUNDED_SCORERS } from '../constants.js';
+import { calculateTokenCosts } from '../common/token-costs.js';
+import { warn } from '../common/logger.js';
 
 /**
  * Interface for all judgment scorers
@@ -220,6 +222,29 @@ export abstract class JudgevalScorer implements Scorer {
    */
   get name(): string {
     return this.type;
+  }
+
+  /**
+   * Calculate token costs for model usage
+   * This is a utility method that all scorers can use
+   * 
+   * @param model Model name (e.g., 'gpt-3.5-turbo')
+   * @param promptTokens Number of prompt tokens
+   * @param completionTokens Number of completion tokens
+   * @returns Total cost in USD
+   */
+  protected _calculateTokenCosts(
+    model: string,
+    promptTokens: number,
+    completionTokens: number
+  ): number {
+    try {
+      const costResult = calculateTokenCosts(model, promptTokens, completionTokens);
+      return costResult.totalCostUsd;
+    } catch (e) {
+      warn(`Error calculating token costs: ${e}`);
+      return 0;
+    }
   }
 }
 

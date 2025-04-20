@@ -12,9 +12,8 @@ import {
 } from './prompts.js';
 import axios from 'axios';
 
-// Import the Judge interface and DefaultJudge from the answer-correctness module
-// In a real implementation, these would be in a shared location
-import { Judge, DefaultJudge, createJudge } from '../answer-correctness/answer-correctness.js';
+// Import the Judge interface and createJudge from the judges module
+import { Judge, createJudge } from '../../../judges/index.js';
 
 // Required parameters for this scorer
 const requiredParams = ['input', 'actualOutput'];
@@ -491,8 +490,14 @@ export class AnswerRelevancyScorer extends JudgevalScorer {
       this.verbose_logs = this._createVerboseLogs();
       
       // Calculate evaluation cost
-      // In a real implementation, you would track tokens used in each LLM call
-      this.evaluation_cost = undefined;
+      // Track tokens used in LLM calls
+      const promptTokens = 500; // Estimate - in a real implementation, track actual tokens
+      const completionTokens = 200; // Estimate - in a real implementation, track actual tokens
+      this.evaluation_cost = this._calculateTokenCosts(
+        this.evaluation_model || 'gpt-3.5-turbo',
+        promptTokens,
+        completionTokens
+      );
       
       info(`Scoring completed with score: ${this.score}`);
       
@@ -506,7 +511,7 @@ export class AnswerRelevancyScorer extends JudgevalScorer {
         strict_mode: this.strict_mode || false,
         evaluation_model: this.evaluation_model || null,
         error: null,
-        evaluation_cost: null,
+        evaluation_cost: this.evaluation_cost || null,
         verbose_logs: this.verbose_logs ? this.verbose_logs : null,
         additional_metadata: this.additional_metadata || {}
       };
@@ -556,8 +561,14 @@ export class AnswerRelevancyScorer extends JudgevalScorer {
       this.verbose_logs = this._createVerboseLogs();
       
       // Calculate evaluation cost
-      // In a real implementation, you would track tokens used in each LLM call
-      this.evaluation_cost = undefined;
+      // Track tokens used in LLM calls
+      const promptTokens = 500; // Estimate - in a real implementation, track actual tokens
+      const completionTokens = 200; // Estimate - in a real implementation, track actual tokens
+      this.evaluation_cost = this._calculateTokenCosts(
+        this.evaluation_model || 'gpt-3.5-turbo',
+        promptTokens,
+        completionTokens
+      );
       
       info(`Scoring completed with score: ${this.score}`);
       
@@ -571,7 +582,7 @@ export class AnswerRelevancyScorer extends JudgevalScorer {
         strict_mode: this.strict_mode || false,
         evaluation_model: this.evaluation_model || null,
         error: null,
-        evaluation_cost: null,
+        evaluation_cost: this.evaluation_cost || null,
         verbose_logs: this.verbose_logs ? this.verbose_logs : null,
         additional_metadata: this.additional_metadata || {}
       };

@@ -29,58 +29,10 @@ const testExample = new Example({
 });
 
 /**
- * Run all scorers function - demonstrates how to use local scorers with a Judge
+ * Run a single scorer and return the result
  */
-async function runAllScorers(example: Example, judge: Judge, threshold: number, useAsync: boolean = true): Promise<ScorerData[]> {
-  const results: ScorerData[] = [];
-  const exampleId = example.exampleId;
-  
-  // Test AnswerCorrectnessScorer
-  logger.info("\n=== Testing AnswerCorrectnessScorer ===", { exampleId });
-  const answerCorrectnessScorer = new AnswerCorrectnessScorer(threshold, judge, useAsync, false, false, true);
-  const answerCorrectnessResult = await answerCorrectnessScorer.scoreExample(example);
-  results.push(answerCorrectnessResult);
-  logger.info(`Score: ${answerCorrectnessResult.score}`, { exampleId });
-  logger.info(`Success: ${answerCorrectnessResult.success}`, { exampleId });
-  logger.info(`Reason: ${answerCorrectnessResult.reason}`, { exampleId });
-  
-  // Test AnswerRelevancyScorer
-  logger.info("\n=== Testing AnswerRelevancyScorer ===", { exampleId });
-  const answerRelevancyScorer = new AnswerRelevancyScorer(threshold, judge, useAsync, false, false, true);
-  const answerRelevancyResult = await answerRelevancyScorer.scoreExample(example);
-  results.push(answerRelevancyResult);
-  logger.info(`Score: ${answerRelevancyResult.score}`, { exampleId });
-  logger.info(`Success: ${answerRelevancyResult.success}`, { exampleId });
-  logger.info(`Reason: ${answerRelevancyResult.reason}`, { exampleId });
-  
-  // Test FaithfulnessScorer
-  logger.info("\n=== Testing FaithfulnessScorer ===", { exampleId });
-  const faithfulnessScorer = new FaithfulnessScorer(threshold, judge, useAsync, false, false, true);
-  const faithfulnessResult = await faithfulnessScorer.scoreExample(example);
-  results.push(faithfulnessResult);
-  logger.info(`Score: ${faithfulnessResult.score}`, { exampleId });
-  logger.info(`Success: ${faithfulnessResult.success}`, { exampleId });
-  logger.info(`Reason: ${faithfulnessResult.reason}`, { exampleId });
-  
-  // Test HallucinationScorer
-  logger.info("\n=== Testing HallucinationScorer ===", { exampleId });
-  const hallucinationScorer = new HallucinationScorer(threshold, judge, useAsync, false, false, true);
-  const hallucinationResult = await hallucinationScorer.scoreExample(example);
-  results.push(hallucinationResult);
-  logger.info(`Score: ${hallucinationResult.score}`, { exampleId });
-  logger.info(`Success: ${hallucinationResult.success}`, { exampleId });
-  logger.info(`Reason: ${hallucinationResult.reason}`, { exampleId });
-  
-  // Test InstructionAdherenceScorer
-  logger.info("\n=== Testing InstructionAdherenceScorer ===", { exampleId });
-  const instructionAdherenceScorer = new InstructionAdherenceScorer(threshold, judge, useAsync, false, false, true);
-  const instructionAdherenceResult = await instructionAdherenceScorer.scoreExample(example);
-  results.push(instructionAdherenceResult);
-  logger.info(`Score: ${instructionAdherenceResult.score}`, { exampleId });
-  logger.info(`Success: ${instructionAdherenceResult.success}`, { exampleId });
-  logger.info(`Reason: ${instructionAdherenceResult.reason}`, { exampleId });
-  
-  return results;
+async function runScorer(example: Example, judge: Judge, scorer: any): Promise<ScorerData> {
+  return await scorer.scoreExample(example);
 }
 
 // Main function to run the example
@@ -100,7 +52,36 @@ async function runLocalScorersTest() {
     
     // Run all scorers with real API calls
     logger.info("\n========== TESTING ALL LOCAL SCORERS WITH REAL API CALLS ==========", { exampleId });
-    const results = await runAllScorers(testExample, judge, SUCCESS_THRESHOLD, true);
+    
+    // Test AnswerCorrectnessScorer
+    logger.info("\n=== Testing AnswerCorrectnessScorer ===", { exampleId });
+    const answerCorrectnessScorer = new AnswerCorrectnessScorer(SUCCESS_THRESHOLD, judge, true, false, false, true);
+    const answerCorrectnessResult = await runScorer(testExample, judge, answerCorrectnessScorer);
+    logger.print(answerCorrectnessResult);
+    
+    // Test AnswerRelevancyScorer
+    logger.info("\n=== Testing AnswerRelevancyScorer ===", { exampleId });
+    const answerRelevancyScorer = new AnswerRelevancyScorer(SUCCESS_THRESHOLD, judge, true, false, false, true);
+    const answerRelevancyResult = await runScorer(testExample, judge, answerRelevancyScorer);
+    logger.print(answerRelevancyResult);
+    
+    // Test FaithfulnessScorer
+    logger.info("\n=== Testing FaithfulnessScorer ===", { exampleId });
+    const faithfulnessScorer = new FaithfulnessScorer(SUCCESS_THRESHOLD, judge, true, false, false, true);
+    const faithfulnessResult = await runScorer(testExample, judge, faithfulnessScorer);
+    logger.print(faithfulnessResult);
+    
+    // Test HallucinationScorer
+    logger.info("\n=== Testing HallucinationScorer ===", { exampleId });
+    const hallucinationScorer = new HallucinationScorer(SUCCESS_THRESHOLD, judge, true, false, false, true);
+    const hallucinationResult = await runScorer(testExample, judge, hallucinationScorer);
+    logger.print(hallucinationResult);
+    
+    // Test InstructionAdherenceScorer
+    logger.info("\n=== Testing InstructionAdherenceScorer ===", { exampleId });
+    const instructionAdherenceScorer = new InstructionAdherenceScorer(SUCCESS_THRESHOLD, judge, true, false, false, true);
+    const instructionAdherenceResult = await runScorer(testExample, judge, instructionAdherenceScorer);
+    logger.print(instructionAdherenceResult);
     
     logger.info("\nAll local scorers tested successfully with real API calls!", { exampleId });
   } catch (error) {

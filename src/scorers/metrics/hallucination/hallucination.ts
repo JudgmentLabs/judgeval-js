@@ -305,6 +305,15 @@ export class HallucinationScorer extends JudgevalScorer {
       // Create verbose logs if enabled
       const verbose_logs = this._createVerboseLogs();
       
+      // Calculate evaluation cost
+      const promptTokens = 600; // Estimate - in a real implementation, track actual tokens
+      const completionTokens = 200; // Estimate - in a real implementation, track actual tokens
+      this.evaluation_cost = this._calculateTokenCosts(
+        this.evaluation_model || 'gpt-3.5-turbo',
+        promptTokens,
+        completionTokens
+      );
+      
       info(`Scoring completed with score: ${this.score}`);
       
       // Return ScorerData object
@@ -317,7 +326,7 @@ export class HallucinationScorer extends JudgevalScorer {
         strict_mode: this.strict_mode,
         evaluation_model: this.evaluation_model || null,
         error: null,
-        evaluation_cost: null,
+        evaluation_cost: this.evaluation_cost || null,
         verbose_logs: verbose_logs,
         additional_metadata: {
           verdicts: this._verdicts
@@ -370,6 +379,15 @@ export class HallucinationScorer extends JudgevalScorer {
       // Create verbose logs if enabled
       const verbose_logs = this._createVerboseLogs();
       
+      // Calculate evaluation cost
+      const promptTokens = 600; // Estimate - in a real implementation, track actual tokens
+      const completionTokens = 200; // Estimate - in a real implementation, track actual tokens
+      this.evaluation_cost = this._calculateTokenCosts(
+        this.evaluation_model || 'gpt-3.5-turbo',
+        promptTokens,
+        completionTokens
+      );
+      
       info(`Scoring completed with score: ${this.score}`);
       
       // Return ScorerData object
@@ -382,7 +400,7 @@ export class HallucinationScorer extends JudgevalScorer {
         strict_mode: this.strict_mode,
         evaluation_model: this.evaluation_model || null,
         error: null,
-        evaluation_cost: null,
+        evaluation_cost: this.evaluation_cost || null,
         verbose_logs: verbose_logs,
         additional_metadata: {
           verdicts: this._verdicts

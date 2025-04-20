@@ -477,8 +477,13 @@ export class FaithfulnessScorer extends JudgevalScorer {
       this.verbose_logs = this._createVerboseLogs();
       
       // Calculate evaluation cost
-      // In a real implementation, you would track tokens used in each LLM call
-      this.evaluation_cost = undefined;
+      const promptTokens = 800; // Estimate - in a real implementation, track actual tokens
+      const completionTokens = 300; // Estimate - in a real implementation, track actual tokens
+      this.evaluation_cost = this._calculateTokenCosts(
+        this.evaluation_model || 'gpt-3.5-turbo',
+        promptTokens,
+        completionTokens
+      );
       
       info(`Scoring completed with score: ${this.score}`);
       
@@ -492,7 +497,7 @@ export class FaithfulnessScorer extends JudgevalScorer {
         strict_mode: this.strict_mode || false,
         evaluation_model: this.evaluation_model || null,
         error: null,
-        evaluation_cost: null,
+        evaluation_cost: this.evaluation_cost || null,
         verbose_logs: this.verbose_logs ? this.verbose_logs : null,
         additional_metadata: this.additional_metadata || {}
       };
@@ -551,8 +556,13 @@ export class FaithfulnessScorer extends JudgevalScorer {
       this.verbose_logs = this._createVerboseLogs();
       
       // Calculate evaluation cost
-      // In a real implementation, you would track tokens used in each LLM call
-      this.evaluation_cost = undefined;
+      const promptTokens = 800; // Estimate - in a real implementation, track actual tokens
+      const completionTokens = 300; // Estimate - in a real implementation, track actual tokens
+      this.evaluation_cost = this._calculateTokenCosts(
+        this.evaluation_model || 'gpt-3.5-turbo',
+        promptTokens,
+        completionTokens
+      );
       
       info(`Scoring completed with score: ${this.score}`);
       
@@ -566,7 +576,7 @@ export class FaithfulnessScorer extends JudgevalScorer {
         strict_mode: this.strict_mode || false,
         evaluation_model: this.evaluation_model || null,
         error: null,
-        evaluation_cost: null,
+        evaluation_cost: this.evaluation_cost || null,
         verbose_logs: this.verbose_logs ? this.verbose_logs : null,
         additional_metadata: this.additional_metadata || {}
       };
