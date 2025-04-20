@@ -1316,32 +1316,40 @@ export function wrap<T extends ApiClient>(client: T): T {
         }
 
         let response;
-        let outputData: Record<string, any> | null = null; // Initialize outputData
 
         for (const span of currentTrace.span(spanName, { spanType: 'llm' })) {
-            const inputData = _formatInputData(client, args);
-            currentTrace.recordInput(inputData);
+            // 1. Record Input (extract data needed for recording)
+            const inputDataForRecording = _formatInputData(client, args);
+            currentTrace.recordInput(inputDataForRecording);
 
             try {
+                // 2. Make the API call
                 response = await boundOriginalMethod(...args);
+
             } catch (error) {
                 currentTrace.recordError(error);
                 throw error;
             }
 
-            outputData = _formatOutputData(client, response);
+            // 3. Extract output data *after* await
+            const outputData = _formatOutputData(client, response);
 
-            // --- Calculate and Embed Costs --- 
-            const modelName = inputData.model;
-            const usage = outputData?.usage;
-            const traceManager = currentTrace.traceManager; // Get trace manager from current trace
+            // --- Calculate and Embed Costs (Reorganized) --- 
+            // 4. Extract modelName and usage *immediately* before the check
+            //    Get modelName directly from the *original arguments* `args`
+            //    Get usage from the `outputData` extracted above
+            const modelName = args[0]?.model; // More direct extraction from original args
+            const traceManager = currentTrace.traceManager;
 
-            if (modelName && usage && traceManager && 
-                (usage.prompt_tokens !== undefined || usage.input_tokens !== undefined) && 
-                (usage.completion_tokens !== undefined || usage.output_tokens !== undefined)) 
+            // 5. Perform the check and cost calculation
+            if (modelName && response?.usage && traceManager && 
+                (response.usage.prompt_tokens !== undefined || response.usage.input_tokens !== undefined) && 
+                (response.usage.completion_tokens !== undefined || response.usage.output_tokens !== undefined))
             {
-                const promptTokens = usage.prompt_tokens ?? usage.input_tokens ?? 0;
-                const completionTokens = usage.completion_tokens ?? usage.output_tokens ?? 0;
+                // Use response.usage directly for calculations too
+                const currentUsage = response.usage;
+                const promptTokens = currentUsage.prompt_tokens ?? currentUsage.input_tokens ?? 0;
+                const completionTokens = currentUsage.completion_tokens ?? currentUsage.output_tokens ?? 0;
                 
                 try {
                     const costResponse = await traceManager.calculateTokenCosts(
@@ -1351,13 +1359,16 @@ export function wrap<T extends ApiClient>(client: T): T {
                     );
                     
                     if (costResponse) {
-                        // Merge costs into the usage object
-                        outputData.usage = { 
-                            ...usage, 
-                            prompt_tokens_cost_usd: costResponse.prompt_tokens_cost_usd,
-                            completion_tokens_cost_usd: costResponse.completion_tokens_cost_usd,
-                            total_cost_usd: costResponse.total_cost_usd
-                        };
+                        // Merge costs into the usage object *within outputData* 
+                        // Need to ensure outputData exists and has usage if we modify it
+                        if (outputData) { // Check if outputData was created
+                            outputData.usage = { 
+                                ...currentUsage, // Use currentUsage from response
+                                prompt_tokens_cost_usd: costResponse.prompt_tokens_cost_usd,
+                                completion_tokens_cost_usd: costResponse.completion_tokens_cost_usd,
+                                total_cost_usd: costResponse.total_cost_usd
+                            };
+                        }
                         logger.info(`[wrap] Calculated cost for ${modelName}: $${costResponse.total_cost_usd.toFixed(6)}`);
                     } else {
                          logger.warn(`[wrap] Could not fetch token costs for model ${modelName}. Costs will be missing for this span.`);
@@ -1368,8 +1379,9 @@ export function wrap<T extends ApiClient>(client: T): T {
             }
             // --- End Cost Calculation ---
 
-            currentTrace.recordOutput(outputData); // Record output potentially enriched with costs
-        }
+            // 6. Record the potentially enriched outputData
+            currentTrace.recordOutput(outputData); 
+        } // End span loop
         
         // The response is returned outside the loop, after the span context has ended
         return response; 
