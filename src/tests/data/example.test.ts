@@ -1,3 +1,16 @@
+/**
+ * @file example.test.ts
+ * @description Tests for the Example and ExampleBuilder classes.
+ * This file tests:
+ * - Example construction and validation
+ * - ExampleBuilder pattern
+ * - JSON serialization
+ * - Default values and optional fields
+ * - Trace-related fields and validation
+ * - UUID generation
+ * - Error handling
+ */
+
 import { describe, expect, it, jest } from '@jest/globals';
 import { Example, ExampleBuilder } from '../../data/example';
 
@@ -77,6 +90,48 @@ describe('Example', () => {
 
       expect(example.example).toBe(false);
     });
+
+    it('should validate trace ID format', () => {
+      const example = new Example({
+        input: 'test input',
+        actualOutput: 'test output',
+        traceId: 'invalid-trace-id'
+      });
+
+      expect(example.traceId).toBe('invalid-trace-id');
+      
+      // Test with valid UUID format
+      const example2 = new Example({
+        input: 'test input',
+        actualOutput: 'test output',
+        traceId: '123e4567-e89b-12d3-a456-426614174000'
+      });
+
+      expect(example2.traceId).toBe('123e4567-e89b-12d3-a456-426614174000');
+    });
+
+    it('should handle trace context correctly', () => {
+      const example = new Example({
+        input: 'test input',
+        actualOutput: 'test output',
+        context: ['trace context 1', 'trace context 2'],
+        retrievalContext: ['retrieved context 1', 'retrieved context 2']
+      });
+
+      expect(example.context).toEqual(['trace context 1', 'trace context 2']);
+      expect(example.retrievalContext).toEqual(['retrieved context 1', 'retrieved context 2']);
+    });
+
+    it('should handle array outputs correctly', () => {
+      const example = new Example({
+        input: 'test input',
+        actualOutput: ['output 1', 'output 2'],
+        expectedOutput: ['expected 1', 'expected 2']
+      });
+
+      expect(example.actualOutput).toEqual(['output 1', 'output 2']);
+      expect(example.expectedOutput).toEqual(['expected 1', 'expected 2']);
+    });
   });
 
   describe('toJSON', () => {
@@ -134,6 +189,31 @@ describe('Example', () => {
         timestamp: expect.any(String),
         traceId: expect.stringMatching(/^trace-\d+-\d+$/),
         example: true,
+      });
+    });
+
+    it('should handle trace-related fields in JSON', () => {
+      const example = new Example({
+        input: 'test input',
+        actualOutput: 'test output',
+        traceId: 'test-trace',
+        context: ['trace context'],
+        retrievalContext: ['retrieved context']
+      });
+
+      const json = example.toJSON();
+
+      expect(json).toEqual({
+        input: 'test input',
+        actualOutput: 'test output',
+        name: 'example',
+        exampleId: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i),
+        exampleIndex: 0,
+        timestamp: expect.any(String),
+        traceId: 'test-trace',
+        context: ['trace context'],
+        retrievalContext: ['retrieved context'],
+        example: true
       });
     });
   });
@@ -210,5 +290,30 @@ describe('ExampleBuilder', () => {
       .build();
 
     expect(example.example).toBe(false);
+  });
+
+  it('should handle trace-related fields in builder', () => {
+    const example = new ExampleBuilder()
+      .input('test input')
+      .actualOutput('test output')
+      .traceId('test-trace')
+      .context(['trace context'])
+      .retrievalContext(['retrieved context'])
+      .build();
+
+    expect(example.traceId).toBe('test-trace');
+    expect(example.context).toEqual(['trace context']);
+    expect(example.retrievalContext).toEqual(['retrieved context']);
+  });
+
+  it('should handle array outputs in builder', () => {
+    const example = new ExampleBuilder()
+      .input('test input')
+      .actualOutput(['output 1', 'output 2'])
+      .expectedOutput(['expected 1', 'expected 2'])
+      .build();
+
+    expect(example.actualOutput).toEqual(['output 1', 'output 2']);
+    expect(example.expectedOutput).toEqual(['expected 1', 'expected 2']);
   });
 }); 

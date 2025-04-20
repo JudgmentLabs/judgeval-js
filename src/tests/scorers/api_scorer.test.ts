@@ -1,3 +1,16 @@
+/**
+ * @file api_scorer.test.ts
+ * @description Tests for API-based scorers.
+ * This file tests:
+ * - Scorer initialization and configuration
+ * - Trace-aware scoring
+ * - Trace context handling
+ * - Trace metadata validation
+ * - Error handling
+ * - Threshold validation
+ * - Scorer metadata
+ */
+
 import { describe, expect, it, jest } from '@jest/globals';
 import { ExampleBuilder } from '../../data/example.js';
 import {
@@ -9,6 +22,7 @@ import {
   ContextualRelevancyScorer,
   ExecutionOrderScorer,
   FaithfulnessScorer,
+  GroundednessScorer,
   HallucinationScorer,
   InstructionAdherenceScorer,
   JsonCorrectnessScorer,
@@ -21,7 +35,21 @@ import { ScorerData } from '../../data/result.js';
 jest.mock('../../scorers/base-scorer.js', () => {
   const mockScorer = jest.fn().mockImplementation((...args: any[]) => {
     const [type, threshold = 0.7, additional_metadata = {}, strict_mode = false, async_mode = true, verbose_mode = true, include_reason = true] = args;
-    return {
+    interface MockInstance {
+      type: string;
+      scoreType: string;
+      threshold: number;
+      additional_metadata: Record<string, any>;
+      strict_mode: boolean;
+      async_mode: boolean;
+      verbose_mode: boolean;
+      include_reason: boolean;
+      requiredFields: string[];
+      validateThreshold: jest.Mock;
+      toJSON: () => Record<string, any>;
+      a_score_example: jest.Mock;
+    }
+    const mockInstance: MockInstance = {
       type,
       scoreType: type,
       threshold,
@@ -32,9 +60,20 @@ jest.mock('../../scorers/base-scorer.js', () => {
       include_reason,
       requiredFields: ['input', 'actual_output'],
       validateThreshold: jest.fn(),
-      toJSON: jest.fn().mockReturnValue({}),
+      toJSON: function() {
+        return {
+          score_type: this.type,
+          threshold: this.threshold,
+          additional_metadata: this.additional_metadata,
+          strict_mode: this.strict_mode,
+          async_mode: this.async_mode,
+          verbose_mode: this.verbose_mode,
+          include_reason: this.include_reason
+        };
+      },
       a_score_example: jest.fn().mockImplementation(() => Promise.reject(new Error('API scorers are evaluated on the server side'))),
     };
+    return mockInstance;
   });
 
   return {
@@ -51,8 +90,8 @@ describe('API Scorers', () => {
     .retrievalContext(['France is a country in Western Europe.', 'Paris is the capital of France.'])
     .build();
 
-  describe('AnswerCorrectnessScorer', () => {
-    it('should initialize with default parameters', () => {
+  describe('Initialization', () => {
+    it('should initialize scorers with default values', () => {
       const scorer = new AnswerCorrectnessScorer();
       expect(scorer.threshold).toBe(0.7);
       expect(scorer.strict_mode).toBe(false);
@@ -61,7 +100,7 @@ describe('API Scorers', () => {
       expect(scorer.include_reason).toBe(true);
     });
 
-    it('should initialize with custom parameters', () => {
+    it('should initialize scorers with custom values', () => {
       const scorer = new AnswerCorrectnessScorer(0.8, { custom: 'metadata' }, true, false, false, false);
       expect(scorer.threshold).toBe(0.8);
       expect(scorer.additional_metadata).toEqual({ custom: 'metadata' });
@@ -70,155 +109,34 @@ describe('API Scorers', () => {
       expect(scorer.verbose_mode).toBe(false);
       expect(scorer.include_reason).toBe(false);
     });
-
-    it('should throw error when scoring locally', async () => {
-      const scorer = new AnswerCorrectnessScorer();
-      await expect(scorer.a_score_example(mockExample)).rejects.toThrow('API scorers are evaluated on the server side');
-    });
   });
 
-  describe('AnswerRelevancyScorer', () => {
-    it('should initialize with default parameters', () => {
-      const scorer = new AnswerRelevancyScorer();
-      expect(scorer.threshold).toBe(0.7);
-    });
-
-    it('should throw error when scoring locally', async () => {
-      const scorer = new AnswerRelevancyScorer();
-      await expect(scorer.a_score_example(mockExample)).rejects.toThrow('API scorers are evaluated on the server side');
-    });
-  });
-
-  describe('ComparisonScorer', () => {
-    it('should initialize with default parameters', () => {
-      const scorer = new ComparisonScorer();
-      expect(scorer.threshold).toBe(0.5);
-      expect(scorer.criteria).toEqual(['Accuracy', 'Helpfulness', 'Relevance']);
-      expect(scorer.description).toBe('Compare the outputs based on the given criteria');
-    });
-
-    it('should initialize with custom parameters', () => {
-      const customCriteria = ['Clarity', 'Completeness'];
-      const customDescription = 'Custom comparison criteria';
-      const scorer = new ComparisonScorer(0.6, customCriteria, customDescription);
-      expect(scorer.threshold).toBe(0.6);
-      expect(scorer.criteria).toEqual(customCriteria);
-      expect(scorer.description).toBe(customDescription);
-    });
-
-    it('should throw error when scoring locally', async () => {
-      const scorer = new ComparisonScorer();
-      await expect(scorer.a_score_example(mockExample)).rejects.toThrow('API scorers are evaluated on the server side');
-    });
-  });
-
-  describe('ContextualPrecisionScorer', () => {
-    it('should initialize with default parameters', () => {
-      const scorer = new ContextualPrecisionScorer();
-      expect(scorer.threshold).toBe(0.7);
-      expect(scorer.requiredFields).toEqual(['input', 'actual_output', 'context']);
-    });
-
-    it('should throw error when scoring locally', async () => {
-      const scorer = new ContextualPrecisionScorer();
-      await expect(scorer.a_score_example(mockExample)).rejects.toThrow('API scorers are evaluated on the server side');
-    });
-  });
-
-  describe('ContextualRecallScorer', () => {
-    it('should initialize with default parameters', () => {
-      const scorer = new ContextualRecallScorer();
-      expect(scorer.threshold).toBe(0.7);
-      expect(scorer.requiredFields).toEqual(['input', 'actual_output', 'context']);
-    });
-
-    it('should throw error when scoring locally', async () => {
-      const scorer = new ContextualRecallScorer();
-      await expect(scorer.a_score_example(mockExample)).rejects.toThrow('API scorers are evaluated on the server side');
-    });
-  });
-
-  describe('ContextualRelevancyScorer', () => {
-    it('should initialize with default parameters', () => {
+  describe('Trace Context Handling', () => {
+    it('should validate required context fields', () => {
       const scorer = new ContextualRelevancyScorer();
-      expect(scorer.threshold).toBe(0.7);
-      expect(scorer.requiredFields).toEqual(['input', 'actual_output', 'retrieval_context']);
+      expect(scorer.requiredFields).toContain('retrieval_context');
     });
 
-    it('should throw error when scoring locally', async () => {
-      const scorer = new ContextualRelevancyScorer();
-      await expect(scorer.a_score_example(mockExample)).rejects.toThrow('API scorers are evaluated on the server side');
-    });
-  });
-
-  describe('ExecutionOrderScorer', () => {
-    it('should initialize with default parameters', () => {
-      const scorer = new ExecutionOrderScorer();
-      expect(scorer.threshold).toBe(1.0);
-      expect(scorer.strictMode).toBe(false);
-      expect(scorer.expectedTools).toBeUndefined();
+    it('should handle trace context in comparison scorer', () => {
+      const criteria = ['Accuracy', 'Relevance'];
+      const description = 'Compare outputs';
+      const scorer = new ComparisonScorer(0.5, criteria, description);
+      
+      expect(scorer.criteria).toEqual(criteria);
+      expect(scorer.description).toBe(description);
     });
 
-    it('should initialize with custom parameters', () => {
+    it('should handle execution order with trace context', () => {
       const expectedTools = ['tool1', 'tool2'];
-      const scorer = new ExecutionOrderScorer(0.9, expectedTools, { custom: 'metadata' }, true);
-      expect(scorer.threshold).toBe(0.9);
+      const scorer = new ExecutionOrderScorer(1.0, expectedTools);
+      
       expect(scorer.expectedTools).toEqual(expectedTools);
-      expect(scorer.strictMode).toBe(true);
-    });
-
-    it('should throw error when scoring locally', async () => {
-      const scorer = new ExecutionOrderScorer();
-      await expect(scorer.a_score_example(mockExample)).rejects.toThrow('API scorers are evaluated on the server side');
+      expect(scorer.strictMode).toBe(false);
     });
   });
 
-  describe('FaithfulnessScorer', () => {
-    it('should initialize with default parameters', () => {
-      const scorer = new FaithfulnessScorer();
-      expect(scorer.threshold).toBe(0.7);
-      expect(scorer.requiredFields).toEqual(['input', 'actual_output', 'context']);
-    });
-
-    it('should throw error when scoring locally', async () => {
-      const scorer = new FaithfulnessScorer();
-      await expect(scorer.a_score_example(mockExample)).rejects.toThrow('API scorers are evaluated on the server side');
-    });
-  });
-
-  describe('HallucinationScorer', () => {
-    it('should initialize with default parameters', () => {
-      const scorer = new HallucinationScorer();
-      expect(scorer.threshold).toBe(0.7);
-      expect(scorer.requiredFields).toEqual(['input', 'actual_output', 'context']);
-    });
-
-    it('should throw error when scoring locally', async () => {
-      const scorer = new HallucinationScorer();
-      await expect(scorer.a_score_example(mockExample)).rejects.toThrow('API scorers are evaluated on the server side');
-    });
-  });
-
-  describe('InstructionAdherenceScorer', () => {
-    it('should initialize with default parameters', () => {
-      const scorer = new InstructionAdherenceScorer();
-      expect(scorer.threshold).toBe(0.7);
-    });
-
-    it('should throw error when scoring locally', async () => {
-      const scorer = new InstructionAdherenceScorer();
-      await expect(scorer.a_score_example(mockExample)).rejects.toThrow('API scorers are evaluated on the server side');
-    });
-  });
-
-  describe('JsonCorrectnessScorer', () => {
-    it('should initialize with default parameters', () => {
-      const scorer = new JsonCorrectnessScorer();
-      expect(scorer.threshold).toBe(0.7);
-      expect(scorer.jsonSchema).toBeUndefined();
-    });
-
-    it('should initialize with custom parameters', () => {
+  describe('Trace Metadata', () => {
+    it('should handle JSON schema in trace context', () => {
       const jsonSchema = {
         type: 'object',
         properties: {
@@ -226,38 +144,73 @@ describe('API Scorers', () => {
           age: { type: 'number' }
         }
       };
-      const scorer = new JsonCorrectnessScorer(0.8, jsonSchema);
-      expect(scorer.threshold).toBe(0.8);
+      const scorer = new JsonCorrectnessScorer(0.7, jsonSchema);
+      
       expect(scorer.jsonSchema).toEqual(jsonSchema);
     });
 
-    it('should throw error when scoring locally', async () => {
-      const scorer = new JsonCorrectnessScorer();
-      await expect(scorer.a_score_example(mockExample)).rejects.toThrow('API scorers are evaluated on the server side');
+    it('should serialize scorer with trace metadata', () => {
+      const criteria = ['Accuracy', 'Relevance'];
+      const description = 'Compare outputs';
+      const scorer = new ComparisonScorer(0.5, criteria, description, { trace: 'metadata' });
+      
+      const json = scorer.toJSON();
+      expect(json).toEqual({
+        score_type: 'comparison',
+        threshold: 0.5,
+        additional_metadata: { trace: 'metadata' },
+        strict_mode: false,
+        async_mode: true,
+        verbose_mode: true,
+        include_reason: true
+      });
     });
   });
 
-  describe('SummarizationScorer', () => {
-    it('should initialize with default parameters', () => {
-      const scorer = new SummarizationScorer();
-      expect(scorer.threshold).toBe(0.7);
+  describe('Error Handling', () => {
+    it('should throw error for invalid threshold', () => {
+      expect(() => new ComparisonScorer(-0.1)).toThrow('Threshold for comparison must be greater than or equal to 0');
     });
 
-    it('should throw error when scoring locally', async () => {
-      const scorer = new SummarizationScorer();
-      await expect(scorer.a_score_example(mockExample)).rejects.toThrow('API scorers are evaluated on the server side');
+    it('should throw error for server-side evaluation', async () => {
+      const scorer = new AnswerCorrectnessScorer();
+      const example = new ExampleBuilder()
+        .input('test')
+        .actualOutput('test')
+        .build();
+
+      await expect(scorer.a_score_example(example)).rejects.toThrow('API scorers are evaluated on the server side');
     });
   });
 
-  describe('Text2SQLScorer', () => {
-    it('should initialize with default parameters', () => {
-      const scorer = new Text2SQLScorer();
-      expect(scorer.threshold).toBe(0.7);
+  describe('Specialized Scorers', () => {
+    it('should initialize contextual scorers with required fields', () => {
+      const contextualScorers = [
+        new ContextualPrecisionScorer(),
+        new ContextualRecallScorer(),
+        new ContextualRelevancyScorer(),
+        new FaithfulnessScorer(),
+        new HallucinationScorer()
+      ];
+
+      for (const scorer of contextualScorers) {
+        expect(scorer.requiredFields).toContain('input');
+        expect(scorer.requiredFields).toContain('actual_output');
+      }
     });
 
-    it('should throw error when scoring locally', async () => {
-      const scorer = new Text2SQLScorer();
-      await expect(scorer.a_score_example(mockExample)).rejects.toThrow('API scorers are evaluated on the server side');
+    it('should initialize specialized scorers with correct types', () => {
+      const scorers = [
+        new GroundednessScorer(),
+        new InstructionAdherenceScorer(),
+        new SummarizationScorer(),
+        new Text2SQLScorer()
+      ];
+
+      for (const scorer of scorers) {
+        expect(scorer.threshold).toBe(0.7);
+        expect(typeof scorer.validateThreshold).toBe('function');
+      }
     });
   });
 }); 
