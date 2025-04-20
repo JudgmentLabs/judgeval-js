@@ -71,7 +71,7 @@ async function runBasicEvaluation() {
       new ExampleBuilder()
         .input("What's the capital of France?")
         .actualOutput("The capital of France is Paris. It's known for the Eiffel Tower.")
-        .context([
+        .retrievalContext([
           "France is a country in Western Europe.",
           "Paris is the capital of France.",
           "The Eiffel Tower is a landmark in Paris."
