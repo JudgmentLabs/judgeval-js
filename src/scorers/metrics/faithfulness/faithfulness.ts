@@ -67,6 +67,9 @@ export class FaithfulnessScorer extends JudgevalScorer {
     this.evaluation_model = this.model.getModelName();
     
     log(`Using model: ${this.evaluation_model}`);
+    
+    // Set required fields for this scorer
+    this.requiredFields = ['input', 'actualOutput', 'retrievalContext'];
   }
 
   /**
@@ -410,21 +413,6 @@ export class FaithfulnessScorer extends JudgevalScorer {
     
     // Match Python implementation's handling of strict_mode
     return this.strict_mode && score < this.threshold ? 0 : score;
-  }
-
-  /**
-   * Check if example has required parameters
-   */
-  private _checkExampleParams(example: Example): void {
-    for (const param of requiredParams) {
-      if (param === 'input' && !example.input) {
-        throw new Error(`Example is missing required parameter: input`);
-      } else if (param === 'actualOutput' && !example.actualOutput) {
-        throw new Error(`Example is missing required parameter: actualOutput`);
-      } else if (param === 'retrievalContext' && !example.retrievalContext) {
-        throw new Error(`Example is missing required parameter: retrievalContext`);
-      }
-    }
   }
 
   /**

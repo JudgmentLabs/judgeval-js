@@ -58,6 +58,7 @@ export class InstructionAdherenceScorer extends JudgevalScorer {
     this.model = judge;
     this.using_native_model = usingNativeModel;
     this.evaluation_model = this.model.getModelName();
+    this.requiredFields = ['input', 'actualOutput'];
   }
 
   /**
@@ -258,19 +259,6 @@ export class InstructionAdherenceScorer extends JudgevalScorer {
     ];
     
     return steps.join('\n\n');
-  }
-
-  /**
-   * Check if example has required parameters
-   */
-  private _checkExampleParams(example: Example): void {
-    for (const param of required_params) {
-      if (param === 'input' && !example.input) {
-        throw new Error(`Example is missing required parameter: input`);
-      } else if (param === 'actualOutput' && !example.actualOutput) {
-        throw new Error(`Example is missing required parameter: actualOutput`);
-      }
-    }
   }
 
   /**

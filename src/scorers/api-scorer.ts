@@ -71,9 +71,12 @@ export class ComparisonScorer extends APIJudgmentScorer {
 }
 
 export class ContextualPrecisionScorer extends APIJudgmentScorer {
+  requiredFields: string[];
+
   constructor(threshold: number = 0.7, additional_metadata?: Record<string, any>, strict_mode: boolean = false, async_mode: boolean = true, verbose_mode: boolean = true, include_reason: boolean = true) {
     super('contextual_precision', threshold, additional_metadata, strict_mode, async_mode, verbose_mode, include_reason);
     this.validateThreshold();
+    this.requiredFields = ['input', 'actual_output', 'context'];
   }
 
   async a_score_example(example: Example): Promise<ScorerData> {
@@ -82,9 +85,12 @@ export class ContextualPrecisionScorer extends APIJudgmentScorer {
 }
 
 export class ContextualRecallScorer extends APIJudgmentScorer {
+  requiredFields: string[];
+
   constructor(threshold: number = 0.7, additional_metadata?: Record<string, any>, strict_mode: boolean = false, async_mode: boolean = true, verbose_mode: boolean = true, include_reason: boolean = true) {
     super('contextual_recall', threshold, additional_metadata, strict_mode, async_mode, verbose_mode, include_reason);
     this.validateThreshold();
+    this.requiredFields = ['input', 'actual_output', 'context'];
   }
 
   async a_score_example(example: Example): Promise<ScorerData> {
@@ -93,9 +99,12 @@ export class ContextualRecallScorer extends APIJudgmentScorer {
 }
 
 export class ContextualRelevancyScorer extends APIJudgmentScorer {
+  requiredFields: string[];
+
   constructor(threshold: number = 0.7, additional_metadata?: Record<string, any>, strict_mode: boolean = false, async_mode: boolean = true, verbose_mode: boolean = true, include_reason: boolean = true) {
     super('contextual_relevancy', threshold, additional_metadata, strict_mode, async_mode, verbose_mode, include_reason);
     this.validateThreshold();
+    this.requiredFields = ['input', 'actual_output', 'retrieval_context'];
   }
 
   async a_score_example(example: Example): Promise<ScorerData> {
@@ -133,9 +142,12 @@ export class ExecutionOrderScorer extends APIJudgmentScorer {
 }
 
 export class FaithfulnessScorer extends APIJudgmentScorer {
+  requiredFields: string[];
+
   constructor(threshold: number = 0.7, additional_metadata?: Record<string, any>, strict_mode: boolean = false, async_mode: boolean = true, verbose_mode: boolean = true, include_reason: boolean = true) {
     super('faithfulness', threshold, additional_metadata, strict_mode, async_mode, verbose_mode, include_reason);
     this.validateThreshold();
+    this.requiredFields = ['input', 'actual_output', 'context'];
   }
 
   async a_score_example(example: Example): Promise<ScorerData> {
@@ -155,9 +167,12 @@ export class GroundednessScorer extends APIJudgmentScorer {
 }
 
 export class HallucinationScorer extends APIJudgmentScorer {
+  requiredFields: string[];
+
   constructor(threshold: number = 0.7, additional_metadata?: Record<string, any>, strict_mode: boolean = false, async_mode: boolean = true, verbose_mode: boolean = true, include_reason: boolean = true) {
     super('hallucination', threshold, additional_metadata, strict_mode, async_mode, verbose_mode, include_reason);
     this.validateThreshold();
+    this.requiredFields = ['input', 'actual_output', 'context'];
   }
 
   async a_score_example(example: Example): Promise<ScorerData> {

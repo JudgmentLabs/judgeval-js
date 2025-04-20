@@ -73,22 +73,32 @@ export class Example {
    * Convert the example to a plain object
    */
   toJSON(): Record<string, any> {
-    return {
+    // Ensure exampleId is a valid UUID
+    if (!this.exampleId || !this.exampleId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      this.exampleId = this.generateUUID();
+    }
+    
+    // Create the base object with required fields
+    const result: Record<string, any> = {
       input: this.input,
       actual_output: this.actualOutput,
       expected_output: this.expectedOutput,
-      context: this.context,
-      retrieval_context: this.retrievalContext,
-      additional_metadata: this.additionalMetadata,
-      tools_called: this.toolsCalled,
-      expected_tools: this.expectedTools,
-      name: this.name,
+      name: this.name || "example",
       example_id: this.exampleId,
-      example_index: this.exampleIndex,
-      timestamp: this.timestamp,
-      trace_id: this.traceId,
-      example: this.example,
+      example_index: this.exampleIndex || 0,
+      timestamp: this.timestamp || new Date().toISOString(),
+      trace_id: this.traceId || `trace-${Date.now()}-${Math.floor(Math.random() * 1000)}`
     };
+    
+    // Only include non-null fields to avoid sending empty fields to the API
+    if (this.context) result.context = this.context;
+    if (this.retrievalContext) result.retrieval_context = this.retrievalContext;
+    if (this.additionalMetadata) result.additional_metadata = this.additionalMetadata;
+    if (this.toolsCalled) result.tools_called = this.toolsCalled;
+    if (this.expectedTools) result.expected_tools = this.expectedTools;
+    if (this.example !== undefined) result.example = this.example;
+    
+    return result;
   }
 }
 

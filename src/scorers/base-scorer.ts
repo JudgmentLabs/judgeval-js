@@ -24,6 +24,7 @@ export interface Scorer {
   evaluation_cost?: number;
   verbose_logs?: string;
   additional_metadata?: Record<string, any>;
+  requiredFields?: string[];
   validateThreshold(): void;
   toJSON(): Record<string, any>;
   successCheck(): boolean;
@@ -43,6 +44,7 @@ export abstract class APIJudgmentScorer implements Scorer {
   async_mode: boolean;
   verbose_mode: boolean;
   include_reason: boolean;
+  requiredFields: string[] = ['input', 'actual_output']; // Default required fields
 
   constructor(type: string, threshold: number, additional_metadata?: Record<string, any>, strict_mode: boolean = false, async_mode: boolean = true, verbose_mode: boolean = true, include_reason: boolean = true) {
     this.type = type;
@@ -128,6 +130,7 @@ export abstract class JudgevalScorer implements Scorer {
   evaluation_cost?: number;
   verbose_logs?: string;
   additional_metadata?: Record<string, any>;
+  requiredFields: string[] = ['input', 'actualOutput']; // Default required fields
 
   constructor(
     type: string, 
@@ -211,6 +214,26 @@ export abstract class JudgevalScorer implements Scorer {
   }
 
   /**
+   * Check if example has required parameters
+   * This is equivalent to Python's check_example_params function
+   */
+  protected _checkExampleParams(example: Example): void {
+    for (const param of this.requiredFields) {
+      if (param === 'input' && !example.input) {
+        throw new Error(`Example is missing required parameter: input`);
+      } else if (param === 'actualOutput' && !example.actualOutput) {
+        throw new Error(`Example is missing required parameter: actualOutput`);
+      } else if (param === 'expectedOutput' && !example.expectedOutput) {
+        throw new Error(`Example is missing required parameter: expectedOutput`);
+      } else if (param === 'context' && (!example.context || !Array.isArray(example.context))) {
+        throw new Error(`Example is missing required parameter: context (must be an array)`);
+      } else if (param === 'retrievalContext' && (!example.retrievalContext || !Array.isArray(example.retrievalContext))) {
+        throw new Error(`Example is missing required parameter: retrievalContext (must be an array)`);
+      }
+    }
+  }
+
+  /**
    * Score an example
    * This must be implemented by subclasses
    */
@@ -268,6 +291,7 @@ export class ScorerWrapper implements Scorer {
   evaluation_cost?: number;
   verbose_logs?: string;
   additional_metadata?: Record<string, any>;
+  requiredFields?: string[];
   scorer: any;
 
   constructor(scorer: any) {
@@ -288,6 +312,7 @@ export class ScorerWrapper implements Scorer {
     this.evaluation_cost = scorer.evaluation_cost;
     this.verbose_logs = scorer.verbose_logs;
     this.additional_metadata = scorer.additional_metadata;
+    this.requiredFields = scorer.requiredFields;
   }
 
   /**
@@ -355,6 +380,7 @@ export class ScorerWrapper implements Scorer {
       evaluation_cost: this.evaluation_cost,
       verbose_logs: this.verbose_logs,
       additional_metadata: this.additional_metadata,
+      requiredFields: this.requiredFields,
     };
   }
 }

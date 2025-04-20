@@ -181,6 +181,75 @@ export async function executeApiEval(evaluationRun: EvaluationRun): Promise<any[
   try {
     // Submit API request to execute evals
     const payload = evaluationRun.toJSON();
+    
+    // Ensure all examples have valid UUIDs and required fields for each scorer type
+    if (payload.examples && Array.isArray(payload.examples)) {
+      payload.examples.forEach(example => {
+        // Ensure example_id is a valid UUID (matching Python's uuid4 format)
+        if (!example.example_id || !example.example_id.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+          // Generate a UUID v4 format ID
+          example.example_id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            const r = Math.random() * 16 | 0;
+            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+          });
+        }
+        
+        // Ensure required fields for all scorers (matching Python SDK)
+        example.name = example.name || "example";
+        example.example_index = example.example_index || 0;
+        example.timestamp = example.timestamp || new Date().toISOString();
+        example.trace_id = example.trace_id || `trace-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        
+        // Check for required fields for each scorer type
+        if (payload.scorers && Array.isArray(payload.scorers)) {
+          payload.scorers.forEach((scorer: any) => {
+            // Find the corresponding scorer in the evaluationRun
+            const scorerObj = evaluationRun.scorers.find(s => s.type === scorer.score_type);
+            
+            if (scorerObj && scorerObj.requiredFields) {
+              // Check if the example has all the required fields for this scorer
+              scorerObj.requiredFields.forEach((field: string) => {
+                const snakeCaseField = field.replace(/([A-Z])/g, '_$1').toLowerCase(); // Convert camelCase to snake_case
+                
+                // If the field is missing, add it with an appropriate default value
+                if (example[snakeCaseField] === undefined) {
+                  if (snakeCaseField === 'context' || snakeCaseField === 'retrieval_context') {
+                    example[snakeCaseField] = [];
+                  } else if (snakeCaseField === 'input' || snakeCaseField === 'actual_output' || snakeCaseField === 'expected_output') {
+                    example[snakeCaseField] = example[snakeCaseField] || '';
+                  }
+                } else if ((snakeCaseField === 'context' || snakeCaseField === 'retrieval_context') && !Array.isArray(example[snakeCaseField])) {
+                  // Ensure context and retrieval_context are arrays
+                  example[snakeCaseField] = [example[snakeCaseField]];
+                }
+              });
+            }
+            
+            // Special handling for contextual scorers
+            if (['contextual_relevancy', 'contextual_precision', 'contextual_recall', 'faithfulness', 'hallucination'].includes(scorer.score_type)) {
+              // For contextual scorers, ensure context is always an array
+              if (!example.context) {
+                example.context = [];
+              } else if (!Array.isArray(example.context)) {
+                // If context is provided but not as an array, convert it to an array
+                example.context = [example.context];
+              }
+              
+              // For contextual relevancy, also ensure retrieval_context is an array
+              if (scorer.score_type === 'contextual_relevancy') {
+                if (!example.retrieval_context) {
+                  example.retrieval_context = example.context || [];
+                } else if (!Array.isArray(example.retrieval_context)) {
+                  example.retrieval_context = [example.retrieval_context];
+                }
+              }
+            }
+          });
+        }
+      });
+    }
+    
     const response = await axios.post(
       JUDGMENT_EVAL_API_URL,
       payload,
@@ -282,6 +351,23 @@ export async function logEvaluationResults(
         results: results.map(result => result.toJSON()),
         project_name: projectName,
         eval_name: evalName,
+        run: {
+          project_name: projectName,
+          eval_name: evalName,
+          examples: results.map(result => result.dataObject),
+          scorers: results.flatMap(result => 
+            result.scorersData ? result.scorersData.map(scorer => ({
+              name: scorer.name,
+              threshold: scorer.threshold,
+              score_type: scorer.name.toLowerCase().replace(' ', '_')
+            })) : []
+          ),
+          model: "gpt-3.5-turbo",  // Default model
+          log_results: true,
+          judgment_api_key: apiKey,
+          organization_id: organizationId,
+          append: false
+        }
       },
       {
         headers: {
@@ -601,16 +687,16 @@ export async function runEval(
         loggerError(`Error executing local evaluation: ${error?.message || String(error)}`);
         if (!ignoreErrors) {
           throw error;
-        }
-        
-        // Create empty results with errors if ignoring errors
-        localResults = evaluationRun.examples.map(example => {
-          return new ScoringResult({
-            dataObject: example,
-            scorersData: [],
-            error: error?.message
+        } else {
+          // Create empty results with errors if ignoring errors
+          localResults = evaluationRun.examples.map(example => {
+            return new ScoringResult({
+              dataObject: example,
+              scorersData: [],
+              error: error?.message
+            });
           });
-        });
+        }
       }
     }
 

@@ -80,6 +80,12 @@ export class DefaultJudge implements Judge {
       fs.unlinkSync(requestFile);
       fs.unlinkSync(responseFile);
       
+      // Check if the response has the expected structure
+      if (!responseData || !responseData.choices || !responseData.choices[0] || !responseData.choices[0].message) {
+        error(`Invalid response structure: ${JSON.stringify(responseData)}`);
+        throw new Error('Invalid response structure from OpenAI API');
+      }
+      
       // Return the content
       return responseData.choices[0].message.content;
     } catch (e: any) {
@@ -109,6 +115,12 @@ export class DefaultJudge implements Judge {
           }
         }
       );
+      
+      // Check if the response has the expected structure
+      if (!response.data || !response.data.choices || !response.data.choices[0] || !response.data.choices[0].message) {
+        error(`Invalid response structure: ${JSON.stringify(response.data)}`);
+        throw new Error('Invalid response structure from OpenAI API');
+      }
       
       return response.data.choices[0].message.content;
     } catch (e: any) {
@@ -173,6 +185,12 @@ export class TogetherJudge implements Judge {
       fs.unlinkSync(requestFile);
       fs.unlinkSync(responseFile);
       
+      // Check if the response has the expected structure
+      if (!responseData || !responseData.choices || !responseData.choices[0] || !responseData.choices[0].text) {
+        error(`Invalid response structure: ${JSON.stringify(responseData)}`);
+        throw new Error('Invalid response structure from Together API');
+      }
+      
       // Return the content
       return responseData.choices[0].text;
     } catch (e: any) {
@@ -202,6 +220,12 @@ export class TogetherJudge implements Judge {
           }
         }
       );
+      
+      // Check if the response has the expected structure
+      if (!response.data || !response.data.choices || !response.data.choices[0] || !response.data.choices[0].text) {
+        error(`Invalid response structure: ${JSON.stringify(response.data)}`);
+        throw new Error('Invalid response structure from Together API');
+      }
       
       return response.data.choices[0].text;
     } catch (e: any) {

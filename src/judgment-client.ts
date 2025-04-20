@@ -27,8 +27,8 @@ dotenv.config();
  * Request body for eval run operations (fetch/pull)
  */
 interface EvalRunRequestBody {
-  eval_name: string;
   project_name: string;
+  eval_name: string;
   judgment_api_key: string; // Keep this as pullEval/fetch API needs it in body
 }
 
@@ -305,70 +305,112 @@ export class JudgmentClient {
 
   /**
    * Pull evaluation results from the server
+   * 
    * @param projectName Name of the project
    * @param evalRunName Name of the evaluation run
-   * @returns Array containing one object with 'id' and 'results' (list of ScoringResult)
+   * @returns Array of evaluation result objects with the same format as the Python SDK
    */
   public async pullEval(
     projectName: string,
     evalRunName: string
-  ): Promise<Array<Record<string, any | ScoringResult[]>>> {
-    const evalRunRequestBody: EvalRunRequestBody = {
+  ): Promise<any[]> {
+    const evalRunRequestBody = {
       project_name: projectName,
       eval_name: evalRunName,
       judgment_api_key: this.judgmentApiKey
     };
 
     try {
+      logger.info(`Pulling evaluation results for project '${projectName}', run '${evalRunName}'`);
+      
       const response = await axios.post(
         JUDGMENT_EVAL_FETCH_API_URL,
         evalRunRequestBody,
         {
-          headers: this.getAuthHeaders()
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${this.judgmentApiKey}`,
+            "X-Organization-Id": this.organizationId
+          }
         }
       );
 
-      if (!Array.isArray(response.data) || response.data.length === 0) {
-        return [{ id: '', results: [] }];
-      }
-
-      const evalRunResult: Array<Record<string, any>> = [{}];
-      for (const result of response.data) {
-        const resultId = result.id || '';
-        const resultData = result.result || {};
-        
-        // Extract data object from result data
-        const dataObject = resultData.data_object || {};
-        
-        // Create Example with required input field
-        const example = new Example({
-          input: dataObject.input || '',
-          actualOutput: dataObject.actual_output,
-          expectedOutput: dataObject.expected_output,
-          context: dataObject.context,
-          retrievalContext: dataObject.retrieval_context,
-          additionalMetadata: dataObject.additional_metadata,
-          toolsCalled: dataObject.tools_called,
-          expectedTools: dataObject.expected_tools,
-          exampleId: dataObject.example_id,
-          exampleIndex: dataObject.example_index,
-          timestamp: dataObject.timestamp,
-          example: dataObject.example // Include example boolean
-        });
-        
-        evalRunResult[0].id = resultId;
-        evalRunResult[0].results = [new ScoringResult({
-          dataObject: example,
-          scorersData: resultData.scorers_data || [],
-          error: resultData.error
-        })];
-      }
-
-      return evalRunResult;
+      // Ensure we return the data in the exact same format as the Python SDK
+      return response.data;
     } catch (error) {
-      this.handleApiError(error, 'pullEval');
-      throw error;
+      if (axios.isAxiosError(error) && error.response) {
+        const errorMessage = `Error fetching eval results: ${JSON.stringify(error.response.data)}`;
+        logger.error(errorMessage);
+        throw new Error(errorMessage);
+      } else {
+        const errorMessage = `Unknown error during pullEval: ${error}`;
+        logger.error(errorMessage);
+        throw error;
+      }
     }
+  }
+
+  /**
+   * Retrieves evaluation results with retry mechanism
+   * @param projectName Name of the project
+   * @param evalRunName Name of the evaluation run
+   * @param options Configuration options for retries
+   * @returns The evaluation results or null if not available after all retries
+   */
+  public async pullEvalWithRetry(
+    projectName: string,
+    evalRunName: string,
+    options: {
+      maxRetries?: number;
+      initialDelayMs?: number;
+      maxDelayMs?: number;
+      backoffFactor?: number;
+    } = {}
+  ): Promise<any> {
+    // Default options
+    const maxRetries = options.maxRetries || 3;
+    const initialDelayMs = options.initialDelayMs || 2000;
+    const maxDelayMs = options.maxDelayMs || 30000;
+    const backoffFactor = options.backoffFactor || 2;
+
+    let lastError: any = null;
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        // Calculate delay with exponential backoff, capped at maxDelayMs
+        const delayMs = Math.min(
+          initialDelayMs * Math.pow(backoffFactor, attempt),
+          maxDelayMs
+        );
+        
+        if (attempt > 0) {
+          logger.info(`Retry attempt ${attempt + 1}/${maxRetries} for pullEval after ${delayMs}ms delay`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+        
+        const results = await this.pullEval(projectName, evalRunName);
+        return results;
+      } catch (error) {
+        lastError = error;
+        
+        // Check if we should retry based on error type
+        if (axios.isAxiosError(error) && error.response) {
+          const status = error.response.status;
+          
+          // Don't retry for client errors (except 429 Too Many Requests)
+          if (status >= 400 && status < 500 && status !== 429) {
+            logger.error(`Not retrying due to client error: ${status}`);
+            throw error;
+          }
+        }
+        
+        logger.warn(`Attempt ${attempt + 1} failed, ${attempt < maxRetries - 1 ? 'will retry' : 'giving up'}`);
+      }
+    }
+    
+    // If we get here, all retries failed
+    logger.error(`All ${maxRetries} retry attempts failed for pullEval`);
+    throw lastError || new Error('Failed to retrieve evaluation results after all retry attempts');
   }
 
   /**
@@ -518,6 +560,7 @@ export class JudgmentClient {
     };
 
     try {
+      logger.info(`Creating project: ${projectName}`);
       const response = await axios.post(JUDGMENT_PROJECT_CREATE_API_URL, requestBody, {
          headers: this.getAuthHeaders()
       });
@@ -642,15 +685,53 @@ export class JudgmentClient {
    * Pull the results of an evaluation run. Matches `pullEval` logic but returns only the ScoringResult array.
    * @param projectName The name of the project
    * @param evalRunName The name of the evaluation run
-   * @returns The results of the evaluation run as ScoringResult[] or empty array on error/no results.
+   * @returns Array of ScoringResult objects
    */
   async pullEvalResults(projectName: string, evalRunName: string): Promise<ScoringResult[]> {
+    // Get the raw API response
     const rawResults = await this.pullEval(projectName, evalRunName);
-    if (!rawResults || rawResults.length === 0 || !rawResults[0].results) {
+    
+    // Ensure proper handling of empty results
+    if (!rawResults || !Array.isArray(rawResults) || rawResults.length === 0) {
       return [];
     }
-    // Assuming pullEval correctly returns results in the expected format
-    return rawResults[0].results as ScoringResult[];
+    
+    // Process the results to match Python SDK format
+    const scoringResults: ScoringResult[] = [];
+    
+    for (const item of rawResults) {
+      if (item.result && item.result.scorers_data && Array.isArray(item.result.scorers_data)) {
+        // Extract example data if available
+        const exampleData = item.examples && item.examples.length > 0 ? item.examples[0] : null;
+        
+        // Create an Example object with the data from the API
+        const example = new Example({
+          input: exampleData?.input || '',
+          actualOutput: exampleData?.actual_output || '',
+          expectedOutput: exampleData?.expected_output || '',
+          context: exampleData?.context || null,
+          retrievalContext: exampleData?.retrieval_context || null,
+          additionalMetadata: exampleData?.additional_metadata || {},
+          toolsCalled: exampleData?.tools_called || null,
+          expectedTools: exampleData?.expected_tools || null,
+          exampleId: exampleData?.example_id || null,
+          name: exampleData?.name || 'example',
+          exampleIndex: exampleData?.example_index || 0,
+          timestamp: exampleData?.created_at || new Date().toISOString(),
+          traceId: item.result?.trace_id || null
+        });
+        
+        // Create a ScoringResult using the builder pattern
+        const scoringResult = ScoringResult.builder()
+          .dataObject(example)
+          .scorersData(item.result.scorers_data)
+          .build();
+        
+        scoringResults.push(scoringResult);
+      }
+    }
+    
+    return scoringResults;
   }
 
   /**
@@ -751,8 +832,8 @@ export class JudgmentClient {
     projectName: string,
     evalRunName: string,
     options: {
-      intervalMs?: number,
-      maxAttempts?: number,
+      intervalMs?: number;
+      maxAttempts?: number;
       showProgress?: boolean
     } = {}
   ): Promise<ScoringResult[]> {
@@ -771,7 +852,7 @@ export class JudgmentClient {
         progressBar.start(100, 0, { status: 'Initiating...' });
     }
 
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
         try {
             const statusResult = await this.checkEvalStatus(projectName, evalRunName);
             const progress = Math.max(0, Math.min(100, statusResult.progress || 0)); // Clamp progress

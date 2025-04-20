@@ -72,11 +72,11 @@ export class ScoringResult {
         additional_metadata: this.dataObject.additionalMetadata,
         tools_called: this.dataObject.toolsCalled,
         expected_tools: this.dataObject.expectedTools,
-        name: "example",
-        example_id: `example-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        example_index: 0,
-        timestamp: new Date().toISOString(),
-        trace_id: `trace-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+        name: this.dataObject.name || "example",
+        example_id: this.dataObject.exampleId,
+        example_index: this.dataObject.exampleIndex || 0,
+        timestamp: this.dataObject.timestamp || new Date().toISOString(),
+        trace_id: this.dataObject.traceId || `trace-${Date.now()}-${Math.floor(Math.random() * 1000)}`
       } : null,
       error: this.error || null
     };

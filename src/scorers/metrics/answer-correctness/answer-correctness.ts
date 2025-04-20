@@ -64,6 +64,9 @@ export class AnswerCorrectnessScorer extends JudgevalScorer {
     this.evaluation_model = this.model.getModelName();
     
     log(`Using model: ${this.evaluation_model}`);
+    
+    // Set required fields for this scorer
+    this.requiredFields = ['input', 'actualOutput', 'expectedOutput'];
   }
 
   /**
@@ -426,14 +429,18 @@ export class AnswerCorrectnessScorer extends JudgevalScorer {
   /**
    * Check if example has required parameters
    */
-  private _checkExampleParams(example: Example): void {
-    for (const param of requiredParams) {
+  protected _checkExampleParams(example: Example): void {
+    for (const param of this.requiredFields) {
       if (param === 'input' && !example.input) {
         throw new Error(`Example is missing required parameter: input`);
       } else if (param === 'actualOutput' && !example.actualOutput) {
         throw new Error(`Example is missing required parameter: actualOutput`);
       } else if (param === 'expectedOutput' && !example.expectedOutput) {
         throw new Error(`Example is missing required parameter: expectedOutput`);
+      } else if (param === 'context' && (!example.context || !Array.isArray(example.context))) {
+        throw new Error(`Example is missing required parameter: context (must be an array)`);
+      } else if (param === 'retrievalContext' && (!example.retrievalContext || !Array.isArray(example.retrievalContext))) {
+        throw new Error(`Example is missing required parameter: retrievalContext (must be an array)`);
       }
     }
   }

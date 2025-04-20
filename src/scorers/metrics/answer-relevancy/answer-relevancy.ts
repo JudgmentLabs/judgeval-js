@@ -15,9 +15,6 @@ import axios from 'axios';
 // Import the Judge interface and createJudge from the judges module
 import { Judge, createJudge } from '../../../judges/index.js';
 
-// Required parameters for this scorer
-const requiredParams = ['input', 'actualOutput'];
-
 /**
  * AnswerRelevancyScorer evaluates how relevant the actual output is to the input
  * by breaking down the actual output into statements and checking if each statement
@@ -70,6 +67,9 @@ export class AnswerRelevancyScorer extends JudgevalScorer {
     this.evaluation_model = this.model.getModelName();
     
     log(`Using model: ${this.evaluation_model}`);
+    
+    // Set required fields for this scorer
+    this.requiredFields = ['input', 'actualOutput'];
   }
 
   /**
@@ -438,19 +438,6 @@ export class AnswerRelevancyScorer extends JudgevalScorer {
   }
 
   /**
-   * Check if example has required parameters
-   */
-  private _checkExampleParams(example: Example): void {
-    for (const param of requiredParams) {
-      if (param === 'input' && !example.input) {
-        throw new Error(`Example is missing required parameter: input`);
-      } else if (param === 'actualOutput' && !example.actualOutput) {
-        throw new Error(`Example is missing required parameter: actualOutput`);
-      }
-    }
-  }
-
-  /**
    * Create verbose logs for debugging
    */
   private _createVerboseLogs(): string {
@@ -459,8 +446,7 @@ export class AnswerRelevancyScorer extends JudgevalScorer {
     }
     
     const steps = [
-      `Statements:\n${JSON.stringify(this.statements, null, 2)}`,
-      `Verdicts:\n${JSON.stringify(this.verdicts, null, 2)}`,
+      `Verdict:\n${JSON.stringify(this.verdicts, null, 2)}`,
       `Score: ${this.score}\nReason: ${this.reason}`
     ];
     
