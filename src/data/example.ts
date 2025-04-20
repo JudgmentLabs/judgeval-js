@@ -48,7 +48,7 @@ export class Example {
     this.exampleIndex = options.exampleIndex;
     this.timestamp = options.timestamp || new Date().toISOString();
     this.traceId = options.traceId;
-    this.example = options.example;
+    this.example = options.example ?? true;
   }
 
   /**
@@ -81,21 +81,21 @@ export class Example {
     // Create the base object with required fields
     const result: Record<string, any> = {
       input: this.input,
-      actual_output: this.actualOutput,
-      expected_output: this.expectedOutput,
+      actualOutput: this.actualOutput,
+      expectedOutput: this.expectedOutput,
       name: this.name || "example",
-      example_id: this.exampleId,
-      example_index: this.exampleIndex || 0,
+      exampleId: this.exampleId,
+      exampleIndex: this.exampleIndex || 0,
       timestamp: this.timestamp || new Date().toISOString(),
-      trace_id: this.traceId || `trace-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+      traceId: this.traceId || `trace-${Date.now()}-${Math.floor(Math.random() * 1000)}`
     };
     
     // Only include non-null fields to avoid sending empty fields to the API
     if (this.context) result.context = this.context;
-    if (this.retrievalContext) result.retrieval_context = this.retrievalContext;
-    if (this.additionalMetadata) result.additional_metadata = this.additionalMetadata;
-    if (this.toolsCalled) result.tools_called = this.toolsCalled;
-    if (this.expectedTools) result.expected_tools = this.expectedTools;
+    if (this.retrievalContext) result.retrievalContext = this.retrievalContext;
+    if (this.additionalMetadata) result.additionalMetadata = this.additionalMetadata;
+    if (this.toolsCalled) result.toolsCalled = this.toolsCalled;
+    if (this.expectedTools) result.expectedTools = this.expectedTools;
     if (this.example !== undefined) result.example = this.example;
     
     return result;

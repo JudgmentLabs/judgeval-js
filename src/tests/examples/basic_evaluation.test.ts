@@ -33,8 +33,8 @@ jest.mock('../../judgment-client.js', () => {
   const mockEvaluate = jest.fn();
   const mockRunEvaluation = jest.fn();
 
-  // Define the mock implementations
-  const mockEvaluateImpl = (config: MockEvaluateConfig) => {
+  mockEvaluate.mockImplementation((...args: unknown[]) => {
+    const config = args[0] as MockEvaluateConfig;
     const { examples, scorers, model = 'gpt-4' } = config;
     return Promise.resolve(examples.map((example: Example) => new ScoringResult({
       dataObject: example,
@@ -52,9 +52,10 @@ jest.mock('../../judgment-client.js', () => {
         additional_metadata: scorer.additional_metadata || {},
       })),
     })));
-  };
+  });
 
-  const mockRunEvaluationImpl = (examples: Example[], scorers: APIJudgmentScorer[], model: string = 'gpt-4') => {
+  mockRunEvaluation.mockImplementation((...args: unknown[]) => {
+    const [examples, scorers, model = 'gpt-4'] = args as [Example[], APIJudgmentScorer[], string];
     return Promise.resolve(examples.map((example: Example) => new ScoringResult({
       dataObject: example,
       scorersData: scorers.map((scorer: APIJudgmentScorer) => ({
@@ -71,11 +72,7 @@ jest.mock('../../judgment-client.js', () => {
         additional_metadata: scorer.additional_metadata || {},
       })),
     })));
-  };
-
-  // Set up the mock implementations
-  mockEvaluate.mockImplementation(mockEvaluateImpl);
-  mockRunEvaluation.mockImplementation(mockRunEvaluationImpl);
+  });
 
   return {
     JudgmentClient: {
