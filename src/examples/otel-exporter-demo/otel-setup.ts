@@ -3,6 +3,8 @@ import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
 import * as dotenv from 'dotenv';
 import path, { dirname } from 'path'; // Import path AND dirname
 import { fileURLToPath } from 'url'; // Import fileURLToPath
+import { Resource } from '@opentelemetry/resources';
+import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
 
 // Import JudgevalExporter using relative path from src - ADD .js
 import { JudgevalExporter } from '../../exporters/otel-exporter.js';
@@ -88,7 +90,9 @@ try {
 
 // --- SDK Initialization ---
 const sdk = new NodeSDK({
-    spanProcessors: [spanProcessor],
+    resource: new Resource({ [SemanticResourceAttributes.SERVICE_NAME]: JUDGMENT_PROJECT_NAME }),
+    // spanProcessors: [spanProcessor],
+    // Other configurations as needed
 });
 
 try {

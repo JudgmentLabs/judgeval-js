@@ -1,6 +1,6 @@
 {
   "name": "judgeval",
-  "version": "0.2.4",
+  "version": "0.2.7",
   "description": "Judgment SDK for TypeScript/JavaScript",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
@@ -120,7 +120,6 @@
     }
   },
   "overrides": {
-    "@ai-sdk/provider": "0.0.26",
-    "@opentelemetry/sdk-trace-base": "1.25.1"
+    "@ai-sdk/provider": "0.0.26"
   }
 }
