@@ -51,7 +51,6 @@ export class DefaultJudge implements Judge {
     }
     
     try {
-      // In Node.js, we can use a synchronous HTTP request via child_process
       // Create a temporary file for the request and response
       const tempDir = os.tmpdir();
       const requestFile = path.join(tempDir, `openai-request-${Date.now()}.json`);
