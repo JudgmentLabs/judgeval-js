@@ -11,7 +11,10 @@ const config = {
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
-  testMatch: ['**/src/e2etests/**/*.test.ts'],
+  testMatch: [
+    '**/src/tests/**/*.test.ts',
+    '**/src/e2etests/**/*.test.ts'
+  ],
   testTimeout: 30000, // Increase timeout for e2e tests
 };
 
