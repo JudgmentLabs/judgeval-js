@@ -58,10 +58,16 @@ async function runBasicEvaluation() {
       new ExampleBuilder()
         .input("What's the capital of France?")
         .actualOutput("The capital of France is Paris.")
+        .expectedOutput("Paris is the capital of France.")
+        .context(["France is a country in Western Europe."])
+        .name("france-capital-relevancy-good")
         .build(),
       new ExampleBuilder()
         .input("What's the capital of France?")
         .actualOutput("There's a lot to do in Marseille. Lots of bars, restaurants, and museums.")
+        .expectedOutput("Paris is the capital of France.")
+        .context(["France is a country in Western Europe."])
+        .name("france-capital-relevancy-bad")
         .build()
     ],
     
@@ -70,11 +76,13 @@ async function runBasicEvaluation() {
       new ExampleBuilder()
         .input("Based on the context, what is the capital of France?")
         .actualOutput("According to the context, the capital of France is Paris.")
+        .expectedOutput("Paris is the capital and most populous city of France.")
         .context([
           "France is a country in Western Europe.",
           "Paris is the capital and most populous city of France.",
           "The Eiffel Tower is located in Paris."
         ])
+        .name("france-capital-context")
         .build()
     ],
     
@@ -83,11 +91,15 @@ async function runBasicEvaluation() {
       new ExampleBuilder()
         .input("What's the capital of France?")
         .actualOutput("The capital of France is Paris. It's known for the Eiffel Tower.")
+        .expectedOutput("Paris is the capital of France. The Eiffel Tower is a landmark in Paris.")
+        .context(["France is a country in Western Europe."])
         .retrievalContext([
           "France is a country in Western Europe.",
           "Paris is the capital of France.",
           "The Eiffel Tower is a landmark in Paris."
         ])
+        .additionalMetadata({source: "test"})
+        .name("france-capital-faithfulness")
         .build()
     ],
     
@@ -96,6 +108,9 @@ async function runBasicEvaluation() {
       new ExampleBuilder()
         .input("What's the capital of France?")
         .actualOutput("The capital of France is Paris, which is known for its beautiful beaches and tropical climate.")
+        .expectedOutput("Paris is the capital of France.")
+        .context(["France is a country in Western Europe with a temperate climate."])
+        .name("france-capital-hallucination")
         .build()
     ],
     
@@ -105,6 +120,8 @@ async function runBasicEvaluation() {
         .input("Summarize the following text: France is a country in Western Europe. Paris is the capital of France. The Eiffel Tower is located in Paris.")
         .actualOutput("France is a Western European country with Paris as its capital, home to the Eiffel Tower.")
         .expectedOutput("France is a Western European country. Paris is its capital and has the Eiffel Tower.")
+        .context(["The text should be summarized concisely while maintaining key information."])
+        .name("france-summary")
         .build()
     ],
     
@@ -113,6 +130,14 @@ async function runBasicEvaluation() {
       new ExampleBuilder()
         .input("List three European capitals.")
         .actualOutput("Three European capitals are Paris, London, and Berlin.")
+        .expectedOutput("List exactly three European capital cities.")
+        .context(["The response should list exactly three capital cities in Europe."])
+        .additionalMetadata({
+          instruction_type: "list",
+          required_count: 3,
+          category: "European capitals"
+        })
+        .name("european-capitals-list")
         .build()
     ],
     
@@ -122,6 +147,12 @@ async function runBasicEvaluation() {
         .input("Which is better for a beginner, Python or C++?")
         .actualOutput("Python is generally considered better for beginners because of its simpler syntax and readability.")
         .expectedOutput("Python is often recommended for beginners due to its readable syntax and gentle learning curve.")
+        .context(["The response should compare programming languages from a beginner's perspective."])
+        .additionalMetadata({
+          criteria: ["Accuracy", "Helpfulness", "Relevance"],
+          comparison_aspects: ["Syntax", "Learning Curve", "Beginner-friendliness"]
+        })
+        .name("python-cpp-comparison")
         .build()
     ],
     
@@ -131,6 +162,24 @@ async function runBasicEvaluation() {
         .input("Describe the steps to make a sandwich.")
         .actualOutput("1. Get bread. 2. Add condiments. 3. Add fillings. 4. Close the sandwich.")
         .expectedOutput("1. Get bread. 2. Add condiments. 3. Add fillings. 4. Close the sandwich.")
+        .context(["The steps should be listed in a logical order."])
+        .toolsCalled(["Get bread", "Add condiments", "Add fillings", "Close sandwich"])
+        .expectedTools(["Get bread", "Add condiments", "Add fillings", "Close sandwich"])
+        .additionalMetadata({
+          step_order: ["Get bread", "Add condiments", "Add fillings", "Close sandwich"]
+        })
+        .name("sandwich-steps")
+        .build()
+    ],
+
+    // Example for JSON Correctness scorer
+    json: [
+      new ExampleBuilder()
+        .input("Convert this to JSON: Name: John, Age: 30, City: New York")
+        .actualOutput('{"name": "John", "age": 30, "city": "New York"}')
+        .expectedOutput('{"name": "John", "age": 30, "city": "New York"}')
+        .context(["The output should be valid JSON with correct key-value pairs."])
+        .name("json-conversion")
         .build()
     ]
   };
@@ -161,7 +210,7 @@ async function runBasicEvaluation() {
 
     // Test AnswerCorrectness scorer
     const acResults = await judgmentClient.evaluate({
-      examples: examples.basic,
+      examples: examples.answerRelevancy,  // Using same examples as they're suitable for correctness too
       scorers: [new AnswerCorrectnessScorer(0.7, undefined, true, true, true, true)],
       evalName: `${evalRunName}-ac`,
       projectName: projectName,
@@ -196,15 +245,13 @@ async function runBasicEvaluation() {
     logger.print(hallResults);
 
     // Test Contextual scorers
-    const contextualScorers = [
-      new ContextualRelevancyScorer(0.7, undefined, true, true, true, true),
-      new ContextualPrecisionScorer(0.7, undefined, true, true, true, true),
-      new ContextualRecallScorer(0.7, undefined, true, true, true, true)
-    ];
-    
     const contextResults = await judgmentClient.evaluate({
       examples: examples.contextual,
-      scorers: contextualScorers,
+      scorers: [
+        new ContextualRelevancyScorer(0.7, undefined, true, true, true, true),
+        new ContextualPrecisionScorer(0.7, undefined, true, true, true, true),
+        new ContextualRecallScorer(0.7, undefined, true, true, true, true)
+      ],
       evalName: `${evalRunName}-context`,
       projectName: projectName,
       model: model
@@ -226,14 +273,8 @@ async function runBasicEvaluation() {
     logger.print(summResults);
 
     // Test JSON Correctness scorer
-    const jsonExample = new ExampleBuilder()
-      .input("Convert this to JSON: Name: John, Age: 30, City: New York")
-      .actualOutput('{"name": "John", "age": 30, "city": "New York"}')
-      .expectedOutput('{"name": "John", "age": 30, "city": "New York"}')
-      .build();
-
     const jsonResults = await judgmentClient.evaluate({
-      examples: [jsonExample],
+      examples: examples.json,
       scorers: [new JsonCorrectnessScorer(0.7, undefined, undefined, true, true, true, true)],
       evalName: `${evalRunName}-json`,
       projectName: projectName,
@@ -246,7 +287,14 @@ async function runBasicEvaluation() {
     // Test Instruction Adherence scorer
     const iaResults = await judgmentClient.evaluate({
       examples: examples.instructionAdherence,
-      scorers: [new InstructionAdherenceScorer(0.7, undefined, true, true, true, true)],
+      scorers: [new InstructionAdherenceScorer(
+        0.7,  // threshold
+        undefined,  // no custom prompt needed
+        true,  // strict mode
+        true,  // verbose
+        true,  // include reason
+        true   // include metadata
+      )],
       evalName: `${evalRunName}-ia`,
       projectName: projectName,
       model: model
@@ -256,14 +304,8 @@ async function runBasicEvaluation() {
     logger.print(iaResults);
 
     // Test Comparison scorer
-    const compExample = new ExampleBuilder()
-      .input("Which is better for a beginner, Python or C++?")
-      .actualOutput("Python is generally considered better for beginners because of its simpler syntax and readability.")
-      .expectedOutput("Python is often recommended for beginners due to its readable syntax and gentle learning curve.")
-      .build();
-
     const compResults = await judgmentClient.evaluate({
-      examples: [compExample],
+      examples: examples.comparison,
       scorers: [new ComparisonScorer(0.5, ['Accuracy', 'Helpfulness', 'Relevance'], 'Compare the outputs based on the given criteria', undefined, true, true, true, true)],
       evalName: `${evalRunName}-comp`,
       projectName: projectName,
@@ -274,16 +316,8 @@ async function runBasicEvaluation() {
     logger.print(compResults);
 
     // Test Execution Order scorer
-    const eoExample = new ExampleBuilder()
-      .input("Describe the steps to make a sandwich.")
-      .actualOutput("1. Get bread. 2. Add condiments. 3. Add fillings. 4. Close the sandwich.")
-      .expectedOutput("1. Get bread. 2. Add condiments. 3. Add fillings. 4. Close the sandwich.")
-      .toolsCalled(["Get bread", "Add condiments", "Add fillings", "Close sandwich"])
-      .expectedTools(["Get bread", "Add condiments", "Add fillings", "Close sandwich"])
-      .build();
-
     const eoResults = await judgmentClient.evaluate({
-      examples: [eoExample],
+      examples: examples.executionOrder,
       scorers: [new ExecutionOrderScorer(0.7, ["Get bread", "Add condiments", "Add fillings", "Close sandwich"], undefined, true, true, true, true)],
       evalName: `${evalRunName}-eo`,
       projectName: projectName,
