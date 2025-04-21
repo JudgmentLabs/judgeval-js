@@ -299,22 +299,8 @@ export class JudgmentClient {
     useJudgment: boolean = true,
     rules?: Rule[]
   ): Promise<ScoringResult[]> {
-    // Delegate to runEvaluation to mirror Python SDK
-    return this.runEvaluation(
-      dataset.examples,
-      scorers,
-      model,
-      aggregator,
-      metadata,
-      logResults,
-      projectName,
-      evalRunName,
-      false,       // override
-      useJudgment, // useJudgment
-      true,        // ignoreErrors
-      false,       // asyncExecution
-      rules
-    );
+    // Keep type loose for stub
+    throw new Error('Not implemented in JudgmentClient. Use EvalDatasetClient.');
   }
 
   /**

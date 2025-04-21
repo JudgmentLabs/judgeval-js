@@ -48,6 +48,7 @@ export class ScoringResult {
    * Convert the scoring result to a plain object
    */
   toJSON(): Record<string, any> {
+    const dataObjectSnake = this.dataObject ? this.dataObject.toJSON() : null;
     return {
       success: this.scorersData ? this.scorersData.every(scorer => scorer.success) : false,
       scorers_data: this.scorersData ? this.scorersData.map(scorer => ({
@@ -63,21 +64,8 @@ export class ScoringResult {
         verbose_logs: scorer.verbose_logs,
         additional_metadata: scorer.additional_metadata
       })) : null,
-      data_object: this.dataObject ? {
-        input: this.dataObject.input,
-        actual_output: this.dataObject.actualOutput,
-        expected_output: this.dataObject.expectedOutput,
-        context: this.dataObject.context,
-        retrieval_context: this.dataObject.retrievalContext,
-        additional_metadata: this.dataObject.additionalMetadata,
-        tools_called: this.dataObject.toolsCalled,
-        expected_tools: this.dataObject.expectedTools,
-        name: this.dataObject.name || "example",
-        example_id: this.dataObject.exampleId,
-        example_index: this.dataObject.exampleIndex || 0,
-        timestamp: this.dataObject.timestamp || new Date().toISOString(),
-        trace_id: this.dataObject.traceId || `trace-${Date.now()}-${Math.floor(Math.random() * 1000)}`
-      } : null,
+      data_object: dataObjectSnake,
+      trace_id: this.dataObject?.traceId || null,
       error: this.error || null
     };
   }

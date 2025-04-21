@@ -52,16 +52,11 @@ export class ComparisonScorer extends APIJudgmentScorer {
   }
 
   toJSON(): Record<string, any> {
+    const base = super.toJSON();
     return {
-      score_type: 'comparison', 
-      threshold: this.threshold,
+      ...base,
       criteria: this.criteria,
-      description: this.description,
-      additional_metadata: this.additional_metadata,
-      strict_mode: this.strict_mode,
-      async_mode: this.async_mode,
-      verbose_mode: this.verbose_mode,
-      include_reason: this.include_reason
+      description: this.description
     };
   }
 
@@ -124,15 +119,10 @@ export class ExecutionOrderScorer extends APIJudgmentScorer {
   }
 
   toJSON(): Record<string, any> {
+    const base = super.toJSON();
     return {
-      score_type: 'execution_order',
-      threshold: this.threshold,
-      strict_mode: this.strictMode,
-      expected_tools: this.expectedTools,
-      additional_metadata: this.additional_metadata,
-      async_mode: this.async_mode,
-      verbose_mode: this.verbose_mode,
-      include_reason: this.include_reason
+      ...base,
+      expected_tools: this.expectedTools
     };
   }
 
@@ -186,6 +176,10 @@ export class InstructionAdherenceScorer extends APIJudgmentScorer {
     this.validateThreshold();
   }
 
+  toJSON(): Record<string, any> {
+    return super.toJSON();
+  }
+
   async a_score_example(example: Example): Promise<ScorerData> {
     throw new Error('API scorers are evaluated on the server side');
   }
@@ -209,15 +203,10 @@ export class JsonCorrectnessScorer extends APIJudgmentScorer {
   }
 
   toJSON(): Record<string, any> {
+    const base = super.toJSON();
     return {
-      score_type: 'json_correctness', 
-      threshold: this.threshold,
-      json_schema: this.jsonSchema,
-      additional_metadata: this.additional_metadata,
-      strict_mode: this.strict_mode,
-      async_mode: this.async_mode,
-      verbose_mode: this.verbose_mode,
-      include_reason: this.include_reason
+      ...base,
+      json_schema: this.jsonSchema
     };
   }
 
@@ -299,7 +288,7 @@ export class ScorerWrapper {
         const executionOrderMetadata = { ...additional_metadata };
         delete executionOrderMetadata?.strict_mode;
         delete executionOrderMetadata?.expected_tools;
-        return new ExecutionOrderScorer(threshold, expectedTools, executionOrderMetadata, strict_mode, async_mode, verbose_mode, include_reason);
+        return new ExecutionOrderScorer(threshold, expectedTools, executionOrderMetadata, strictMode, async_mode, verbose_mode, include_reason);
       case 'faithfulness':
         return new FaithfulnessScorer(threshold, additional_metadata, strict_mode, async_mode, verbose_mode, include_reason);
       case 'groundedness':

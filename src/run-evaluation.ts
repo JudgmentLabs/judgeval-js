@@ -142,7 +142,7 @@ export async function pollEvaluationStatus(
             }
           }
         );
-        
+        console.log('Raw API evaluation results:', JSON.stringify(response.data, null, 2));
         // Convert API results to ScoringResult objects
         const results = response.data.map((result: any) => {
           return new ScoringResult({
@@ -617,16 +617,42 @@ export async function runEval(
           : apiResponseData as any[];
         
         apiResults = resultsData.map((result: any) => {
-          // If the result is already a ScoringResult, return it directly
-          if (result instanceof ScoringResult) {
-            return result;
+          // Defensive: Ensure data_object is present and well-formed
+          let dataObject = result.data_object;
+          let dataObjectError = undefined;
+          if (!dataObject || typeof dataObject !== 'object') {
+            dataObjectError = 'Missing or malformed data_object in API result.';
+            // Try to reconstruct minimal Example if possible
+            dataObject = {
+              input: result.input || '',
+              actualOutput: result.actual_output || '',
+              expectedOutput: result.expected_output || '',
+              name: result.name || 'example',
+              exampleId: result.example_id || '',
+              exampleIndex: result.example_index || 0,
+              timestamp: result.timestamp || new Date().toISOString(),
+              traceId: result.trace_id || null,
+            };
           }
-          
-          // Otherwise, create a new ScoringResult from the result data
+          // Defensive: If still missing required fields, fill with defaults
+          dataObject.input = dataObject.input || '';
+          dataObject.name = dataObject.name || 'example';
+          dataObject.exampleId = dataObject.exampleId || '';
+          dataObject.exampleIndex = dataObject.exampleIndex || 0;
+          dataObject.timestamp = dataObject.timestamp || new Date().toISOString();
+          dataObject.traceId = dataObject.traceId || null;
+
+          // Create Example instance for ScoringResult
+          const exampleInstance = new Example(dataObject);
+          // Compose error message if needed
+          const errorMsg = result.error && dataObjectError
+            ? `${result.error} | ${dataObjectError}`
+            : result.error || dataObjectError;
+
           return new ScoringResult({
-            dataObject: result.data_object,
+            dataObject: exampleInstance,
             scorersData: result.scorers_data,
-            error: result.error
+            error: errorMsg
           });
         });
         

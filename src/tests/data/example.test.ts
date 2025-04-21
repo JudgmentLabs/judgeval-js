@@ -12,7 +12,7 @@
  */
 
 import { describe, expect, it, jest } from '@jest/globals';
-import { Example, ExampleBuilder } from '../../data/example';
+import { Example, ExampleBuilder } from '../../data/example.js';
 
 describe('Example', () => {
   describe('constructor', () => {

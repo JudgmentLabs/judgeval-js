@@ -33,11 +33,23 @@ async function runBasicEvaluation() {
         .input("What is the capital of France?")
         .actualOutput("The capital of France is Paris.")
         .expectedOutput("Paris is the capital of France.")
+        .context(["France is a country in Western Europe."])
+        .retrievalContext(["Paris is the capital of France."])
+        .additionalMetadata({source: "test"})
+        .toolsCalled(["search", "lookup"])
+        .expectedTools(["search"])
+        .name("capital-question")
         .build(),
       new ExampleBuilder()
         .input("What is the tallest mountain in the world?")
         .actualOutput("Mount Everest is the tallest mountain in the world.")
         .expectedOutput("Mount Everest is the tallest mountain in the world.")
+        .context(["Mount Everest is in Asia."])
+        .retrievalContext(["Everest is the tallest mountain."])
+        .additionalMetadata({source: "test2"})
+        .toolsCalled(["search"])
+        .expectedTools(["lookup"])
+        .name("mountain-question")
         .build()
     ],
     
@@ -122,6 +134,12 @@ async function runBasicEvaluation() {
         .build()
     ]
   };
+
+  // Log the outgoing payload for comparison
+  console.log("\n=== Outgoing Example Payload (TypeScript) ===\n");
+  examples.basic.forEach((ex, idx) => {
+    console.log(`Example ${idx + 1}:`, JSON.stringify(ex.toJSON(), null, 2));
+  });
 
   // Set up evaluation parameters
   const projectName = 'js-sdk-all-scorers';

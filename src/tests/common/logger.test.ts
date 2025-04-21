@@ -15,8 +15,8 @@ import {
   formatEvaluationResults,
   printResults,
   print
-} from '../../common/logger';
-import logger from '../../common/logger-instance';
+} from '../../common/logger.js';
+import logger from '../../common/logger-instance.js';
 
 // Mock winston logger
 jest.mock('winston', () => ({
