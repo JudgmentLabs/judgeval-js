@@ -36,7 +36,7 @@ export const UNBOUNDED_SCORERS = new Set<APIScorer>([
 
 // API URLs
 // Define ROOT_API directly as a constant string
-export const ROOT_API = 'http://localhost:8000'; 
+export const ROOT_API = 'https://api.judgmentlabs.ai';
 
 // Dataset API URLs (derive from ROOT_API)
 export const JUDGMENT_DATASETS_PUSH_API_URL = `${ROOT_API}/datasets/push/`;
