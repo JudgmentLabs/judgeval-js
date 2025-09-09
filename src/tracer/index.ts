@@ -1,14 +1,17 @@
 import { context, SpanKind, trace } from "@opentelemetry/api";
+import { Example } from "../data/example";
 import { JUDGMENT_DEFAULT_GPT_MODEL } from "../env";
 import { JudgmentApiClient } from "../internal/api";
 import {
   BaseScorer,
-  Example,
   ExampleEvaluationRun,
+  Example as ExampleModel,
   ResolveProjectNameRequest,
 } from "../internal/api/models";
+import { APIScorer, APIScorerType } from "../scorers/api-scorer";
 import { parseFunctionArgs } from "../utils/annotate";
 import { Logger } from "../utils/logger";
+import { KeysOf } from "../utils/types";
 import { JudgmentSpanExporter, NoOpSpanExporter } from "./exporters";
 import { OpenTelemetryKeys } from "./OpenTelemetryKeys";
 import { TracerConfiguration } from "./TracerConfiguration";
@@ -154,12 +157,10 @@ export class JudgevalTracer {
       const argNames = parseFunctionArgs(fn);
       const argumentDict: Record<string, unknown> = {};
 
-      // Map argument names to values
       for (let i = 0; i < args.length; i++) {
         if (i < argNames.length) {
           argumentDict[argNames[i]] = args[i];
         } else {
-          // Handle rest parameters or extra arguments
           argumentDict[`arguments[${i}]`] = args[i];
         }
       }
@@ -180,7 +181,6 @@ export class JudgevalTracer {
   public observe<TArgs extends unknown[], TReturn>(
     spanName: string,
     fn: (...args: TArgs) => TReturn,
-    input?: TArgs[0],
     spanKind: "llm" | "tool" | "span" = "span",
     attributes?: Record<string, unknown>
   ): (...args: TArgs) => TReturn {
@@ -217,7 +217,6 @@ export class JudgevalTracer {
   public observeAsync<TArgs extends unknown[], TReturn>(
     spanName: string,
     fn: (...args: TArgs) => Promise<TReturn>,
-    input?: TArgs[0],
     spanKind: "llm" | "tool" | "span" = "span",
     attributes?: Record<string, unknown>
   ): (...args: TArgs) => Promise<TReturn> {
@@ -233,15 +232,8 @@ export class JudgevalTracer {
 
       return context.with(trace.setSpan(context.active(), span), async () => {
         try {
-          // Create argument name to value dictionary
           const argumentDict = this.createArgumentDict(fn, args);
           this.setInput(argumentDict);
-
-          // Also record the explicit input if provided
-          if (input !== undefined) {
-            this.setAttribute("explicit_input", this.serializer(input));
-          }
-
           const result = await fn(...args);
           this.setOutput(result);
           return result;
@@ -255,9 +247,13 @@ export class JudgevalTracer {
     };
   }
 
-  public asyncEvaluate(
-    scorer: BaseScorer,
-    example: Example,
+  public asyncEvaluate<
+    T extends APIScorerType,
+    P extends readonly string[],
+    E extends Record<string, any>
+  >(
+    scorer: APIScorer<T, P>,
+    example: Example<E> & Record<KeysOf<P>, any>,
     model?: string
   ): void {
     if (!this.configuration.enableEvaluation) {
@@ -302,7 +298,7 @@ export class JudgevalTracer {
 
   private createEvaluationRun(
     scorer: BaseScorer,
-    example: Example,
+    example: ExampleModel,
     model: string | undefined,
     traceId: string,
     spanId: string
@@ -327,7 +323,7 @@ export class JudgevalTracer {
     evaluationRun: ExampleEvaluationRun
   ): Promise<void> {
     try {
-      await this.apiClient.addToRunEvalQueue(evaluationRun);
+      await this.apiClient.addToRunEvalQueueExamples(evaluationRun);
       Logger.info(`Enqueuing evaluation run: ${evaluationRun.eval_name}`);
     } catch (error) {
       Logger.error(
@@ -379,7 +375,3 @@ export class TracerBuilder {
     return new JudgevalTracer(this.config, client, this._serializer);
   }
 }
-
-// Re-export types and classes
-export { OpenTelemetryKeys } from "./OpenTelemetryKeys";
-export { TracerConfiguration } from "./TracerConfiguration";

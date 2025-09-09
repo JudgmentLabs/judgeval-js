@@ -1,0 +1,17 @@
+import { Example as ExampleModel } from "../internal/api/models/Example";
+
+export type Example<T extends Record<string, any> = Record<string, any>> =
+  ExampleModel & T;
+
+export function createExample<T extends Record<string, any>>(
+  properties: T
+): Example<T> {
+  const example: Example<T> = {
+    example_id: "",
+    created_at: new Date().toISOString(),
+    name: null,
+    ...properties,
+  } as Example<T>;
+
+  return example;
+}

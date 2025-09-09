@@ -1,28 +1,28 @@
 import { ExampleParams } from "../../data";
 import { APIScorer, APIScorerType, createAPIScorer } from "../api-scorer";
 
-const ANSWER_CORRECTNESS_REQUIRED_PARAMS = [
+const FAITHFULNESS_REQUIRED_PARAMS = [
   ExampleParams.INPUT,
   ExampleParams.ACTUAL_OUTPUT,
-  ExampleParams.EXPECTED_OUTPUT,
+  ExampleParams.RETRIEVAL_CONTEXT,
 ] as const;
 
-export type AnswerCorrectnessScorer = APIScorer<
-  APIScorerType.ANSWER_CORRECTNESS,
-  typeof ANSWER_CORRECTNESS_REQUIRED_PARAMS
+export type FaithfulnessScorer = APIScorer<
+  APIScorerType.FAITHFULNESS,
+  typeof FAITHFULNESS_REQUIRED_PARAMS
 >;
 
-export type AnswerCorrectnessScorerArgs = {
+export type FaithfulnessScorerArgs = {
   threshold?: number;
   model?: string;
 };
 
-export function createAnswerCorrectnessScorer(
-  scorerArgs?: AnswerCorrectnessScorerArgs
-): AnswerCorrectnessScorer {
+export function createFaithfulnessScorer(
+  scorerArgs?: FaithfulnessScorerArgs
+): FaithfulnessScorer {
   const scorer = createAPIScorer(
-    APIScorerType.ANSWER_CORRECTNESS,
-    ANSWER_CORRECTNESS_REQUIRED_PARAMS
+    APIScorerType.FAITHFULNESS,
+    FAITHFULNESS_REQUIRED_PARAMS
   );
 
   if (scorerArgs) {

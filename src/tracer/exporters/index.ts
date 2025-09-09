@@ -5,16 +5,10 @@ import { ReadableSpan, SpanExporter } from "@opentelemetry/sdk-trace-base";
 import { Logger } from "../../utils/logger";
 import { OpenTelemetryKeys } from "../OpenTelemetryKeys";
 
-/**
- * SpanExporter implementation that sends spans to Judgment Labs with project identification.
- */
 export class JudgmentSpanExporter implements SpanExporter {
   private readonly delegate: OTLPTraceExporter;
   private readonly projectId: string;
 
-  /**
-   * Creates a new JudgmentSpanExporter with the specified configuration.
-   */
   constructor(
     endpoint: string,
     apiKey: string,
@@ -58,7 +52,6 @@ export class JudgmentSpanExporter implements SpanExporter {
       const originalResource = span.resource || new Resource({});
       const mergedResource = originalResource.merge(projectIdResource);
 
-      // Create a new ReadableSpan with the merged resource
       return Object.assign(Object.create(Object.getPrototypeOf(span)), span, {
         resource: mergedResource,
       });
@@ -83,9 +76,6 @@ export class JudgmentSpanExporter implements SpanExporter {
   }
 }
 
-/**
- * Builder for creating JudgmentSpanExporter instances.
- */
 export class JudgmentSpanExporterBuilder {
   private _endpoint?: string;
   private _apiKey?: string;

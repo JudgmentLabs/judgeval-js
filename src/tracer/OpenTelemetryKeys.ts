@@ -1,6 +1,3 @@
-/**
- * OpenTelemetry attribute keys used by the Judgment tracer.
- */
 export class OpenTelemetryKeys {
   public static readonly AttributeKeys = {
     JUDGMENT_SPAN_KIND: "judgment.span_kind",

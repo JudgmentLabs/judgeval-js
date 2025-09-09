@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "check": "tsc",
+    "check": "tsc --noEmit",
     "generate-client": "ts-node scripts/generate-client.ts",
     "test": "ts-node test.ts"
   },

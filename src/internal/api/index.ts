@@ -30,8 +30,23 @@ export class JudgmentApiClient {
     };
   }
 
-  async addToRunEvalQueue(payload: Models.ExampleEvaluationRun): Promise<void> {
-    const url = this.buildUrl("/add_to_run_eval_queue/");
+  async addToRunEvalQueueExamples(payload: Models.ExampleEvaluationRun): Promise<void> {
+    const url = this.buildUrl("/add_to_run_eval_queue/examples");
+    const response = await fetch(url, {
+      method: "POST",
+      headers: this.buildHeaders(),
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP Error: ${response.status} - ${await response.text()}`);
+    }
+
+    return;
+  }
+
+  async addToRunEvalQueueTraces(payload: Models.TraceEvaluationRun): Promise<void> {
+    const url = this.buildUrl("/add_to_run_eval_queue/traces");
     const response = await fetch(url, {
       method: "POST",
       headers: this.buildHeaders(),

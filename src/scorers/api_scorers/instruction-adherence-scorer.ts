@@ -1,29 +1,30 @@
 import { ExampleParams } from "../../data";
 import { APIScorer, APIScorerType, createAPIScorer } from "../api-scorer";
 
-const ANSWER_CORRECTNESS_REQUIRED_PARAMS = [
+const INSTRUCTION_ADHERENCE_REQUIRED_PARAMS = [
   ExampleParams.INPUT,
   ExampleParams.ACTUAL_OUTPUT,
-  ExampleParams.EXPECTED_OUTPUT,
 ] as const;
 
-export type AnswerCorrectnessScorer = APIScorer<
-  APIScorerType.ANSWER_CORRECTNESS,
-  typeof ANSWER_CORRECTNESS_REQUIRED_PARAMS
+export type InstructionAdherenceScorer = APIScorer<
+  APIScorerType.INSTRUCTION_ADHERENCE,
+  typeof INSTRUCTION_ADHERENCE_REQUIRED_PARAMS
 >;
 
-export type AnswerCorrectnessScorerArgs = {
+export type InstructionAdherenceScorerArgs = {
   threshold?: number;
   model?: string;
 };
 
-export function createAnswerCorrectnessScorer(
-  scorerArgs?: AnswerCorrectnessScorerArgs
-): AnswerCorrectnessScorer {
+export function createInstructionAdherenceScorer(
+  scorerArgs?: InstructionAdherenceScorerArgs
+): InstructionAdherenceScorer {
   const scorer = createAPIScorer(
-    APIScorerType.ANSWER_CORRECTNESS,
-    ANSWER_CORRECTNESS_REQUIRED_PARAMS
+    APIScorerType.INSTRUCTION_ADHERENCE,
+    INSTRUCTION_ADHERENCE_REQUIRED_PARAMS
   );
+
+  scorer.name = "Instruction Adherence";
 
   if (scorerArgs) {
     if (scorerArgs.threshold !== undefined) {
