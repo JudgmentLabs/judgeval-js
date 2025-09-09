@@ -3,8 +3,7 @@ export * from "./utils/logger";
 
 export * from "./data";
 
-export * from "./scorers/api-scorer";
-export * from "./scorers/base-scorer";
+export * from "./scorers";
 
 export * from "./internal/api";
 
