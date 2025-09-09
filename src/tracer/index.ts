@@ -34,8 +34,6 @@ export class JudgevalTracer {
     this.apiClient = apiClient;
     this.serializer = serializer;
     this.projectIdPromise = this.resolveProjectId();
-
-    console.log("JudgevalTracer initialized", this.configuration);
   }
 
   private async resolveProjectId(): Promise<string | null> {
@@ -310,7 +308,8 @@ export class JudgevalTracer {
       project_name: this.configuration.projectName,
       eval_name: runId,
       examples: [example],
-      custom_scorers: [scorer],
+      custom_scorers: [],
+      judgment_scorers: [scorer],
       model: modelName,
       trace_id: traceId,
       trace_span_id: spanId,

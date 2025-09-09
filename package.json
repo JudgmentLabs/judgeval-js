@@ -1,16 +1,47 @@
 {
-  "name": "judgeval-ts",
+  "name": "judgeval-js",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "JavaScript/TypeScript client for Judgment evaluation platform",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
+    "build": "npm run build:types && npm run build:esm && npm run build:cjs && npm run build:umd",
+    "build:types": "tsc -p tsconfig.build.json",
+    "build:esm": "webpack --mode production --config webpack.config.js --env target=esm",
+    "build:cjs": "webpack --mode production --config webpack.config.js --env target=cjs",
+    "build:umd": "webpack --mode production --config webpack.config.js --env target=umd",
+    "build:dev": "npm run build:types && webpack --mode development --config webpack.config.js --env target=esm",
     "check": "tsc --noEmit",
     "generate-client": "ts-node scripts/generate-client.ts",
-    "test": "ts-node test.ts"
+    "test": "ts-node test.ts",
+    "clean": "rimraf dist",
+    "prepublishOnly": "npm run clean && npm run build"
   },
-  "keywords": [],
+  "keywords": [
+    "judgment",
+    "evaluation",
+    "ai",
+    "llm",
+    "tracing",
+    "opentelemetry",
+    "typescript"
+  ],
   "author": "",
-  "license": "ISC",
-  "description": "",
+  "license": "Apache-2.0",
   "dependencies": {
     "@opentelemetry/api": "^1.2.0",
     "@opentelemetry/core": "^1.12.0",
@@ -19,10 +50,15 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "@opentelemetry/auto-instrumentations-node": "^0.36.6",
-    "@opentelemetry/sdk-node": "^0.45.1",
     "dotenv": "^17.2.2",
+    "rimraf": "^5.0.0",
     "ts-node": "^10.9.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "webpack": "^5.88.0",
+    "webpack-cli": "^5.1.0",
+    "ts-loader": "^9.4.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
   }
 }

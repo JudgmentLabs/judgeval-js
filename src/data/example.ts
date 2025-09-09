@@ -7,7 +7,7 @@ export function createExample<T extends Record<string, any>>(
   properties: T
 ): Example<T> {
   const example: Example<T> = {
-    example_id: "",
+    example_id: undefined,
     created_at: new Date().toISOString(),
     name: null,
     ...properties,
