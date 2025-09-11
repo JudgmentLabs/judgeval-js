@@ -37,6 +37,22 @@ export class Tracer {
   private readonly tracer: OTELTracer;
   private judgmentProcessor?: SpanProcessor;
 
+  public getTracer(): OTELTracer {
+    return this.tracer;
+  }
+
+  public getConfiguration(): TracerConfiguration {
+    return this.configuration;
+  }
+
+  public getProjectId(): string | null {
+    return this.projectId;
+  }
+
+  public getSerializer(): Serializer {
+    return this.serializer;
+  }
+
   constructor(
     configuration: TracerConfiguration,
     apiClient: JudgmentApiClient,
@@ -82,9 +98,9 @@ export class Tracer {
       return this.projectId;
     } catch (error) {
       Logger.error(
-        `Failed to resolve project ID for project '${
-          this.configuration.projectName
-        }': ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to resolve project ID for project '${this.configuration.projectName}': ${
+          error instanceof Error ? error.message : String(error)
+        }`,
       );
       this.projectId = null;
       return null;
@@ -178,9 +194,7 @@ export class Tracer {
       Logger.info("Tracer force flush completed");
     } catch (error) {
       Logger.error(
-        `Error during force flush: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Error during force flush: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -191,9 +205,7 @@ export class Tracer {
       Logger.info("Tracer shutdown completed");
     } catch (error) {
       Logger.error(
-        `Error during shutdown: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Error during shutdown: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -377,9 +389,7 @@ export class Tracer {
       Logger.info(`Enqueuing evaluation run: ${evaluationRun.eval_name}`);
     } catch (error) {
       Logger.error(
-        `Failed to enqueue evaluation run: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Failed to enqueue evaluation run: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
