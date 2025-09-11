@@ -5,9 +5,9 @@
 
 export type ScorerConfig = {
   score_type: string;
-  name?: (string | null);
+  name?: string | null;
   threshold?: number;
   strict_mode?: boolean;
   required_params?: Array<string>;
-  kwargs?: (Record<string, any> | null);
+  kwargs?: Record<string, any> | null;
 };

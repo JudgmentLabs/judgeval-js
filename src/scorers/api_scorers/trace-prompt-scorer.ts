@@ -1,14 +1,8 @@
 import { JUDGMENT_API_KEY, JUDGMENT_ORG_ID } from "../../env";
 import { APIScorerType } from "../api-scorer";
 import { BasePromptScorer } from "./base-prompt-scorer";
-export {
-  fetchPromptScorer,
-  JudgmentAPIError,
-  pushPromptScorer,
-  scorerExists,
-} from "./prompt-scorer-utils";
 
-export class PromptScorer extends BasePromptScorer {
+export class TracePromptScorer extends BasePromptScorer {
   constructor(
     name: string,
     prompt: string,
@@ -18,7 +12,7 @@ export class PromptScorer extends BasePromptScorer {
     organizationId: string = JUDGMENT_ORG_ID || "",
   ) {
     super(
-      APIScorerType.PROMPT_SCORER,
+      APIScorerType.TRACE_PROMPT_SCORER,
       name,
       prompt,
       threshold,

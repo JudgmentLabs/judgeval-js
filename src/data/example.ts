@@ -4,7 +4,7 @@ export type Example<T extends Record<string, any> = Record<string, any>> =
   ExampleModel & T;
 
 export function createExample<T extends Record<string, any>>(
-  properties: T
+  properties: T,
 ): Example<T> {
   const example: Example<T> = {
     example_id: undefined,

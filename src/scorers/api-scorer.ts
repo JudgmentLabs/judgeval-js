@@ -2,12 +2,12 @@ import { BaseScorer, createBaseScorer } from "./base-scorer";
 
 export enum APIScorerType {
   PROMPT_SCORER = "Prompt Scorer",
+  TRACE_PROMPT_SCORER = "Trace Prompt Scorer",
   FAITHFULNESS = "Faithfulness",
   ANSWER_RELEVANCY = "Answer Relevancy",
   ANSWER_CORRECTNESS = "Answer Correctness",
   INSTRUCTION_ADHERENCE = "Instruction Adherence",
   EXECUTION_ORDER = "Execution Order",
-  DERAILMENT = "Derailment",
   TOOL_ORDER = "Tool Order",
   CLASSIFIER = "Classifier",
   TOOL_DEPENDENCY = "Tool Dependency",
@@ -16,7 +16,7 @@ export enum APIScorerType {
 
 export type APIScorer<
   T extends APIScorerType = APIScorerType,
-  P extends readonly string[] = readonly string[]
+  P extends readonly string[] = readonly string[],
 > = BaseScorer & {
   scoreType: T;
   requiredParams: P;
@@ -27,7 +27,7 @@ export type APIScorer<
 
 export function createAPIScorer<
   T extends APIScorerType,
-  P extends readonly string[]
+  P extends readonly string[],
 >(scoreType: T, requiredParams: P): APIScorer<T, P> {
   const scorer = createBaseScorer() as APIScorer<T, P>;
 

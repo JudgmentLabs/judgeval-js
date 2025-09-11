@@ -17,11 +17,11 @@ export type AnswerRelevancyScorerArgs = {
 };
 
 export function createAnswerRelevancyScorer(
-  scorerArgs?: AnswerRelevancyScorerArgs
+  scorerArgs?: AnswerRelevancyScorerArgs,
 ): AnswerRelevancyScorer {
   const scorer = createAPIScorer(
     APIScorerType.ANSWER_RELEVANCY,
-    ANSWER_RELEVANCY_REQUIRED_PARAMS
+    ANSWER_RELEVANCY_REQUIRED_PARAMS,
   );
 
   if (scorerArgs) {

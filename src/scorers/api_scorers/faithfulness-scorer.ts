@@ -18,11 +18,11 @@ export type FaithfulnessScorerArgs = {
 };
 
 export function createFaithfulnessScorer(
-  scorerArgs?: FaithfulnessScorerArgs
+  scorerArgs?: FaithfulnessScorerArgs,
 ): FaithfulnessScorer {
   const scorer = createAPIScorer(
     APIScorerType.FAITHFULNESS,
-    FAITHFULNESS_REQUIRED_PARAMS
+    FAITHFULNESS_REQUIRED_PARAMS,
   );
 
   if (scorerArgs) {

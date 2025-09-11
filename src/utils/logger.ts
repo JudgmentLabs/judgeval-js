@@ -45,7 +45,7 @@ export class Logger {
       .substring(0, 19);
     const levelName =
       Object.keys(Logger.Level).find(
-        (key) => Logger.Level[key as keyof typeof Logger.Level] === level
+        (key) => Logger.Level[key as keyof typeof Logger.Level] === level,
       ) || "UNKNOWN";
     let formattedMessage = `${timestamp} - judgeval - ${levelName} - ${message}`;
 
@@ -54,8 +54,8 @@ export class Logger {
         level === Logger.Level.DEBUG || level === Logger.Level.INFO
           ? Logger.GRAY
           : level === Logger.Level.WARNING
-          ? Logger.YELLOW
-          : Logger.RED;
+            ? Logger.YELLOW
+            : Logger.RED;
       formattedMessage = `${color}${formattedMessage}${Logger.RESET}`;
     }
 

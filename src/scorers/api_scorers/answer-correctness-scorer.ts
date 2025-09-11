@@ -18,11 +18,11 @@ export type AnswerCorrectnessScorerArgs = {
 };
 
 export function createAnswerCorrectnessScorer(
-  scorerArgs?: AnswerCorrectnessScorerArgs
+  scorerArgs?: AnswerCorrectnessScorerArgs,
 ): AnswerCorrectnessScorer {
   const scorer = createAPIScorer(
     APIScorerType.ANSWER_CORRECTNESS,
-    ANSWER_CORRECTNESS_REQUIRED_PARAMS
+    ANSWER_CORRECTNESS_REQUIRED_PARAMS,
   );
 
   if (scorerArgs) {

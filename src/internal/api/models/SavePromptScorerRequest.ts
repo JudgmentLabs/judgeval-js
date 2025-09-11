@@ -7,6 +7,6 @@ export type SavePromptScorerRequest = {
   name: string;
   prompt: string;
   threshold: number;
-  options?: (Record<string, number> | null);
-  is_trace?: (boolean | null);
+  options?: Record<string, number> | null;
+  is_trace?: boolean | null;
 };

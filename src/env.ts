@@ -12,10 +12,10 @@ export const JUDGMENT_API_KEY = getEnvVar("JUDGMENT_API_KEY");
 export const JUDGMENT_ORG_ID = getEnvVar("JUDGMENT_ORG_ID");
 export const JUDGMENT_API_URL = getEnvVar(
   "JUDGMENT_API_URL",
-  "https://api.judgmentlabs.ai"
+  "https://api.judgmentlabs.ai",
 );
 export const JUDGMENT_DEFAULT_GPT_MODEL = getEnvVar(
   "JUDGMENT_DEFAULT_GPT_MODEL",
-  "gpt-4.1"
+  "gpt-4.1",
 );
 export const JUDGMENT_NO_COLOR = getEnvVar("JUDGMENT_NO_COLOR");

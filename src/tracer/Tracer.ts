@@ -1,4 +1,11 @@
 import { context, SpanKind, trace } from "@opentelemetry/api";
+import { Resource } from "@opentelemetry/resources";
+import {
+  BasicTracerProvider,
+  BatchSpanProcessor,
+  Tracer as OTELTracer,
+  SpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
 import { Example } from "../data/example";
 import { JUDGMENT_DEFAULT_GPT_MODEL } from "../env";
 import { JudgmentApiClient } from "../internal/api";
@@ -12,48 +19,63 @@ import { APIScorer, APIScorerType } from "../scorers/api-scorer";
 import { parseFunctionArgs } from "../utils/annotate";
 import { Logger } from "../utils/logger";
 import { KeysOf } from "../utils/types";
+import { VERSION } from "../version";
 import { JudgmentSpanExporter, NoOpSpanExporter } from "./exporters";
 import { OpenTelemetryKeys } from "./OpenTelemetryKeys";
 import { TracerConfiguration } from "./TracerConfiguration";
 
 export type Serializer = (obj: unknown) => string;
 
-export class JudgevalTracer {
+export class Tracer {
   private readonly configuration: TracerConfiguration;
   private readonly apiClient: JudgmentApiClient;
   private readonly serializer: Serializer;
   private projectId: string | null = null;
   private projectIdPromise: Promise<string | null>;
 
+  private readonly provider: BasicTracerProvider;
+  private readonly tracer: OTELTracer;
+  private judgmentProcessor?: SpanProcessor;
+
   constructor(
     configuration: TracerConfiguration,
     apiClient: JudgmentApiClient,
-    serializer: Serializer
+    serializer: Serializer,
   ) {
     this.configuration = configuration;
     this.apiClient = apiClient;
     this.serializer = serializer;
     this.projectIdPromise = this.resolveProjectId();
+
+    this.provider = new BasicTracerProvider({
+      resource: new Resource({
+        "service.name": configuration.projectName,
+      }),
+    });
+
+    this.provider.register();
+    this.tracer = this.provider.getTracer("judgeval-tracer", VERSION);
   }
 
   private async resolveProjectId(): Promise<string | null> {
     try {
       Logger.info(
-        `Resolving project ID for project: ${this.configuration.projectName}`
+        `Resolving project ID for project: ${this.configuration.projectName}`,
       );
 
       const request: ResolveProjectNameRequest = {
         project_name: this.configuration.projectName,
-      };
+      } as const;
 
       const response = await this.apiClient.projectsResolve(request);
       this.projectId = response.project_id?.toString() || null;
 
       if (this.projectId) {
         Logger.info(`Successfully resolved project ID: ${this.projectId}`);
+        this.setupExporter();
       } else {
         Logger.warn(
-          `Project ID not found for project: ${this.configuration.projectName}`
+          `Project ID not found for project: ${this.configuration.projectName}`,
         );
       }
 
@@ -62,26 +84,41 @@ export class JudgevalTracer {
       Logger.error(
         `Failed to resolve project ID for project '${
           this.configuration.projectName
-        }': ${error instanceof Error ? error.message : String(error)}`
+        }': ${error instanceof Error ? error.message : String(error)}`,
       );
       this.projectId = null;
       return null;
     }
   }
 
+  private setupExporter(): void {
+    if (!this.projectId) return;
+
+    const exporter = this.createJudgmentSpanExporter(this.projectId);
+    this.judgmentProcessor = new BatchSpanProcessor(exporter, {
+      maxQueueSize: 2 ** 18,
+      maxExportBatchSize: 512,
+      exportTimeoutMillis: 30000,
+      scheduledDelayMillis: 5000,
+    });
+
+    this.provider.addSpanProcessor(this.judgmentProcessor);
+    Logger.info("Judgment exporter setup completed");
+  }
+
   public static builder(): TracerBuilder {
     return new TracerBuilder();
   }
 
-  public static createDefault(projectName: string): JudgevalTracer {
+  public static createDefault(projectName: string): Tracer {
     return TracerBuilder.builder()
       .configuration(TracerConfiguration.createDefault(projectName))
       .build();
   }
 
   public static createWithConfiguration(
-    configuration: TracerConfiguration
-  ): JudgevalTracer {
+    configuration: TracerConfiguration,
+  ): Tracer {
     return TracerBuilder.builder().configuration(configuration).build();
   }
 
@@ -89,13 +126,9 @@ export class JudgevalTracer {
     JudgmentSpanExporter | NoOpSpanExporter
   > {
     const projectId = await this.projectIdPromise;
-    if (projectId === null) {
-      Logger.error(
-        "Project not resolved; cannot create exporter, returning NoOpSpanExporter"
-      );
-      return new NoOpSpanExporter();
-    }
-    return this.createJudgmentSpanExporter(projectId);
+    return projectId
+      ? this.createJudgmentSpanExporter(projectId)
+      : new NoOpSpanExporter();
   }
 
   public setSpanKind(kind: string | null): void {
@@ -103,7 +136,7 @@ export class JudgevalTracer {
     if (currentSpan && kind !== null) {
       currentSpan.setAttribute(
         OpenTelemetryKeys.AttributeKeys.JUDGMENT_SPAN_KIND,
-        kind
+        kind,
       );
     }
   }
@@ -139,6 +172,32 @@ export class JudgevalTracer {
     this.setSpanKind("span");
   }
 
+  public async forceFlush(): Promise<void> {
+    try {
+      await this.provider.forceFlush();
+      Logger.info("Tracer force flush completed");
+    } catch (error) {
+      Logger.error(
+        `Error during force flush: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
+  public async shutdown(): Promise<void> {
+    try {
+      await this.provider.shutdown();
+      Logger.info("Tracer shutdown completed");
+    } catch (error) {
+      Logger.error(
+        `Error during shutdown: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
   public setInput(input: unknown): void {
     this.setAttribute(OpenTelemetryKeys.AttributeKeys.JUDGMENT_INPUT, input);
   }
@@ -149,7 +208,7 @@ export class JudgevalTracer {
 
   private createArgumentDict<TArgs extends unknown[]>(
     fn: (...args: TArgs) => unknown,
-    args: TArgs
+    args: TArgs,
   ): Record<string, unknown> {
     try {
       const argNames = parseFunctionArgs(fn);
@@ -173,18 +232,14 @@ export class JudgevalTracer {
     }
   }
 
-  /**
-   * Creates a traced version of a function that records input/output and exceptions.
-   */
   public observe<TArgs extends unknown[], TReturn>(
     spanName: string,
     fn: (...args: TArgs) => TReturn,
-    spanKind: "llm" | "tool" | "span" = "span",
-    attributes?: Record<string, unknown>
+    spanKind: ("llm" | "tool" | "span") & {} = "span",
+    attributes?: Record<string, unknown>,
   ): (...args: TArgs) => TReturn {
     return (...args: TArgs): TReturn => {
-      const tracer = trace.getTracer("judgeval-tracer");
-      const span = tracer.startSpan(spanName, {
+      const span = this.tracer.startSpan(spanName, {
         kind: SpanKind.INTERNAL,
         attributes: {
           [OpenTelemetryKeys.AttributeKeys.JUDGMENT_SPAN_KIND]: spanKind,
@@ -209,18 +264,14 @@ export class JudgevalTracer {
     };
   }
 
-  /**
-   * Creates a traced version of an async function that records input/output and exceptions.
-   */
   public observeAsync<TArgs extends unknown[], TReturn>(
     spanName: string,
     fn: (...args: TArgs) => Promise<TReturn>,
-    spanKind: "llm" | "tool" | "span" = "span",
-    attributes?: Record<string, unknown>
+    spanKind: ("llm" | "tool" | "span") & {} = "span",
+    attributes?: Record<string, unknown>,
   ): (...args: TArgs) => Promise<TReturn> {
     return (...args: TArgs): Promise<TReturn> => {
-      const tracer = trace.getTracer("judgeval-tracer");
-      const span = tracer.startSpan(spanName, {
+      const span = this.tracer.startSpan(spanName, {
         kind: SpanKind.INTERNAL,
         attributes: {
           [OpenTelemetryKeys.AttributeKeys.JUDGMENT_SPAN_KIND]: spanKind,
@@ -248,11 +299,11 @@ export class JudgevalTracer {
   public asyncEvaluate<
     T extends APIScorerType,
     P extends readonly string[],
-    E extends Record<string, any>
+    E extends Record<string, any>,
   >(
     scorer: APIScorer<T, P>,
     example: Example<E> & Record<KeysOf<P>, any>,
-    model?: string
+    model?: string,
   ): void {
     if (!this.configuration.enableEvaluation) {
       return;
@@ -268,7 +319,7 @@ export class JudgevalTracer {
     const spanId = spanContext.spanId;
 
     Logger.info(
-      `asyncEvaluate: project=${this.configuration.projectName}, traceId=${traceId}, spanId=${spanId}`
+      `asyncEvaluate: project=${this.configuration.projectName}, traceId=${traceId}, spanId=${spanId}`,
     );
 
     const evaluationRun = this.createEvaluationRun(
@@ -276,7 +327,7 @@ export class JudgevalTracer {
       example,
       model,
       traceId,
-      spanId
+      spanId,
     );
     this.enqueueEvaluation(evaluationRun);
   }
@@ -290,7 +341,7 @@ export class JudgevalTracer {
       endpoint,
       this.configuration.apiKey,
       this.configuration.organizationId,
-      projectId
+      projectId,
     );
   }
 
@@ -299,7 +350,7 @@ export class JudgevalTracer {
     example: ExampleModel,
     model: string | undefined,
     traceId: string,
-    spanId: string
+    spanId: string,
   ): ExampleEvaluationRun {
     const runId = `async_evaluate_${spanId || Date.now()}`;
     const modelName = model || JUDGMENT_DEFAULT_GPT_MODEL;
@@ -319,7 +370,7 @@ export class JudgevalTracer {
   }
 
   private async enqueueEvaluation(
-    evaluationRun: ExampleEvaluationRun
+    evaluationRun: ExampleEvaluationRun,
   ): Promise<void> {
     try {
       await this.apiClient.addToRunEvalQueueExamples(evaluationRun);
@@ -328,7 +379,7 @@ export class JudgevalTracer {
       Logger.error(
         `Failed to enqueue evaluation run: ${
           error instanceof Error ? error.message : String(error)
-        }`
+        }`,
       );
     }
   }
@@ -358,7 +409,7 @@ export class TracerBuilder {
     return this;
   }
 
-  public build(): JudgevalTracer {
+  public build(): Tracer {
     if (!this.config) {
       throw new Error("Configuration is required");
     }
@@ -368,9 +419,9 @@ export class TracerBuilder {
       new JudgmentApiClient(
         this.config.apiUrl,
         this.config.apiKey,
-        this.config.organizationId
+        this.config.organizationId,
       );
 
-    return new JudgevalTracer(this.config, client, this._serializer);
+    return new Tracer(this.config, client, this._serializer);
   }
 }

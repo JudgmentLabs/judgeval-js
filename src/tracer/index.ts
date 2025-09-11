@@ -1,4 +1,4 @@
 export * from "./exporters";
-export * from "./JudgevalTracer";
 export * from "./OpenTelemetryKeys";
+export * from "./Tracer";
 export * from "./TracerConfiguration";

@@ -17,11 +17,11 @@ export type InstructionAdherenceScorerArgs = {
 };
 
 export function createInstructionAdherenceScorer(
-  scorerArgs?: InstructionAdherenceScorerArgs
+  scorerArgs?: InstructionAdherenceScorerArgs,
 ): InstructionAdherenceScorer {
   const scorer = createAPIScorer(
     APIScorerType.INSTRUCTION_ADHERENCE,
-    INSTRUCTION_ADHERENCE_REQUIRED_PARAMS
+    INSTRUCTION_ADHERENCE_REQUIRED_PARAMS,
   );
 
   scorer.name = "Instruction Adherence";

@@ -3,16 +3,16 @@
  * DO NOT EDIT MANUALLY - This file is generated automatically
  */
 
-import { Example } from './Example';
-import { OtelTraceSpan } from './OtelTraceSpan';
-import { ScorerData } from './ScorerData';
+import { Example } from "./Example";
+import { OtelTraceSpan } from "./OtelTraceSpan";
+import { ScorerData } from "./ScorerData";
 
 export type ScoringResult = {
   success: boolean;
-  scorers_data: (Array<ScorerData> | null);
-  name?: (string | null);
-  data_object?: (OtelTraceSpan | Example | null);
-  trace_id?: (string | null);
-  run_duration?: (number | null);
-  evaluation_cost?: (number | null);
+  scorers_data: Array<ScorerData> | null;
+  name?: string | null;
+  data_object?: OtelTraceSpan | Example | null;
+  trace_id?: string | null;
+  run_duration?: number | null;
+  evaluation_cost?: number | null;
 };

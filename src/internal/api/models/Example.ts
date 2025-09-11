@@ -6,5 +6,5 @@
 export type Example = {
   example_id?: string;
   created_at?: string;
-  name?: (string | null);
+  name?: string | null;
 };

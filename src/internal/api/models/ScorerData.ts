@@ -7,10 +7,10 @@ export type ScorerData = {
   name: string;
   threshold: number;
   success: boolean;
-  score?: (number | null);
-  reason?: (string | null);
-  strict_mode?: (boolean | null);
-  evaluation_model?: (Array<string> | string);
-  error?: (string | null);
-  additional_metadata?: (Record<string, any> | null);
+  score?: number | null;
+  reason?: string | null;
+  strict_mode?: boolean | null;
+  evaluation_model?: Array<string> | string;
+  error?: string | null;
+  additional_metadata?: Record<string, any> | null;
 };

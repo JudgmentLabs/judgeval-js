@@ -3,17 +3,17 @@
  * DO NOT EDIT MANUALLY - This file is generated automatically
  */
 
-import { BaseScorer } from './BaseScorer';
-import { ScorerConfig } from './ScorerConfig';
+import { BaseScorer } from "./BaseScorer";
+import { ScorerConfig } from "./ScorerConfig";
 
 export type TraceEvaluationRun = {
-  id?: (string | null);
-  project_name?: (string | null);
-  eval_name?: (string | null);
+  id?: string | null;
+  project_name?: string | null;
+  eval_name?: string | null;
   custom_scorers?: Array<BaseScorer>;
   judgment_scorers?: Array<ScorerConfig>;
   model: string;
-  created_at?: (string | null);
+  created_at?: string | null;
   trace_and_span_ids: Array<[string, string]>;
   is_offline?: boolean;
 };

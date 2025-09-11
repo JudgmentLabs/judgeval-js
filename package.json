@@ -26,7 +26,8 @@
     "build:umd": "webpack --mode production --config webpack.config.js --env target=umd",
     "build:dev": "npm run build:types && webpack --mode development --config webpack.config.js --env target=esm",
     "check": "tsc --noEmit",
-    "generate-client": "ts-node scripts/generate-client.ts",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "generate-client": "ts-node scripts/generate-client.ts && npm run format",
     "test": "ts-node test.ts",
     "clean": "rimraf dist",
     "prepublishOnly": "npm run clean && npm run build"
@@ -51,12 +52,13 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "dotenv": "^17.2.2",
+    "prettier": "^3.6.2",
     "rimraf": "^5.0.0",
+    "ts-loader": "^9.4.0",
     "ts-node": "^10.9.0",
     "typescript": "^5.0.0",
     "webpack": "^5.88.0",
-    "webpack-cli": "^5.1.0",
-    "ts-loader": "^9.4.0"
+    "webpack-cli": "^5.1.0"
   },
   "engines": {
     "node": ">=16.0.0"

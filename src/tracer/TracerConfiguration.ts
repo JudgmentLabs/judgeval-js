@@ -3,7 +3,7 @@ import { JUDGMENT_API_KEY, JUDGMENT_API_URL, JUDGMENT_ORG_ID } from "../env";
 /**
  * Configuration for the Judgment Tracer that controls how tracing and evaluation behave.
  *
- * This class encapsulates all configuration parameters needed to initialize a JudgevalTracer.
+ * This class encapsulates all configuration parameters needed to initialize a Tracer.
  *
  * @example
  * ```typescript
@@ -14,7 +14,7 @@ import { JUDGMENT_API_KEY, JUDGMENT_API_URL, JUDGMENT_ORG_ID } from "../env";
  *   .enableEvaluation(true)
  *   .build();
  *
- * const tracer = JudgevalTracer.createWithConfiguration(config);
+ * const tracer = Tracer.createWithConfiguration(config);
  * ```
  */
 export class TracerConfiguration {
@@ -23,7 +23,7 @@ export class TracerConfiguration {
     public readonly apiKey: string,
     public readonly organizationId: string,
     public readonly apiUrl: string,
-    public readonly enableEvaluation: boolean
+    public readonly enableEvaluation: boolean,
   ) {}
 
   /**
@@ -116,7 +116,7 @@ export class TracerConfigurationBuilder {
       this._apiKey,
       this._organizationId,
       this._apiUrl,
-      this._enableEvaluation
+      this._enableEvaluation,
     );
   }
 }

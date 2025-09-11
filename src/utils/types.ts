@@ -1,6 +1,6 @@
 export type HasRequiredKeys<
   T,
-  K extends readonly string[]
+  K extends readonly string[],
 > = K extends readonly (infer U)[]
   ? U extends string
     ? T extends Record<U, any>

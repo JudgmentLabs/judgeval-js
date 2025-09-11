@@ -3,7 +3,7 @@
  * DO NOT EDIT MANUALLY - This file is generated automatically
  */
 
-import { PromptScorer } from './PromptScorer';
+import { PromptScorer } from "./PromptScorer";
 
 export type FetchPromptScorerResponse = {
   scorer: PromptScorer;

@@ -7,8 +7,8 @@ export type PromptScorer = {
   name: string;
   prompt: string;
   threshold: number;
-  options?: (Record<string, number> | null);
-  created_at?: (string | null);
-  updated_at?: (string | null);
-  is_trace?: (boolean | null);
+  options?: Record<string, number> | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  is_trace?: boolean | null;
 };

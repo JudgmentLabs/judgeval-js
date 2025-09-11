@@ -13,7 +13,7 @@ export class JudgmentSpanExporter implements SpanExporter {
     endpoint: string,
     apiKey: string,
     organizationId: string,
-    projectId: string
+    projectId: string,
   ) {
     if (!projectId || projectId.trim() === "") {
       throw new Error("projectId is required for JudgmentSpanExporter");
@@ -38,10 +38,10 @@ export class JudgmentSpanExporter implements SpanExporter {
 
   export(
     spans: ReadableSpan[],
-    resultCallback: (result: ExportResult) => void
+    resultCallback: (result: ExportResult) => void,
   ): void {
     Logger.info(
-      `JudgmentSpanExporter exporting spans: count=${spans ? spans.length : 0}`
+      `JudgmentSpanExporter exporting spans: count=${spans ? spans.length : 0}`,
     );
 
     const projectIdResource = new Resource({
@@ -60,7 +60,7 @@ export class JudgmentSpanExporter implements SpanExporter {
     this.delegate.export(spansWithProjectId, (result) => {
       if (result.code !== 0) {
         Logger.error(
-          `Failed to export spans: ${result.error?.message || "Unknown error"}`
+          `Failed to export spans: ${result.error?.message || "Unknown error"}`,
         );
       }
       resultCallback(result);
@@ -137,7 +137,7 @@ export class JudgmentSpanExporterBuilder {
       this._endpoint,
       this._apiKey,
       this._organizationId,
-      this._projectId
+      this._projectId,
     );
   }
 }
