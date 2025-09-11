@@ -33,11 +33,11 @@ export class Tracer {
   private projectId: string | null = null;
   private projectIdPromise: Promise<string | null>;
 
-  private readonly provider: BasicTracerProvider;
-  private readonly tracer: OTELTracer;
+  private provider?: BasicTracerProvider;
+  private tracer?: OTELTracer;
   private judgmentProcessor?: SpanProcessor;
 
-  public getTracer(): OTELTracer {
+  public getTracer(): OTELTracer | undefined {
     return this.tracer;
   }
 
@@ -53,6 +53,40 @@ export class Tracer {
     return this.serializer;
   }
 
+  /**
+   * Registers the OpenTelemetry provider and creates the tracer.
+   * This method is optional and should only be called if you want to use
+   * OpenTelemetry tracing functionality. If you have existing OpenTelemetry
+   * setup, you may not need to call this method.
+   */
+  public registerOtel(): void {
+    if (this.provider) {
+      Logger.warn("OpenTelemetry provider is already registered");
+      return;
+    }
+
+    this.provider = new BasicTracerProvider({
+      resource: new Resource({
+        "service.name": this.configuration.projectName,
+      }),
+    });
+
+    this.provider.register();
+    this.tracer = this.provider.getTracer(
+      this.configuration.tracerName,
+      VERSION,
+    );
+
+    Logger.info(
+      `OpenTelemetry provider registered with tracer name: ${this.configuration.tracerName}`,
+    );
+
+    // Setup exporter if projectId is already resolved
+    if (this.projectId) {
+      this.setupExporter();
+    }
+  }
+
   constructor(
     configuration: TracerConfiguration,
     apiClient: JudgmentApiClient,
@@ -62,15 +96,6 @@ export class Tracer {
     this.apiClient = apiClient;
     this.serializer = serializer;
     this.projectIdPromise = this.resolveProjectId();
-
-    this.provider = new BasicTracerProvider({
-      resource: new Resource({
-        "service.name": configuration.projectName,
-      }),
-    });
-
-    this.provider.register();
-    this.tracer = this.provider.getTracer("judgeval-tracer", VERSION);
   }
 
   private async resolveProjectId(): Promise<string | null> {
@@ -88,7 +113,10 @@ export class Tracer {
 
       if (this.projectId) {
         Logger.info(`Successfully resolved project ID: ${this.projectId}`);
-        this.setupExporter();
+        // Only setup exporter if provider is registered
+        if (this.provider) {
+          this.setupExporter();
+        }
       } else {
         Logger.warn(
           `Project ID not found for project: ${this.configuration.projectName}`,
@@ -108,7 +136,7 @@ export class Tracer {
   }
 
   private setupExporter(): void {
-    if (!this.projectId) return;
+    if (!this.projectId || !this.provider) return;
 
     const exporter = this.createJudgmentSpanExporter(this.projectId);
     this.judgmentProcessor = new BatchSpanProcessor(exporter, {
@@ -148,6 +176,8 @@ export class Tracer {
   }
 
   public setSpanKind(kind: string | null): void {
+    if (!this.tracer) return;
+
     const currentSpan = trace.getActiveSpan();
     if (currentSpan && kind !== null) {
       currentSpan.setAttribute(
@@ -158,6 +188,8 @@ export class Tracer {
   }
 
   public setAttribute(key: string, value: unknown): void {
+    if (!this.tracer) return;
+
     const currentSpan = trace.getActiveSpan();
     if (currentSpan) {
       currentSpan.setAttribute(key, this.serializer(value));
@@ -165,7 +197,7 @@ export class Tracer {
   }
 
   public setAttributes(attributes: Record<string, unknown>): void {
-    if (!attributes) {
+    if (!attributes || !this.tracer) {
       return;
     }
     const currentSpan = trace.getActiveSpan();
@@ -189,6 +221,11 @@ export class Tracer {
   }
 
   public async forceFlush(): Promise<void> {
+    if (!this.provider) {
+      Logger.warn("No OpenTelemetry provider registered, skipping force flush");
+      return;
+    }
+
     try {
       await this.provider.forceFlush();
       Logger.info("Tracer force flush completed");
@@ -200,6 +237,11 @@ export class Tracer {
   }
 
   public async shutdown(): Promise<void> {
+    if (!this.provider) {
+      Logger.warn("No OpenTelemetry provider registered, skipping shutdown");
+      return;
+    }
+
     try {
       await this.provider.shutdown();
       Logger.info("Tracer shutdown completed");
@@ -211,10 +253,12 @@ export class Tracer {
   }
 
   public setInput(input: unknown): void {
+    if (!this.tracer) return;
     this.setAttribute(OpenTelemetryKeys.AttributeKeys.JUDGMENT_INPUT, input);
   }
 
   public setOutput(output: unknown): void {
+    if (!this.tracer) return;
     this.setAttribute(OpenTelemetryKeys.AttributeKeys.JUDGMENT_OUTPUT, output);
   }
 
@@ -251,6 +295,10 @@ export class Tracer {
     attributes?: Record<string, unknown>,
   ): (...args: TArgs) => TReturn {
     return (...args: TArgs): TReturn => {
+      if (!this.tracer) {
+        return fn(...args);
+      }
+
       const span = this.tracer.startSpan(spanName, {
         kind: SpanKind.INTERNAL,
         attributes: {
@@ -283,6 +331,10 @@ export class Tracer {
     attributes?: Record<string, unknown>,
   ): (...args: TArgs) => Promise<TReturn> {
     return (...args: TArgs): Promise<TReturn> => {
+      if (!this.tracer) {
+        return fn(...args);
+      }
+
       const span = this.tracer.startSpan(spanName, {
         kind: SpanKind.INTERNAL,
         attributes: {

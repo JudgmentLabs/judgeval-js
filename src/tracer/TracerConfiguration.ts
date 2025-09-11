@@ -1,3 +1,4 @@
+import { TRACER_NAME } from "../constants";
 import { JUDGMENT_API_KEY, JUDGMENT_API_URL, JUDGMENT_ORG_ID } from "../env";
 
 /**
@@ -24,6 +25,7 @@ export class TracerConfiguration {
     public readonly organizationId: string,
     public readonly apiUrl: string,
     public readonly enableEvaluation: boolean,
+    public readonly tracerName: string = TRACER_NAME
   ) {}
 
   /**
@@ -68,6 +70,7 @@ export class TracerConfigurationBuilder {
   private _organizationId: string = JUDGMENT_ORG_ID || "";
   private _apiUrl: string = JUDGMENT_API_URL || "";
   private _enableEvaluation: boolean = true;
+  private _tracerName: string = TRACER_NAME;
 
   public projectName(projectName: string): this {
     this._projectName = projectName;
@@ -94,6 +97,11 @@ export class TracerConfigurationBuilder {
     return this;
   }
 
+  public tracerName(tracerName: string): this {
+    this._tracerName = tracerName;
+    return this;
+  }
+
   public build(): TracerConfiguration {
     if (!this._projectName) {
       throw new Error("Project name is required");
@@ -117,6 +125,7 @@ export class TracerConfigurationBuilder {
       this._organizationId,
       this._apiUrl,
       this._enableEvaluation,
+      this._tracerName
     );
   }
 }
