@@ -9,7 +9,7 @@ import { ScorerData } from "./ScorerData";
 
 export type ScoringResult = {
   success: boolean;
-  scorers_data: Array<ScorerData> | null;
+  scorers_data: Array<ScorerData>;
   name?: string | null;
   data_object?: OtelTraceSpan | Example | null;
   trace_id?: string | null;

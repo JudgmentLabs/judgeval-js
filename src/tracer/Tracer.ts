@@ -125,11 +125,6 @@ export class Tracer {
 
       return this.projectId;
     } catch (error) {
-      Logger.error(
-        `Failed to resolve project ID for project '${this.configuration.projectName}': ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
       this.projectId = null;
       return null;
     }
@@ -170,9 +165,17 @@ export class Tracer {
     JudgmentSpanExporter | NoOpSpanExporter
   > {
     const projectId = await this.projectIdPromise;
-    return projectId
-      ? this.createJudgmentSpanExporter(projectId)
-      : new NoOpSpanExporter();
+    if (!projectId) {
+      Logger.error(
+        "Failed to resolve project " +
+          this.configuration.projectName +
+          ", please create it first at https://app.judgmentlabs.ai/org/" +
+          this.configuration.organizationId +
+          "/projects. Skipping Judgment export.",
+      );
+      return new NoOpSpanExporter();
+    }
+    return this.createJudgmentSpanExporter(projectId);
   }
 
   public setSpanKind(kind: string | null): void {

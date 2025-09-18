@@ -25,7 +25,7 @@ export class TracerConfiguration {
     public readonly organizationId: string,
     public readonly apiUrl: string,
     public readonly enableEvaluation: boolean,
-    public readonly tracerName: string = TRACER_NAME
+    public readonly tracerName: string = TRACER_NAME,
   ) {}
 
   /**
@@ -125,7 +125,7 @@ export class TracerConfigurationBuilder {
       this._organizationId,
       this._apiUrl,
       this._enableEvaluation,
-      this._tracerName
+      this._tracerName,
     );
   }
 }

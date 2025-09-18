@@ -165,10 +165,10 @@ export class JudgmentApiClient {
     return (await response.json()) as Models.SavePromptScorerResponse;
   }
 
-  async fetchScorer(
-    payload: Models.FetchPromptScorerRequest,
-  ): Promise<Models.FetchPromptScorerResponse> {
-    const url = this.buildUrl("/fetch_scorer/");
+  async fetchScorers(
+    payload: Models.FetchPromptScorersRequest,
+  ): Promise<Models.FetchPromptScorersResponse> {
+    const url = this.buildUrl("/fetch_scorers/");
     const response = await fetch(url, {
       method: "POST",
       headers: this.buildHeaders(),
@@ -181,7 +181,7 @@ export class JudgmentApiClient {
       );
     }
 
-    return (await response.json()) as Models.FetchPromptScorerResponse;
+    return (await response.json()) as Models.FetchPromptScorersResponse;
   }
 
   async projectsResolve(

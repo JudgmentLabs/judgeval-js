@@ -1,5 +1,9 @@
-import { JUDGMENT_API_KEY, JUDGMENT_API_URL, JUDGMENT_ORG_ID } from "../../env";
-import { JudgmentApiClient } from "../../internal/api";
+import {
+  JUDGMENT_API_KEY,
+  JUDGMENT_API_URL,
+  JUDGMENT_ORG_ID,
+} from "../../../env";
+import { JudgmentApiClient } from "../../../internal/api";
 
 export class JudgmentAPIError extends Error {
   constructor(
@@ -53,8 +57,11 @@ export async function fetchPromptScorer(
     judgmentApiKey,
     organizationId,
   );
-  const response = await client.fetchScorer({ name });
-  const { created_at, updated_at, ...config } = response.scorer;
+  const response = await client.fetchScorers({ names: [name] });
+  if (response.scorers.length === 0) {
+    throw new JudgmentAPIError(404, `Scorer with name ${name} not found`);
+  }
+  const { created_at, updated_at, ...config } = response.scorers[0];
   return config;
 }
 

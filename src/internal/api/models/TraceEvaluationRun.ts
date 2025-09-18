@@ -7,13 +7,13 @@ import { BaseScorer } from "./BaseScorer";
 import { ScorerConfig } from "./ScorerConfig";
 
 export type TraceEvaluationRun = {
-  id?: string | null;
-  project_name?: string | null;
-  eval_name?: string | null;
+  id?: string;
+  project_name: string;
+  eval_name: string;
   custom_scorers?: Array<BaseScorer>;
   judgment_scorers?: Array<ScorerConfig>;
   model: string;
-  created_at?: string | null;
+  created_at?: string;
   trace_and_span_ids: Array<[string, string]>;
   is_offline?: boolean;
 };

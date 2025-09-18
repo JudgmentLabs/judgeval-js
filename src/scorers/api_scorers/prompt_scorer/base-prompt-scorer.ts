@@ -1,5 +1,5 @@
-import { JUDGMENT_API_KEY, JUDGMENT_ORG_ID } from "../../env";
-import { APIScorer, APIScorerType } from "../api-scorer";
+import { JUDGMENT_API_KEY, JUDGMENT_ORG_ID } from "../../../env";
+import { APIScorer, APIScorerType } from "../../api-scorer";
 import {
   fetchPromptScorer,
   JudgmentAPIError,

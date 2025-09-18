@@ -4,13 +4,14 @@
  */
 
 export type ScorerData = {
+  id?: string;
   name: string;
   threshold: number;
   success: boolean;
   score?: number | null;
   reason?: string | null;
   strict_mode?: boolean | null;
-  evaluation_model?: Array<string> | string;
+  evaluation_model?: string | null;
   error?: string | null;
   additional_metadata?: Record<string, any> | null;
 };

@@ -8,13 +8,13 @@ import { Example } from "./Example";
 import { ScorerConfig } from "./ScorerConfig";
 
 export type ExampleEvaluationRun = {
-  id?: string | null;
-  project_name?: string | null;
-  eval_name?: string | null;
+  id?: string;
+  project_name: string;
+  eval_name: string;
   custom_scorers?: Array<BaseScorer>;
   judgment_scorers?: Array<ScorerConfig>;
   model: string;
-  created_at?: string | null;
+  created_at?: string;
   examples: Array<Example>;
   trace_span_id?: string | null;
   trace_id?: string | null;

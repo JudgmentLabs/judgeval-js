@@ -1,9 +1,9 @@
-export { BasePromptScorer } from "./base-prompt-scorer";
 export {
+  BasePromptScorer,
+  fetchPromptScorer,
   JudgmentAPIError,
   PromptScorer,
-  fetchPromptScorer,
   pushPromptScorer,
   scorerExists,
-} from "./prompt-scorer";
-export { TracePromptScorer } from "./trace-prompt-scorer";
+  TracePromptScorer,
+} from "./prompt_scorer";

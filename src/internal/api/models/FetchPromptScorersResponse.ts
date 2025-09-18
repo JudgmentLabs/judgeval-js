@@ -5,6 +5,6 @@
 
 import { PromptScorer } from "./PromptScorer";
 
-export type FetchPromptScorerResponse = {
-  scorer: PromptScorer;
+export type FetchPromptScorersResponse = {
+  scorers: Array<PromptScorer>;
 };
