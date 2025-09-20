@@ -11,7 +11,7 @@ export class TracePromptScorer extends BasePromptScorer {
     requiredParams: readonly string[] = [],
     options?: Record<string, number> | null,
     judgmentApiKey: string = JUDGMENT_API_KEY || "",
-    organizationId: string = JUDGMENT_ORG_ID || "",
+    organizationId: string = JUDGMENT_ORG_ID || ""
   ) {
     super(
       scoreType,
@@ -21,7 +21,7 @@ export class TracePromptScorer extends BasePromptScorer {
       requiredParams,
       options,
       judgmentApiKey,
-      organizationId,
+      organizationId
     );
   }
 }
