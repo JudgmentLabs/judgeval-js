@@ -36,7 +36,7 @@ export class Tracer {
   constructor(
     configuration: TracerConfiguration,
     apiClient: JudgmentApiClient,
-    serializer: Serializer
+    serializer: Serializer,
   ) {
     this.configuration = configuration;
     this.apiClient = apiClient;
@@ -47,7 +47,7 @@ export class Tracer {
   private async resolveProjectId(): Promise<string | null> {
     try {
       Logger.info(
-        `Resolving project ID for project: ${this.configuration.projectName}`
+        `Resolving project ID for project: ${this.configuration.projectName}`,
       );
 
       const request: ResolveProjectNameRequest = {
@@ -61,7 +61,7 @@ export class Tracer {
         Logger.info(`Successfully resolved project ID: ${this.projectId}`);
       } else {
         Logger.warn(
-          `Project ID not found for project: ${this.configuration.projectName}`
+          `Project ID not found for project: ${this.configuration.projectName}`,
         );
       }
 
@@ -83,7 +83,7 @@ export class Tracer {
   }
 
   public static createWithConfiguration(
-    configuration: TracerConfiguration
+    configuration: TracerConfiguration,
   ): Tracer {
     return TracerBuilder.builder().configuration(configuration).build();
   }
@@ -98,7 +98,7 @@ export class Tracer {
           this.configuration.projectName +
           ", please create it first at https://app.judgmentlabs.ai/org/" +
           this.configuration.organizationId +
-          "/projects. Skipping Judgment export."
+          "/projects. Skipping Judgment export.",
       );
       return new NoOpSpanExporter();
     }
@@ -114,7 +114,7 @@ export class Tracer {
     if (kind !== null) {
       currentSpan.setAttribute(
         OpenTelemetryKeys.AttributeKeys.JUDGMENT_SPAN_KIND,
-        kind
+        kind,
       );
     }
   }
@@ -165,7 +165,7 @@ export class Tracer {
   public asyncEvaluate(
     scorer: BaseScorer,
     example: ExampleModel,
-    model?: string
+    model?: string,
   ): void {
     if (!this.configuration.enableEvaluation) {
       return;
@@ -186,7 +186,7 @@ export class Tracer {
     const spanId = spanContext.spanId;
 
     Logger.info(
-      `asyncEvaluate: project=${this.configuration.projectName}, traceId=${traceId}, spanId=${spanId}, scorer=${scorer.name}`
+      `asyncEvaluate: project=${this.configuration.projectName}, traceId=${traceId}, spanId=${spanId}, scorer=${scorer.name}`,
     );
 
     const evaluationRun = this.createEvaluationRun(
@@ -194,7 +194,7 @@ export class Tracer {
       example,
       model,
       traceId,
-      spanId
+      spanId,
     );
     this.enqueueEvaluation(evaluationRun);
   }
@@ -219,7 +219,7 @@ export class Tracer {
     const spanId = spanContext.spanId;
 
     Logger.info(
-      `asyncTraceEvaluate: project=${this.configuration.projectName}, traceId=${traceId}, spanId=${spanId}, scorer=${scorer.name}`
+      `asyncTraceEvaluate: project=${this.configuration.projectName}, traceId=${traceId}, spanId=${spanId}, scorer=${scorer.name}`,
     );
 
     try {
@@ -227,16 +227,16 @@ export class Tracer {
         scorer,
         model,
         traceId,
-        spanId
+        spanId,
       );
       const traceEvalJson = this.serializer(traceEvaluationRun);
       currentSpan.setAttribute(
         OpenTelemetryKeys.AttributeKeys.PENDING_TRACE_EVAL,
-        traceEvalJson
+        traceEvalJson,
       );
     } catch (error) {
       Logger.error(
-        `Failed to serialize trace evaluation: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to serialize trace evaluation: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -245,7 +245,7 @@ export class Tracer {
     scorer: BaseScorer,
     model: string | undefined,
     traceId: string,
-    spanId: string
+    spanId: string,
   ): any {
     const evalName = `async_trace_evaluate_${spanId || Date.now()}`;
     const modelName = model || JUDGMENT_DEFAULT_GPT_MODEL;
@@ -272,7 +272,7 @@ export class Tracer {
       endpoint,
       this.configuration.apiKey,
       this.configuration.organizationId,
-      projectId
+      projectId,
     );
   }
 
@@ -281,7 +281,7 @@ export class Tracer {
     example: ExampleModel,
     model: string | undefined,
     traceId: string,
-    spanId: string
+    spanId: string,
   ): ExampleEvaluationRun {
     const runId = `async_evaluate_${spanId || Date.now()}`;
     const modelName = model || JUDGMENT_DEFAULT_GPT_MODEL;
@@ -303,14 +303,14 @@ export class Tracer {
   }
 
   private async enqueueEvaluation(
-    evaluationRun: ExampleEvaluationRun
+    evaluationRun: ExampleEvaluationRun,
   ): Promise<void> {
     try {
       await this.apiClient.addToRunEvalQueueExamples(evaluationRun);
       Logger.info(`Enqueuing evaluation run: ${evaluationRun.eval_name}`);
     } catch (error) {
       Logger.error(
-        `Failed to enqueue evaluation run: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to enqueue evaluation run: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -350,7 +350,7 @@ export class TracerBuilder {
       new JudgmentApiClient(
         this.config.apiUrl,
         this.config.apiKey,
-        this.config.organizationId
+        this.config.organizationId,
       );
 
     return new Tracer(this.config, client, this._serializer);

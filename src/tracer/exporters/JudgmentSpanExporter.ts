@@ -5,7 +5,7 @@ export class JudgmentSpanExporter extends OTLPTraceExporter {
     endpoint: string,
     apiKey: string,
     organizationId: string,
-    projectId: string
+    projectId: string,
   ) {
     if (!projectId || projectId.trim() === "") {
       throw new Error("projectId is required for JudgmentSpanExporter");
@@ -90,7 +90,7 @@ export class JudgmentSpanExporterBuilder {
       this._endpoint,
       this._apiKey,
       this._organizationId,
-      this._projectId
+      this._projectId,
     );
   }
 }
