@@ -1,9 +1,11 @@
+import { ScorerConfig } from "../internal/api/models";
 import { BaseScorer as BaseScorerModel } from "../internal/api/models/BaseScorer";
 
 export type BaseScorer = BaseScorerModel & {
   addModel: (model: string) => void;
   successCheck: () => boolean;
   getRequiredParams: () => string[];
+  toTransport: () => ScorerConfig;
 };
 
 export function createBaseScorer(): BaseScorer {
@@ -27,6 +29,16 @@ export function createBaseScorer(): BaseScorer {
     },
     getRequiredParams: () => {
       return [];
+    },
+    toTransport: () => {
+      return {
+        score_type: scorer.score_type,
+        name: scorer.name,
+        threshold: scorer.threshold ?? 0.5,
+        strict_mode: scorer.strict_mode ?? false,
+        required_params: [],
+        kwargs: {},
+      };
     },
   };
 

@@ -1,25 +1,13 @@
-import { context, SpanKind, trace } from "@opentelemetry/api";
-import { Resource } from "@opentelemetry/resources";
-import {
-  BasicTracerProvider,
-  BatchSpanProcessor,
-  Tracer as OTELTracer,
-  SpanProcessor,
-} from "@opentelemetry/sdk-trace-base";
-import { Example } from "../data/example";
+import { trace } from "@opentelemetry/api";
 import { JUDGMENT_DEFAULT_GPT_MODEL } from "../env";
 import { JudgmentApiClient } from "../internal/api";
 import {
-  BaseScorer,
   ExampleEvaluationRun,
   Example as ExampleModel,
   ResolveProjectNameRequest,
 } from "../internal/api/models";
-import { APIScorer, APIScorerType } from "../scorers/api-scorer";
-import { parseFunctionArgs } from "../utils/annotate";
+import { BaseScorer } from "../scorers/base-scorer";
 import { Logger } from "../utils/logger";
-import { KeysOf } from "../utils/types";
-import { VERSION } from "../version";
 import { JudgmentSpanExporter, NoOpSpanExporter } from "./exporters";
 import { OpenTelemetryKeys } from "./OpenTelemetryKeys";
 import { TracerConfiguration } from "./TracerConfiguration";
@@ -33,14 +21,6 @@ export class Tracer {
   private projectId: string | null = null;
   private projectIdPromise: Promise<string | null>;
 
-  private provider?: BasicTracerProvider;
-  private tracer?: OTELTracer;
-  private judgmentProcessor?: SpanProcessor;
-
-  public getTracer(): OTELTracer | undefined {
-    return this.tracer;
-  }
-
   public getConfiguration(): TracerConfiguration {
     return this.configuration;
   }
@@ -53,44 +33,10 @@ export class Tracer {
     return this.serializer;
   }
 
-  /**
-   * Registers the OpenTelemetry provider and creates the tracer.
-   * This method is optional and should only be called if you want to use
-   * OpenTelemetry tracing functionality. If you have existing OpenTelemetry
-   * setup, you may not need to call this method.
-   */
-  public registerOtel(): void {
-    if (this.provider) {
-      Logger.warn("OpenTelemetry provider is already registered");
-      return;
-    }
-
-    this.provider = new BasicTracerProvider({
-      resource: new Resource({
-        "service.name": this.configuration.projectName,
-      }),
-    });
-
-    this.provider.register();
-    this.tracer = this.provider.getTracer(
-      this.configuration.tracerName,
-      VERSION,
-    );
-
-    Logger.info(
-      `OpenTelemetry provider registered with tracer name: ${this.configuration.tracerName}`,
-    );
-
-    // Setup exporter if projectId is already resolved
-    if (this.projectId) {
-      this.setupExporter();
-    }
-  }
-
   constructor(
     configuration: TracerConfiguration,
     apiClient: JudgmentApiClient,
-    serializer: Serializer,
+    serializer: Serializer
   ) {
     this.configuration = configuration;
     this.apiClient = apiClient;
@@ -101,7 +47,7 @@ export class Tracer {
   private async resolveProjectId(): Promise<string | null> {
     try {
       Logger.info(
-        `Resolving project ID for project: ${this.configuration.projectName}`,
+        `Resolving project ID for project: ${this.configuration.projectName}`
       );
 
       const request: ResolveProjectNameRequest = {
@@ -113,13 +59,9 @@ export class Tracer {
 
       if (this.projectId) {
         Logger.info(`Successfully resolved project ID: ${this.projectId}`);
-        // Only setup exporter if provider is registered
-        if (this.provider) {
-          this.setupExporter();
-        }
       } else {
         Logger.warn(
-          `Project ID not found for project: ${this.configuration.projectName}`,
+          `Project ID not found for project: ${this.configuration.projectName}`
         );
       }
 
@@ -128,21 +70,6 @@ export class Tracer {
       this.projectId = null;
       return null;
     }
-  }
-
-  private setupExporter(): void {
-    if (!this.projectId || !this.provider) return;
-
-    const exporter = this.createJudgmentSpanExporter(this.projectId);
-    this.judgmentProcessor = new BatchSpanProcessor(exporter, {
-      maxQueueSize: 2 ** 18,
-      maxExportBatchSize: 512,
-      exportTimeoutMillis: 30000,
-      scheduledDelayMillis: 5000,
-    });
-
-    this.provider.addSpanProcessor(this.judgmentProcessor);
-    Logger.info("Judgment exporter setup completed");
   }
 
   public static builder(): TracerBuilder {
@@ -156,7 +83,7 @@ export class Tracer {
   }
 
   public static createWithConfiguration(
-    configuration: TracerConfiguration,
+    configuration: TracerConfiguration
   ): Tracer {
     return TracerBuilder.builder().configuration(configuration).build();
   }
@@ -171,7 +98,7 @@ export class Tracer {
           this.configuration.projectName +
           ", please create it first at https://app.judgmentlabs.ai/org/" +
           this.configuration.organizationId +
-          "/projects. Skipping Judgment export.",
+          "/projects. Skipping Judgment export."
       );
       return new NoOpSpanExporter();
     }
@@ -179,36 +106,26 @@ export class Tracer {
   }
 
   public setSpanKind(kind: string | null): void {
-    if (!this.tracer) return;
-
     const currentSpan = trace.getActiveSpan();
-    if (currentSpan && kind !== null) {
+    if (!currentSpan) {
+      Logger.warn("No active span found, skipping setSpanKind");
+      return;
+    }
+    if (kind !== null) {
       currentSpan.setAttribute(
         OpenTelemetryKeys.AttributeKeys.JUDGMENT_SPAN_KIND,
-        kind,
+        kind
       );
     }
   }
 
-  public setAttribute(key: string, value: unknown): void {
-    if (!this.tracer) return;
-
+  public setAttribute(key: string, value: unknown, type?: any): void {
     const currentSpan = trace.getActiveSpan();
-    if (currentSpan) {
-      currentSpan.setAttribute(key, this.serializer(value));
-    }
-  }
-
-  public setAttributes(attributes: Record<string, unknown>): void {
-    if (!attributes || !this.tracer) {
+    if (!currentSpan) {
+      Logger.warn("No active span found, skipping setAttribute");
       return;
     }
-    const currentSpan = trace.getActiveSpan();
-    if (currentSpan) {
-      for (const [key, value] of Object.entries(attributes)) {
-        currentSpan.setAttribute(key, this.serializer(value));
-      }
-    }
+    currentSpan.setAttribute(key, this.serializer(value));
   }
 
   public setLLMSpan(): void {
@@ -223,161 +140,44 @@ export class Tracer {
     this.setSpanKind("span");
   }
 
-  public async forceFlush(): Promise<void> {
-    if (!this.provider) {
-      Logger.warn("No OpenTelemetry provider registered, skipping force flush");
+  public setAttributes(attributes: Record<string, unknown>): void {
+    if (!attributes) {
       return;
     }
-
-    try {
-      await this.provider.forceFlush();
-      Logger.info("Tracer force flush completed");
-    } catch (error) {
-      Logger.error(
-        `Error during force flush: ${error instanceof Error ? error.message : String(error)}`,
-      );
+    const currentSpan = trace.getActiveSpan();
+    if (!currentSpan) {
+      Logger.warn("No active span found, skipping setAttributes");
+      return;
+    }
+    for (const [key, value] of Object.entries(attributes)) {
+      currentSpan.setAttribute(key, this.serializer(value));
     }
   }
 
-  public async shutdown(): Promise<void> {
-    if (!this.provider) {
-      Logger.warn("No OpenTelemetry provider registered, skipping shutdown");
-      return;
-    }
-
-    try {
-      await this.provider.shutdown();
-      Logger.info("Tracer shutdown completed");
-    } catch (error) {
-      Logger.error(
-        `Error during shutdown: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  }
-
-  public setInput(input: unknown): void {
-    if (!this.tracer) return;
+  public setInput(input: unknown, type?: any): void {
     this.setAttribute(OpenTelemetryKeys.AttributeKeys.JUDGMENT_INPUT, input);
   }
 
-  public setOutput(output: unknown): void {
-    if (!this.tracer) return;
+  public setOutput(output: unknown, type?: any): void {
     this.setAttribute(OpenTelemetryKeys.AttributeKeys.JUDGMENT_OUTPUT, output);
   }
 
-  private createArgumentDict<TArgs extends unknown[]>(
-    fn: (...args: TArgs) => unknown,
-    args: TArgs,
-  ): Record<string, unknown> {
-    try {
-      const argNames = parseFunctionArgs(fn);
-      const argumentDict: Record<string, unknown> = {};
-
-      for (let i = 0; i < args.length; i++) {
-        if (i < argNames.length) {
-          argumentDict[argNames[i]] = args[i];
-        } else {
-          argumentDict[`arguments[${i}]`] = args[i];
-        }
-      }
-
-      return argumentDict;
-    } catch (error) {
-      const fallbackDict: Record<string, unknown> = {};
-      for (let i = 0; i < args.length; i++) {
-        fallbackDict[`arguments[${i}]`] = args[i];
-      }
-      return fallbackDict;
-    }
-  }
-
-  public observe<TArgs extends unknown[], TReturn>(
-    spanName: string,
-    fn: (...args: TArgs) => TReturn,
-    spanKind: ("llm" | "tool" | "span") & {} = "span",
-    attributes?: Record<string, unknown>,
-  ): (...args: TArgs) => TReturn {
-    return (...args: TArgs): TReturn => {
-      if (!this.tracer) {
-        return fn(...args);
-      }
-
-      const span = this.tracer.startSpan(spanName, {
-        kind: SpanKind.INTERNAL,
-        attributes: {
-          [OpenTelemetryKeys.AttributeKeys.JUDGMENT_SPAN_KIND]: spanKind,
-          ...attributes,
-        },
-      });
-
-      return context.with(trace.setSpan(context.active(), span), () => {
-        try {
-          const argumentDict = this.createArgumentDict(fn, args);
-          this.setInput(argumentDict);
-          const result = fn(...args);
-          this.setOutput(result);
-          return result;
-        } catch (error) {
-          span.recordException(error as Error);
-          throw error;
-        } finally {
-          span.end();
-        }
-      });
-    };
-  }
-
-  public observeAsync<TArgs extends unknown[], TReturn>(
-    spanName: string,
-    fn: (...args: TArgs) => Promise<TReturn>,
-    spanKind: ("llm" | "tool" | "span") & {} = "span",
-    attributes?: Record<string, unknown>,
-  ): (...args: TArgs) => Promise<TReturn> {
-    return (...args: TArgs): Promise<TReturn> => {
-      if (!this.tracer) {
-        return fn(...args);
-      }
-
-      const span = this.tracer.startSpan(spanName, {
-        kind: SpanKind.INTERNAL,
-        attributes: {
-          [OpenTelemetryKeys.AttributeKeys.JUDGMENT_SPAN_KIND]: spanKind,
-          ...attributes,
-        },
-      });
-
-      return context.with(trace.setSpan(context.active(), span), async () => {
-        try {
-          const argumentDict = this.createArgumentDict(fn, args);
-          this.setInput(argumentDict);
-          const result = await fn(...args);
-          this.setOutput(result);
-          return result;
-        } catch (error) {
-          span.recordException(error as Error);
-          throw error;
-        } finally {
-          span.end();
-        }
-      });
-    };
-  }
-
-  public asyncEvaluate<
-    T extends APIScorerType,
-    P extends readonly string[],
-    E extends Record<string, any>,
-  >(
-    scorer: APIScorer<T, P>,
-    example: Example<E> & Record<KeysOf<P>, any>,
-    model?: string,
+  public asyncEvaluate(
+    scorer: BaseScorer,
+    example: ExampleModel,
+    model?: string
   ): void {
     if (!this.configuration.enableEvaluation) {
       return;
     }
 
     const currentSpan = trace.getActiveSpan();
-    if (!currentSpan || !currentSpan.isRecording()) {
+    if (!currentSpan) {
+      Logger.warn("No active span found, skipping asyncEvaluate");
+      return;
+    }
+    if (!currentSpan.isRecording()) {
+      Logger.warn("Active span is not recording, skipping asyncEvaluate");
       return;
     }
 
@@ -386,7 +186,7 @@ export class Tracer {
     const spanId = spanContext.spanId;
 
     Logger.info(
-      `asyncEvaluate: project=${this.configuration.projectName}, traceId=${traceId}, spanId=${spanId}`,
+      `asyncEvaluate: project=${this.configuration.projectName}, traceId=${traceId}, spanId=${spanId}, scorer=${scorer.name}`
     );
 
     const evaluationRun = this.createEvaluationRun(
@@ -394,9 +194,73 @@ export class Tracer {
       example,
       model,
       traceId,
-      spanId,
+      spanId
     );
     this.enqueueEvaluation(evaluationRun);
+  }
+
+  public asyncTraceEvaluate(scorer: BaseScorer, model?: string): void {
+    if (!this.configuration.enableEvaluation) {
+      return;
+    }
+
+    const currentSpan = trace.getActiveSpan();
+    if (!currentSpan) {
+      Logger.warn("No active span found, skipping asyncTraceEvaluate");
+      return;
+    }
+    if (!currentSpan.isRecording()) {
+      Logger.warn("Active span is not recording, skipping asyncTraceEvaluate");
+      return;
+    }
+
+    const spanContext = currentSpan.spanContext();
+    const traceId = spanContext.traceId;
+    const spanId = spanContext.spanId;
+
+    Logger.info(
+      `asyncTraceEvaluate: project=${this.configuration.projectName}, traceId=${traceId}, spanId=${spanId}, scorer=${scorer.name}`
+    );
+
+    try {
+      const traceEvaluationRun = this.createTraceEvaluationRun(
+        scorer,
+        model,
+        traceId,
+        spanId
+      );
+      const traceEvalJson = this.serializer(traceEvaluationRun);
+      currentSpan.setAttribute(
+        OpenTelemetryKeys.AttributeKeys.PENDING_TRACE_EVAL,
+        traceEvalJson
+      );
+    } catch (error) {
+      Logger.error(
+        `Failed to serialize trace evaluation: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  private createTraceEvaluationRun(
+    scorer: BaseScorer,
+    model: string | undefined,
+    traceId: string,
+    spanId: string
+  ): any {
+    const evalName = `async_trace_evaluate_${spanId || Date.now()}`;
+    const modelName = model || JUDGMENT_DEFAULT_GPT_MODEL;
+
+    const scorerConfig = scorer.toTransport();
+
+    return {
+      project_name: this.configuration.projectName,
+      eval_name: evalName,
+      scorer: scorerConfig,
+      model: modelName,
+      organization_id: this.configuration.organizationId,
+      trace_id: traceId,
+      trace_span_id: spanId,
+    };
   }
 
   private createJudgmentSpanExporter(projectId: string): JudgmentSpanExporter {
@@ -408,7 +272,7 @@ export class Tracer {
       endpoint,
       this.configuration.apiKey,
       this.configuration.organizationId,
-      projectId,
+      projectId
     );
   }
 
@@ -417,17 +281,19 @@ export class Tracer {
     example: ExampleModel,
     model: string | undefined,
     traceId: string,
-    spanId: string,
+    spanId: string
   ): ExampleEvaluationRun {
     const runId = `async_evaluate_${spanId || Date.now()}`;
     const modelName = model || JUDGMENT_DEFAULT_GPT_MODEL;
+
+    const scorerConfig = scorer.toTransport();
 
     const evaluationRun: ExampleEvaluationRun = {
       project_name: this.configuration.projectName,
       eval_name: runId,
       examples: [example],
       custom_scorers: [],
-      judgment_scorers: [scorer],
+      judgment_scorers: [scorerConfig],
       model: modelName,
       trace_id: traceId,
       trace_span_id: spanId,
@@ -437,14 +303,14 @@ export class Tracer {
   }
 
   private async enqueueEvaluation(
-    evaluationRun: ExampleEvaluationRun,
+    evaluationRun: ExampleEvaluationRun
   ): Promise<void> {
     try {
       await this.apiClient.addToRunEvalQueueExamples(evaluationRun);
       Logger.info(`Enqueuing evaluation run: ${evaluationRun.eval_name}`);
     } catch (error) {
       Logger.error(
-        `Failed to enqueue evaluation run: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to enqueue evaluation run: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -484,7 +350,7 @@ export class TracerBuilder {
       new JudgmentApiClient(
         this.config.apiUrl,
         this.config.apiKey,
-        this.config.organizationId,
+        this.config.organizationId
       );
 
     return new Tracer(this.config, client, this._serializer);

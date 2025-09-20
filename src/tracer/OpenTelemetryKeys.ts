@@ -3,6 +3,7 @@ export class OpenTelemetryKeys {
     JUDGMENT_SPAN_KIND: "judgment.span_kind",
     JUDGMENT_INPUT: "judgment.input",
     JUDGMENT_OUTPUT: "judgment.output",
+    PENDING_TRACE_EVAL: "judgment.pending_trace_eval",
   } as const;
 
   public static readonly ResourceKeys = {

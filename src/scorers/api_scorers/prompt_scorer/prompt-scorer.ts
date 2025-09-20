@@ -10,18 +10,21 @@ export {
 
 export class PromptScorer extends BasePromptScorer {
   constructor(
+    scoreType: APIScorerType,
     name: string,
     prompt: string,
     threshold: number,
+    requiredParams: readonly string[] = [],
     options?: Record<string, number> | null,
     judgmentApiKey: string = JUDGMENT_API_KEY || "",
     organizationId: string = JUDGMENT_ORG_ID || "",
   ) {
     super(
-      APIScorerType.PROMPT_SCORER,
+      scoreType,
       name,
       prompt,
       threshold,
+      requiredParams,
       options,
       judgmentApiKey,
       organizationId,
