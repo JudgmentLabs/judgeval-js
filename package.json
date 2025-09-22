@@ -1,5 +1,5 @@
 {
-  "name": "judgeval-js",
+  "name": "judgeval",
   "version": "0.3.0",
   "description": "JavaScript/TypeScript client for Judgment evaluation platform",
   "main": "./dist/index.js",
