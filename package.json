@@ -41,8 +41,12 @@
     "opentelemetry",
     "typescript"
   ],
-  "author": "",
+  "author": "Judgment Labs",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JudgmentLabs/judgeval-js.git"
+  },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/core": "^2.1.0",
