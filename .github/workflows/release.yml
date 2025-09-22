@@ -38,16 +38,25 @@ jobs:
           echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
 
           if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            # Get the previous version from the last commit
-            PREVIOUS_VERSION=$(git show HEAD~1:package.json 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version" 2>/dev/null || echo "0.0.0")
-            echo "previous_version=$PREVIOUS_VERSION" >> $GITHUB_OUTPUT
+            # Get the published version from npm
+            NPM_VERSION=$(npm view judgeval-js version 2>/dev/null || echo "0.0.0")
+            echo "npm_version=$NPM_VERSION" >> $GITHUB_OUTPUT
             
-            if [ "$CURRENT_VERSION" != "$PREVIOUS_VERSION" ]; then
-              echo "version_changed=true" >> $GITHUB_OUTPUT
-              echo "Version bumped from $PREVIOUS_VERSION to $CURRENT_VERSION"
+            # Compare versions using npm's version comparison
+            if npm version $CURRENT_VERSION --allow-same-version >/dev/null 2>&1; then
+              # Check if current version is greater than npm version
+              if [ "$(npm version $CURRENT_VERSION --allow-same-version 2>/dev/null | cut -d'v' -f2)" != "$NPM_VERSION" ]; then
+                echo "version_changed=true" >> $GITHUB_OUTPUT
+                echo "Version bumped from $NPM_VERSION to $CURRENT_VERSION"
+              else
+                echo "version_changed=false" >> $GITHUB_OUTPUT
+                echo "Version $CURRENT_VERSION is not greater than published version $NPM_VERSION"
+                exit 1
+              fi
             else
               echo "version_changed=false" >> $GITHUB_OUTPUT
-              echo "No version change detected"
+              echo "Invalid version format: $CURRENT_VERSION"
+              exit 1
             fi
           else
             echo "version_changed=false" >> $GITHUB_OUTPUT
