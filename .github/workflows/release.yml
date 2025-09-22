@@ -59,6 +59,7 @@ jobs:
 
       - name: Create Release
         if: steps.version-check.outputs.version_changed == 'true'
+        id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -71,7 +72,18 @@ jobs:
             This release was automatically created due to a version bump in package.json.
 
             ### Version Changes
-            - Previous: ${{ steps.version-check.outputs.previous_version }}
+            - Previous: ${{ steps.version-check.outputs.npm_version }}
             - Current: ${{ steps.version-check.outputs.current_version }}
           draft: false
           prerelease: false
+
+      - name: Upload Release Assets
+        if: steps.version-check.outputs.version_changed == 'true'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./dist
+          asset_name: dist.zip
+          asset_content_type: application/zip
