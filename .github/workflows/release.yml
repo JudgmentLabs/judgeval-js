@@ -67,11 +67,12 @@ jobs:
           tag_name: v${{ steps.version-check.outputs.current_version }}
           release_name: Release v${{ steps.version-check.outputs.current_version }}
           body: |
-            ## Changes in v${{ steps.version-check.outputs.current_version }}
+            ## Release v${{ steps.version-check.outputs.current_version }}
 
-            This release was automatically created due to a version bump in package.json.
+            **Diff since previous release:**  
+            [View changes](https://github.com/${{ github.repository }}/compare/v${{ steps.version-check.outputs.npm_version }}...v${{ steps.version-check.outputs.current_version }})
 
-            ### Version Changes
+            **Version changes:**
             - Previous: ${{ steps.version-check.outputs.npm_version }}
             - Current: ${{ steps.version-check.outputs.current_version }}
           draft: false
