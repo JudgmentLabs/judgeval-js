@@ -1,94 +1,87 @@
 name: Create new Release
-
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    outputs:
+      exists: ${{ steps.tag-check.outputs.exists }}
+      version: ${{ steps.pkg.outputs.version }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "18"
           cache: "npm"
+          registry-url: "https://registry.npmjs.org"
 
-      - name: Install dependencies
-        run: npm ci
+      - run: npm ci
+      - run: npm run check
+      - run: npm run build
 
-      - name: Run type check
-        run: npm run check
+      - name: Get version from package.json
+        id: pkg
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
 
-      - name: Build package
-        run: npm run build
-
-      - name: Check for version bump
-        id: version-check
+      - name: Check if tag exists
+        id: tag-check
         run: |
-          CURRENT_VERSION=$(node -p "require('./package.json').version")
-
-          # Try to get npm version, if package doesn't exist, treat as 0.0.0
-          if NPM_VERSION=$(npm view judgeval version 2>/dev/null); then
-            echo "npm_version=$NPM_VERSION" >> $GITHUB_OUTPUT
-            echo "Found published version: $NPM_VERSION"
+          if git rev-parse "v${{ steps.pkg.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
           else
-            NPM_VERSION="0.0.0"
-            echo "npm_version=$NPM_VERSION" >> $GITHUB_OUTPUT
-            echo "Package not found on npm, treating as 0.0.0"
+            echo "exists=false" >> $GITHUB_OUTPUT
           fi
 
-          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+      - name: Create and push tag
+        if: steps.tag-check.outputs.exists == 'false'
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag v${{ steps.pkg.outputs.version }}
+          git push origin v${{ steps.pkg.outputs.version }}
 
-          if [ "$CURRENT_VERSION" != "$NPM_VERSION" ]; then
-            echo "version_changed=true" >> $GITHUB_OUTPUT
-            echo "Version bumped from $NPM_VERSION to $CURRENT_VERSION"
-          else
-            echo "version_changed=false" >> $GITHUB_OUTPUT
-            echo "Version $CURRENT_VERSION already published to npm"
-            exit 1
-          fi
+  publish:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
 
-      - name: Create Release
-        if: steps.version-check.outputs.version_changed == 'true'
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    if: needs.release.outputs.exists == 'false'
+
+    steps:
+      - uses: actions/checkout@v4
         with:
-          tag_name: v${{ steps.version-check.outputs.current_version }}
-          release_name: Release v${{ steps.version-check.outputs.current_version }}
-          body: |
-            ## Release v${{ steps.version-check.outputs.current_version }}
+          fetch-depth: 0
 
-            **Diff since previous release:**  
-            [View changes](https://github.com/${{ github.repository }}/compare/v${{ steps.version-check.outputs.npm_version }}...v${{ steps.version-check.outputs.current_version }})
-
-            **Version changes:**
-            - Previous: ${{ steps.version-check.outputs.npm_version }}
-            - Current: ${{ steps.version-check.outputs.current_version }}
-          draft: false
-          prerelease: false
-
-      - name: Create release package
-        if: steps.version-check.outputs.version_changed == 'true'
-        run: zip -r judgeval-v${{ steps.version-check.outputs.current_version }}.zip dist/
-
-      - name: Upload Release Assets
-        if: steps.version-check.outputs.version_changed == 'true'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./judgeval-v${{ steps.version-check.outputs.current_version }}.zip
-          asset_name: judgeval-v${{ steps.version-check.outputs.current_version }}.zip
-          asset_content_type: application/zip
+          node-version: "18"
+          registry-url: "https://registry.npmjs.org"
+          cache: "npm"
+
+      - run: npm ci
+      - run: npm run check
+      - run: npm run build
+
+      - name: Publish to npm
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ needs.release.outputs.version }}
+          name: Release v${{ needs.release.outputs.version }}
+          generate_release_notes: true
