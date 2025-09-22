@@ -1,0 +1,73 @@
+name: Create new Release
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run type check
+        run: npm run check
+
+      - name: Build package
+        run: npm run build
+
+      - name: Check for version bump
+        id: version-check
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            # Get the previous version from the last commit
+            PREVIOUS_VERSION=$(git show HEAD~1:package.json 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version" 2>/dev/null || echo "0.0.0")
+            echo "previous_version=$PREVIOUS_VERSION" >> $GITHUB_OUTPUT
+            
+            if [ "$CURRENT_VERSION" != "$PREVIOUS_VERSION" ]; then
+              echo "version_changed=true" >> $GITHUB_OUTPUT
+              echo "Version bumped from $PREVIOUS_VERSION to $CURRENT_VERSION"
+            else
+              echo "version_changed=false" >> $GITHUB_OUTPUT
+              echo "No version change detected"
+            fi
+          else
+            echo "version_changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        if: steps.version-check.outputs.version_changed == 'true'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.version-check.outputs.current_version }}
+          release_name: Release v${{ steps.version-check.outputs.current_version }}
+          body: |
+            ## Changes in v${{ steps.version-check.outputs.current_version }}
+
+            This release was automatically created due to a version bump in package.json.
+
+            ### Version Changes
+            - Previous: ${{ steps.version-check.outputs.previous_version }}
+            - Current: ${{ steps.version-check.outputs.current_version }}
+          draft: false
+          prerelease: false
