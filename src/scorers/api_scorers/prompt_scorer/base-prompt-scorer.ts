@@ -1,4 +1,5 @@
 import { JUDGMENT_API_KEY, JUDGMENT_ORG_ID } from "../../../env";
+import { ScorerConfig } from "../../../internal/api/models";
 import { APIScorer, APIScorerType } from "../../api-scorer";
 import {
   fetchPromptScorer,
@@ -8,7 +9,7 @@ import {
 } from "./prompt-scorer-utils";
 
 export abstract class BasePromptScorer
-  implements APIScorer<APIScorerType, readonly ["input", "actual_output"]>
+  implements APIScorer<APIScorerType, readonly string[]>
 {
   public scoreType: APIScorerType;
   public name: string;
@@ -17,7 +18,7 @@ export abstract class BasePromptScorer
   public options?: Record<string, number> | null;
   public judgmentApiKey: string;
   public organizationId: string;
-  public requiredParams: readonly ["input", "actual_output"];
+  public requiredParams: readonly string[];
   public score_type: string;
   public class_name: string;
   public model?: string;
@@ -30,6 +31,7 @@ export abstract class BasePromptScorer
     name: string,
     prompt: string,
     threshold: number,
+    requiredParams: readonly string[],
     options?: Record<string, number> | null,
     judgmentApiKey: string = JUDGMENT_API_KEY || "",
     organizationId: string = JUDGMENT_ORG_ID || "",
@@ -38,10 +40,10 @@ export abstract class BasePromptScorer
     this.name = name;
     this.prompt = prompt;
     this.threshold = threshold;
+    this.requiredParams = requiredParams;
     this.options = options;
     this.judgmentApiKey = judgmentApiKey;
     this.organizationId = organizationId;
-    this.requiredParams = ["input", "actual_output"];
     this.score_type = scoreType;
     this.class_name = "BasePromptScorer";
     this.model = undefined;
@@ -87,9 +89,10 @@ export abstract class BasePromptScorer
 
     return new this(
       scoreType,
-      name,
+      config.name, // Use config.name instead of name parameter
       config.prompt,
       config.threshold,
+      [],
       config.options,
       judgmentApiKey,
       organizationId,
@@ -133,6 +136,7 @@ export abstract class BasePromptScorer
       name,
       prompt,
       threshold,
+      [],
       options,
       judgmentApiKey,
       organizationId,
@@ -218,7 +222,10 @@ export abstract class BasePromptScorer
   }
 
   getRequiredParams(): string[] {
-    return [...this.requiredParams];
+    if (Array.isArray(this.requiredParams)) {
+      return [...this.requiredParams];
+    }
+    return [];
   }
 
   setThreshold(threshold: number): void {
@@ -232,7 +239,21 @@ export abstract class BasePromptScorer
     return this.scoreType;
   }
 
-  setRequiredParams(params: readonly ["input", "actual_output"]): void {
+  setRequiredParams(params: readonly string[]): void {
     this.requiredParams = params;
+  }
+
+  toTransport(): ScorerConfig {
+    return {
+      score_type: this.getScoreType(),
+      name: this.getName(),
+      threshold: this.getThreshold(),
+      strict_mode: this.strict_mode ?? false,
+      required_params: this.getRequiredParams(),
+      kwargs: {
+        prompt: this.getPrompt(),
+        ...(this.getOptions() ? { options: this.getOptions() } : {}),
+      },
+    };
   }
 }
