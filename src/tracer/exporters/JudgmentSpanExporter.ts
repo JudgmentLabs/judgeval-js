@@ -1,6 +1,25 @@
+import { ExportResult } from "@opentelemetry/core";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+import { ReadableSpan, SpanExporter } from "@opentelemetry/sdk-trace-base";
 
-export class JudgmentSpanExporter extends OTLPTraceExporter {
+/**
+ * SpanExporter implementation that sends spans to Judgment Labs with project identification.
+ *
+ * This exporter wraps the OTLP HTTP exporter and adds Judgment Labs specific headers and project
+ * identification to all exported spans.
+ */
+export class JudgmentSpanExporter implements SpanExporter {
+  private readonly delegate: SpanExporter;
+
+  /**
+   * Creates a new JudgmentSpanExporter with the specified configuration.
+   *
+   * @param endpoint the OTLP endpoint URL
+   * @param apiKey the API key for authentication
+   * @param organizationId the organization ID
+   * @param projectId the project ID (must not be null or empty)
+   * @throws Error if projectId is null or empty
+   */
   constructor(
     endpoint: string,
     apiKey: string,
@@ -11,7 +30,7 @@ export class JudgmentSpanExporter extends OTLPTraceExporter {
       throw new Error("projectId is required for JudgmentSpanExporter");
     }
 
-    super({
+    this.delegate = new OTLPTraceExporter({
       url: endpoint,
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -27,8 +46,35 @@ export class JudgmentSpanExporter extends OTLPTraceExporter {
   public static builder(): JudgmentSpanExporterBuilder {
     return new JudgmentSpanExporterBuilder();
   }
+
+  /**
+   * Exports a collection of spans.
+   */
+  export(
+    spans: ReadableSpan[],
+    resultCallback: (result: ExportResult) => void,
+  ): void {
+    this.delegate.export(spans, resultCallback);
+  }
+
+  /**
+   * Shuts down the exporter.
+   */
+  shutdown(): Promise<void> {
+    return this.delegate.shutdown();
+  }
+
+  /**
+   * Forces the exporter to flush any pending spans.
+   */
+  forceFlush(): Promise<void> {
+    return this.delegate.forceFlush?.() ?? Promise.resolve();
+  }
 }
 
+/**
+ * Builder for creating JudgmentSpanExporter instances.
+ */
 export class JudgmentSpanExporterBuilder {
   private _endpoint?: string;
   private _apiKey?: string;
@@ -39,6 +85,9 @@ export class JudgmentSpanExporterBuilder {
 
   /**
    * Sets the OTLP endpoint URL.
+   *
+   * @param endpoint the endpoint URL
+   * @return this builder for method chaining
    */
   public endpoint(endpoint: string): this {
     this._endpoint = endpoint;
@@ -47,6 +96,9 @@ export class JudgmentSpanExporterBuilder {
 
   /**
    * Sets the API key for authentication.
+   *
+   * @param apiKey the API key
+   * @return this builder for method chaining
    */
   public apiKey(apiKey: string): this {
     this._apiKey = apiKey;
@@ -55,6 +107,9 @@ export class JudgmentSpanExporterBuilder {
 
   /**
    * Sets the organization ID.
+   *
+   * @param organizationId the organization ID
+   * @return this builder for method chaining
    */
   public organizationId(organizationId: string): this {
     this._organizationId = organizationId;
@@ -63,6 +118,9 @@ export class JudgmentSpanExporterBuilder {
 
   /**
    * Sets the project ID.
+   *
+   * @param projectId the project ID
+   * @return this builder for method chaining
    */
   public projectId(projectId: string): this {
     this._projectId = projectId;
@@ -71,6 +129,9 @@ export class JudgmentSpanExporterBuilder {
 
   /**
    * Builds a new JudgmentSpanExporter with the current configuration.
+   *
+   * @return a new JudgmentSpanExporter instance
+   * @throws Error if required fields are missing
    */
   public build(): JudgmentSpanExporter {
     if (!this._endpoint || this._endpoint.trim() === "") {

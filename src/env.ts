@@ -18,4 +18,12 @@ export const JUDGMENT_DEFAULT_GPT_MODEL = getEnvVar(
   "JUDGMENT_DEFAULT_GPT_MODEL",
   "gpt-4.1",
 );
+export const JUDGMENT_ENABLE_MONITORING = getEnvVar(
+  "JUDGMENT_ENABLE_MONITORING",
+  "true",
+);
+export const JUDGMENT_ENABLE_EVALUATIONS = getEnvVar(
+  "JUDGMENT_ENABLE_EVALUATIONS",
+  "true",
+);
 export const JUDGMENT_NO_COLOR = getEnvVar("JUDGMENT_NO_COLOR");

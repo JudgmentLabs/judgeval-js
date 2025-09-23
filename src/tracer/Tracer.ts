@@ -1,5 +1,12 @@
 import { trace } from "@opentelemetry/api";
-import { JUDGMENT_DEFAULT_GPT_MODEL } from "../env";
+import {
+  JUDGMENT_API_KEY,
+  JUDGMENT_API_URL,
+  JUDGMENT_DEFAULT_GPT_MODEL,
+  JUDGMENT_ENABLE_EVALUATIONS,
+  JUDGMENT_ENABLE_MONITORING,
+  JUDGMENT_ORG_ID,
+} from "../env";
 import { JudgmentApiClient } from "../internal/api";
 import {
   ExampleEvaluationRun,
@@ -7,25 +14,37 @@ import {
   ResolveProjectNameRequest,
 } from "../internal/api/models";
 import { BaseScorer } from "../scorers/base-scorer";
+import { expectApiKey, expectOrganizationId } from "../utils/guards";
 import { Logger } from "../utils/logger";
 import { JudgmentSpanExporter, NoOpSpanExporter } from "./exporters";
 import { OpenTelemetryKeys } from "./OpenTelemetryKeys";
 import { TracerConfiguration } from "./TracerConfiguration";
 
 export type Serializer = (obj: unknown) => string;
+type SpanKind = ("llm" | "tool" | "span") & {};
 
 export class Tracer {
-  private readonly configuration: TracerConfiguration;
-  private readonly apiClient: JudgmentApiClient;
-  private readonly serializer: Serializer;
-  private projectId: string | null = null;
-  private projectIdPromise: Promise<string | null>;
+  private static instance: Tracer | null = null;
 
-  public getConfiguration(): TracerConfiguration {
+  public apiKey: string;
+  public organizationId: string;
+  public projectName: string;
+  public enableMonitoring: boolean;
+  public enableEvaluation: boolean;
+  public apiClient: JudgmentApiClient | null = null;
+  public tracer: unknown = null;
+  public serializer: Serializer = JSON.stringify;
+
+  private _initialized: boolean = false;
+
+  private projectId: string = "";
+  private configuration: TracerConfiguration | null = null;
+
+  public getConfiguration(): TracerConfiguration | null {
     return this.configuration;
   }
 
-  public getProjectId(): string | null {
+  public getProjectId(): string {
     return this.projectId;
   }
 
@@ -33,18 +52,77 @@ export class Tracer {
     return this.serializer;
   }
 
-  constructor(
-    configuration: TracerConfiguration,
-    apiClient: JudgmentApiClient,
-    serializer: Serializer,
+  private constructor(
+    projectName: string,
+    options: {
+      apiKey?: string;
+      organizationId?: string;
+      enableMonitoring?: boolean;
+      enableEvaluation?: boolean;
+      resourceAttributes?: Record<string, unknown>;
+      initialize?: boolean;
+    } = {},
   ) {
-    this.configuration = configuration;
-    this.apiClient = apiClient;
-    this.serializer = serializer;
-    this.projectIdPromise = this.resolveProjectId();
+    this.projectName = projectName;
+    this.apiKey = expectApiKey(options.apiKey || JUDGMENT_API_KEY);
+    this.organizationId = expectOrganizationId(
+      options.organizationId || JUDGMENT_ORG_ID,
+    );
+    this.enableMonitoring =
+      options.enableMonitoring ??
+      JUDGMENT_ENABLE_MONITORING?.toLowerCase() === "true";
+    this.enableEvaluation =
+      options.enableEvaluation ??
+      JUDGMENT_ENABLE_EVALUATIONS?.toLowerCase() === "true";
+
+    if (!this._initialized) {
+      this._initialized = false;
+
+      if (options.initialize !== false) {
+        // Initialize asynchronously - don't await in constructor
+        this.initialize().catch((error) => {
+          Logger.error(
+            `Failed to initialize tracer: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        });
+      }
+    }
   }
 
-  private async resolveProjectId(): Promise<string | null> {
+  public static getInstance(
+    projectName: string,
+    options: {
+      apiKey?: string;
+      organizationId?: string;
+      enableMonitoring?: boolean;
+      enableEvaluation?: boolean;
+      resourceAttributes?: Record<string, unknown>;
+      initialize?: boolean;
+    } = {},
+  ): Tracer {
+    if (!Tracer.instance) {
+      Tracer.instance = new Tracer(projectName, options);
+    }
+    return Tracer.instance;
+  }
+
+  public async initialize(): Promise<Tracer> {
+    if (this._initialized) {
+      return this;
+    }
+
+    // TODO: Initialize OpenTelemetry here
+    // This will be implemented later
+
+    this._initialized = true;
+    return this;
+  }
+
+  private async resolveProjectId(): Promise<string> {
+    if (!this.configuration || !this.apiClient) {
+      throw new Error("Configuration or API client not available");
+    }
+
     try {
       Logger.info(
         `Resolving project ID for project: ${this.configuration.projectName}`,
@@ -55,20 +133,22 @@ export class Tracer {
       } as const;
 
       const response = await this.apiClient.projectsResolve(request);
-      this.projectId = response.project_id?.toString() || null;
+      this.projectId = response.project_id?.toString() || "";
 
       if (this.projectId) {
         Logger.info(`Successfully resolved project ID: ${this.projectId}`);
       } else {
-        Logger.warn(
+        throw new Error(
           `Project ID not found for project: ${this.configuration.projectName}`,
         );
       }
 
       return this.projectId;
     } catch (error) {
-      this.projectId = null;
-      return null;
+      this.projectId = "";
+      throw new Error(
+        `Failed to resolve project ID: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -77,35 +157,67 @@ export class Tracer {
   }
 
   public static createDefault(projectName: string): Tracer {
-    return TracerBuilder.builder()
-      .configuration(TracerConfiguration.createDefault(projectName))
-      .build();
+    return Tracer.getInstance(projectName);
   }
 
   public static createWithConfiguration(
     configuration: TracerConfiguration,
   ): Tracer {
-    return TracerBuilder.builder().configuration(configuration).build();
+    return Tracer.builder()
+      .projectName(configuration.projectName)
+      .apiKey(configuration.apiKey)
+      .organizationId(configuration.organizationId)
+      .enableEvaluation(configuration.enableEvaluation)
+      .initialize(true)
+      .build();
+  }
+
+  public static getExporter(
+    apiKey?: string,
+    organizationId?: string,
+    projectId: string = "",
+  ): JudgmentSpanExporter {
+    if (!projectId) {
+      throw new Error("project_id is required");
+    }
+
+    const endpoint = JUDGMENT_API_URL?.endsWith("/")
+      ? `${JUDGMENT_API_URL}otel/v1/traces`
+      : `${JUDGMENT_API_URL}/otel/v1/traces`;
+
+    return JudgmentSpanExporter.builder()
+      .endpoint(endpoint)
+      .apiKey(apiKey || JUDGMENT_API_KEY || "")
+      .organizationId(organizationId || JUDGMENT_ORG_ID || "")
+      .projectId(projectId)
+      .build();
   }
 
   public async getSpanExporter(): Promise<
     JudgmentSpanExporter | NoOpSpanExporter
   > {
-    const projectId = await this.projectIdPromise;
-    if (!projectId) {
+    if (!this._initialized) {
+      throw new Error(
+        "Tracer must be initialized before getting span exporter",
+      );
+    }
+
+    try {
+      const projectId = await this.resolveProjectId();
+      return this.createJudgmentSpanExporter(projectId);
+    } catch (error) {
       Logger.error(
         "Failed to resolve project " +
-          this.configuration.projectName +
+          this.projectName +
           ", please create it first at https://app.judgmentlabs.ai/org/" +
-          this.configuration.organizationId +
+          (this.organizationId || "unknown") +
           "/projects. Skipping Judgment export.",
       );
       return new NoOpSpanExporter();
     }
-    return this.createJudgmentSpanExporter(projectId);
   }
 
-  public setSpanKind(kind: string | null): void {
+  public setSpanKind(kind: SpanKind): void {
     const currentSpan = trace.getActiveSpan();
     if (!currentSpan) {
       Logger.warn("No active span found, skipping setSpanKind");
@@ -119,7 +231,7 @@ export class Tracer {
     }
   }
 
-  public setAttribute(key: string, value: unknown, type?: any): void {
+  public setAttribute(key: string, value: unknown): void {
     const currentSpan = trace.getActiveSpan();
     if (!currentSpan) {
       Logger.warn("No active span found, skipping setAttribute");
@@ -154,11 +266,11 @@ export class Tracer {
     }
   }
 
-  public setInput(input: unknown, type?: any): void {
+  public setInput(input: unknown): void {
     this.setAttribute(OpenTelemetryKeys.AttributeKeys.JUDGMENT_INPUT, input);
   }
 
-  public setOutput(output: unknown, type?: any): void {
+  public setOutput(output: unknown): void {
     this.setAttribute(OpenTelemetryKeys.AttributeKeys.JUDGMENT_OUTPUT, output);
   }
 
@@ -167,6 +279,11 @@ export class Tracer {
     example: ExampleModel,
     model?: string,
   ): void {
+    if (!this._initialized || !this.configuration) {
+      Logger.warn("Tracer not initialized, skipping asyncEvaluate");
+      return;
+    }
+
     if (!this.configuration.enableEvaluation) {
       return;
     }
@@ -200,6 +317,11 @@ export class Tracer {
   }
 
   public asyncTraceEvaluate(scorer: BaseScorer, model?: string): void {
+    if (!this._initialized || !this.configuration) {
+      Logger.warn("Tracer not initialized, skipping asyncTraceEvaluate");
+      return;
+    }
+
     if (!this.configuration.enableEvaluation) {
       return;
     }
@@ -246,11 +368,15 @@ export class Tracer {
     model: string | undefined,
     traceId: string,
     spanId: string,
-  ): any {
+  ): Record<string, unknown> {
+    if (!this.configuration) {
+      throw new Error("Configuration not available");
+    }
+
     const evalName = `async_trace_evaluate_${spanId || Date.now()}`;
     const modelName = model || JUDGMENT_DEFAULT_GPT_MODEL;
 
-    const scorerConfig = scorer.toTransport();
+    const scorerConfig = scorer.getConfig();
 
     return {
       project_name: this.configuration.projectName,
@@ -264,16 +390,20 @@ export class Tracer {
   }
 
   private createJudgmentSpanExporter(projectId: string): JudgmentSpanExporter {
+    if (!this.configuration) {
+      throw new Error("Configuration not available");
+    }
+
     const endpoint = this.configuration.apiUrl.endsWith("/")
       ? `${this.configuration.apiUrl}otel/v1/traces`
       : `${this.configuration.apiUrl}/otel/v1/traces`;
 
-    return new JudgmentSpanExporter(
-      endpoint,
-      this.configuration.apiKey,
-      this.configuration.organizationId,
-      projectId,
-    );
+    return JudgmentSpanExporter.builder()
+      .endpoint(endpoint)
+      .apiKey(this.configuration.apiKey)
+      .organizationId(this.configuration.organizationId)
+      .projectId(projectId)
+      .build();
   }
 
   private createEvaluationRun(
@@ -283,10 +413,14 @@ export class Tracer {
     traceId: string,
     spanId: string,
   ): ExampleEvaluationRun {
+    if (!this.configuration) {
+      throw new Error("Configuration not available");
+    }
+
     const runId = `async_evaluate_${spanId || Date.now()}`;
     const modelName = model || JUDGMENT_DEFAULT_GPT_MODEL;
 
-    const scorerConfig = scorer.toTransport();
+    const scorerConfig = scorer.getConfig();
 
     const evaluationRun: ExampleEvaluationRun = {
       project_name: this.configuration.projectName,
@@ -305,6 +439,11 @@ export class Tracer {
   private async enqueueEvaluation(
     evaluationRun: ExampleEvaluationRun,
   ): Promise<void> {
+    if (!this.apiClient) {
+      Logger.warn("API client not available, skipping evaluation enqueue");
+      return;
+    }
+
     try {
       await this.apiClient.addToRunEvalQueueExamples(evaluationRun);
       Logger.info(`Enqueuing evaluation run: ${evaluationRun.eval_name}`);
@@ -314,45 +453,77 @@ export class Tracer {
       );
     }
   }
+
+  public observe<TArgs, TResult>(func: (...args: TArgs[]) => TResult): TResult {
+    const currentSpan = trace.getActiveSpan();
+    if (!currentSpan) {
+      Logger.warn("No active span found, skipping observe");
+      return func();
+    }
+    return func();
+  }
 }
 
 export class TracerBuilder {
-  private config?: TracerConfiguration;
-  private _apiClient?: JudgmentApiClient;
-  private _serializer: Serializer = JSON.stringify;
+  private _projectName?: string;
+  private _apiKey?: string;
+  private _organizationId?: string;
+  private _enableMonitoring?: boolean;
+  private _enableEvaluation?: boolean;
+  private _resourceAttributes?: Record<string, unknown>;
+  private _initialize: boolean = true;
 
   public static builder(): TracerBuilder {
     return new TracerBuilder();
   }
 
-  public configuration(configuration: TracerConfiguration): this {
-    this.config = configuration;
+  public projectName(projectName: string): this {
+    this._projectName = projectName;
     return this;
   }
 
-  public apiClient(apiClient: JudgmentApiClient): this {
-    this._apiClient = apiClient;
+  public apiKey(apiKey: string): this {
+    this._apiKey = apiKey;
     return this;
   }
 
-  public serializer(serializer: Serializer): this {
-    this._serializer = serializer;
+  public organizationId(organizationId: string): this {
+    this._organizationId = organizationId;
+    return this;
+  }
+
+  public enableMonitoring(enableMonitoring: boolean): this {
+    this._enableMonitoring = enableMonitoring;
+    return this;
+  }
+
+  public enableEvaluation(enableEvaluation: boolean): this {
+    this._enableEvaluation = enableEvaluation;
+    return this;
+  }
+
+  public resourceAttributes(resourceAttributes: Record<string, unknown>): this {
+    this._resourceAttributes = resourceAttributes;
+    return this;
+  }
+
+  public initialize(initialize: boolean): this {
+    this._initialize = initialize;
     return this;
   }
 
   public build(): Tracer {
-    if (!this.config) {
-      throw new Error("Configuration is required");
+    if (!this._projectName) {
+      throw new Error("Project name is required");
     }
 
-    const client =
-      this._apiClient ||
-      new JudgmentApiClient(
-        this.config.apiUrl,
-        this.config.apiKey,
-        this.config.organizationId,
-      );
-
-    return new Tracer(this.config, client, this._serializer);
+    return Tracer.getInstance(this._projectName, {
+      apiKey: this._apiKey,
+      organizationId: this._organizationId,
+      enableMonitoring: this._enableMonitoring,
+      enableEvaluation: this._enableEvaluation,
+      resourceAttributes: this._resourceAttributes,
+      initialize: this._initialize,
+    });
   }
 }
