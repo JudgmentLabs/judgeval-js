@@ -23,8 +23,22 @@ import { TracerConfiguration } from "./TracerConfiguration";
 export type Serializer = (obj: unknown) => string;
 type SpanKind = ("llm" | "tool" | "span") & {};
 
-export class Tracer {
-  private static instance: Tracer | null = null;
+export type TracerOptions = {
+  apiKey?: string;
+  organizationId?: string;
+  enableMonitoring?: boolean;
+  enableEvaluation?: boolean;
+  resourceAttributes?: Record<string, unknown>;
+  initialize?: boolean;
+};
+
+export type TracerInitializeOptions = {
+  resourceAttributes?: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
+export abstract class Tracer {
+  protected static instances: Map<string, Tracer> = new Map();
 
   public apiKey: string;
   public organizationId: string;
@@ -35,10 +49,10 @@ export class Tracer {
   public tracer: unknown = null;
   public serializer: Serializer = JSON.stringify;
 
-  private _initialized: boolean = false;
+  protected _initialized: boolean = false;
 
   private projectId: string = "";
-  private configuration: TracerConfiguration | null = null;
+  protected configuration: TracerConfiguration | null = null;
 
   public getConfiguration(): TracerConfiguration | null {
     return this.configuration;
@@ -52,17 +66,7 @@ export class Tracer {
     return this.serializer;
   }
 
-  private constructor(
-    projectName: string,
-    options: {
-      apiKey?: string;
-      organizationId?: string;
-      enableMonitoring?: boolean;
-      enableEvaluation?: boolean;
-      resourceAttributes?: Record<string, unknown>;
-      initialize?: boolean;
-    } = {},
-  ) {
+  public constructor(projectName: string, options: TracerOptions = {}) {
     this.projectName = projectName;
     this.apiKey = expectApiKey(options.apiKey || JUDGMENT_API_KEY);
     this.organizationId = expectOrganizationId(
@@ -75,12 +79,18 @@ export class Tracer {
       options.enableEvaluation ??
       JUDGMENT_ENABLE_EVALUATIONS?.toLowerCase() === "true";
 
+    // Initialize API client in constructor
+    this.apiClient = new JudgmentApiClient(
+      this.apiKey,
+      this.organizationId,
+      JUDGMENT_API_URL || "https://api.judgmentlabs.ai",
+    );
+
     if (!this._initialized) {
       this._initialized = false;
 
       if (options.initialize !== false) {
-        // Initialize asynchronously - don't await in constructor
-        this.initialize().catch((error) => {
+        this.initialize({}).catch((error) => {
           Logger.error(
             `Failed to initialize tracer: ${error instanceof Error ? error.message : String(error)}`,
           );
@@ -89,34 +99,7 @@ export class Tracer {
     }
   }
 
-  public static getInstance(
-    projectName: string,
-    options: {
-      apiKey?: string;
-      organizationId?: string;
-      enableMonitoring?: boolean;
-      enableEvaluation?: boolean;
-      resourceAttributes?: Record<string, unknown>;
-      initialize?: boolean;
-    } = {},
-  ): Tracer {
-    if (!Tracer.instance) {
-      Tracer.instance = new Tracer(projectName, options);
-    }
-    return Tracer.instance;
-  }
-
-  public async initialize(): Promise<Tracer> {
-    if (this._initialized) {
-      return this;
-    }
-
-    // TODO: Initialize OpenTelemetry here
-    // This will be implemented later
-
-    this._initialized = true;
-    return this;
-  }
+  public abstract initialize(options: TracerInitializeOptions): Promise<Tracer>;
 
   private async resolveProjectId(): Promise<string> {
     if (!this.configuration || !this.apiClient) {
@@ -150,26 +133,6 @@ export class Tracer {
         `Failed to resolve project ID: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
-  }
-
-  public static builder(): TracerBuilder {
-    return new TracerBuilder();
-  }
-
-  public static createDefault(projectName: string): Tracer {
-    return Tracer.getInstance(projectName);
-  }
-
-  public static createWithConfiguration(
-    configuration: TracerConfiguration,
-  ): Tracer {
-    return Tracer.builder()
-      .projectName(configuration.projectName)
-      .apiKey(configuration.apiKey)
-      .organizationId(configuration.organizationId)
-      .enableEvaluation(configuration.enableEvaluation)
-      .initialize(true)
-      .build();
   }
 
   public static getExporter(
@@ -376,7 +339,7 @@ export class Tracer {
     const evalName = `async_trace_evaluate_${spanId || Date.now()}`;
     const modelName = model || JUDGMENT_DEFAULT_GPT_MODEL;
 
-    const scorerConfig = scorer.getConfig();
+    const scorerConfig = scorer.getScorerConfig();
 
     return {
       project_name: this.configuration.projectName,
@@ -420,7 +383,7 @@ export class Tracer {
     const runId = `async_evaluate_${spanId || Date.now()}`;
     const modelName = model || JUDGMENT_DEFAULT_GPT_MODEL;
 
-    const scorerConfig = scorer.getConfig();
+    const scorerConfig = scorer.getScorerConfig();
 
     const evaluationRun: ExampleEvaluationRun = {
       project_name: this.configuration.projectName,
@@ -462,68 +425,9 @@ export class Tracer {
     }
     return func();
   }
-}
 
-export class TracerBuilder {
-  private _projectName?: string;
-  private _apiKey?: string;
-  private _organizationId?: string;
-  private _enableMonitoring?: boolean;
-  private _enableEvaluation?: boolean;
-  private _resourceAttributes?: Record<string, unknown>;
-  private _initialize: boolean = true;
-
-  public static builder(): TracerBuilder {
-    return new TracerBuilder();
-  }
-
-  public projectName(projectName: string): this {
-    this._projectName = projectName;
-    return this;
-  }
-
-  public apiKey(apiKey: string): this {
-    this._apiKey = apiKey;
-    return this;
-  }
-
-  public organizationId(organizationId: string): this {
-    this._organizationId = organizationId;
-    return this;
-  }
-
-  public enableMonitoring(enableMonitoring: boolean): this {
-    this._enableMonitoring = enableMonitoring;
-    return this;
-  }
-
-  public enableEvaluation(enableEvaluation: boolean): this {
-    this._enableEvaluation = enableEvaluation;
-    return this;
-  }
-
-  public resourceAttributes(resourceAttributes: Record<string, unknown>): this {
-    this._resourceAttributes = resourceAttributes;
-    return this;
-  }
-
-  public initialize(initialize: boolean): this {
-    this._initialize = initialize;
-    return this;
-  }
-
-  public build(): Tracer {
-    if (!this._projectName) {
-      throw new Error("Project name is required");
-    }
-
-    return Tracer.getInstance(this._projectName, {
-      apiKey: this._apiKey,
-      organizationId: this._organizationId,
-      enableMonitoring: this._enableMonitoring,
-      enableEvaluation: this._enableEvaluation,
-      resourceAttributes: this._resourceAttributes,
-      initialize: this._initialize,
-    });
+  public async shutdown(): Promise<void> {
+    // Default implementation - no specific shutdown needed
+    // This will be overridden by browser/node implementations
   }
 }

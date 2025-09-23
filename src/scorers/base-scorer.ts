@@ -5,7 +5,7 @@ export type BaseScorer = BaseScorerModel & {
   addModel: (model: string) => void;
   successCheck: () => boolean;
   getRequiredParams: () => string[];
-  getConfig: () => ScorerConfig;
+  getScorerConfig: () => ScorerConfig;
 };
 
 export function createBaseScorer(): BaseScorer {
@@ -30,7 +30,7 @@ export function createBaseScorer(): BaseScorer {
     getRequiredParams: () => {
       return [];
     },
-    getConfig: () => {
+    getScorerConfig: () => {
       return {
         score_type: scorer.score_type,
         name: scorer.name,

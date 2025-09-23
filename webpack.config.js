@@ -2,55 +2,63 @@ const path = require("path");
 
 module.exports = (env, argv) => {
   const isProduction = argv.mode === "production";
-  const target = env.target || "esm";
+  const target = env.target || "main";
 
-  const getOutputConfig = () => {
+  const getConfig = () => {
     switch (target) {
-      case "esm":
+      case "main":
         return {
+          entry: "./src/index.ts",
           filename: "index.mjs",
-          library: {
-            type: "module",
-          },
-          environment: {
-            module: true,
-          },
+          libraryType: "module",
+          target: "node",
         };
-      case "cjs":
+      case "browser":
         return {
-          filename: "index.js",
-          library: {
-            type: "commonjs2",
-          },
-          environment: {
-            module: false,
-          },
+          entry: "./src/browser.ts",
+          filename: "browser.mjs",
+          libraryType: "module",
+          target: "web",
+        };
+      case "node":
+        return {
+          entry: "./src/node.ts",
+          filename: "node.mjs",
+          libraryType: "module",
+          target: "node",
         };
       case "umd":
         return {
+          entry: "./src/umd.ts",
           filename: "index.umd.js",
-          library: {
-            name: "JudgevalJS",
-            type: "umd",
-          },
-          globalObject: "this",
+          libraryType: "umd",
+          target: "web",
         };
       default:
         throw new Error(`Unknown target: ${target}`);
     }
   };
 
-  const outputConfig = getOutputConfig();
+  const config = getConfig();
 
   return {
-    entry: target === "umd" ? "./src/umd.ts" : "./src/index.ts",
-    target: "node",
+    entry: config.entry,
+    target: config.target,
     mode: isProduction ? "production" : "development",
     devtool: isProduction ? "source-map" : "eval-source-map",
     output: {
       path: path.resolve(__dirname, "dist"),
-      ...outputConfig,
-      clean: false, // Don't clean dist folder as we build multiple targets
+      filename: config.filename,
+      library: {
+        name: config.libraryType === "umd" ? "JudgevalJS" : undefined,
+        type: config.libraryType,
+      },
+      globalObject: config.libraryType === "umd" ? "this" : undefined,
+      environment: {
+        module: config.libraryType === "module",
+      },
+      clean: false,
+      iife: config.libraryType === "umd",
     },
     resolve: {
       extensions: [".ts", ".js", ".json"],
@@ -76,15 +84,22 @@ module.exports = (env, argv) => {
       ],
     },
     externals: {
-      // Keep OpenTelemetry dependencies as external for better tree-shaking
       "@opentelemetry/api": "@opentelemetry/api",
       "@opentelemetry/core": "@opentelemetry/core",
       "@opentelemetry/exporter-trace-otlp-http":
         "@opentelemetry/exporter-trace-otlp-http",
       "@opentelemetry/sdk-trace-base": "@opentelemetry/sdk-trace-base",
+      "@opentelemetry/sdk-trace-web": "@opentelemetry/sdk-trace-web",
+      "@opentelemetry/sdk-node": "@opentelemetry/sdk-node",
+      "@opentelemetry/sdk-trace-node": "@opentelemetry/sdk-trace-node",
+      "@opentelemetry/auto-instrumentations-node":
+        "@opentelemetry/auto-instrumentations-node",
+      "@opentelemetry/resources": "@opentelemetry/resources",
+      "@opentelemetry/semantic-conventions":
+        "@opentelemetry/semantic-conventions",
     },
     experiments: {
-      outputModule: target === "esm",
+      outputModule: config.libraryType === "module",
     },
     optimization: {
       minimize: isProduction,
