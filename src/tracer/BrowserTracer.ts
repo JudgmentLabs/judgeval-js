@@ -1,5 +1,8 @@
 import { resourceFromAttributes } from "@opentelemetry/resources";
-import { WebTracerProvider } from "@opentelemetry/sdk-trace-web";
+import {
+  BatchSpanProcessor,
+  WebTracerProvider,
+} from "@opentelemetry/sdk-trace-web";
 import { VERSION } from "../version";
 import { OpenTelemetryKeys } from "./OpenTelemetryKeys";
 import { Tracer, TracerInitializeOptions } from "./Tracer";
@@ -25,8 +28,11 @@ export class BrowserTracer extends Tracer {
         ...options.resourceAttributes,
       };
 
+      const spanExporter = await this.getSpanExporter();
+
       this.webTracerProvider = new WebTracerProvider({
         resource: resourceFromAttributes(resourceAttributes),
+        spanProcessors: [new BatchSpanProcessor(spanExporter)],
       });
 
       this.webTracerProvider.register();

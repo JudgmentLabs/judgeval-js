@@ -1,5 +1,6 @@
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import { NodeSDK, NodeSDKConfiguration } from "@opentelemetry/sdk-node";
+import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-node";
 import { VERSION } from "../version";
 import { OpenTelemetryKeys } from "./OpenTelemetryKeys";
 import { Tracer, TracerInitializeOptions } from "./Tracer";
@@ -14,7 +15,7 @@ export class NodeTracer extends Tracer {
   private nodeSDK?: NodeSDK;
 
   public async initialize(
-    options: NodeTracerInitializeOptions = {}
+    options: NodeTracerInitializeOptions = {},
   ): Promise<NodeTracer> {
     if (this._initialized) {
       return this;
@@ -28,9 +29,12 @@ export class NodeTracer extends Tracer {
         ...options.resourceAttributes,
       };
 
+      const spanExporter = await this.getSpanExporter();
+
       this.nodeSDK = new NodeSDK({
         resource: resourceFromAttributes(resourceAttributes),
         instrumentations: options.instrumentations,
+        spanProcessor: new BatchSpanProcessor(spanExporter),
         ...options,
       });
 
@@ -40,7 +44,7 @@ export class NodeTracer extends Tracer {
       return this;
     } catch (error) {
       throw new Error(
-        `Failed to initialize node tracer: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to initialize node tracer: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -62,7 +66,7 @@ export class NodeTracer extends Tracer {
   }
 
   public static createWithConfiguration(
-    configuration: TracerConfiguration
+    configuration: TracerConfiguration,
   ): NodeTracer {
     return new NodeTracer(configuration);
   }
