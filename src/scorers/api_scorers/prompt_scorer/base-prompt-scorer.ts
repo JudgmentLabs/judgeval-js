@@ -185,7 +185,7 @@ export abstract class BasePromptScorer
       prompt: this.prompt,
       threshold: this.threshold,
       options: this.options,
-    };
+    } as const;
   }
 
   async pushPromptScorer(): Promise<void> {
@@ -243,7 +243,7 @@ export abstract class BasePromptScorer
     this.requiredParams = params;
   }
 
-  toTransport(): ScorerConfig {
+  getScorerConfig(): ScorerConfig {
     return {
       score_type: this.getScoreType(),
       name: this.getName(),

@@ -1,4 +1,4 @@
-import { TRACER_NAME } from "../constants";
+import { JUDGEVAL_TRACER_INSTRUMENTING_MODULE_NAME } from "../constants";
 import { JUDGMENT_API_KEY, JUDGMENT_API_URL, JUDGMENT_ORG_ID } from "../env";
 
 /**
@@ -25,7 +25,7 @@ export class TracerConfiguration {
     public readonly organizationId: string,
     public readonly apiUrl: string,
     public readonly enableEvaluation: boolean,
-    public readonly tracerName: string = TRACER_NAME,
+    public readonly tracerName: string = JUDGEVAL_TRACER_INSTRUMENTING_MODULE_NAME,
   ) {}
 
   /**
@@ -66,11 +66,11 @@ export class TracerConfiguration {
  */
 export class TracerConfigurationBuilder {
   private _projectName?: string;
-  private _apiKey: string = JUDGMENT_API_KEY || "";
-  private _organizationId: string = JUDGMENT_ORG_ID || "";
-  private _apiUrl: string = JUDGMENT_API_URL || "";
+  private _apiKey: string | null = JUDGMENT_API_KEY;
+  private _organizationId: string | null = JUDGMENT_ORG_ID;
+  private _apiUrl: string = JUDGMENT_API_URL;
   private _enableEvaluation: boolean = true;
-  private _tracerName: string = TRACER_NAME;
+  private _tracerName: string = JUDGEVAL_TRACER_INSTRUMENTING_MODULE_NAME;
 
   public projectName(projectName: string): this {
     this._projectName = projectName;

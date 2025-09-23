@@ -1,25 +1,40 @@
-import { trace } from "@opentelemetry/api";
-import { JUDGMENT_DEFAULT_GPT_MODEL } from "../env";
+import {
+  context,
+  SpanKind as OpenTelemetrySpanKind,
+  trace,
+} from "@opentelemetry/api";
+import { JUDGMENT_API_URL, JUDGMENT_DEFAULT_GPT_MODEL } from "../env";
 import { JudgmentApiClient } from "../internal/api";
 import {
   ExampleEvaluationRun,
   Example as ExampleModel,
-  ResolveProjectNameRequest,
 } from "../internal/api/models";
 import { BaseScorer } from "../scorers/base-scorer";
+import { parseFunctionArgs } from "../utils/annotate";
 import { Logger } from "../utils/logger";
 import { JudgmentSpanExporter, NoOpSpanExporter } from "./exporters";
 import { OpenTelemetryKeys } from "./OpenTelemetryKeys";
 import { TracerConfiguration } from "./TracerConfiguration";
 
 export type Serializer = (obj: unknown) => string;
+type SpanKind = ("llm" | "tool" | "span") & {};
 
-export class Tracer {
-  private readonly configuration: TracerConfiguration;
-  private readonly apiClient: JudgmentApiClient;
-  private readonly serializer: Serializer;
+export type TracerInitializeOptions = {
+  resourceAttributes?: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
+export abstract class Tracer {
+  protected static instances: Map<string, Tracer> = new Map();
+
+  public apiClient: JudgmentApiClient;
+  public tracer: unknown = null;
+  public serializer: Serializer = JSON.stringify;
+
+  protected _initialized: boolean = false;
+
   private projectId: string | null = null;
-  private projectIdPromise: Promise<string | null>;
+  protected configuration: TracerConfiguration;
 
   public getConfiguration(): TracerConfiguration {
     return this.configuration;
@@ -33,79 +48,85 @@ export class Tracer {
     return this.serializer;
   }
 
-  constructor(
-    configuration: TracerConfiguration,
-    apiClient: JudgmentApiClient,
-    serializer: Serializer,
-  ) {
+  public constructor(configuration: TracerConfiguration) {
     this.configuration = configuration;
-    this.apiClient = apiClient;
-    this.serializer = serializer;
-    this.projectIdPromise = this.resolveProjectId();
+
+    this.apiClient = new JudgmentApiClient(
+      this.configuration.apiUrl,
+      this.configuration.apiKey,
+      this.configuration.organizationId,
+    );
+
+    this._initialized = false;
   }
 
-  private async resolveProjectId(): Promise<string | null> {
+  public abstract initialize(options: TracerInitializeOptions): Promise<Tracer>;
+
+  private async resolveProjectId(): Promise<string> {
     try {
       Logger.info(
         `Resolving project ID for project: ${this.configuration.projectName}`,
       );
 
-      const request: ResolveProjectNameRequest = {
+      const response = await this.apiClient.projectsResolve({
         project_name: this.configuration.projectName,
-      } as const;
+      });
+      Logger.info(`Resolved project ID: ${response.project_id}`);
+      const resolvedProjectId = response.project_id?.toString();
 
-      const response = await this.apiClient.projectsResolve(request);
-      this.projectId = response.project_id?.toString() || null;
-
-      if (this.projectId) {
-        Logger.info(`Successfully resolved project ID: ${this.projectId}`);
-      } else {
-        Logger.warn(
+      if (!resolvedProjectId) {
+        throw new Error(
           `Project ID not found for project: ${this.configuration.projectName}`,
         );
       }
 
+      this.projectId = resolvedProjectId;
+      Logger.info(`Successfully resolved project ID: ${this.projectId}`);
+
       return this.projectId;
     } catch (error) {
-      this.projectId = null;
-      return null;
+      throw new Error(
+        `Failed to resolve project ID: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
-  public static builder(): TracerBuilder {
-    return new TracerBuilder();
-  }
+  public static getExporter(
+    apiKey: string,
+    organizationId: string,
+    projectId: string,
+  ): JudgmentSpanExporter {
+    const endpoint = JUDGMENT_API_URL?.endsWith("/")
+      ? `${JUDGMENT_API_URL}otel/v1/traces`
+      : `${JUDGMENT_API_URL}/otel/v1/traces`;
 
-  public static createDefault(projectName: string): Tracer {
-    return TracerBuilder.builder()
-      .configuration(TracerConfiguration.createDefault(projectName))
+    return JudgmentSpanExporter.builder()
+      .endpoint(endpoint)
+      .apiKey(apiKey)
+      .organizationId(organizationId)
+      .projectId(projectId)
       .build();
-  }
-
-  public static createWithConfiguration(
-    configuration: TracerConfiguration,
-  ): Tracer {
-    return TracerBuilder.builder().configuration(configuration).build();
   }
 
   public async getSpanExporter(): Promise<
     JudgmentSpanExporter | NoOpSpanExporter
   > {
-    const projectId = await this.projectIdPromise;
-    if (!projectId) {
+    try {
+      const projectId = await this.resolveProjectId();
+      return this.createJudgmentSpanExporter(projectId);
+    } catch (error) {
       Logger.error(
         "Failed to resolve project " +
           this.configuration.projectName +
           ", please create it first at https://app.judgmentlabs.ai/org/" +
-          this.configuration.organizationId +
+          (this.configuration.organizationId || "unknown") +
           "/projects. Skipping Judgment export.",
       );
       return new NoOpSpanExporter();
     }
-    return this.createJudgmentSpanExporter(projectId);
   }
 
-  public setSpanKind(kind: string | null): void {
+  public setSpanKind(kind: SpanKind): void {
     const currentSpan = trace.getActiveSpan();
     if (!currentSpan) {
       Logger.warn("No active span found, skipping setSpanKind");
@@ -119,7 +140,7 @@ export class Tracer {
     }
   }
 
-  public setAttribute(key: string, value: unknown, type?: any): void {
+  public setAttribute(key: string, value: unknown): void {
     const currentSpan = trace.getActiveSpan();
     if (!currentSpan) {
       Logger.warn("No active span found, skipping setAttribute");
@@ -154,11 +175,11 @@ export class Tracer {
     }
   }
 
-  public setInput(input: unknown, type?: any): void {
+  public setInput(input: unknown): void {
     this.setAttribute(OpenTelemetryKeys.AttributeKeys.JUDGMENT_INPUT, input);
   }
 
-  public setOutput(output: unknown, type?: any): void {
+  public setOutput(output: unknown): void {
     this.setAttribute(OpenTelemetryKeys.AttributeKeys.JUDGMENT_OUTPUT, output);
   }
 
@@ -167,6 +188,11 @@ export class Tracer {
     example: ExampleModel,
     model?: string,
   ): void {
+    if (!this._initialized) {
+      Logger.warn("Tracer not initialized, skipping asyncEvaluate");
+      return;
+    }
+
     if (!this.configuration.enableEvaluation) {
       return;
     }
@@ -200,6 +226,11 @@ export class Tracer {
   }
 
   public asyncTraceEvaluate(scorer: BaseScorer, model?: string): void {
+    if (!this._initialized) {
+      Logger.warn("Tracer not initialized, skipping asyncTraceEvaluate");
+      return;
+    }
+
     if (!this.configuration.enableEvaluation) {
       return;
     }
@@ -246,11 +277,11 @@ export class Tracer {
     model: string | undefined,
     traceId: string,
     spanId: string,
-  ): any {
+  ): Record<string, unknown> {
     const evalName = `async_trace_evaluate_${spanId || Date.now()}`;
     const modelName = model || JUDGMENT_DEFAULT_GPT_MODEL;
 
-    const scorerConfig = scorer.toTransport();
+    const scorerConfig = scorer.getScorerConfig();
 
     return {
       project_name: this.configuration.projectName,
@@ -268,12 +299,12 @@ export class Tracer {
       ? `${this.configuration.apiUrl}otel/v1/traces`
       : `${this.configuration.apiUrl}/otel/v1/traces`;
 
-    return new JudgmentSpanExporter(
-      endpoint,
-      this.configuration.apiKey,
-      this.configuration.organizationId,
-      projectId,
-    );
+    return JudgmentSpanExporter.builder()
+      .endpoint(endpoint)
+      .apiKey(this.configuration.apiKey)
+      .organizationId(this.configuration.organizationId)
+      .projectId(projectId)
+      .build();
   }
 
   private createEvaluationRun(
@@ -286,7 +317,7 @@ export class Tracer {
     const runId = `async_evaluate_${spanId || Date.now()}`;
     const modelName = model || JUDGMENT_DEFAULT_GPT_MODEL;
 
-    const scorerConfig = scorer.toTransport();
+    const scorerConfig = scorer.getScorerConfig();
 
     const evaluationRun: ExampleEvaluationRun = {
       project_name: this.configuration.projectName,
@@ -305,6 +336,11 @@ export class Tracer {
   private async enqueueEvaluation(
     evaluationRun: ExampleEvaluationRun,
   ): Promise<void> {
+    if (!this.apiClient) {
+      Logger.warn("API client not available, skipping evaluation enqueue");
+      return;
+    }
+
     try {
       await this.apiClient.addToRunEvalQueueExamples(evaluationRun);
       Logger.info(`Enqueuing evaluation run: ${evaluationRun.eval_name}`);
@@ -314,45 +350,79 @@ export class Tracer {
       );
     }
   }
-}
 
-export class TracerBuilder {
-  private config?: TracerConfiguration;
-  private _apiClient?: JudgmentApiClient;
-  private _serializer: Serializer = JSON.stringify;
+  public observe<TArgs extends any[], TResult>(
+    func: (...args: TArgs) => TResult,
+    spanKind: SpanKind = "span",
+  ): (...args: TArgs) => TResult {
+    return (...args: TArgs) => {
+      const currentSpan = trace.getActiveSpan();
+      if (!currentSpan) {
+        Logger.warn("No active span found, skipping observe");
+        return func(...args);
+      }
 
-  public static builder(): TracerBuilder {
-    return new TracerBuilder();
+      const spanName = func.name || "anonymous";
+      const tracer = trace.getTracer(this.configuration.tracerName);
+
+      return context.with(trace.setSpan(context.active(), currentSpan), () => {
+        return tracer.startActiveSpan(
+          spanName,
+          { kind: OpenTelemetrySpanKind.INTERNAL },
+          (span) => {
+            try {
+              span.setAttribute(
+                OpenTelemetryKeys.AttributeKeys.JUDGMENT_SPAN_KIND,
+                spanKind,
+              );
+
+              const argNames = parseFunctionArgs(func);
+              if (argNames.length === args.length) {
+                const inputObj: Record<string, unknown> = {};
+                argNames.forEach((name, index) => {
+                  inputObj[name] = args[index];
+                });
+                span.setAttribute(
+                  OpenTelemetryKeys.AttributeKeys.JUDGMENT_INPUT,
+                  this.serializer(inputObj),
+                );
+              }
+
+              const result = func(...args);
+
+              if (result instanceof Promise) {
+                return result
+                  .then((res) => {
+                    span.setAttribute(
+                      OpenTelemetryKeys.AttributeKeys.JUDGMENT_OUTPUT,
+                      this.serializer(res),
+                    );
+                    span.end();
+                    return res;
+                  })
+                  .catch((err) => {
+                    span.recordException(err as Error);
+                    span.end();
+                    throw err;
+                  }) as TResult;
+              } else {
+                span.setAttribute(
+                  OpenTelemetryKeys.AttributeKeys.JUDGMENT_OUTPUT,
+                  this.serializer(result),
+                );
+                span.end();
+                return result;
+              }
+            } catch (err) {
+              span.recordException(err as Error);
+              span.end();
+              throw err;
+            }
+          },
+        );
+      });
+    };
   }
 
-  public configuration(configuration: TracerConfiguration): this {
-    this.config = configuration;
-    return this;
-  }
-
-  public apiClient(apiClient: JudgmentApiClient): this {
-    this._apiClient = apiClient;
-    return this;
-  }
-
-  public serializer(serializer: Serializer): this {
-    this._serializer = serializer;
-    return this;
-  }
-
-  public build(): Tracer {
-    if (!this.config) {
-      throw new Error("Configuration is required");
-    }
-
-    const client =
-      this._apiClient ||
-      new JudgmentApiClient(
-        this.config.apiUrl,
-        this.config.apiKey,
-        this.config.organizationId,
-      );
-
-    return new Tracer(this.config, client, this._serializer);
-  }
+  public async shutdown(): Promise<void> {}
 }

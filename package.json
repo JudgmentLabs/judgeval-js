@@ -1,16 +1,16 @@
 {
   "name": "judgeval",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "JavaScript/TypeScript client for Judgment evaluation platform",
-  "main": "./dist/index.js",
+  "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./umd": "./dist/index.umd.js",
     "./package.json": "./package.json"
   },
   "files": [
@@ -19,12 +19,11 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "npm run build:types && npm run build:esm && npm run build:cjs && npm run build:umd",
+    "build": "npm run build:types && npm run build:lib && npm run build:umd",
     "build:types": "tsc -p tsconfig.build.json",
-    "build:esm": "webpack --mode production --config webpack.config.js --env target=esm",
-    "build:cjs": "webpack --mode production --config webpack.config.js --env target=cjs",
+    "build:lib": "webpack --mode production --config webpack.config.js --env target=lib",
     "build:umd": "webpack --mode production --config webpack.config.js --env target=umd",
-    "build:dev": "npm run build:types && webpack --mode development --config webpack.config.js --env target=esm",
+    "build:dev": "npm run build:types && webpack --mode development --config webpack.config.js --env target=lib",
     "check": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.ts\"",
     "generate-client": "ts-node scripts/generate-client.ts && npm run format",
@@ -50,14 +49,17 @@
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/core": "^2.1.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.205.0",
+    "@opentelemetry/resources": "^2.1.0",
+    "@opentelemetry/sdk-node": "^0.205.0",
     "@opentelemetry/sdk-trace-base": "^2.1.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.205.0"
+    "@opentelemetry/sdk-trace-node": "^2.1.0",
+    "@opentelemetry/sdk-trace-web": "^2.1.0",
+    "@opentelemetry/semantic-conventions": "^1.18.1"
   },
   "devDependencies": {
     "@opentelemetry/auto-instrumentations-node": "^0.64.1",
     "@opentelemetry/sdk-metrics": "^2.1.0",
-    "@opentelemetry/sdk-node": "^0.205.0",
-    "@opentelemetry/sdk-trace-node": "^2.1.0",
     "@types/node": "^24.5.2",
     "dotenv": "^17.2.2",
     "prettier": "^3.6.2",
@@ -69,6 +71,6 @@
     "webpack-cli": "^6.0.1"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=18.0.0"
   }
 }

@@ -1,0 +1,39 @@
+name: Test Install
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run check
+
+      - name: Build package
+        run: npm run build
+
+      - name: Check build output
+        run: |
+          set -e
+
+          # Verify main files exist
+          test -f dist/index.mjs
+          test -f dist/index.umd.js
+          test -f dist/index.d.ts
