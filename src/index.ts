@@ -11,3 +11,6 @@ export * from "./utils/annotate";
 export * from "./utils/types";
 
 export * from "./env";
+
+export { BrowserTracer } from "./tracer/BrowserTracer";
+export { NodeTracer } from "./tracer/NodeTracer";

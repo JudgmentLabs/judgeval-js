@@ -10,14 +10,6 @@
       "import": "./dist/index.mjs",
       "types": "./dist/index.d.ts"
     },
-    "./browser": {
-      "import": "./dist/browser.mjs",
-      "types": "./dist/browser.d.ts"
-    },
-    "./node": {
-      "import": "./dist/node.mjs",
-      "types": "./dist/node.d.ts"
-    },
     "./umd": "./dist/index.umd.js",
     "./package.json": "./package.json"
   },
@@ -27,13 +19,11 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "npm run build:types && npm run build:main && npm run build:browser && npm run build:node && npm run build:umd",
+    "build": "npm run build:types && npm run build:lib && npm run build:umd",
     "build:types": "tsc -p tsconfig.build.json",
-    "build:main": "webpack --mode production --config webpack.config.js --env target=main",
-    "build:browser": "webpack --mode production --config webpack.config.js --env target=browser",
-    "build:node": "webpack --mode production --config webpack.config.js --env target=node",
+    "build:lib": "webpack --mode production --config webpack.config.js --env target=lib",
     "build:umd": "webpack --mode production --config webpack.config.js --env target=umd",
-    "build:dev": "npm run build:types && webpack --mode development --config webpack.config.js --env target=main",
+    "build:dev": "npm run build:types && webpack --mode development --config webpack.config.js --env target=lib",
     "check": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.ts\"",
     "generate-client": "ts-node scripts/generate-client.ts && npm run format",

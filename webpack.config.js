@@ -6,24 +6,10 @@ module.exports = (env, argv) => {
 
   const getConfig = () => {
     switch (target) {
-      case "main":
+      case "lib":
         return {
           entry: "./src/index.ts",
           filename: "index.mjs",
-          libraryType: "module",
-          target: "node",
-        };
-      case "browser":
-        return {
-          entry: "./src/browser.ts",
-          filename: "browser.mjs",
-          libraryType: "module",
-          target: "web",
-        };
-      case "node":
-        return {
-          entry: "./src/node.ts",
-          filename: "node.mjs",
           libraryType: "module",
           target: "node",
         };
