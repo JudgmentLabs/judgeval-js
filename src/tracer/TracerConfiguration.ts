@@ -25,7 +25,7 @@ export class TracerConfiguration {
     public readonly organizationId: string,
     public readonly apiUrl: string,
     public readonly enableEvaluation: boolean,
-    public readonly tracerName: string = JUDGEVAL_TRACER_INSTRUMENTING_MODULE_NAME,
+    public readonly tracerName: string = JUDGEVAL_TRACER_INSTRUMENTING_MODULE_NAME
   ) {}
 
   /**
@@ -66,9 +66,9 @@ export class TracerConfiguration {
  */
 export class TracerConfigurationBuilder {
   private _projectName?: string;
-  private _apiKey: string = JUDGMENT_API_KEY || "";
-  private _organizationId: string = JUDGMENT_ORG_ID || "";
-  private _apiUrl: string = JUDGMENT_API_URL || "";
+  private _apiKey: string | null = JUDGMENT_API_KEY;
+  private _organizationId: string | null = JUDGMENT_ORG_ID;
+  private _apiUrl: string = JUDGMENT_API_URL;
   private _enableEvaluation: boolean = true;
   private _tracerName: string = JUDGEVAL_TRACER_INSTRUMENTING_MODULE_NAME;
 
@@ -125,7 +125,7 @@ export class TracerConfigurationBuilder {
       this._organizationId,
       this._apiUrl,
       this._enableEvaluation,
-      this._tracerName,
+      this._tracerName
     );
   }
 }

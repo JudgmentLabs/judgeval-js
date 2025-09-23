@@ -2,7 +2,7 @@ import { resourceFromAttributes } from "@opentelemetry/resources";
 import { NodeSDK, NodeSDKConfiguration } from "@opentelemetry/sdk-node";
 import { VERSION } from "../version";
 import { OpenTelemetryKeys } from "./OpenTelemetryKeys";
-import { Tracer, TracerInitializeOptions, TracerOptions } from "./Tracer";
+import { Tracer, TracerInitializeOptions } from "./Tracer";
 import { TracerConfiguration } from "./TracerConfiguration";
 
 export type NodeTracerInitializeOptions = TracerInitializeOptions & {
@@ -14,7 +14,7 @@ export class NodeTracer extends Tracer {
   private nodeSDK?: NodeSDK;
 
   public async initialize(
-    options: NodeTracerInitializeOptions = {},
+    options: NodeTracerInitializeOptions = {}
   ): Promise<NodeTracer> {
     if (this._initialized) {
       return this;
@@ -22,7 +22,8 @@ export class NodeTracer extends Tracer {
 
     try {
       const resourceAttributes = {
-        [OpenTelemetryKeys.ResourceKeys.SERVICE_NAME]: this.projectName,
+        [OpenTelemetryKeys.ResourceKeys.SERVICE_NAME]:
+          this.configuration.projectName,
         [OpenTelemetryKeys.ResourceKeys.TELEMETRY_SDK_VERSION]: VERSION,
         ...options.resourceAttributes,
       };
@@ -35,45 +36,35 @@ export class NodeTracer extends Tracer {
 
       this.nodeSDK.start();
 
-      this.configuration = TracerConfiguration.builder()
-        .projectName(this.projectName)
-        .apiKey(this.apiKey)
-        .organizationId(this.organizationId)
-        .enableEvaluation(this.enableEvaluation)
-        .build();
-
       this._initialized = true;
       return this;
     } catch (error) {
       throw new Error(
-        `Failed to initialize node tracer: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to initialize node tracer: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
 
-  public static getInstance(
-    projectName: string,
-    options: TracerOptions = {},
-  ): NodeTracer {
-    const key = `NodeTracer:${projectName}`;
+  public static getInstance(configuration: TracerConfiguration): NodeTracer {
+    const key = `NodeTracer:${configuration.projectName}`;
     if (!Tracer.instances.has(key)) {
-      Tracer.instances.set(key, new NodeTracer(projectName, options));
+      Tracer.instances.set(key, new NodeTracer(configuration));
     }
     return Tracer.instances.get(key) as NodeTracer;
   }
 
   public static createDefault(projectName: string): NodeTracer {
-    return NodeTracer.getInstance(projectName);
+    const configuration = TracerConfiguration.builder()
+      .projectName(projectName)
+      .enableEvaluation(true)
+      .build();
+    return NodeTracer.getInstance(configuration);
   }
 
   public static createWithConfiguration(
-    configuration: TracerConfiguration,
+    configuration: TracerConfiguration
   ): NodeTracer {
-    return NodeTracer.getInstance(configuration.projectName, {
-      apiKey: configuration.apiKey,
-      organizationId: configuration.organizationId,
-      enableEvaluation: configuration.enableEvaluation,
-    });
+    return new NodeTracer(configuration);
   }
 
   public async shutdown(): Promise<void> {
