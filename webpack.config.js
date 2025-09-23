@@ -11,7 +11,7 @@ module.exports = (env, argv) => {
           entry: "./src/index.ts",
           filename: "index.mjs",
           libraryType: "module",
-          target: "node",
+          target: "node20",
         };
       case "umd":
         return {

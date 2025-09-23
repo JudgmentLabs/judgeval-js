@@ -14,7 +14,7 @@ export class BrowserTracer extends Tracer {
   private webTracerProvider?: WebTracerProvider;
 
   public async initialize(
-    options: BrowserTracerInitializeOptions = {}
+    options: BrowserTracerInitializeOptions = {},
   ): Promise<BrowserTracer> {
     if (this._initialized) {
       return this;
@@ -41,7 +41,7 @@ export class BrowserTracer extends Tracer {
       return this;
     } catch (error) {
       throw new Error(
-        `Failed to initialize browser tracer: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to initialize browser tracer: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -62,7 +62,7 @@ export class BrowserTracer extends Tracer {
   }
 
   public static createWithConfiguration(
-    configuration: TracerConfiguration
+    configuration: TracerConfiguration,
   ): BrowserTracer {
     return new BrowserTracer(configuration);
   }
