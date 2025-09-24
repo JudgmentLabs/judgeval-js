@@ -1,26 +1,12 @@
 #!/usr/bin/env bun
 
-import type { BuildConfig } from "bun";
+import type { BuildConfig, BuildOutput } from "bun";
 import { build } from "bun";
 
-const target = process.argv[2] || "lib";
 const isDev = process.argv.includes("--dev");
 const isProduction = !isDev;
 
-async function buildLib() {
-  const config: BuildConfig = {
-    entrypoints: ["./src/index.ts"],
-    outdir: "./dist",
-    target: "node",
-    format: "esm",
-    external: ["@opentelemetry/*"],
-    minify: isProduction,
-    sourcemap: isProduction ? "linked" : "inline",
-    naming: { entry: "index.mjs" },
-  };
-
-  const result = await build(config);
-
+function handleBuildResult(result: BuildOutput, target: string) {
   if (!result.success) {
     console.error(`Build failed for target '${target}':`);
     result.logs.forEach((log) => {
@@ -36,8 +22,24 @@ async function buildLib() {
   }
 
   console.log(
-    `✓ Built lib bundle: ${result.outputs.map((o) => o.path).join(", ")}`
+    `✓ Built ${target} bundle: ${result.outputs.map((o) => o.path).join(", ")}`
   );
+}
+
+async function buildLib() {
+  const config: BuildConfig = {
+    entrypoints: ["./src/index.ts"],
+    outdir: "./dist",
+    target: "node",
+    format: "esm",
+    external: ["@opentelemetry/*"],
+    minify: isProduction,
+    sourcemap: isProduction ? "linked" : "inline",
+    naming: { entry: "index.mjs" },
+  };
+
+  const result = await build(config);
+  handleBuildResult(result, "lib");
 }
 
 async function buildUmd() {
@@ -53,39 +55,27 @@ async function buildUmd() {
   };
 
   const result = await build(config);
-
-  if (!result.success) {
-    console.error(`Build failed for target '${target}':`);
-    result.logs.forEach((log) => {
-      const level = log.level === "error" ? "ERROR" : log.level.toUpperCase();
-      console.error(`  [${level}] ${log.message}`);
-      if (log.position) {
-        console.error(
-          `    at ${log.position.file}:${log.position.line}:${log.position.column}`
-        );
-      }
-    });
-    process.exit(1);
-  }
-
-  console.log(
-    `✓ Built UMD bundle: ${result.outputs.map((o) => o.path).join(", ")}`
-  );
+  handleBuildResult(result, "umd");
 }
 
 async function main() {
-  switch (target) {
-    case "lib":
-      await buildLib();
-      break;
-    case "umd":
-      await buildUmd();
-      break;
-    default:
-      console.error(`Unknown target: ${target}`);
-      console.error("Available targets: lib, umd");
-      process.exit(1);
-  }
+  const args = process.argv.slice(2).filter((arg) => !arg.startsWith("--"));
+  const targetsToBuild = args.length > 0 ? args : ["lib", "umd"];
+
+  const buildPromises = targetsToBuild.map((target) => {
+    switch (target) {
+      case "lib":
+        return buildLib();
+      case "umd":
+        return buildUmd();
+      default:
+        console.error(`Unknown target: ${target}`);
+        console.error("Available targets: lib, umd");
+        process.exit(1);
+    }
+  });
+
+  await Promise.all(buildPromises);
 }
 
 main().catch(console.error);

@@ -19,7 +19,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "bun run build:types && bun scripts/build.ts lib && bun scripts/build.ts umd",
+    "build": "bun run build:types && bun scripts/build.ts lib umd",
     "build:types": "tsc -p tsconfig.build.json",
     "build:lib": "bun scripts/build.ts lib",
     "build:umd": "bun scripts/build.ts umd",
