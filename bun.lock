@@ -12,7 +12,6 @@
         "@opentelemetry/sdk-trace-base": "^2.1.0",
         "@opentelemetry/sdk-trace-node": "^2.1.0",
         "@opentelemetry/sdk-trace-web": "^2.1.0",
-        "@opentelemetry/semantic-conventions": "^1.18.1",
       },
       "devDependencies": {
         "@opentelemetry/auto-instrumentations-node": "^0.64.1",
