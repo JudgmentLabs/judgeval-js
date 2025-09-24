@@ -1,8 +1,4 @@
-import {
-  context,
-  SpanKind as OpenTelemetrySpanKind,
-  trace,
-} from "@opentelemetry/api";
+import { Tracer as OpenTelemetryTracer, trace } from "@opentelemetry/api";
 import { JUDGMENT_API_URL, JUDGMENT_DEFAULT_GPT_MODEL } from "../env";
 import { JudgmentApiClient } from "../internal/api";
 import {
@@ -28,7 +24,7 @@ export abstract class Tracer {
   protected static instances: Map<string, Tracer> = new Map();
 
   public apiClient: JudgmentApiClient;
-  public tracer: unknown = null;
+  public tracer: OpenTelemetryTracer;
   public serializer: Serializer = JSON.stringify;
 
   protected _initialized: boolean = false;
@@ -50,6 +46,7 @@ export abstract class Tracer {
 
   public constructor(configuration: TracerConfiguration) {
     this.configuration = configuration;
+    this.tracer = trace.getTracer(this.configuration.tracerName);
 
     this.apiClient = new JudgmentApiClient(
       this.configuration.apiUrl,
@@ -355,71 +352,58 @@ export abstract class Tracer {
     func: (...args: TArgs) => TResult,
     spanKind: SpanKind = "span",
   ): (...args: TArgs) => TResult {
-    return (...args: TArgs) => {
-      const currentSpan = trace.getActiveSpan();
-      if (!currentSpan) {
-        Logger.warn("No active span found, skipping observe");
-        return func(...args);
-      }
-
+    return (...args: TArgs): TResult => {
       const spanName = func.name || "anonymous";
-      const tracer = trace.getTracer(this.configuration.tracerName);
 
-      return context.with(trace.setSpan(context.active(), currentSpan), () => {
-        return tracer.startActiveSpan(
-          spanName,
-          { kind: OpenTelemetrySpanKind.INTERNAL },
-          (span) => {
-            try {
-              span.setAttribute(
-                OpenTelemetryKeys.AttributeKeys.JUDGMENT_SPAN_KIND,
-                spanKind,
-              );
+      return this.tracer.startActiveSpan(spanName, (span) => {
+        try {
+          span.setAttribute(
+            OpenTelemetryKeys.AttributeKeys.JUDGMENT_SPAN_KIND,
+            spanKind,
+          );
 
-              const argNames = parseFunctionArgs(func);
-              if (argNames.length === args.length) {
-                const inputObj: Record<string, unknown> = {};
-                argNames.forEach((name, index) => {
-                  inputObj[name] = args[index];
-                });
-                span.setAttribute(
-                  OpenTelemetryKeys.AttributeKeys.JUDGMENT_INPUT,
-                  this.serializer(inputObj),
-                );
-              }
+          const argNames = parseFunctionArgs(func);
+          if (argNames.length === args.length) {
+            const inputObj: Record<string, unknown> = {};
+            argNames.forEach((name, index) => {
+              inputObj[name] = args[index];
+            });
+            span.setAttribute(
+              OpenTelemetryKeys.AttributeKeys.JUDGMENT_INPUT,
+              this.serializer(inputObj),
+            );
+          }
 
-              const result = func(...args);
+          const result = func(...args);
 
-              if (result instanceof Promise) {
-                return result
-                  .then((res) => {
-                    span.setAttribute(
-                      OpenTelemetryKeys.AttributeKeys.JUDGMENT_OUTPUT,
-                      this.serializer(res),
-                    );
-                    span.end();
-                    return res;
-                  })
-                  .catch((err) => {
-                    span.recordException(err as Error);
-                    span.end();
-                    throw err;
-                  }) as TResult;
-              } else {
+          if (result instanceof Promise) {
+            return result
+              .then((res) => {
                 span.setAttribute(
                   OpenTelemetryKeys.AttributeKeys.JUDGMENT_OUTPUT,
-                  this.serializer(result),
+                  this.serializer(res),
                 );
                 span.end();
-                return result;
-              }
-            } catch (err) {
-              span.recordException(err as Error);
-              span.end();
-              throw err;
-            }
-          },
-        );
+                return res;
+              })
+              .catch((err) => {
+                span.recordException(err as Error);
+                span.end();
+                throw err;
+              }) as TResult;
+          } else {
+            span.setAttribute(
+              OpenTelemetryKeys.AttributeKeys.JUDGMENT_OUTPUT,
+              this.serializer(result),
+            );
+            span.end();
+            return result;
+          }
+        } catch (err) {
+          span.recordException(err as Error);
+          span.end();
+          throw err;
+        }
       });
     };
   }
