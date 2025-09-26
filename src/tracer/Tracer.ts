@@ -55,6 +55,7 @@ export abstract class Tracer {
     );
 
     this._initialized = false;
+    
   }
 
   public abstract initialize(options: TracerInitializeOptions): Promise<Tracer>;
