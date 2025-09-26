@@ -55,7 +55,6 @@ export abstract class Tracer {
     );
 
     this._initialized = false;
-    
   }
 
   public abstract initialize(options: TracerInitializeOptions): Promise<Tracer>;
@@ -384,13 +383,14 @@ export abstract class Tracer {
                   OpenTelemetryKeys.AttributeKeys.JUDGMENT_OUTPUT,
                   this.serializer(res),
                 );
-                span.end();
                 return res;
               })
               .catch((err) => {
                 span.recordException(err as Error);
-                span.end();
                 throw err;
+              })
+              .finally(() => {
+                span.end();
               }) as TResult;
           } else {
             span.setAttribute(

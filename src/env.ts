@@ -27,3 +27,4 @@ export const JUDGMENT_ENABLE_EVALUATIONS = getEnvVar(
   "true",
 );
 export const JUDGMENT_NO_COLOR = getEnvVar("JUDGMENT_NO_COLOR");
+export const JUDGMENT_LOG_LEVEL = getEnvVar("JUDGMENT_LOG_LEVEL", "warn");
