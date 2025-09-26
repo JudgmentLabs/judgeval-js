@@ -44,7 +44,7 @@ async function buildLib() {
 
 async function buildUmd() {
   const config: BuildConfig = {
-    entrypoints: ["./src/umd.ts"],
+    entrypoints: ["./src/index.ts"],
     outdir: "./dist",
     target: "browser",
     format: "iife",

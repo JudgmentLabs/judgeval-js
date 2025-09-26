@@ -1,3 +1,5 @@
+import { JUDGMENT_LOG_LEVEL } from "../env";
+
 export class Logger {
   private static readonly RESET = "\x1b[0m";
   private static readonly RED = "\x1b[31m";
@@ -13,13 +15,27 @@ export class Logger {
   } as const;
 
   private static initialized = false;
-  private static currentLevel: number = Logger.Level.INFO;
+  private static currentLevel: number = Logger.Level.WARNING;
   private static useColor = true;
 
   private static initialize(): void {
     if (!Logger.initialized) {
       const noColor = process.env.JUDGMENT_NO_COLOR;
       Logger.useColor = !noColor && process.stdout.isTTY;
+
+      const logLevel = JUDGMENT_LOG_LEVEL.toLowerCase();
+      if (logLevel) {
+        const levelMap: Record<string, number> = {
+          debug: Logger.Level.DEBUG,
+          info: Logger.Level.INFO,
+          warning: Logger.Level.WARNING,
+          warn: Logger.Level.WARNING,
+          error: Logger.Level.ERROR,
+          critical: Logger.Level.CRITICAL,
+        };
+        Logger.currentLevel = levelMap[logLevel] ?? Logger.Level.WARNING;
+      }
+
       Logger.initialized = true;
     }
   }

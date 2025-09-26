@@ -1,15 +1,14 @@
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import { NodeSDK, NodeSDKConfiguration } from "@opentelemetry/sdk-node";
-import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-node";
+import { Logger } from "../utils/logger";
 import { VERSION } from "../version";
 import { OpenTelemetryKeys } from "./OpenTelemetryKeys";
 import { Tracer, TracerInitializeOptions } from "./Tracer";
 import { TracerConfiguration } from "./TracerConfiguration";
 
 export type NodeTracerInitializeOptions = TracerInitializeOptions & {
-  instrumentations?: NodeSDKConfiguration["instrumentations"];
   resourceAttributes?: Record<string, unknown>;
-};
+} & Partial<NodeSDKConfiguration>;
 
 export class NodeTracer extends Tracer {
   private nodeSDK?: NodeSDK;
@@ -34,7 +33,7 @@ export class NodeTracer extends Tracer {
       this.nodeSDK = new NodeSDK({
         resource: resourceFromAttributes(resourceAttributes),
         instrumentations: options.instrumentations,
-        spanProcessor: new BatchSpanProcessor(spanExporter),
+        traceExporter: spanExporter,
         ...options,
       });
 
@@ -72,8 +71,10 @@ export class NodeTracer extends Tracer {
   }
 
   public async shutdown(): Promise<void> {
-    if (this.nodeSDK) {
-      await this.nodeSDK.shutdown();
+    if (!this.nodeSDK) {
+      Logger.warn("Node SDK not initialized, skipping shutdown");
+      return;
     }
+    await this.nodeSDK.shutdown();
   }
 }
