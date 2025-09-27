@@ -1,4 +1,4 @@
-import { Tracer as OpenTelemetryTracer, trace } from "@opentelemetry/api";
+import { Tracer as OpenTelemetryTracer, Span, trace } from "@opentelemetry/api";
 import { JUDGMENT_API_URL, JUDGMENT_DEFAULT_GPT_MODEL } from "../env";
 import { JudgmentApiClient } from "../internal/api";
 import {
@@ -362,7 +362,7 @@ export abstract class Tracer {
   }
 
   private _executeWithSpan<TArgs extends any[], TResult>(
-    span: any,
+    span: Span,
     func: (...args: TArgs) => TResult,
     args: TArgs,
     spanKind: SpanKind
