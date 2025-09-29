@@ -126,7 +126,7 @@ export abstract class Tracer {
   public setSpanKind(kind: SpanKind): void {
     const currentSpan = trace.getActiveSpan();
     if (!currentSpan) {
-      Logger.warn("No active span found, skipping setSpanKind");
+      Logger.info("No active span found, skipping setSpanKind");
       return;
     }
     if (kind !== null) {
@@ -140,7 +140,7 @@ export abstract class Tracer {
   public setAttribute(key: string, value: unknown): void {
     const currentSpan = trace.getActiveSpan();
     if (!currentSpan) {
-      Logger.warn("No active span found, skipping setAttribute");
+      Logger.info("No active span found, skipping setAttribute");
       return;
     }
     currentSpan.setAttribute(key, this.serializer(value));
@@ -164,7 +164,7 @@ export abstract class Tracer {
     }
     const currentSpan = trace.getActiveSpan();
     if (!currentSpan) {
-      Logger.warn("No active span found, skipping setAttributes");
+      Logger.info("No active span found, skipping setAttributes");
       return;
     }
     for (const [key, value] of Object.entries(attributes)) {
@@ -186,7 +186,7 @@ export abstract class Tracer {
     model?: string
   ): void {
     if (!this._initialized) {
-      Logger.warn("Tracer not initialized, skipping asyncEvaluate");
+      Logger.info("Tracer not initialized, skipping asyncEvaluate");
       return;
     }
 
@@ -196,11 +196,11 @@ export abstract class Tracer {
 
     const currentSpan = trace.getActiveSpan();
     if (!currentSpan) {
-      Logger.warn("No active span found, skipping asyncEvaluate");
+      Logger.info("No active span found, skipping asyncEvaluate");
       return;
     }
     if (!currentSpan.isRecording()) {
-      Logger.warn("Active span is not recording, skipping asyncEvaluate");
+      Logger.info("Active span is not recording, skipping asyncEvaluate");
       return;
     }
 
@@ -224,7 +224,7 @@ export abstract class Tracer {
 
   public asyncTraceEvaluate(scorer: BaseScorer, model?: string): void {
     if (!this._initialized) {
-      Logger.warn("Tracer not initialized, skipping asyncTraceEvaluate");
+      Logger.info("Tracer not initialized, skipping asyncTraceEvaluate");
       return;
     }
 
@@ -234,11 +234,11 @@ export abstract class Tracer {
 
     const currentSpan = trace.getActiveSpan();
     if (!currentSpan) {
-      Logger.warn("No active span found, skipping asyncTraceEvaluate");
+      Logger.info("No active span found, skipping asyncTraceEvaluate");
       return;
     }
     if (!currentSpan.isRecording()) {
-      Logger.warn("Active span is not recording, skipping asyncTraceEvaluate");
+      Logger.info("Active span is not recording, skipping asyncTraceEvaluate");
       return;
     }
 
@@ -334,7 +334,7 @@ export abstract class Tracer {
     evaluationRun: ExampleEvaluationRun
   ): Promise<void> {
     if (!this.apiClient) {
-      Logger.warn("API client not available, skipping evaluation enqueue");
+      Logger.info("API client not available, skipping evaluation enqueue");
       return;
     }
 
