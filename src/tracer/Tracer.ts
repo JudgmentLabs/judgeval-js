@@ -473,22 +473,19 @@ export abstract class Tracer {
           Logger.error(
             `Failed to wrap method with observe: ${error instanceof Error ? error.message : String(error)}`,
           );
+          // Don't modify the descriptor if wrapping fails - preserve original behavior
         }
       };
     } catch (error) {
       Logger.error(
         `Failed to observe function: ${error instanceof Error ? error.message : String(error)}`,
       );
-      // Return a no-op function if observation fails
-      return (...args: any[]) => {
-        Logger.warn(
-          "Observe wrapper failed, calling original function without tracing",
-        );
-        if (typeof funcOrSpanKind === "function") {
-          return (funcOrSpanKind as (...args: any[]) => any)(...args);
-        }
-        return undefined;
-      };
+      // Return the original function if observation fails - preserve exact types and behavior
+      if (typeof funcOrSpanKind === "function") {
+        return funcOrSpanKind;
+      }
+      // Return a no-op decorator that doesn't modify anything
+      return () => {};
     }
   }
 
