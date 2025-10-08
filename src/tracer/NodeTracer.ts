@@ -6,9 +6,8 @@ import { OpenTelemetryKeys } from "./OpenTelemetryKeys";
 import { Tracer, TracerInitializeOptions } from "./Tracer";
 import { TracerConfiguration } from "./TracerConfiguration";
 
-export type NodeTracerInitializeOptions = TracerInitializeOptions & {
-  resourceAttributes?: Record<string, unknown>;
-} & Partial<NodeSDKConfiguration>;
+export type NodeTracerInitializeOptions = TracerInitializeOptions &
+  Partial<NodeSDKConfiguration>;
 
 export class NodeTracer extends Tracer {
   private nodeSDK?: NodeSDK;
@@ -25,6 +24,7 @@ export class NodeTracer extends Tracer {
         [OpenTelemetryKeys.ResourceKeys.SERVICE_NAME]:
           this.configuration.projectName,
         [OpenTelemetryKeys.ResourceKeys.TELEMETRY_SDK_VERSION]: VERSION,
+        ...this.configuration.resourceAttributes,
         ...options.resourceAttributes,
       };
 

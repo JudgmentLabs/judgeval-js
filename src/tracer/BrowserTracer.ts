@@ -25,6 +25,7 @@ export class BrowserTracer extends Tracer {
         [OpenTelemetryKeys.ResourceKeys.SERVICE_NAME]:
           this.configuration.projectName,
         [OpenTelemetryKeys.ResourceKeys.TELEMETRY_SDK_VERSION]: VERSION,
+        ...this.configuration.resourceAttributes,
         ...options.resourceAttributes,
       };
 
@@ -33,6 +34,7 @@ export class BrowserTracer extends Tracer {
       this.webTracerProvider = new WebTracerProvider({
         resource: resourceFromAttributes(resourceAttributes),
         spanProcessors: [new BatchSpanProcessor(spanExporter)],
+        ...options,
       });
 
       this.webTracerProvider.register();

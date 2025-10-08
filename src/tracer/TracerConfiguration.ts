@@ -13,9 +13,15 @@ import { JUDGMENT_API_KEY, JUDGMENT_API_URL, JUDGMENT_ORG_ID } from "../env";
  *   .apiKey("your-api-key")
  *   .organizationId("your-org-id")
  *   .enableEvaluation(true)
+ *   .resourceAttributes({
+ *     "custom.service.version": "1.0.0",
+ *     "custom.environment": "production"
+ *   })
+ *   .initialize(true)
  *   .build();
  *
- * const tracer = Tracer.createWithConfiguration(config);
+ * const tracer = NodeTracer.createWithConfiguration(config);
+ * // Tracer is ready to use immediately
  * ```
  */
 export class TracerConfiguration {
@@ -26,6 +32,8 @@ export class TracerConfiguration {
     public readonly apiUrl: string,
     public readonly enableEvaluation: boolean,
     public readonly tracerName: string = JUDGEVAL_TRACER_INSTRUMENTING_MODULE_NAME,
+    public readonly resourceAttributes: Record<string, unknown> = {},
+    public readonly initialize: boolean = true,
   ) {}
 
   /**
@@ -61,7 +69,17 @@ export class TracerConfiguration {
  *   .organizationId("custom-org-id")
  *   .apiUrl("https://custom-api.judgmentlabs.ai")
  *   .enableEvaluation(false)
+ *   .resourceAttributes({
+ *     "custom.service.version": "2.0.0",
+ *     "custom.region": "us-west-2"
+ *   })
+ *   .initialize(false)
  *   .build();
+ *
+ * const tracer = NodeTracer.createWithConfiguration(config);
+ * await tracer.initialize({
+ *   instrumentations: []
+ * });
  * ```
  */
 export class TracerConfigurationBuilder {
@@ -71,6 +89,8 @@ export class TracerConfigurationBuilder {
   private _apiUrl: string = JUDGMENT_API_URL;
   private _enableEvaluation: boolean = true;
   private _tracerName: string = JUDGEVAL_TRACER_INSTRUMENTING_MODULE_NAME;
+  private _resourceAttributes: Record<string, unknown> = {};
+  private _initialize: boolean = true;
 
   public projectName(projectName: string): this {
     this._projectName = projectName;
@@ -102,6 +122,16 @@ export class TracerConfigurationBuilder {
     return this;
   }
 
+  public resourceAttributes(resourceAttributes: Record<string, unknown>): this {
+    this._resourceAttributes = resourceAttributes;
+    return this;
+  }
+
+  public initialize(initialize: boolean): this {
+    this._initialize = initialize;
+    return this;
+  }
+
   public build(): TracerConfiguration {
     if (!this._projectName) {
       throw new Error("Project name is required");
@@ -126,6 +156,8 @@ export class TracerConfigurationBuilder {
       this._apiUrl,
       this._enableEvaluation,
       this._tracerName,
+      this._resourceAttributes,
+      this._initialize,
     );
   }
 }
