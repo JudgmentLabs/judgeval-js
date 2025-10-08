@@ -1,6 +1,7 @@
 import { ExportResult } from "@opentelemetry/core";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { ReadableSpan, SpanExporter } from "@opentelemetry/sdk-trace-base";
+import { Logger } from "../../utils/logger";
 
 /**
  * SpanExporter implementation that sends spans to Judgment Labs with project identification.
@@ -10,6 +11,7 @@ import { ReadableSpan, SpanExporter } from "@opentelemetry/sdk-trace-base";
  */
 export class JudgmentSpanExporter implements SpanExporter {
   private readonly delegate: SpanExporter;
+  private readonly projectId: string;
 
   /**
    * Creates a new JudgmentSpanExporter with the specified configuration.
@@ -30,6 +32,7 @@ export class JudgmentSpanExporter implements SpanExporter {
       throw new Error("projectId is required for JudgmentSpanExporter");
     }
 
+    this.projectId = projectId;
     this.delegate = new OTLPTraceExporter({
       url: endpoint,
       headers: {
@@ -54,6 +57,7 @@ export class JudgmentSpanExporter implements SpanExporter {
     spans: ReadableSpan[],
     resultCallback: (result: ExportResult) => void,
   ): void {
+    Logger.info(`JudgmentSpanExporter: Exported ${spans.length} spans`);
     this.delegate.export(spans, resultCallback);
   }
 
@@ -61,6 +65,9 @@ export class JudgmentSpanExporter implements SpanExporter {
    * Shuts down the exporter.
    */
   shutdown(): Promise<void> {
+    Logger.info(
+      `JudgmentSpanExporter: Shutting down exporter for project ${this.projectId}`,
+    );
     return this.delegate.shutdown();
   }
 
@@ -68,6 +75,9 @@ export class JudgmentSpanExporter implements SpanExporter {
    * Forces the exporter to flush any pending spans.
    */
   forceFlush(): Promise<void> {
+    Logger.info(
+      `JudgmentSpanExporter: Force flushing spans for project ${this.projectId}`,
+    );
     return this.delegate.forceFlush?.() ?? Promise.resolve();
   }
 }
