@@ -61,22 +61,7 @@ export abstract class Tracer {
     );
 
     this._initialized = false;
-
-    if (this.configuration.initialize) {
-      this.initialize({
-        resourceAttributes: this.configuration.resourceAttributes,
-      })
-        .then(() => {
-          Logger.info(
-            `Successfully initialized tracer: ${this.configuration.projectName}`,
-          );
-        })
-        .catch((error) => {
-          Logger.error(
-            `Failed to auto-initialize tracer: ${error instanceof Error ? error.message : String(error)}`,
-          );
-        });
-    }
+    // Initialization is handled by the subclasses, since operation requires IO.
   }
 
   public abstract initialize(options: TracerInitializeOptions): Promise<Tracer>;

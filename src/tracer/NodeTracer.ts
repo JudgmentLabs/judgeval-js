@@ -56,18 +56,26 @@ export class NodeTracer extends Tracer {
     return Tracer.instances.get(key) as NodeTracer;
   }
 
-  public static createDefault(projectName: string): NodeTracer {
+  public static async createDefault(projectName: string): Promise<NodeTracer> {
     const configuration = TracerConfiguration.builder()
       .projectName(projectName)
       .enableEvaluation(true)
       .build();
-    return NodeTracer.getInstance(configuration);
+    const tracer = new NodeTracer(configuration);
+    if (configuration.initialize) {
+      await tracer.initialize();
+    }
+    return tracer;
   }
 
-  public static createWithConfiguration(
+  public static async createWithConfiguration(
     configuration: TracerConfiguration,
-  ): NodeTracer {
-    return new NodeTracer(configuration);
+  ): Promise<NodeTracer> {
+    const tracer = new NodeTracer(configuration);
+    if (configuration.initialize) {
+      await tracer.initialize();
+    }
+    return tracer;
   }
 
   public async shutdown(): Promise<void> {

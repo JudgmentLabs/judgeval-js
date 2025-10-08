@@ -56,16 +56,26 @@ export class BrowserTracer extends Tracer {
     return Tracer.instances.get(key) as BrowserTracer;
   }
 
-  public static createDefault(projectName: string): BrowserTracer {
+  public static async createDefault(
+    projectName: string,
+  ): Promise<BrowserTracer> {
     const configuration = TracerConfiguration.builder()
       .projectName(projectName)
       .build();
-    return BrowserTracer.getInstance(configuration);
+    const tracer = new BrowserTracer(configuration);
+    if (configuration.initialize) {
+      await tracer.initialize();
+    }
+    return tracer;
   }
 
-  public static createWithConfiguration(
+  public static async createWithConfiguration(
     configuration: TracerConfiguration,
-  ): BrowserTracer {
-    return new BrowserTracer(configuration);
+  ): Promise<BrowserTracer> {
+    const tracer = new BrowserTracer(configuration);
+    if (configuration.initialize) {
+      await tracer.initialize();
+    }
+    return tracer;
   }
 }
