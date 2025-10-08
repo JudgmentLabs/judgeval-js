@@ -4,7 +4,7 @@ import {
   Span,
   trace,
 } from "@opentelemetry/api";
-import { JUDGMENT_API_URL, JUDGMENT_DEFAULT_GPT_MODEL } from "../env";
+import { JUDGMENT_DEFAULT_GPT_MODEL } from "../env";
 import { JudgmentApiClient } from "../internal/api";
 import {
   ExampleEvaluationRun,
@@ -35,6 +35,7 @@ export abstract class Tracer {
   protected _initialized: boolean = false;
 
   private projectId: string | null = null;
+  private spanExporter: JudgmentSpanExporter | NoOpSpanExporter | null = null;
   protected configuration: TracerConfiguration;
 
   public getConfiguration(): TracerConfiguration {
@@ -102,40 +103,27 @@ export abstract class Tracer {
       );
     }
   }
-
-  public static getExporter(
-    apiKey: string,
-    organizationId: string,
-    projectId: string,
-  ): JudgmentSpanExporter {
-    const endpoint = JUDGMENT_API_URL?.endsWith("/")
-      ? `${JUDGMENT_API_URL}otel/v1/traces`
-      : `${JUDGMENT_API_URL}/otel/v1/traces`;
-
-    return JudgmentSpanExporter.builder()
-      .endpoint(endpoint)
-      .apiKey(apiKey)
-      .organizationId(organizationId)
-      .projectId(projectId)
-      .build();
-  }
-
   public async getSpanExporter(): Promise<
     JudgmentSpanExporter | NoOpSpanExporter
   > {
-    try {
-      const projectId = await this.resolveProjectId();
-      return this.createJudgmentSpanExporter(projectId);
-    } catch (error) {
-      Logger.error(
-        "Failed to resolve project " +
-          this.configuration.projectName +
-          ", please create it first at https://app.judgmentlabs.ai/org/" +
-          (this.configuration.organizationId || "unknown") +
-          "/projects. Skipping Judgment export.",
-      );
-      return new NoOpSpanExporter();
+    if (!this.spanExporter) {
+      try {
+        const projectId = await this.resolveProjectId();
+        this.spanExporter = this.createJudgmentSpanExporter(projectId);
+      } catch (error) {
+        Logger.error(
+          "Failed to resolve project " +
+            this.configuration.projectName +
+            ", please create it first at https://app.judgmentlabs.ai/org/" +
+            (this.configuration.organizationId || "unknown") +
+            "/projects. Skipping Judgment export.",
+        );
+      } finally {
+        this.spanExporter = new NoOpSpanExporter();
+      }
     }
+
+    return this.spanExporter;
   }
 
   public setSpanKind(kind: SpanKind): void {
