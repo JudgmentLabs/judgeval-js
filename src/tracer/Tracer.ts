@@ -51,7 +51,7 @@ export abstract class Tracer {
     this.apiClient = new JudgmentApiClient(
       this.configuration.apiUrl,
       this.configuration.apiKey,
-      this.configuration.organizationId,
+      this.configuration.organizationId
     );
 
     this._initialized = false;
@@ -61,7 +61,7 @@ export abstract class Tracer {
         resourceAttributes: this.configuration.resourceAttributes,
       }).catch((error) => {
         Logger.error(
-          `Failed to auto-initialize tracer: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to auto-initialize tracer: ${error instanceof Error ? error.message : String(error)}`
         );
       });
     }
@@ -72,7 +72,7 @@ export abstract class Tracer {
   private async resolveProjectId(): Promise<string> {
     try {
       Logger.info(
-        `Resolving project ID for project: ${this.configuration.projectName}`,
+        `Resolving project ID for project: ${this.configuration.projectName}`
       );
 
       const response = await this.apiClient.projectsResolve({
@@ -83,7 +83,7 @@ export abstract class Tracer {
 
       if (!resolvedProjectId) {
         throw new Error(
-          `Project ID not found for project: ${this.configuration.projectName}`,
+          `Project ID not found for project: ${this.configuration.projectName}`
         );
       }
 
@@ -93,7 +93,7 @@ export abstract class Tracer {
       return this.projectId;
     } catch (error) {
       throw new Error(
-        `Failed to resolve project ID: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to resolve project ID: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -101,7 +101,7 @@ export abstract class Tracer {
   public static getExporter(
     apiKey: string,
     organizationId: string,
-    projectId: string,
+    projectId: string
   ): JudgmentSpanExporter {
     const endpoint = JUDGMENT_API_URL?.endsWith("/")
       ? `${JUDGMENT_API_URL}otel/v1/traces`
@@ -127,7 +127,7 @@ export abstract class Tracer {
           this.configuration.projectName +
           ", please create it first at https://app.judgmentlabs.ai/org/" +
           (this.configuration.organizationId || "unknown") +
-          "/projects. Skipping Judgment export.",
+          "/projects. Skipping Judgment export."
       );
       return new NoOpSpanExporter();
     }
@@ -142,7 +142,7 @@ export abstract class Tracer {
     if (kind !== null) {
       currentSpan.setAttribute(
         OpenTelemetryKeys.AttributeKeys.JUDGMENT_SPAN_KIND,
-        kind,
+        kind
       );
     }
   }
@@ -193,7 +193,7 @@ export abstract class Tracer {
   public asyncEvaluate(
     scorer: BaseScorer,
     example: ExampleModel,
-    model?: string,
+    model?: string
   ): void {
     try {
       if (!this.configuration.enableEvaluation) {
@@ -215,7 +215,7 @@ export abstract class Tracer {
       const spanId = spanContext.spanId;
 
       Logger.info(
-        `asyncEvaluate: project=${this.configuration.projectName}, traceId=${traceId}, spanId=${spanId}, scorer=${scorer.name}`,
+        `asyncEvaluate: project=${this.configuration.projectName}, traceId=${traceId}, spanId=${spanId}, scorer=${scorer.name}`
       );
 
       const evaluationRun = this.createEvaluationRun(
@@ -223,12 +223,12 @@ export abstract class Tracer {
         example,
         model,
         traceId,
-        spanId,
+        spanId
       );
       this.enqueueEvaluation(evaluationRun);
     } catch (error) {
       Logger.error(
-        `Failed to asyncEvaluate: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to asyncEvaluate: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -246,7 +246,7 @@ export abstract class Tracer {
       }
       if (!currentSpan.isRecording()) {
         Logger.info(
-          "Active span is not recording, skipping asyncTraceEvaluate",
+          "Active span is not recording, skipping asyncTraceEvaluate"
         );
         return;
       }
@@ -256,23 +256,23 @@ export abstract class Tracer {
       const spanId = spanContext.spanId;
 
       Logger.info(
-        `asyncTraceEvaluate: project=${this.configuration.projectName}, traceId=${traceId}, spanId=${spanId}, scorer=${scorer.name}`,
+        `asyncTraceEvaluate: project=${this.configuration.projectName}, traceId=${traceId}, spanId=${spanId}, scorer=${scorer.name}`
       );
 
       const traceEvaluationRun = this.createTraceEvaluationRun(
         scorer,
         model,
         traceId,
-        spanId,
+        spanId
       );
       const traceEvalJson = this.serializer(traceEvaluationRun);
       currentSpan.setAttribute(
         OpenTelemetryKeys.AttributeKeys.PENDING_TRACE_EVAL,
-        traceEvalJson,
+        traceEvalJson
       );
     } catch (error) {
       Logger.error(
-        `Failed to asyncTraceEvaluate: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to asyncTraceEvaluate: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -281,7 +281,7 @@ export abstract class Tracer {
     scorer: BaseScorer,
     model: string | undefined,
     traceId: string,
-    spanId: string,
+    spanId: string
   ): Record<string, unknown> {
     const evalName = `async_trace_evaluate_${spanId || Date.now()}`;
     const modelName = model || JUDGMENT_DEFAULT_GPT_MODEL;
@@ -317,7 +317,7 @@ export abstract class Tracer {
     example: ExampleModel,
     model: string | undefined,
     traceId: string,
-    spanId: string,
+    spanId: string
   ): ExampleEvaluationRun {
     const runId = `async_evaluate_${spanId || Date.now()}`;
     const modelName = model || JUDGMENT_DEFAULT_GPT_MODEL;
@@ -339,7 +339,7 @@ export abstract class Tracer {
   }
 
   private async enqueueEvaluation(
-    evaluationRun: ExampleEvaluationRun,
+    evaluationRun: ExampleEvaluationRun
   ): Promise<void> {
     if (!this.apiClient) {
       Logger.info("API client not available, skipping evaluation enqueue");
@@ -351,14 +351,14 @@ export abstract class Tracer {
       Logger.info(`Enqueuing evaluation run: ${evaluationRun.eval_name}`);
     } catch (error) {
       Logger.error(
-        `Failed to enqueue evaluation run: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to enqueue evaluation run: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
 
   private _observe<TArgs extends any[], TResult>(
     func: (...args: TArgs) => TResult,
-    spanKind: SpanKind = "span",
+    spanKind: SpanKind = "span"
   ): (...args: TArgs) => TResult {
     return (...args: TArgs): TResult => {
       const spanName = func.name || "anonymous";
@@ -373,12 +373,12 @@ export abstract class Tracer {
     span: Span,
     func: (...args: TArgs) => TResult,
     args: TArgs,
-    spanKind: SpanKind,
+    spanKind: SpanKind
   ): TResult {
     try {
       span.setAttribute(
         OpenTelemetryKeys.AttributeKeys.JUDGMENT_SPAN_KIND,
-        spanKind,
+        spanKind
       );
 
       try {
@@ -390,12 +390,12 @@ export abstract class Tracer {
           });
           span.setAttribute(
             OpenTelemetryKeys.AttributeKeys.JUDGMENT_INPUT,
-            this.serializer(inputObj),
+            this.serializer(inputObj)
           );
         }
       } catch (error) {
         Logger.warn(
-          `Failed to parse function args: ${error instanceof Error ? error.message : String(error)}`,
+          `Failed to parse function args: ${error instanceof Error ? error.message : String(error)}`
         );
       }
 
@@ -406,7 +406,7 @@ export abstract class Tracer {
           .then((res) => {
             span.setAttribute(
               OpenTelemetryKeys.AttributeKeys.JUDGMENT_OUTPUT,
-              this.serializer(res),
+              this.serializer(res)
             );
             return res;
           })
@@ -420,7 +420,7 @@ export abstract class Tracer {
       } else {
         span.setAttribute(
           OpenTelemetryKeys.AttributeKeys.JUDGMENT_OUTPUT,
-          this.serializer(result),
+          this.serializer(result)
         );
         span.end();
         return result;
@@ -433,19 +433,19 @@ export abstract class Tracer {
   }
 
   public observe(
-    spanKind?: SpanKind,
+    spanKind?: SpanKind
   ): (
     target: any,
     propertyKey: string | symbol,
-    descriptor?: PropertyDescriptor,
+    descriptor?: PropertyDescriptor
   ) => void;
   public observe<TArgs extends any[], TResult>(
     func: (...args: TArgs) => TResult,
-    spanKind?: SpanKind,
+    spanKind?: SpanKind
   ): (...args: TArgs) => TResult;
   public observe<TArgs extends any[], TResult>(
     funcOrSpanKind?: ((...args: TArgs) => TResult) | SpanKind,
-    spanKind?: SpanKind,
+    spanKind?: SpanKind
   ): any {
     try {
       if (typeof funcOrSpanKind === "function") {
@@ -456,14 +456,14 @@ export abstract class Tracer {
       return (
         _target: any,
         _propertyKey: string | symbol,
-        descriptor?: PropertyDescriptor,
+        descriptor?: PropertyDescriptor
       ) => {
         try {
           if (!descriptor) return;
           const originalMethod = descriptor.value;
           const wrapped = this._observe(
             originalMethod,
-            funcOrSpanKind || "span",
+            funcOrSpanKind || "span"
           );
           Object.defineProperty(wrapped, "name", {
             value: originalMethod.name,
@@ -471,20 +471,17 @@ export abstract class Tracer {
           descriptor.value = wrapped;
         } catch (error) {
           Logger.error(
-            `Failed to wrap method with observe: ${error instanceof Error ? error.message : String(error)}`,
+            `Failed to wrap method with observe: ${error instanceof Error ? error.message : String(error)}`
           );
-          // Don't modify the descriptor if wrapping fails - preserve original behavior
         }
       };
     } catch (error) {
       Logger.error(
-        `Failed to observe function: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to observe function: ${error instanceof Error ? error.message : String(error)}`
       );
-      // Return the original function if observation fails - preserve exact types and behavior
       if (typeof funcOrSpanKind === "function") {
         return funcOrSpanKind;
       }
-      // Return a no-op decorator that doesn't modify anything
       return () => {};
     }
   }
