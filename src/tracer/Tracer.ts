@@ -65,11 +65,17 @@ export abstract class Tracer {
     if (this.configuration.initialize) {
       this.initialize({
         resourceAttributes: this.configuration.resourceAttributes,
-      }).catch((error) => {
-        Logger.error(
-          `Failed to auto-initialize tracer: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      });
+      })
+        .then(() => {
+          Logger.info(
+            `Successfully initialized tracer: ${this.configuration.projectName}`,
+          );
+        })
+        .catch((error) => {
+          Logger.error(
+            `Failed to auto-initialize tracer: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        });
     }
   }
 
