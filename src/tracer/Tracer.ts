@@ -469,6 +469,7 @@ export abstract class Tracer {
             value: originalMethod.name,
           });
           descriptor.value = wrapped;
+          return descriptor;
         } catch (error) {
           Logger.error(
             `Failed to wrap method with observe: ${error instanceof Error ? error.message : String(error)}`
