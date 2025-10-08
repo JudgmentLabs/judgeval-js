@@ -124,7 +124,6 @@ export abstract class Tracer {
             (this.configuration.organizationId || "unknown") +
             "/projects. Skipping Judgment export.",
         );
-      } finally {
         this.spanExporter = new NoOpSpanExporter();
       }
     }
