@@ -25,6 +25,7 @@ export class BrowserTracer extends Tracer {
         [OpenTelemetryKeys.ResourceKeys.SERVICE_NAME]:
           this.configuration.projectName,
         [OpenTelemetryKeys.ResourceKeys.TELEMETRY_SDK_VERSION]: VERSION,
+        ...this.configuration.resourceAttributes,
         ...options.resourceAttributes,
       };
 
@@ -33,6 +34,7 @@ export class BrowserTracer extends Tracer {
       this.webTracerProvider = new WebTracerProvider({
         resource: resourceFromAttributes(resourceAttributes),
         spanProcessors: [new BatchSpanProcessor(spanExporter)],
+        ...options,
       });
 
       this.webTracerProvider.register();
@@ -54,16 +56,26 @@ export class BrowserTracer extends Tracer {
     return Tracer.instances.get(key) as BrowserTracer;
   }
 
-  public static createDefault(projectName: string): BrowserTracer {
+  public static async createDefault(
+    projectName: string,
+  ): Promise<BrowserTracer> {
     const configuration = TracerConfiguration.builder()
       .projectName(projectName)
       .build();
-    return BrowserTracer.getInstance(configuration);
+    const tracer = new BrowserTracer(configuration);
+    if (configuration.initialize) {
+      await tracer.initialize();
+    }
+    return tracer;
   }
 
-  public static createWithConfiguration(
+  public static async createWithConfiguration(
     configuration: TracerConfiguration,
-  ): BrowserTracer {
-    return new BrowserTracer(configuration);
+  ): Promise<BrowserTracer> {
+    const tracer = new BrowserTracer(configuration);
+    if (configuration.initialize) {
+      await tracer.initialize();
+    }
+    return tracer;
   }
 }

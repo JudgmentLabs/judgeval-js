@@ -6,9 +6,8 @@ import { OpenTelemetryKeys } from "./OpenTelemetryKeys";
 import { Tracer, TracerInitializeOptions } from "./Tracer";
 import { TracerConfiguration } from "./TracerConfiguration";
 
-export type NodeTracerInitializeOptions = TracerInitializeOptions & {
-  resourceAttributes?: Record<string, unknown>;
-} & Partial<NodeSDKConfiguration>;
+export type NodeTracerInitializeOptions = TracerInitializeOptions &
+  Partial<NodeSDKConfiguration>;
 
 export class NodeTracer extends Tracer {
   private nodeSDK?: NodeSDK;
@@ -25,6 +24,7 @@ export class NodeTracer extends Tracer {
         [OpenTelemetryKeys.ResourceKeys.SERVICE_NAME]:
           this.configuration.projectName,
         [OpenTelemetryKeys.ResourceKeys.TELEMETRY_SDK_VERSION]: VERSION,
+        ...this.configuration.resourceAttributes,
         ...options.resourceAttributes,
       };
 
@@ -56,18 +56,26 @@ export class NodeTracer extends Tracer {
     return Tracer.instances.get(key) as NodeTracer;
   }
 
-  public static createDefault(projectName: string): NodeTracer {
+  public static async createDefault(projectName: string): Promise<NodeTracer> {
     const configuration = TracerConfiguration.builder()
       .projectName(projectName)
       .enableEvaluation(true)
       .build();
-    return NodeTracer.getInstance(configuration);
+    const tracer = new NodeTracer(configuration);
+    if (configuration.initialize) {
+      await tracer.initialize();
+    }
+    return tracer;
   }
 
-  public static createWithConfiguration(
+  public static async createWithConfiguration(
     configuration: TracerConfiguration,
-  ): NodeTracer {
-    return new NodeTracer(configuration);
+  ): Promise<NodeTracer> {
+    const tracer = new NodeTracer(configuration);
+    if (configuration.initialize) {
+      await tracer.initialize();
+    }
+    return tracer;
   }
 
   public async shutdown(): Promise<void> {

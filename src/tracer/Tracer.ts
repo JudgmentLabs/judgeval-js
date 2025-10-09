@@ -1,5 +1,10 @@
-import { Tracer as OpenTelemetryTracer, trace } from "@opentelemetry/api";
-import { JUDGMENT_API_URL, JUDGMENT_DEFAULT_GPT_MODEL } from "../env";
+import {
+  context,
+  Tracer as OpenTelemetryTracer,
+  Span,
+  trace,
+} from "@opentelemetry/api";
+import { JUDGMENT_DEFAULT_GPT_MODEL } from "../env";
 import { JudgmentApiClient } from "../internal/api";
 import {
   ExampleEvaluationRun,
@@ -13,7 +18,7 @@ import { OpenTelemetryKeys } from "./OpenTelemetryKeys";
 import { TracerConfiguration } from "./TracerConfiguration";
 
 export type Serializer = (obj: unknown) => string;
-type SpanKind = ("llm" | "tool" | "span") & {};
+type SpanKind = string;
 
 export type TracerInitializeOptions = {
   resourceAttributes?: Record<string, unknown>;
@@ -30,6 +35,7 @@ export abstract class Tracer {
   protected _initialized: boolean = false;
 
   private projectId: string | null = null;
+  private spanExporter: JudgmentSpanExporter | NoOpSpanExporter | null = null;
   protected configuration: TracerConfiguration;
 
   public getConfiguration(): TracerConfiguration {
@@ -55,6 +61,7 @@ export abstract class Tracer {
     );
 
     this._initialized = false;
+    // Initialization is handled by the subclasses, since operation requires IO.
   }
 
   public abstract initialize(options: TracerInitializeOptions): Promise<Tracer>;
@@ -87,46 +94,32 @@ export abstract class Tracer {
       );
     }
   }
-
-  public static getExporter(
-    apiKey: string,
-    organizationId: string,
-    projectId: string,
-  ): JudgmentSpanExporter {
-    const endpoint = JUDGMENT_API_URL?.endsWith("/")
-      ? `${JUDGMENT_API_URL}otel/v1/traces`
-      : `${JUDGMENT_API_URL}/otel/v1/traces`;
-
-    return JudgmentSpanExporter.builder()
-      .endpoint(endpoint)
-      .apiKey(apiKey)
-      .organizationId(organizationId)
-      .projectId(projectId)
-      .build();
-  }
-
   public async getSpanExporter(): Promise<
     JudgmentSpanExporter | NoOpSpanExporter
   > {
-    try {
-      const projectId = await this.resolveProjectId();
-      return this.createJudgmentSpanExporter(projectId);
-    } catch (error) {
-      Logger.error(
-        "Failed to resolve project " +
-          this.configuration.projectName +
-          ", please create it first at https://app.judgmentlabs.ai/org/" +
-          (this.configuration.organizationId || "unknown") +
-          "/projects. Skipping Judgment export.",
-      );
-      return new NoOpSpanExporter();
+    if (!this.spanExporter) {
+      try {
+        const projectId = await this.resolveProjectId();
+        this.spanExporter = this.createJudgmentSpanExporter(projectId);
+      } catch (error) {
+        Logger.error(
+          "Failed to resolve project " +
+            this.configuration.projectName +
+            ", please create it first at https://app.judgmentlabs.ai/org/" +
+            (this.configuration.organizationId || "unknown") +
+            "/projects. Skipping Judgment export.",
+        );
+        this.spanExporter = new NoOpSpanExporter();
+      }
     }
+
+    return this.spanExporter;
   }
 
   public setSpanKind(kind: SpanKind): void {
     const currentSpan = trace.getActiveSpan();
     if (!currentSpan) {
-      Logger.warn("No active span found, skipping setSpanKind");
+      Logger.info("No active span found, skipping setSpanKind");
       return;
     }
     if (kind !== null) {
@@ -140,7 +133,7 @@ export abstract class Tracer {
   public setAttribute(key: string, value: unknown): void {
     const currentSpan = trace.getActiveSpan();
     if (!currentSpan) {
-      Logger.warn("No active span found, skipping setAttribute");
+      Logger.info("No active span found, skipping setAttribute");
       return;
     }
     currentSpan.setAttribute(key, this.serializer(value));
@@ -164,7 +157,7 @@ export abstract class Tracer {
     }
     const currentSpan = trace.getActiveSpan();
     if (!currentSpan) {
-      Logger.warn("No active span found, skipping setAttributes");
+      Logger.info("No active span found, skipping setAttributes");
       return;
     }
     for (const [key, value] of Object.entries(attributes)) {
@@ -185,72 +178,70 @@ export abstract class Tracer {
     example: ExampleModel,
     model?: string,
   ): void {
-    if (!this._initialized) {
-      Logger.warn("Tracer not initialized, skipping asyncEvaluate");
-      return;
+    try {
+      if (!this.configuration.enableEvaluation) {
+        return;
+      }
+
+      const currentSpan = trace.getActiveSpan();
+      if (!currentSpan) {
+        Logger.info("No active span found, skipping asyncEvaluate");
+        return;
+      }
+      if (!currentSpan.isRecording()) {
+        Logger.info("Active span is not recording, skipping asyncEvaluate");
+        return;
+      }
+
+      const spanContext = currentSpan.spanContext();
+      const traceId = spanContext.traceId;
+      const spanId = spanContext.spanId;
+
+      Logger.info(
+        `asyncEvaluate: project=${this.configuration.projectName}, traceId=${traceId}, spanId=${spanId}, scorer=${scorer.name}`,
+      );
+
+      const evaluationRun = this.createEvaluationRun(
+        scorer,
+        example,
+        model,
+        traceId,
+        spanId,
+      );
+      this.enqueueEvaluation(evaluationRun);
+    } catch (error) {
+      Logger.error(
+        `Failed to asyncEvaluate: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
-
-    if (!this.configuration.enableEvaluation) {
-      return;
-    }
-
-    const currentSpan = trace.getActiveSpan();
-    if (!currentSpan) {
-      Logger.warn("No active span found, skipping asyncEvaluate");
-      return;
-    }
-    if (!currentSpan.isRecording()) {
-      Logger.warn("Active span is not recording, skipping asyncEvaluate");
-      return;
-    }
-
-    const spanContext = currentSpan.spanContext();
-    const traceId = spanContext.traceId;
-    const spanId = spanContext.spanId;
-
-    Logger.info(
-      `asyncEvaluate: project=${this.configuration.projectName}, traceId=${traceId}, spanId=${spanId}, scorer=${scorer.name}`,
-    );
-
-    const evaluationRun = this.createEvaluationRun(
-      scorer,
-      example,
-      model,
-      traceId,
-      spanId,
-    );
-    this.enqueueEvaluation(evaluationRun);
   }
 
   public asyncTraceEvaluate(scorer: BaseScorer, model?: string): void {
-    if (!this._initialized) {
-      Logger.warn("Tracer not initialized, skipping asyncTraceEvaluate");
-      return;
-    }
-
-    if (!this.configuration.enableEvaluation) {
-      return;
-    }
-
-    const currentSpan = trace.getActiveSpan();
-    if (!currentSpan) {
-      Logger.warn("No active span found, skipping asyncTraceEvaluate");
-      return;
-    }
-    if (!currentSpan.isRecording()) {
-      Logger.warn("Active span is not recording, skipping asyncTraceEvaluate");
-      return;
-    }
-
-    const spanContext = currentSpan.spanContext();
-    const traceId = spanContext.traceId;
-    const spanId = spanContext.spanId;
-
-    Logger.info(
-      `asyncTraceEvaluate: project=${this.configuration.projectName}, traceId=${traceId}, spanId=${spanId}, scorer=${scorer.name}`,
-    );
-
     try {
+      if (!this.configuration.enableEvaluation) {
+        return;
+      }
+
+      const currentSpan = trace.getActiveSpan();
+      if (!currentSpan) {
+        Logger.info("No active span found, skipping asyncTraceEvaluate");
+        return;
+      }
+      if (!currentSpan.isRecording()) {
+        Logger.info(
+          "Active span is not recording, skipping asyncTraceEvaluate",
+        );
+        return;
+      }
+
+      const spanContext = currentSpan.spanContext();
+      const traceId = spanContext.traceId;
+      const spanId = spanContext.spanId;
+
+      Logger.info(
+        `asyncTraceEvaluate: project=${this.configuration.projectName}, traceId=${traceId}, spanId=${spanId}, scorer=${scorer.name}`,
+      );
+
       const traceEvaluationRun = this.createTraceEvaluationRun(
         scorer,
         model,
@@ -264,7 +255,7 @@ export abstract class Tracer {
       );
     } catch (error) {
       Logger.error(
-        `Failed to serialize trace evaluation: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to asyncTraceEvaluate: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -334,7 +325,7 @@ export abstract class Tracer {
     evaluationRun: ExampleEvaluationRun,
   ): Promise<void> {
     if (!this.apiClient) {
-      Logger.warn("API client not available, skipping evaluation enqueue");
+      Logger.info("API client not available, skipping evaluation enqueue");
       return;
     }
 
@@ -348,65 +339,134 @@ export abstract class Tracer {
     }
   }
 
-  public observe<TArgs extends any[], TResult>(
+  private _observe<TArgs extends any[], TResult>(
     func: (...args: TArgs) => TResult,
     spanKind: SpanKind = "span",
   ): (...args: TArgs) => TResult {
-    return (...args: TArgs): TResult => {
+    return context.bind(context.active(), (...args: TArgs): TResult => {
       const spanName = func.name || "anonymous";
-
       return this.tracer.startActiveSpan(spanName, (span) => {
-        try {
+        return this._executeWithSpan(span, func, args, spanKind);
+      });
+    });
+  }
+
+  private _executeWithSpan<TArgs extends any[], TResult>(
+    span: Span,
+    func: (...args: TArgs) => TResult,
+    args: TArgs,
+    spanKind: SpanKind,
+  ): TResult {
+    try {
+      span.setAttribute(
+        OpenTelemetryKeys.AttributeKeys.JUDGMENT_SPAN_KIND,
+        spanKind,
+      );
+
+      try {
+        const argNames = parseFunctionArgs(func);
+        if (argNames.length === args.length) {
+          const inputObj: Record<string, unknown> = {};
+          argNames.forEach((name, index) => {
+            inputObj[name] = args[index];
+          });
           span.setAttribute(
-            OpenTelemetryKeys.AttributeKeys.JUDGMENT_SPAN_KIND,
-            spanKind,
+            OpenTelemetryKeys.AttributeKeys.JUDGMENT_INPUT,
+            this.serializer(inputObj),
           );
+        }
+      } catch (error) {
+        Logger.warn(
+          `Failed to parse function args: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
 
-          const argNames = parseFunctionArgs(func);
-          if (argNames.length === args.length) {
-            const inputObj: Record<string, unknown> = {};
-            argNames.forEach((name, index) => {
-              inputObj[name] = args[index];
-            });
-            span.setAttribute(
-              OpenTelemetryKeys.AttributeKeys.JUDGMENT_INPUT,
-              this.serializer(inputObj),
-            );
-          }
+      const result = func(...args);
 
-          const result = func(...args);
-
-          if (result instanceof Promise) {
-            return result
-              .then((res) => {
-                span.setAttribute(
-                  OpenTelemetryKeys.AttributeKeys.JUDGMENT_OUTPUT,
-                  this.serializer(res),
-                );
-                return res;
-              })
-              .catch((err) => {
-                span.recordException(err as Error);
-                throw err;
-              })
-              .finally(() => {
-                span.end();
-              }) as TResult;
-          } else {
+      if (result instanceof Promise) {
+        return result
+          .then((res) => {
             span.setAttribute(
               OpenTelemetryKeys.AttributeKeys.JUDGMENT_OUTPUT,
-              this.serializer(result),
+              this.serializer(res),
             );
+            return res;
+          })
+          .catch((err) => {
+            span.recordException(err as Error);
+            throw err;
+          })
+          .finally(() => {
             span.end();
-            return result;
-          }
-        } catch (err) {
-          span.recordException(err as Error);
-          span.end();
-          throw err;
+          }) as TResult;
+      } else {
+        span.setAttribute(
+          OpenTelemetryKeys.AttributeKeys.JUDGMENT_OUTPUT,
+          this.serializer(result),
+        );
+        span.end();
+        return result;
+      }
+    } catch (err) {
+      span.recordException(err as Error);
+      span.end();
+      throw err;
+    }
+  }
+
+  public observe(
+    spanKind?: SpanKind,
+  ): (
+    target: any,
+    propertyKey: string | symbol,
+    descriptor?: PropertyDescriptor,
+  ) => void;
+  public observe<TArgs extends any[], TResult>(
+    func: (...args: TArgs) => TResult,
+    spanKind?: SpanKind,
+  ): (...args: TArgs) => TResult;
+  public observe<TArgs extends any[], TResult>(
+    funcOrSpanKind?: ((...args: TArgs) => TResult) | SpanKind,
+    spanKind?: SpanKind,
+  ): any {
+    try {
+      if (typeof funcOrSpanKind === "function") {
+        const wrapped = this._observe(funcOrSpanKind, spanKind || "span");
+        Object.defineProperty(wrapped, "name", { value: funcOrSpanKind.name });
+        return wrapped;
+      }
+      return (
+        _target: any,
+        _propertyKey: string | symbol,
+        descriptor?: PropertyDescriptor,
+      ) => {
+        try {
+          if (!descriptor) return;
+          const originalMethod = descriptor.value;
+          const wrapped = this._observe(
+            originalMethod,
+            funcOrSpanKind || "span",
+          );
+          Object.defineProperty(wrapped, "name", {
+            value: originalMethod.name,
+          });
+          descriptor.value = wrapped;
+          return descriptor;
+        } catch (error) {
+          Logger.error(
+            `Failed to wrap method with observe: ${error instanceof Error ? error.message : String(error)}`,
+          );
         }
-      });
-    };
+      };
+    } catch (error) {
+      Logger.error(
+        `Failed to observe function: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      if (typeof funcOrSpanKind === "function") {
+        return funcOrSpanKind;
+      }
+      return () => {};
+    }
   }
 
   public async shutdown(): Promise<void> {}
