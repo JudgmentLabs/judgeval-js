@@ -10,8 +10,8 @@ export class TracePromptScorer extends BasePromptScorer {
     threshold: number,
     requiredParams: readonly string[] = [],
     options?: Record<string, number> | null,
-    judgmentApiKey: string = JUDGMENT_API_KEY || "",
-    organizationId: string = JUDGMENT_ORG_ID || "",
+    judgmentApiKey: string = JUDGMENT_API_KEY ?? "",
+    organizationId: string = JUDGMENT_ORG_ID ?? "",
   ) {
     super(
       scoreType,

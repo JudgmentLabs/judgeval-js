@@ -3,12 +3,6 @@ import {
   ChatCompletion,
   ChatCompletionCreateParamsNonStreaming,
 } from "openai/resources/chat/completions";
-import {
-  JUDGMENT_API_KEY,
-  JUDGMENT_LLM_PROXY_URL,
-  JUDGMENT_ORG_ID,
-  OPENAI_API_KEY,
-} from "../env";
 
 export enum LLMProvider {
   OPENAI = "openai",
@@ -53,37 +47,4 @@ export class LLMClient {
       ...params,
     });
   }
-
-  public async models() {
-    const client = this.createOpenAIClient();
-    return await client.models.list();
-  }
-}
-
-if (import.meta.main) {
-  if (
-    !JUDGMENT_LLM_PROXY_URL ||
-    !JUDGMENT_API_KEY ||
-    !JUDGMENT_ORG_ID ||
-    !OPENAI_API_KEY
-  ) {
-    throw new Error(
-      "JUDGMENT_LLM_PROXY_URL, JUDGMENT_API_KEY, and JUDGMENT_ORG_ID must be set",
-    );
-  }
-  const llm = new LLMClient({
-    baseUrl: JUDGMENT_LLM_PROXY_URL,
-    apiKey: OPENAI_API_KEY,
-    judgmentApiKey: JUDGMENT_API_KEY,
-    judgmentOrganizationId: JUDGMENT_ORG_ID,
-  });
-
-  const models = await llm.models();
-  console.log(models);
-
-  // const response = await llm.completion({
-  //   model: "gpt-4.1",
-  //   messages: [{ role: "user", content: "Hello, how are you?" }],
-  // });
-  // console.log(response);
 }

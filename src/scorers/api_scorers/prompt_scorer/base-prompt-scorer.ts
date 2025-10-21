@@ -24,8 +24,8 @@ export abstract class BasePromptScorer extends APIScorer<
     threshold: number,
     requiredParams: readonly string[],
     options?: Record<string, number> | null,
-    judgmentApiKey: string = JUDGMENT_API_KEY || "",
-    organizationId: string = JUDGMENT_ORG_ID || "",
+    judgmentApiKey: string = JUDGMENT_API_KEY ?? "",
+    organizationId: string = JUDGMENT_ORG_ID ?? "",
   ) {
     super(scoreType, requiredParams);
     this.name = name;
@@ -42,10 +42,19 @@ export abstract class BasePromptScorer extends APIScorer<
   }
 
   static async get<T extends BasePromptScorer>(
-    this: new (...args: any[]) => T,
+    this: new (
+      scoreType: APIScorerType,
+      name: string,
+      prompt: string,
+      threshold: number,
+      requiredParams: readonly string[],
+      options?: Record<string, number> | null,
+      judgmentApiKey?: string,
+      organizationId?: string,
+    ) => T,
     name: string,
-    judgmentApiKey: string = JUDGMENT_API_KEY || "",
-    organizationId: string = JUDGMENT_ORG_ID || "",
+    judgmentApiKey: string = JUDGMENT_API_KEY ?? "",
+    organizationId: string = JUDGMENT_ORG_ID ?? "",
   ): Promise<T> {
     const config = await fetchPromptScorer(
       name,
@@ -54,8 +63,9 @@ export abstract class BasePromptScorer extends APIScorer<
     );
 
     const isTrace = config.is_trace === true;
+    const prototype = this.prototype as BasePromptScorer;
     const expectedIsTrace =
-      this.prototype.scoreType === APIScorerType.TRACE_PROMPT_SCORER;
+      prototype.scoreType === APIScorerType.TRACE_PROMPT_SCORER;
 
     if (isTrace !== expectedIsTrace) {
       throw new JudgmentAPIError(
@@ -70,7 +80,7 @@ export abstract class BasePromptScorer extends APIScorer<
 
     return new this(
       scoreType,
-      config.name, // Use config.name instead of name parameter
+      config.name,
       config.prompt,
       config.threshold,
       [],
@@ -81,13 +91,22 @@ export abstract class BasePromptScorer extends APIScorer<
   }
 
   static async create<T extends BasePromptScorer>(
-    this: new (...args: any[]) => T,
+    this: new (
+      scoreType: APIScorerType,
+      name: string,
+      prompt: string,
+      threshold: number,
+      requiredParams: readonly string[],
+      options?: Record<string, number> | null,
+      judgmentApiKey?: string,
+      organizationId?: string,
+    ) => T,
     name: string,
     prompt: string,
-    threshold: number = 0.5,
+    threshold = 0.5,
     options?: Record<string, number> | null,
-    judgmentApiKey: string = JUDGMENT_API_KEY || "",
-    organizationId: string = JUDGMENT_ORG_ID || "",
+    judgmentApiKey: string = JUDGMENT_API_KEY ?? "",
+    organizationId: string = JUDGMENT_ORG_ID ?? "",
   ): Promise<T> {
     if (await scorerExists(name, judgmentApiKey, organizationId)) {
       throw new JudgmentAPIError(
@@ -96,8 +115,8 @@ export abstract class BasePromptScorer extends APIScorer<
       );
     }
 
-    const isTrace =
-      this.prototype.scoreType === APIScorerType.TRACE_PROMPT_SCORER;
+    const prototype = this.prototype as BasePromptScorer;
+    const isTrace = prototype.scoreType === APIScorerType.TRACE_PROMPT_SCORER;
     const scoreType = isTrace
       ? APIScorerType.TRACE_PROMPT_SCORER
       : APIScorerType.PROMPT_SCORER;
@@ -160,13 +179,13 @@ export abstract class BasePromptScorer extends APIScorer<
     return this.name ?? "";
   }
 
-  getConfig(): Record<string, any> {
+  getConfig(): Record<string, unknown> {
     return {
       name: this.name,
       prompt: this.prompt,
       threshold: this.threshold,
       options: this.options,
-    } as const;
+    };
   }
 
   async pushPromptScorer(): Promise<void> {
@@ -199,14 +218,11 @@ export abstract class BasePromptScorer extends APIScorer<
     }
     const threshold = this.threshold ?? 0.5;
     const score = this.score;
-    return threshold != null && score != null && score >= threshold;
+    return score >= threshold;
   }
 
   getRequiredParams(): string[] {
-    if (Array.isArray(this.requiredParams)) {
-      return [...this.requiredParams];
-    }
-    return [];
+    return [...this.requiredParams];
   }
 
   setThreshold(threshold: number): void {

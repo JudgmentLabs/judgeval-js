@@ -6,10 +6,8 @@ import { APIScorer } from "../scorers/api-scorer";
 import { ExampleScorer } from "../scorers/example-scorer";
 import { Example } from "./example";
 
-// Scorer union type for input
 export type ScorerInput = ExampleScorer | APIScorer | ScorerConfig;
 
-// Base evaluation run class
 export class EvaluationRun {
   id: string;
   created_at: string;
@@ -20,19 +18,16 @@ export class EvaluationRun {
   constructor(params: { scorers?: ScorerInput[]; model?: string }) {
     const { scorers = [], model } = params;
 
-    // Auto-generate id and created_at
     this.id = crypto.randomUUID();
     this.created_at = new Date().toISOString();
     this.model = model ?? null;
 
-    // Classify scorers
     for (const scorer of scorers) {
       if (scorer instanceof ExampleScorer) {
         this.custom_scorers.push(scorer);
       } else if (scorer instanceof APIScorer) {
         this.judgment_scorers.push(scorer.getScorerConfig());
       } else if (typeof scorer === "object" && "score_type" in scorer) {
-        // ScorerConfig object
         this.judgment_scorers.push(scorer);
       }
     }
@@ -51,7 +46,6 @@ export class EvaluationRun {
   }
 }
 
-// Example evaluation run class
 export class ExampleEvaluationRun
   extends EvaluationRun
   implements ExampleEvaluationRunModel
@@ -101,7 +95,6 @@ export class ExampleEvaluationRun
   }
 }
 
-// Trace evaluation run class
 export class TraceEvaluationRun
   extends EvaluationRun
   implements TraceEvaluationRunModel
