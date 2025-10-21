@@ -1,4 +1,4 @@
-import { BaseScorer, createBaseScorer } from "./base-scorer";
+import { BaseScorer } from "./base-scorer";
 
 export enum APIScorerType {
   PROMPT_SCORER = "Prompt Scorer",
@@ -14,42 +14,47 @@ export enum APIScorerType {
   CUSTOM = "Custom",
 }
 
-export type APIScorer<
+export class APIScorer<
   T extends APIScorerType = APIScorerType,
   P extends readonly string[] = readonly string[],
-> = BaseScorer & {
+> extends BaseScorer {
   scoreType: T;
   requiredParams: P;
-  setThreshold: (threshold: number) => void;
-  getScoreType: () => T;
-  setRequiredParams: (params: P) => void;
-};
+
+  constructor(scoreType: T, requiredParams: P) {
+    super();
+    this.scoreType = scoreType;
+    this.name = scoreType;
+    this.score_type = scoreType;
+    this.requiredParams = requiredParams;
+  }
+
+  setThreshold(threshold: number): void {
+    if (threshold < 0 || threshold > 1) {
+      throw new Error(`Threshold must be between 0 and 1, got: ${threshold}`);
+    }
+    this.threshold = threshold;
+  }
+
+  getScoreType(): T {
+    return this.scoreType;
+  }
+
+  setRequiredParams(params: P): void {
+    this.requiredParams = params;
+  }
+
+  getRequiredParams(): string[] {
+    if (Array.isArray(this.requiredParams)) {
+      return [...this.requiredParams];
+    }
+    return [];
+  }
+}
 
 export function createAPIScorer<
   T extends APIScorerType,
   P extends readonly string[],
 >(scoreType: T, requiredParams: P): APIScorer<T, P> {
-  const scorer = createBaseScorer() as APIScorer<T, P>;
-
-  scorer.scoreType = scoreType;
-  scorer.name = scoreType;
-  scorer.score_type = scoreType;
-  scorer.requiredParams = requiredParams;
-
-  scorer.setThreshold = (threshold: number) => {
-    if (threshold < 0 || threshold > 1) {
-      throw new Error(`Threshold must be between 0 and 1, got: ${threshold}`);
-    }
-    scorer.threshold = threshold;
-  };
-
-  scorer.getScoreType = () => {
-    return scorer.scoreType;
-  };
-
-  scorer.setRequiredParams = (params: P) => {
-    scorer.requiredParams = params;
-  };
-
-  return scorer;
+  return new APIScorer(scoreType, requiredParams);
 }

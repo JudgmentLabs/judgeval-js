@@ -1,5 +1,5 @@
 import { ExampleParams } from "../../data";
-import { APIScorer, APIScorerType, createAPIScorer } from "../api-scorer";
+import { APIScorer, APIScorerType } from "../api-scorer";
 
 const ANSWER_CORRECTNESS_REQUIRED_PARAMS = [
   ExampleParams.INPUT,
@@ -7,10 +7,23 @@ const ANSWER_CORRECTNESS_REQUIRED_PARAMS = [
   ExampleParams.EXPECTED_OUTPUT,
 ] as const;
 
-export type AnswerCorrectnessScorer = APIScorer<
+export class AnswerCorrectnessScorer extends APIScorer<
   APIScorerType.ANSWER_CORRECTNESS,
   typeof ANSWER_CORRECTNESS_REQUIRED_PARAMS
->;
+> {
+  constructor(scorerArgs?: AnswerCorrectnessScorerArgs) {
+    super(APIScorerType.ANSWER_CORRECTNESS, ANSWER_CORRECTNESS_REQUIRED_PARAMS);
+
+    if (scorerArgs) {
+      if (scorerArgs.threshold !== undefined) {
+        this.setThreshold(scorerArgs.threshold);
+      }
+      if (scorerArgs.model) {
+        this.addModel(scorerArgs.model);
+      }
+    }
+  }
+}
 
 export type AnswerCorrectnessScorerArgs = {
   threshold?: number;
@@ -20,19 +33,5 @@ export type AnswerCorrectnessScorerArgs = {
 export function createAnswerCorrectnessScorer(
   scorerArgs?: AnswerCorrectnessScorerArgs,
 ): AnswerCorrectnessScorer {
-  const scorer = createAPIScorer(
-    APIScorerType.ANSWER_CORRECTNESS,
-    ANSWER_CORRECTNESS_REQUIRED_PARAMS,
-  );
-
-  if (scorerArgs) {
-    if (scorerArgs.threshold !== undefined) {
-      scorer.setThreshold(scorerArgs.threshold);
-    }
-    if (scorerArgs.model) {
-      scorer.addModel(scorerArgs.model);
-    }
-  }
-
-  return scorer;
+  return new AnswerCorrectnessScorer(scorerArgs);
 }

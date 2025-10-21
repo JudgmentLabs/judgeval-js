@@ -3,8 +3,8 @@
  * DO NOT EDIT MANUALLY - This file is generated automatically
  */
 
-export type Example = {
+export interface Example {
   example_id?: string;
   created_at?: string;
   name?: string | null;
-};
+}

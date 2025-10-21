@@ -1,15 +1,33 @@
 import { ExampleParams } from "../../data";
-import { APIScorer, APIScorerType, createAPIScorer } from "../api-scorer";
+import { APIScorer, APIScorerType } from "../api-scorer";
 
 const INSTRUCTION_ADHERENCE_REQUIRED_PARAMS = [
   ExampleParams.INPUT,
   ExampleParams.ACTUAL_OUTPUT,
 ] as const;
 
-export type InstructionAdherenceScorer = APIScorer<
+export class InstructionAdherenceScorer extends APIScorer<
   APIScorerType.INSTRUCTION_ADHERENCE,
   typeof INSTRUCTION_ADHERENCE_REQUIRED_PARAMS
->;
+> {
+  constructor(scorerArgs?: InstructionAdherenceScorerArgs) {
+    super(
+      APIScorerType.INSTRUCTION_ADHERENCE,
+      INSTRUCTION_ADHERENCE_REQUIRED_PARAMS
+    );
+
+    this.name = "Instruction Adherence";
+
+    if (scorerArgs) {
+      if (scorerArgs.threshold !== undefined) {
+        this.setThreshold(scorerArgs.threshold);
+      }
+      if (scorerArgs.model) {
+        this.addModel(scorerArgs.model);
+      }
+    }
+  }
+}
 
 export type InstructionAdherenceScorerArgs = {
   threshold?: number;
@@ -17,23 +35,7 @@ export type InstructionAdherenceScorerArgs = {
 };
 
 export function createInstructionAdherenceScorer(
-  scorerArgs?: InstructionAdherenceScorerArgs,
+  scorerArgs?: InstructionAdherenceScorerArgs
 ): InstructionAdherenceScorer {
-  const scorer = createAPIScorer(
-    APIScorerType.INSTRUCTION_ADHERENCE,
-    INSTRUCTION_ADHERENCE_REQUIRED_PARAMS,
-  );
-
-  scorer.name = "Instruction Adherence";
-
-  if (scorerArgs) {
-    if (scorerArgs.threshold !== undefined) {
-      scorer.setThreshold(scorerArgs.threshold);
-    }
-    if (scorerArgs.model) {
-      scorer.addModel(scorerArgs.model);
-    }
-  }
-
-  return scorer;
+  return new InstructionAdherenceScorer(scorerArgs);
 }

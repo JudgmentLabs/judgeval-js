@@ -3,10 +3,12 @@
  * DO NOT EDIT MANUALLY - This file is generated automatically
  */
 
-export type SavePromptScorerRequest = {
+export interface SavePromptScorerRequest {
   name: string;
   prompt: string;
   threshold: number;
+  model?: string;
+  is_trace?: boolean;
   options?: Record<string, number> | null;
-  is_trace?: boolean | null;
-};
+  description?: string | null;
+}

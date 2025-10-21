@@ -1,52 +1,64 @@
 import { ScorerConfig } from "../internal/api/models";
-import { BaseScorer as BaseScorerModel } from "../internal/api/models/BaseScorer";
+import { BaseScorer as IBaseScorer } from "../internal/api/models/BaseScorer";
 
-export type BaseScorer = BaseScorerModel & {
-  addModel: (model: string) => void;
-  successCheck: () => boolean;
-  getRequiredParams: () => string[];
-  getScorerConfig: () => ScorerConfig;
-};
+export class BaseScorer implements IBaseScorer {
+  score_type: string = "";
+  threshold?: number;
+  name?: string | null;
+  class_name?: string | null;
+  score?: number | null;
+  score_breakdown?: Record<string, any> | null;
+  reason?: string | null;
+  using_native_model?: boolean | null;
+  success?: boolean | null;
+  model?: string | null;
+  model_client?: any | null;
+  strict_mode?: boolean;
+  error?: string | null;
+  additional_metadata?: Record<string, any> | null;
+  user?: string | null;
+  server_hosted?: boolean;
 
-export function createBaseScorer(): BaseScorer {
-  const scorer: BaseScorer = {
-    score_type: "",
-    class_name: "",
-    name: "",
-    addModel: (model: string) => {
-      scorer.model = model;
-    },
-    successCheck: () => {
-      if (scorer.error != null) {
-        return false;
-      }
-      if (scorer.score == null) {
-        return false;
-      }
-      const threshold = scorer.threshold ?? 0.5;
-      const score = scorer.score;
-      return threshold != null && score != null && score >= threshold;
-    },
-    getRequiredParams: () => {
-      return [];
-    },
-    getScorerConfig: () => {
-      return {
-        score_type: scorer.score_type,
-        name: scorer.name,
-        threshold: scorer.threshold ?? 0.5,
-        strict_mode: scorer.strict_mode ?? false,
-        required_params: [],
-        kwargs: {},
-      };
-    },
-  };
-
-  scorer.class_name = "BaseScorer";
-  scorer.name = scorer.class_name;
-  if (scorer.strict_mode === true) {
-    scorer.threshold = 1.0;
+  constructor() {
+    this.class_name = "BaseScorer";
+    this.name = this.class_name;
+    if (this.strict_mode === true) {
+      this.threshold = 1.0;
+    }
   }
 
-  return scorer;
+  addModel(model: string): void {
+    this.model = model;
+  }
+
+  successCheck(): boolean {
+    if (this.error != null) {
+      return false;
+    }
+    if (this.score == null) {
+      return false;
+    }
+    const threshold = this.threshold ?? 0.5;
+    const score = this.score;
+    return threshold != null && score != null && score >= threshold;
+  }
+
+  getRequiredParams(): string[] {
+    return [];
+  }
+
+  getScorerConfig(): ScorerConfig {
+    return {
+      score_type: this.score_type,
+      name: this.name,
+      threshold: this.threshold ?? 0.5,
+      strict_mode: this.strict_mode ?? false,
+      required_params: [],
+      kwargs: {},
+    };
+  }
+}
+
+export function createBaseScorer(): BaseScorer {
+  return new BaseScorer();
 }

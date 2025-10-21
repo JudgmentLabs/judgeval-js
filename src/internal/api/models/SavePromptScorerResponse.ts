@@ -3,7 +3,7 @@
  * DO NOT EDIT MANUALLY - This file is generated automatically
  */
 
-export type SavePromptScorerResponse = {
+export interface SavePromptScorerResponse {
   message: string;
   name: string;
-};
+}

@@ -1,5 +1,5 @@
 import { ExampleParams } from "../../data";
-import { APIScorer, APIScorerType, createAPIScorer } from "../api-scorer";
+import { APIScorer, APIScorerType } from "../api-scorer";
 
 const FAITHFULNESS_REQUIRED_PARAMS = [
   ExampleParams.INPUT,
@@ -7,10 +7,23 @@ const FAITHFULNESS_REQUIRED_PARAMS = [
   ExampleParams.RETRIEVAL_CONTEXT,
 ] as const;
 
-export type FaithfulnessScorer = APIScorer<
+export class FaithfulnessScorer extends APIScorer<
   APIScorerType.FAITHFULNESS,
   typeof FAITHFULNESS_REQUIRED_PARAMS
->;
+> {
+  constructor(scorerArgs?: FaithfulnessScorerArgs) {
+    super(APIScorerType.FAITHFULNESS, FAITHFULNESS_REQUIRED_PARAMS);
+
+    if (scorerArgs) {
+      if (scorerArgs.threshold !== undefined) {
+        this.setThreshold(scorerArgs.threshold);
+      }
+      if (scorerArgs.model) {
+        this.addModel(scorerArgs.model);
+      }
+    }
+  }
+}
 
 export type FaithfulnessScorerArgs = {
   threshold?: number;
@@ -20,19 +33,5 @@ export type FaithfulnessScorerArgs = {
 export function createFaithfulnessScorer(
   scorerArgs?: FaithfulnessScorerArgs,
 ): FaithfulnessScorer {
-  const scorer = createAPIScorer(
-    APIScorerType.FAITHFULNESS,
-    FAITHFULNESS_REQUIRED_PARAMS,
-  );
-
-  if (scorerArgs) {
-    if (scorerArgs.threshold !== undefined) {
-      scorer.setThreshold(scorerArgs.threshold);
-    }
-    if (scorerArgs.model) {
-      scorer.addModel(scorerArgs.model);
-    }
-  }
-
-  return scorer;
+  return new FaithfulnessScorer(scorerArgs);
 }

@@ -7,7 +7,7 @@ import { ExampleEvaluationRun } from "./ExampleEvaluationRun";
 import { ScoringResult } from "./ScoringResult";
 import { TraceEvaluationRun } from "./TraceEvaluationRun";
 
-export type EvalResults = {
+export interface EvalResults {
   results: Array<ScoringResult>;
   run: ExampleEvaluationRun | TraceEvaluationRun;
-};
+}

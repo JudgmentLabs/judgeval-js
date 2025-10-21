@@ -3,6 +3,6 @@
  * DO NOT EDIT MANUALLY - This file is generated automatically
  */
 
-export type ScorerExistsRequest = {
+export interface ScorerExistsRequest {
   name: string;
-};
+}

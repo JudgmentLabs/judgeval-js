@@ -8,23 +8,14 @@ import {
   scorerExists,
 } from "./prompt-scorer-utils";
 
-export abstract class BasePromptScorer
-  implements APIScorer<APIScorerType, readonly string[]>
-{
-  public scoreType: APIScorerType;
-  public name: string;
+export abstract class BasePromptScorer extends APIScorer<
+  APIScorerType,
+  readonly string[]
+> {
   public prompt: string;
-  public threshold: number;
   public options?: Record<string, number> | null;
   public judgmentApiKey: string;
   public organizationId: string;
-  public requiredParams: readonly string[];
-  public score_type: string;
-  public class_name: string;
-  public model?: string;
-  public score?: number;
-  public error?: string | null;
-  public strict_mode?: boolean;
 
   constructor(
     scoreType: APIScorerType,
@@ -34,42 +25,32 @@ export abstract class BasePromptScorer
     requiredParams: readonly string[],
     options?: Record<string, number> | null,
     judgmentApiKey: string = JUDGMENT_API_KEY || "",
-    organizationId: string = JUDGMENT_ORG_ID || "",
+    organizationId: string = JUDGMENT_ORG_ID || ""
   ) {
-    this.scoreType = scoreType;
+    super(scoreType, requiredParams);
     this.name = name;
     this.prompt = prompt;
     this.threshold = threshold;
-    this.requiredParams = requiredParams;
     this.options = options;
     this.judgmentApiKey = judgmentApiKey;
     this.organizationId = organizationId;
-    this.score_type = scoreType;
     this.class_name = "BasePromptScorer";
     this.model = undefined;
     this.score = undefined;
     this.error = null;
     this.strict_mode = false;
   }
-  score_breakdown?: Record<string, any> | null | undefined;
-  reason?: string | null | undefined;
-  using_native_model?: boolean | null | undefined;
-  success?: boolean | null | undefined;
-  model_client?: any;
-  additional_metadata?: Record<string, any> | null | undefined;
-  user?: string | null | undefined;
-  server_hosted?: boolean | undefined;
 
   static async get<T extends BasePromptScorer>(
     this: new (...args: any[]) => T,
     name: string,
     judgmentApiKey: string = JUDGMENT_API_KEY || "",
-    organizationId: string = JUDGMENT_ORG_ID || "",
+    organizationId: string = JUDGMENT_ORG_ID || ""
   ): Promise<T> {
     const config = await fetchPromptScorer(
       name,
       judgmentApiKey,
-      organizationId,
+      organizationId
     );
 
     const isTrace = config.is_trace === true;
@@ -79,7 +60,7 @@ export abstract class BasePromptScorer
     if (isTrace !== expectedIsTrace) {
       throw new JudgmentAPIError(
         400,
-        `Scorer with name ${name} is not a ${this.name}`,
+        `Scorer with name ${name} is not a ${this.name}`
       );
     }
 
@@ -95,7 +76,7 @@ export abstract class BasePromptScorer
       [],
       config.options,
       judgmentApiKey,
-      organizationId,
+      organizationId
     );
   }
 
@@ -106,12 +87,12 @@ export abstract class BasePromptScorer
     threshold: number = 0.5,
     options?: Record<string, number> | null,
     judgmentApiKey: string = JUDGMENT_API_KEY || "",
-    organizationId: string = JUDGMENT_ORG_ID || "",
+    organizationId: string = JUDGMENT_ORG_ID || ""
   ): Promise<T> {
     if (await scorerExists(name, judgmentApiKey, organizationId)) {
       throw new JudgmentAPIError(
         400,
-        `Scorer with name ${name} already exists. Either use the existing scorer with the get() method or use a new name.`,
+        `Scorer with name ${name} already exists. Either use the existing scorer with the get() method or use a new name.`
       );
     }
 
@@ -128,7 +109,7 @@ export abstract class BasePromptScorer
       options,
       judgmentApiKey,
       organizationId,
-      isTrace,
+      isTrace
     );
 
     return new this(
@@ -139,7 +120,7 @@ export abstract class BasePromptScorer
       [],
       options,
       judgmentApiKey,
-      organizationId,
+      organizationId
     );
   }
 
@@ -164,7 +145,7 @@ export abstract class BasePromptScorer
   }
 
   getThreshold(): number {
-    return this.threshold;
+    return this.threshold ?? 0.5;
   }
 
   getPrompt(): string {
@@ -176,7 +157,7 @@ export abstract class BasePromptScorer
   }
 
   getName(): string {
-    return this.name;
+    return this.name ?? "";
   }
 
   getConfig(): Record<string, any> {
@@ -190,12 +171,12 @@ export abstract class BasePromptScorer
 
   async pushPromptScorer(): Promise<void> {
     await pushPromptScorer(
-      this.name,
+      this.name ?? "",
       this.prompt,
-      this.threshold,
+      this.threshold ?? 0.5,
       this.options,
       this.judgmentApiKey,
-      this.organizationId,
+      this.organizationId
     );
   }
 

@@ -102,31 +102,6 @@ export class JudgmentApiClient {
     return;
   }
 
-  async getEvaluationStatus(
-    experiment_run_id: string,
-    project_name: string,
-  ): Promise<void> {
-    const queryParams = new URLSearchParams();
-    queryParams.set("experiment_run_id", experiment_run_id);
-    queryParams.set("project_name", project_name);
-    const url = this.buildUrl(
-      "/get_evaluation_status/" +
-        (queryParams.toString() ? "?" + queryParams.toString() : ""),
-    );
-    const response = await fetch(url, {
-      method: "GET",
-      headers: this.buildHeaders(),
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `HTTP Error: ${response.status} - ${await response.text()}`,
-      );
-    }
-
-    return;
-  }
-
   async scorerExists(
     payload: Models.ScorerExistsRequest,
   ): Promise<Models.ScorerExistsResponse> {
