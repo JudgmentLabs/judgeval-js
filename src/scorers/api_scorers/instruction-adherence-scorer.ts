@@ -13,7 +13,7 @@ export class InstructionAdherenceScorer extends APIScorer<
   constructor(scorerArgs?: InstructionAdherenceScorerArgs) {
     super(
       APIScorerType.INSTRUCTION_ADHERENCE,
-      INSTRUCTION_ADHERENCE_REQUIRED_PARAMS
+      INSTRUCTION_ADHERENCE_REQUIRED_PARAMS,
     );
 
     this.name = "Instruction Adherence";
@@ -35,7 +35,7 @@ export type InstructionAdherenceScorerArgs = {
 };
 
 export function createInstructionAdherenceScorer(
-  scorerArgs?: InstructionAdherenceScorerArgs
+  scorerArgs?: InstructionAdherenceScorerArgs,
 ): InstructionAdherenceScorer {
   return new InstructionAdherenceScorer(scorerArgs);
 }

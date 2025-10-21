@@ -2,20 +2,20 @@ import { ScorerConfig } from "../internal/api/models";
 import { BaseScorer as IBaseScorer } from "../internal/api/models/BaseScorer";
 
 export class BaseScorer implements IBaseScorer {
-  score_type: string = "";
+  score_type = "";
   threshold?: number;
   name?: string | null;
   class_name?: string | null;
   score?: number | null;
-  score_breakdown?: Record<string, any> | null;
+  score_breakdown?: Record<string, unknown> | null;
   reason?: string | null;
   using_native_model?: boolean | null;
   success?: boolean | null;
   model?: string | null;
-  model_client?: any | null;
+  model_client?: unknown;
   strict_mode?: boolean;
   error?: string | null;
-  additional_metadata?: Record<string, any> | null;
+  additional_metadata?: Record<string, unknown> | null;
   user?: string | null;
   server_hosted?: boolean;
 
@@ -40,7 +40,7 @@ export class BaseScorer implements IBaseScorer {
     }
     const threshold = this.threshold ?? 0.5;
     const score = this.score;
-    return threshold != null && score != null && score >= threshold;
+    return score >= threshold;
   }
 
   getRequiredParams(): string[] {

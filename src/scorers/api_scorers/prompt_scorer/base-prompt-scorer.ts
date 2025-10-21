@@ -25,7 +25,7 @@ export abstract class BasePromptScorer extends APIScorer<
     requiredParams: readonly string[],
     options?: Record<string, number> | null,
     judgmentApiKey: string = JUDGMENT_API_KEY || "",
-    organizationId: string = JUDGMENT_ORG_ID || ""
+    organizationId: string = JUDGMENT_ORG_ID || "",
   ) {
     super(scoreType, requiredParams);
     this.name = name;
@@ -45,12 +45,12 @@ export abstract class BasePromptScorer extends APIScorer<
     this: new (...args: any[]) => T,
     name: string,
     judgmentApiKey: string = JUDGMENT_API_KEY || "",
-    organizationId: string = JUDGMENT_ORG_ID || ""
+    organizationId: string = JUDGMENT_ORG_ID || "",
   ): Promise<T> {
     const config = await fetchPromptScorer(
       name,
       judgmentApiKey,
-      organizationId
+      organizationId,
     );
 
     const isTrace = config.is_trace === true;
@@ -60,7 +60,7 @@ export abstract class BasePromptScorer extends APIScorer<
     if (isTrace !== expectedIsTrace) {
       throw new JudgmentAPIError(
         400,
-        `Scorer with name ${name} is not a ${this.name}`
+        `Scorer with name ${name} is not a ${this.name}`,
       );
     }
 
@@ -76,7 +76,7 @@ export abstract class BasePromptScorer extends APIScorer<
       [],
       config.options,
       judgmentApiKey,
-      organizationId
+      organizationId,
     );
   }
 
@@ -87,12 +87,12 @@ export abstract class BasePromptScorer extends APIScorer<
     threshold: number = 0.5,
     options?: Record<string, number> | null,
     judgmentApiKey: string = JUDGMENT_API_KEY || "",
-    organizationId: string = JUDGMENT_ORG_ID || ""
+    organizationId: string = JUDGMENT_ORG_ID || "",
   ): Promise<T> {
     if (await scorerExists(name, judgmentApiKey, organizationId)) {
       throw new JudgmentAPIError(
         400,
-        `Scorer with name ${name} already exists. Either use the existing scorer with the get() method or use a new name.`
+        `Scorer with name ${name} already exists. Either use the existing scorer with the get() method or use a new name.`,
       );
     }
 
@@ -109,7 +109,7 @@ export abstract class BasePromptScorer extends APIScorer<
       options,
       judgmentApiKey,
       organizationId,
-      isTrace
+      isTrace,
     );
 
     return new this(
@@ -120,7 +120,7 @@ export abstract class BasePromptScorer extends APIScorer<
       [],
       options,
       judgmentApiKey,
-      organizationId
+      organizationId,
     );
   }
 
@@ -176,7 +176,7 @@ export abstract class BasePromptScorer extends APIScorer<
       this.threshold ?? 0.5,
       this.options,
       this.judgmentApiKey,
-      this.organizationId
+      this.organizationId,
     );
   }
 

@@ -20,19 +20,19 @@ import { TracerConfiguration } from "./TracerConfiguration";
 export type Serializer = (obj: unknown) => string;
 type SpanKind = string;
 
-export type TracerInitializeOptions = {
+export interface TracerInitializeOptions {
   resourceAttributes?: Record<string, unknown>;
   [key: string]: unknown;
-};
+}
 
 export abstract class Tracer {
-  protected static instances: Map<string, Tracer> = new Map();
+  protected static instances = new Map<string, Tracer>();
 
   public apiClient: JudgmentApiClient;
   public tracer: OpenTelemetryTracer;
   public serializer: Serializer = JSON.stringify;
 
-  protected _initialized: boolean = false;
+  protected _initialized = false;
 
   private projectId: string | null = null;
   private spanExporter: JudgmentSpanExporter | NoOpSpanExporter | null = null;
@@ -76,13 +76,7 @@ export abstract class Tracer {
         project_name: this.configuration.projectName,
       });
       Logger.info(`Resolved project ID: ${response.project_id}`);
-      const resolvedProjectId = response.project_id?.toString();
-
-      if (!resolvedProjectId) {
-        throw new Error(
-          `Project ID not found for project: ${this.configuration.projectName}`,
-        );
-      }
+      const resolvedProjectId = response.project_id;
 
       this.projectId = resolvedProjectId;
       Logger.info(`Successfully resolved project ID: ${this.projectId}`);
@@ -101,7 +95,7 @@ export abstract class Tracer {
       try {
         const projectId = await this.resolveProjectId();
         this.spanExporter = this.createJudgmentSpanExporter(projectId);
-      } catch (error) {
+      } catch {
         Logger.error(
           "Failed to resolve project " +
             this.configuration.projectName +
@@ -122,12 +116,10 @@ export abstract class Tracer {
       Logger.info("No active span found, skipping setSpanKind");
       return;
     }
-    if (kind !== null) {
-      currentSpan.setAttribute(
-        OpenTelemetryKeys.AttributeKeys.JUDGMENT_SPAN_KIND,
-        kind,
-      );
-    }
+    currentSpan.setAttribute(
+      OpenTelemetryKeys.AttributeKeys.JUDGMENT_SPAN_KIND,
+      kind,
+    );
   }
 
   public setAttribute(key: string, value: unknown): void {
@@ -152,9 +144,6 @@ export abstract class Tracer {
   }
 
   public setAttributes(attributes: Record<string, unknown>): void {
-    if (!attributes) {
-      return;
-    }
     const currentSpan = trace.getActiveSpan();
     if (!currentSpan) {
       Logger.info("No active span found, skipping setAttributes");
@@ -208,7 +197,7 @@ export abstract class Tracer {
         traceId,
         spanId,
       );
-      this.enqueueEvaluation(evaluationRun);
+      void this.enqueueEvaluation(evaluationRun);
     } catch (error) {
       Logger.error(
         `Failed to asyncEvaluate: ${error instanceof Error ? error.message : String(error)}`,
@@ -267,7 +256,7 @@ export abstract class Tracer {
     spanId: string,
   ): Record<string, unknown> {
     const evalName = `async_trace_evaluate_${spanId || Date.now()}`;
-    const modelName = model || JUDGMENT_DEFAULT_GPT_MODEL;
+    const modelName = model ?? JUDGMENT_DEFAULT_GPT_MODEL;
 
     const scorerConfig = scorer.getScorerConfig();
 
@@ -303,7 +292,7 @@ export abstract class Tracer {
     spanId: string,
   ): ExampleEvaluationRun {
     const runId = `async_evaluate_${spanId || Date.now()}`;
-    const modelName = model || JUDGMENT_DEFAULT_GPT_MODEL;
+    const modelName = model ?? JUDGMENT_DEFAULT_GPT_MODEL;
 
     const scorerConfig = scorer.getScorerConfig();
 
@@ -324,11 +313,6 @@ export abstract class Tracer {
   private async enqueueEvaluation(
     evaluationRun: ExampleEvaluationRun,
   ): Promise<void> {
-    if (!this.apiClient) {
-      Logger.info("API client not available, skipping evaluation enqueue");
-      return;
-    }
-
     try {
       await this.apiClient.addToRunEvalQueueExamples(evaluationRun);
       Logger.info(`Enqueuing evaluation run: ${evaluationRun.eval_name}`);
@@ -339,7 +323,7 @@ export abstract class Tracer {
     }
   }
 
-  private _observe<TArgs extends any[], TResult>(
+  private _observe<TArgs extends unknown[], TResult>(
     func: (...args: TArgs) => TResult,
     spanKind: SpanKind = "span",
   ): (...args: TArgs) => TResult {
@@ -351,7 +335,7 @@ export abstract class Tracer {
     });
   }
 
-  private _executeWithSpan<TArgs extends any[], TResult>(
+  private _executeWithSpan<TArgs extends unknown[], TResult>(
     span: Span,
     func: (...args: TArgs) => TResult,
     args: TArgs,
@@ -385,15 +369,17 @@ export abstract class Tracer {
 
       if (result instanceof Promise) {
         return result
-          .then((res) => {
+          .then((res: TResult) => {
             span.setAttribute(
               OpenTelemetryKeys.AttributeKeys.JUDGMENT_OUTPUT,
               this.serializer(res),
             );
             return res;
           })
-          .catch((err) => {
-            span.recordException(err as Error);
+          .catch((err: unknown) => {
+            span.recordException(
+              err instanceof Error ? err : new Error(String(err)),
+            );
             throw err;
           })
           .finally(() => {
@@ -417,35 +403,37 @@ export abstract class Tracer {
   public observe(
     spanKind?: SpanKind,
   ): (
-    target: any,
+    target: unknown,
     propertyKey: string | symbol,
     descriptor?: PropertyDescriptor,
   ) => void;
-  public observe<TArgs extends any[], TResult>(
+  public observe<TArgs extends unknown[], TResult>(
     func: (...args: TArgs) => TResult,
     spanKind?: SpanKind,
   ): (...args: TArgs) => TResult;
-  public observe<TArgs extends any[], TResult>(
+  public observe<TArgs extends unknown[], TResult>(
     funcOrSpanKind?: ((...args: TArgs) => TResult) | SpanKind,
     spanKind?: SpanKind,
-  ): any {
+  ): unknown {
     try {
       if (typeof funcOrSpanKind === "function") {
-        const wrapped = this._observe(funcOrSpanKind, spanKind || "span");
+        const wrapped = this._observe(funcOrSpanKind, spanKind ?? "span");
         Object.defineProperty(wrapped, "name", { value: funcOrSpanKind.name });
         return wrapped;
       }
       return (
-        _target: any,
+        _target: unknown,
         _propertyKey: string | symbol,
         descriptor?: PropertyDescriptor,
       ) => {
         try {
           if (!descriptor) return;
-          const originalMethod = descriptor.value;
+          const originalMethod = descriptor.value as (
+            ...args: unknown[]
+          ) => unknown;
           const wrapped = this._observe(
             originalMethod,
-            funcOrSpanKind || "span",
+            funcOrSpanKind ?? "span",
           );
           Object.defineProperty(wrapped, "name", {
             value: originalMethod.name,
@@ -465,9 +453,13 @@ export abstract class Tracer {
       if (typeof funcOrSpanKind === "function") {
         return funcOrSpanKind;
       }
-      return () => {};
+      return () => {
+        /* empty */
+      };
     }
   }
 
-  public async shutdown(): Promise<void> {}
+  public async shutdown(): Promise<void> {
+    /* empty */
+  }
 }

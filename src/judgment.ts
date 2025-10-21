@@ -9,7 +9,7 @@ export class JudgmentClient {
 
   public constructor(
     apiKey: string | null = JUDGMENT_API_KEY,
-    organizationId: string | null = JUDGMENT_ORG_ID
+    organizationId: string | null = JUDGMENT_ORG_ID,
   ) {
     if (!apiKey || !organizationId) {
       throw new Error("API key and organization ID are required");
@@ -25,7 +25,7 @@ export class JudgmentClient {
     projectName: string,
     evalRunName: string,
     model?: string,
-    assertTest: boolean = false
+    assertTest: boolean = false,
   ): Promise<ScoringResult[]> {
     return Promise.resolve([]);
   }

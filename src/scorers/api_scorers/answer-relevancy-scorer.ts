@@ -30,7 +30,7 @@ export type AnswerRelevancyScorerArgs = {
 };
 
 export function createAnswerRelevancyScorer(
-  scorerArgs?: AnswerRelevancyScorerArgs
+  scorerArgs?: AnswerRelevancyScorerArgs,
 ): AnswerRelevancyScorer {
   return new AnswerRelevancyScorer(scorerArgs);
 }

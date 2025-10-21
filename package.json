@@ -26,7 +26,9 @@
     "build:cjs": "bun scripts/build.ts cjs",
     "build:umd": "bun scripts/build.ts umd",
     "build:dev": "bun run build:types && bun scripts/build.ts lib --dev",
-    "check": "tsc --noEmit",
+    "check": "tsc --noEmit && eslint src/**/*.ts --no-warn-ignored",
+    "lint": "eslint src/**/*.ts --no-warn-ignored",
+    "lint:fix": "eslint src/**/*.ts --fix --no-warn-ignored",
     "format": "prettier --write \"src/**/*.ts\"",
     "generate-client": "bunx tsx scripts/generate-client.ts && bun run format",
     "test": "bunx tsx test.ts",
@@ -64,10 +66,16 @@
     "@opentelemetry/sdk-metrics": "^2.1.0",
     "@types/bun": "^1.2.22",
     "@types/node": "^24.5.2",
+    "@typescript-eslint/eslint-plugin": "^8.46.2",
+    "@typescript-eslint/parser": "^8.46.2",
     "dotenv": "^17.2.2",
+    "eslint": "^9.38.0",
+    "globals": "^16.4.0",
+    "jiti": "^2.6.1",
     "prettier": "^3.6.2",
     "rimraf": "^6.0.1",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.46.2"
   },
   "engines": {
     "node": ">=18.0.0",

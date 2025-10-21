@@ -1,3 +1,4 @@
+/* eslint-disable */
 // Adopted from https://github.com/angular/angular.js/blob/master/src/auto/injector.js
 
 const ARROW_ARG = /^([^(]+?)=>/;
@@ -12,12 +13,12 @@ function stringifyFn(fn: Function): string {
 
 function extractArgs(fn: Function): RegExpMatchArray | null {
   const fnText = stringifyFn(fn).replace(STRIP_COMMENTS, "");
-  return fnText.match(ARROW_ARG) || fnText.match(FN_ARGS);
+  return ARROW_ARG.exec(fnText) || FN_ARGS.exec(fnText);
 }
 
 export function parseFunctionArgs(fn: Function): string[] {
   const args = extractArgs(fn);
-  if (!args || !args[1]) {
+  if (!args?.[1]) {
     return [];
   }
 
