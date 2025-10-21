@@ -68,7 +68,9 @@ export class JudgmentApiClient {
     return;
   }
 
-  async logEvalResults(payload: Models.EvalResults): Promise<void> {
+  async logEvalResults(
+    payload: Models.EvalResults,
+  ): Promise<{ ui_results_url: string }> {
     const url = this.buildUrl("/log_eval_results/");
     const response = await fetch(url, {
       method: "POST",
@@ -82,10 +84,12 @@ export class JudgmentApiClient {
       );
     }
 
-    return;
+    return (await response.json()) as { ui_results_url: string };
   }
 
-  async fetchExperimentRun(payload: Models.EvalResultsFetch): Promise<void> {
+  async fetchExperimentRun(
+    payload: Models.EvalResultsFetch,
+  ): Promise<Models.EvalResultsFetchResponse> {
     const url = this.buildUrl("/fetch_experiment_run/");
     const response = await fetch(url, {
       method: "POST",
@@ -99,7 +103,7 @@ export class JudgmentApiClient {
       );
     }
 
-    return;
+    return (await response.json()) as Models.EvalResultsFetchResponse;
   }
 
   async scorerExists(

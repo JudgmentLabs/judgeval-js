@@ -20,8 +20,8 @@ export async function pushPromptScorer(
   prompt: string,
   threshold: number,
   options?: Record<string, number> | null,
-  judgmentApiKey: string = JUDGMENT_API_KEY || "",
-  organizationId: string = JUDGMENT_ORG_ID || "",
+  judgmentApiKey: string = JUDGMENT_API_KEY ?? "",
+  organizationId: string = JUDGMENT_ORG_ID ?? "",
   isTrace?: boolean,
 ): Promise<string> {
   if (!JUDGMENT_API_URL || !judgmentApiKey || !organizationId) {
@@ -45,8 +45,8 @@ export async function pushPromptScorer(
 
 export async function fetchPromptScorer(
   name: string,
-  judgmentApiKey: string = JUDGMENT_API_KEY || "",
-  organizationId: string = JUDGMENT_ORG_ID || "",
+  judgmentApiKey: string = JUDGMENT_API_KEY ?? "",
+  organizationId: string = JUDGMENT_ORG_ID ?? "",
 ) {
   if (!JUDGMENT_API_URL || !judgmentApiKey || !organizationId) {
     throw new Error("Missing required API credentials");
@@ -61,14 +61,14 @@ export async function fetchPromptScorer(
   if (response.scorers.length === 0) {
     throw new JudgmentAPIError(404, `Scorer with name ${name} not found`);
   }
-  const { created_at, updated_at, ...config } = response.scorers[0];
+  const { created_at: _, updated_at: __, ...config } = response.scorers[0];
   return config;
 }
 
 export async function scorerExists(
   name: string,
-  judgmentApiKey: string = JUDGMENT_API_KEY || "",
-  organizationId: string = JUDGMENT_ORG_ID || "",
+  judgmentApiKey: string = JUDGMENT_API_KEY ?? "",
+  organizationId: string = JUDGMENT_ORG_ID ?? "",
 ): Promise<boolean> {
   if (!JUDGMENT_API_URL || !judgmentApiKey || !organizationId) {
     throw new Error("Missing required API credentials");

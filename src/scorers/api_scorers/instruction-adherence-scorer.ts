@@ -10,7 +10,7 @@ export class InstructionAdherenceScorer extends APIScorer<
   APIScorerType.INSTRUCTION_ADHERENCE,
   typeof INSTRUCTION_ADHERENCE_REQUIRED_PARAMS
 > {
-  constructor(scorerArgs?: InstructionAdherenceScorerArgs) {
+  private constructor(scorerArgs?: InstructionAdherenceScorerArgs) {
     super(
       APIScorerType.INSTRUCTION_ADHERENCE,
       INSTRUCTION_ADHERENCE_REQUIRED_PARAMS,
@@ -27,15 +27,15 @@ export class InstructionAdherenceScorer extends APIScorer<
       }
     }
   }
+
+  static get(
+    scorerArgs?: InstructionAdherenceScorerArgs,
+  ): InstructionAdherenceScorer {
+    return new InstructionAdherenceScorer(scorerArgs);
+  }
 }
 
-export type InstructionAdherenceScorerArgs = {
+export interface InstructionAdherenceScorerArgs {
   threshold?: number;
   model?: string;
-};
-
-export function createInstructionAdherenceScorer(
-  scorerArgs?: InstructionAdherenceScorerArgs,
-): InstructionAdherenceScorer {
-  return new InstructionAdherenceScorer(scorerArgs);
 }

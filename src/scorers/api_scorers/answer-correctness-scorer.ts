@@ -11,7 +11,7 @@ export class AnswerCorrectnessScorer extends APIScorer<
   APIScorerType.ANSWER_CORRECTNESS,
   typeof ANSWER_CORRECTNESS_REQUIRED_PARAMS
 > {
-  constructor(scorerArgs?: AnswerCorrectnessScorerArgs) {
+  private constructor(scorerArgs?: AnswerCorrectnessScorerArgs) {
     super(APIScorerType.ANSWER_CORRECTNESS, ANSWER_CORRECTNESS_REQUIRED_PARAMS);
 
     if (scorerArgs) {
@@ -23,15 +23,15 @@ export class AnswerCorrectnessScorer extends APIScorer<
       }
     }
   }
+
+  static get(
+    scorerArgs?: AnswerCorrectnessScorerArgs,
+  ): AnswerCorrectnessScorer {
+    return new AnswerCorrectnessScorer(scorerArgs);
+  }
 }
 
-export type AnswerCorrectnessScorerArgs = {
+export interface AnswerCorrectnessScorerArgs {
   threshold?: number;
   model?: string;
-};
-
-export function createAnswerCorrectnessScorer(
-  scorerArgs?: AnswerCorrectnessScorerArgs,
-): AnswerCorrectnessScorer {
-  return new AnswerCorrectnessScorer(scorerArgs);
 }

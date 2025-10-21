@@ -2,7 +2,7 @@ import { Example as ExampleModel } from "../internal/api/models/Example";
 
 export type Example<
   T extends Record<string, unknown> = Record<string, unknown>,
-> = ExampleModel & T;
+> = ExampleModel & T & Record<string, unknown>;
 
 export function Example<T extends Record<string, unknown>>(
   properties: T,

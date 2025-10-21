@@ -31,6 +31,10 @@ export class BaseScorer implements IBaseScorer {
     this.model = model;
   }
 
+  setThreshold(threshold: number): void {
+    this.threshold = threshold;
+  }
+
   successCheck(): boolean {
     if (this.error != null) {
       return false;

@@ -11,7 +11,7 @@ export class FaithfulnessScorer extends APIScorer<
   APIScorerType.FAITHFULNESS,
   typeof FAITHFULNESS_REQUIRED_PARAMS
 > {
-  constructor(scorerArgs?: FaithfulnessScorerArgs) {
+  private constructor(scorerArgs?: FaithfulnessScorerArgs) {
     super(APIScorerType.FAITHFULNESS, FAITHFULNESS_REQUIRED_PARAMS);
 
     if (scorerArgs) {
@@ -23,15 +23,13 @@ export class FaithfulnessScorer extends APIScorer<
       }
     }
   }
+
+  static get(scorerArgs?: FaithfulnessScorerArgs): FaithfulnessScorer {
+    return new FaithfulnessScorer(scorerArgs);
+  }
 }
 
 export type FaithfulnessScorerArgs = {
   threshold?: number;
   model?: string;
 };
-
-export function createFaithfulnessScorer(
-  scorerArgs?: FaithfulnessScorerArgs,
-): FaithfulnessScorer {
-  return new FaithfulnessScorer(scorerArgs);
-}

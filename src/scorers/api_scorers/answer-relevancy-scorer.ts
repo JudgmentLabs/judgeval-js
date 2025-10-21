@@ -10,7 +10,7 @@ export class AnswerRelevancyScorer extends APIScorer<
   APIScorerType.ANSWER_RELEVANCY,
   typeof ANSWER_RELEVANCY_REQUIRED_PARAMS
 > {
-  constructor(scorerArgs?: AnswerRelevancyScorerArgs) {
+  private constructor(scorerArgs?: AnswerRelevancyScorerArgs) {
     super(APIScorerType.ANSWER_RELEVANCY, ANSWER_RELEVANCY_REQUIRED_PARAMS);
 
     if (scorerArgs) {
@@ -22,15 +22,13 @@ export class AnswerRelevancyScorer extends APIScorer<
       }
     }
   }
+
+  static get(scorerArgs?: AnswerRelevancyScorerArgs): AnswerRelevancyScorer {
+    return new AnswerRelevancyScorer(scorerArgs);
+  }
 }
 
-export type AnswerRelevancyScorerArgs = {
+export interface AnswerRelevancyScorerArgs {
   threshold?: number;
   model?: string;
-};
-
-export function createAnswerRelevancyScorer(
-  scorerArgs?: AnswerRelevancyScorerArgs,
-): AnswerRelevancyScorer {
-  return new AnswerRelevancyScorer(scorerArgs);
 }
