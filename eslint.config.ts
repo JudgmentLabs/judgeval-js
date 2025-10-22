@@ -55,6 +55,7 @@ export default tseslint.config(
       "@typescript-eslint/no-deprecated": "warn",
       "@typescript-eslint/no-extraneous-class": "off",
       "@typescript-eslint/no-unnecessary-type-arguments": "off",
+      "@typescript-eslint/unified-signatures": "off",
     },
   }
 );

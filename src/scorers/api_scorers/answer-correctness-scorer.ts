@@ -1,37 +1,22 @@
 import { ExampleParams } from "../../data";
-import { APIScorer, APIScorerType } from "../api-scorer";
+import { RemoteScorer, RemoteScorerConfig } from "../remote-scorer";
 
-const ANSWER_CORRECTNESS_REQUIRED_PARAMS = [
-  ExampleParams.INPUT,
-  ExampleParams.ACTUAL_OUTPUT,
-  ExampleParams.EXPECTED_OUTPUT,
-] as const;
-
-export class AnswerCorrectnessScorer extends APIScorer<
-  APIScorerType.ANSWER_CORRECTNESS,
-  typeof ANSWER_CORRECTNESS_REQUIRED_PARAMS
-> {
-  private constructor(scorerArgs?: AnswerCorrectnessScorerArgs) {
-    super(APIScorerType.ANSWER_CORRECTNESS, ANSWER_CORRECTNESS_REQUIRED_PARAMS);
-
-    if (scorerArgs) {
-      if (scorerArgs.threshold !== undefined) {
-        this.setThreshold(scorerArgs.threshold);
-      }
-      if (scorerArgs.model) {
-        this.addModel(scorerArgs.model);
-      }
-    }
+export class AnswerCorrectnessScorer extends RemoteScorer {
+  private constructor(config: Partial<RemoteScorerConfig> = {}) {
+    super({
+      scoreType: "Answer Correctness",
+      ...config,
+      requiredParams: [
+        ExampleParams.INPUT,
+        ExampleParams.ACTUAL_OUTPUT,
+        ExampleParams.EXPECTED_OUTPUT,
+      ],
+    });
   }
 
   static get(
-    scorerArgs?: AnswerCorrectnessScorerArgs,
+    config: Partial<RemoteScorerConfig> = {},
   ): AnswerCorrectnessScorer {
-    return new AnswerCorrectnessScorer(scorerArgs);
+    return new AnswerCorrectnessScorer(config);
   }
-}
-
-export interface AnswerCorrectnessScorerArgs {
-  threshold?: number;
-  model?: string;
 }

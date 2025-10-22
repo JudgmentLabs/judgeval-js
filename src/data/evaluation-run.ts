@@ -1,18 +1,20 @@
-import { BaseScorer } from "../internal/api/models/BaseScorer";
 import { ExampleEvaluationRun as ExampleEvaluationRunModel } from "../internal/api/models/ExampleEvaluationRun";
-import { ScorerConfig } from "../internal/api/models/ScorerConfig";
 import { TraceEvaluationRun as TraceEvaluationRunModel } from "../internal/api/models/TraceEvaluationRun";
-import { APIScorer } from "../scorers/api-scorer";
-import { ExampleScorer } from "../scorers/example-scorer";
+import {
+  localScorerToBaseScorer,
+  remoteScorerToScorerConfig,
+} from "../scorers/adapters";
+import { LocalScorer } from "../scorers/local-scorer";
+import { RemoteScorer } from "../scorers/remote-scorer";
 import { Example } from "./example";
 
-export type ScorerInput = ExampleScorer | APIScorer | ScorerConfig;
+export type ScorerInput = LocalScorer | RemoteScorer;
 
 export class EvaluationRun {
   id: string;
   created_at: string;
-  custom_scorers: BaseScorer[] = [];
-  judgment_scorers: ScorerConfig[] = [];
+  local_scorers: LocalScorer[] = [];
+  remote_scorers: RemoteScorer[] = [];
   model?: string | null;
 
   constructor(params: { scorers?: ScorerInput[]; model?: string }) {
@@ -23,24 +25,26 @@ export class EvaluationRun {
     this.model = model ?? null;
 
     for (const scorer of scorers) {
-      if (scorer instanceof ExampleScorer) {
-        this.custom_scorers.push(scorer);
-      } else if (scorer instanceof APIScorer) {
-        this.judgment_scorers.push(scorer.getScorerConfig());
-      } else if (typeof scorer === "object" && "score_type" in scorer) {
-        this.judgment_scorers.push(scorer);
+      if (scorer instanceof LocalScorer) {
+        this.local_scorers.push(scorer);
+      } else if (scorer instanceof RemoteScorer) {
+        this.remote_scorers.push(scorer);
       }
     }
   }
 
-  toJSON(): Record<string, unknown> {
+  protected toBaseModel() {
     return {
       id: this.id,
       created_at: this.created_at,
       custom_scorers:
-        this.custom_scorers.length > 0 ? this.custom_scorers : undefined,
+        this.local_scorers.length > 0
+          ? this.local_scorers.map(localScorerToBaseScorer)
+          : undefined,
       judgment_scorers:
-        this.judgment_scorers.length > 0 ? this.judgment_scorers : undefined,
+        this.remote_scorers.length > 0
+          ? this.remote_scorers.map(remoteScorerToScorerConfig)
+          : undefined,
       model: this.model,
     };
   }
@@ -83,15 +87,15 @@ export class ExampleEvaluationRun
     this.trace_id = trace_id ?? null;
   }
 
-  toJSON(): Record<string, unknown> {
+  toModel(): ExampleEvaluationRunModel {
     return {
-      ...super.toJSON(),
+      ...this.toBaseModel(),
       project_name: this.project_name,
       eval_name: this.eval_name,
       examples: this.examples,
       trace_span_id: this.trace_span_id,
       trace_id: this.trace_id,
-    } satisfies ExampleEvaluationRunModel;
+    };
   }
 }
 
@@ -128,9 +132,9 @@ export class TraceEvaluationRun
     this.is_offline = is_offline ?? false;
   }
 
-  toJSON(): Record<string, unknown> {
+  toModel(): TraceEvaluationRunModel {
     return {
-      ...super.toJSON(),
+      ...this.toBaseModel(),
       project_name: this.project_name,
       eval_name: this.eval_name,
       trace_and_span_ids: this.trace_and_span_ids,

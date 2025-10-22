@@ -7,10 +7,11 @@ import {
 import { JUDGMENT_DEFAULT_GPT_MODEL } from "../env";
 import { JudgmentApiClient } from "../internal/api";
 import {
-  ExampleEvaluationRun,
+  ExampleEvaluationRun as ExampleEvaluationRunModel,
   Example as ExampleModel,
 } from "../internal/api/models";
-import { BaseScorer } from "../scorers/base-scorer";
+import { remoteScorerToScorerConfig } from "../scorers/adapters";
+import { RemoteScorer } from "../scorers/remote-scorer";
 import { parseFunctionArgs } from "../utils/annotate";
 import { Logger } from "../utils/logger";
 import { JudgmentSpanExporter, NoOpSpanExporter } from "./exporters";
@@ -163,7 +164,7 @@ export abstract class Tracer {
   }
 
   public asyncEvaluate(
-    scorer: BaseScorer,
+    scorer: RemoteScorer,
     example: ExampleModel,
     model?: string,
   ): void {
@@ -205,7 +206,7 @@ export abstract class Tracer {
     }
   }
 
-  public asyncTraceEvaluate(scorer: BaseScorer, model?: string): void {
+  public asyncTraceEvaluate(scorer: RemoteScorer, model?: string): void {
     try {
       if (!this.configuration.enableEvaluation) {
         return;
@@ -250,7 +251,7 @@ export abstract class Tracer {
   }
 
   private createTraceEvaluationRun(
-    scorer: BaseScorer,
+    scorer: RemoteScorer,
     model: string | undefined,
     traceId: string,
     spanId: string,
@@ -258,7 +259,7 @@ export abstract class Tracer {
     const evalName = `async_trace_evaluate_${spanId || Date.now()}`;
     const modelName = model ?? JUDGMENT_DEFAULT_GPT_MODEL;
 
-    const scorerConfig = scorer.getScorerConfig();
+    const scorerConfig = remoteScorerToScorerConfig(scorer);
 
     return {
       project_name: this.configuration.projectName,
@@ -285,18 +286,18 @@ export abstract class Tracer {
   }
 
   private createEvaluationRun(
-    scorer: BaseScorer,
+    scorer: RemoteScorer,
     example: ExampleModel,
     model: string | undefined,
     traceId: string,
     spanId: string,
-  ): ExampleEvaluationRun {
+  ): ExampleEvaluationRunModel {
     const runId = `async_evaluate_${spanId || Date.now()}`;
     const modelName = model ?? JUDGMENT_DEFAULT_GPT_MODEL;
 
-    const scorerConfig = scorer.getScorerConfig();
+    const scorerConfig = remoteScorerToScorerConfig(scorer);
 
-    const evaluationRun: ExampleEvaluationRun = {
+    const evaluationRun: ExampleEvaluationRunModel = {
       project_name: this.configuration.projectName,
       eval_name: runId,
       examples: [example],
@@ -311,7 +312,7 @@ export abstract class Tracer {
   }
 
   private async enqueueEvaluation(
-    evaluationRun: ExampleEvaluationRun,
+    evaluationRun: ExampleEvaluationRunModel,
   ): Promise<void> {
     try {
       await this.apiClient.addToRunEvalQueueExamples(evaluationRun);
