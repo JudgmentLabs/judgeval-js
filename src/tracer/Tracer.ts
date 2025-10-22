@@ -51,7 +51,7 @@ export abstract class Tracer {
     return this.serializer;
   }
 
-  public constructor(configuration: TracerConfiguration) {
+  protected constructor(configuration: TracerConfiguration) {
     this.configuration = configuration;
     this.tracer = trace.getTracer(this.configuration.tracerName);
 
