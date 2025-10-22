@@ -1,4 +1,5 @@
-// Adopted from https://github.com/angular/angular.js/blob/master/src/auto/injector.js
+/* eslint-disable */
+/// Adopted from https://github.com/angular/angular.js/blob/master/src/auto/injector.js
 
 const ARROW_ARG = /^([^(]+?)=>/;
 const FN_ARGS = /^[^(]*\(\s*([^)]*)\)/m;

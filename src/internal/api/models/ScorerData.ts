@@ -3,7 +3,7 @@
  * DO NOT EDIT MANUALLY - This file is generated automatically
  */
 
-export type ScorerData = {
+export interface ScorerData {
   id?: string;
   name: string;
   threshold: number;
@@ -14,4 +14,4 @@ export type ScorerData = {
   evaluation_model?: string | null;
   error?: string | null;
   additional_metadata?: Record<string, any> | null;
-};
+}

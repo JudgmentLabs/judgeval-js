@@ -62,7 +62,7 @@ export class Logger {
     const levelName =
       Object.keys(Logger.Level).find(
         (key) => Logger.Level[key as keyof typeof Logger.Level] === level,
-      ) || "UNKNOWN";
+      ) ?? "UNKNOWN";
     let formattedMessage = `${timestamp} - judgeval - ${levelName} - ${message}`;
 
     if (Logger.useColor) {

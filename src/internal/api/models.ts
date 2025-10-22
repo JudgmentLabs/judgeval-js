@@ -6,6 +6,7 @@
 export * from "./models/BaseScorer";
 export * from "./models/EvalResults";
 export * from "./models/EvalResultsFetch";
+export * from "./models/EvalResultsFetchResponse";
 export * from "./models/Example";
 export * from "./models/ExampleEvaluationRun";
 export * from "./models/FetchPromptScorersRequest";

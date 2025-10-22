@@ -3,11 +3,9 @@
  * DO NOT EDIT MANUALLY - This file is generated automatically
  */
 
-import { ExampleEvaluationRun } from "./ExampleEvaluationRun";
 import { ScoringResult } from "./ScoringResult";
-import { TraceEvaluationRun } from "./TraceEvaluationRun";
 
-export interface EvalResults {
+export interface EvalResultsFetchResponse {
   results: Array<ScoringResult>;
-  run: ExampleEvaluationRun | TraceEvaluationRun;
+  ui_results_url: string;
 }

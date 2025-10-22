@@ -3,6 +3,6 @@
  * DO NOT EDIT MANUALLY - This file is generated automatically
  */
 
-export type FetchPromptScorersRequest = {
+export interface FetchPromptScorersRequest {
   names?: Array<string> | null;
-};
+}

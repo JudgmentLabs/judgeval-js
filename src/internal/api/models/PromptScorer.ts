@@ -3,12 +3,14 @@
  * DO NOT EDIT MANUALLY - This file is generated automatically
  */
 
-export type PromptScorer = {
+export interface PromptScorer {
   name: string;
   prompt: string;
   threshold: number;
+  model?: string;
   options?: Record<string, number> | null;
+  description?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
   is_trace?: boolean | null;
-};
+}

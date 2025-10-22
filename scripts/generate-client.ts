@@ -439,7 +439,7 @@ function generateModelClass(className: string, schema: any): string {
     lines.push("");
   }
 
-  lines.push(`export type ${className} = ${tsType};`);
+  lines.push(`export interface ${className} ${tsType}`);
 
   return lines.join("\n");
 }
@@ -701,8 +701,8 @@ async function generateApiFiles(spec: OpenAPISpec): Promise<void> {
             responseSchema === "EMPTY_SCHEMA"
               ? "void"
               : responseSchema
-              ? toClassName(responseSchema)
-              : "any",
+                ? toClassName(responseSchema)
+                : "any",
         };
         methods.push(methodInfo);
       }

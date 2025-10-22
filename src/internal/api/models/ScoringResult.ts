@@ -7,7 +7,7 @@ import { Example } from "./Example";
 import { OtelTraceSpan } from "./OtelTraceSpan";
 import { ScorerData } from "./ScorerData";
 
-export type ScoringResult = {
+export interface ScoringResult {
   success: boolean;
   scorers_data: Array<ScorerData>;
   name?: string | null;
@@ -15,4 +15,4 @@ export type ScoringResult = {
   trace_id?: string | null;
   run_duration?: number | null;
   evaluation_cost?: number | null;
-};
+}
