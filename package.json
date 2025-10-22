@@ -31,7 +31,7 @@
     "lint:fix": "eslint src/**/*.ts --fix --no-warn-ignored",
     "format": "prettier --write \"src/**/*.ts\"",
     "generate-client": "bunx tsx scripts/generate-client.ts && bun run format",
-    "test": "bunx tsx test.ts",
+    "test": "bun test",
     "clean": "rimraf dist",
     "prepublishOnly": "bun run clean && bun run build"
   },
@@ -58,20 +58,15 @@
     "@opentelemetry/sdk-node": "^0.205.0",
     "@opentelemetry/sdk-trace-base": "^2.1.0",
     "@opentelemetry/sdk-trace-node": "^2.1.0",
-    "@opentelemetry/sdk-trace-web": "^2.1.0",
-    "openai": "^6.6.0"
+    "@opentelemetry/sdk-trace-web": "^2.1.0"
   },
   "devDependencies": {
-    "@opentelemetry/auto-instrumentations-node": "^0.64.1",
-    "@opentelemetry/sdk-metrics": "^2.1.0",
     "@types/bun": "^1.2.22",
     "@types/node": "^24.5.2",
     "@typescript-eslint/eslint-plugin": "^8.46.2",
     "@typescript-eslint/parser": "^8.46.2",
-    "dotenv": "^17.2.2",
     "eslint": "^9.38.0",
     "globals": "^16.4.0",
-    "jiti": "^2.6.1",
     "prettier": "^3.6.2",
     "rimraf": "^6.0.1",
     "typescript": "^5.9.2",
