@@ -62,28 +62,28 @@ describe("expectOrganizationId", () => {
 
   test("throws error when organization ID is null", () => {
     expect(() => expectOrganizationId(null)).toThrow(
-      "Organization ID is required"
+      "Organization ID is required",
     );
   });
 
   test("throws error when organization ID is undefined", () => {
     expect(() => expectOrganizationId(undefined)).toThrow(
-      "Organization ID is required"
+      "Organization ID is required",
     );
   });
 
   test("throws error when organization ID is empty string", () => {
     expect(() => expectOrganizationId("")).toThrow(
-      "Organization ID is required"
+      "Organization ID is required",
     );
   });
 
   test("throws error when organization ID is whitespace only", () => {
     expect(() => expectOrganizationId("   ")).toThrow(
-      "Organization ID is required"
+      "Organization ID is required",
     );
     expect(() => expectOrganizationId("\t\n")).toThrow(
-      "Organization ID is required"
+      "Organization ID is required",
     );
   });
 });

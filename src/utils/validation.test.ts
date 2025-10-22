@@ -30,7 +30,7 @@ describe("requireNonNull", () => {
 
   test("throws error with custom message when value is null", () => {
     expect(() => requireNonNull(null, "Custom null error")).toThrow(
-      "Custom null error"
+      "Custom null error",
     );
   });
 

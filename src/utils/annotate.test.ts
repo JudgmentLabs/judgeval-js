@@ -35,7 +35,7 @@ describe("parseFunctionArgs", () => {
     function testFunc(
       a: string /* comment */,
       _b: number, // another comment
-      _c: boolean
+      _c: boolean,
     ) {
       return a;
     }
