@@ -1,13 +1,9 @@
 import { JUDGMENT_API_KEY, JUDGMENT_ORG_ID } from "../../../env";
 import { BasePromptScorer } from "./base-prompt-scorer";
-import {
-  fetchPromptScorer,
-  JudgmentAPIError,
-  scorerExists,
-} from "./prompt-scorer-utils";
+import { fetchPromptScorer, JudgmentAPIError } from "./prompt-scorer-utils";
 
 export class TracePromptScorer extends BasePromptScorer {
-  private constructor(
+  constructor(
     name: string,
     prompt: string,
     threshold: number,
@@ -66,38 +62,5 @@ export class TracePromptScorer extends BasePromptScorer {
       judgmentApiKey,
       organizationId,
     );
-  }
-
-  static async create(
-    name: string,
-    prompt: string,
-    threshold = 0.5,
-    model: string | null = null,
-    options?: Record<string, number> | null,
-    description?: string | null,
-    judgmentApiKey: string = JUDGMENT_API_KEY ?? "",
-    organizationId: string = JUDGMENT_ORG_ID ?? "",
-  ): Promise<TracePromptScorer> {
-    if (await scorerExists(name, judgmentApiKey, organizationId)) {
-      throw new JudgmentAPIError(
-        400,
-        `Scorer with name ${name} already exists. Either use the existing scorer with the get() method or use a new name.`,
-      );
-    }
-
-    const scorer = new TracePromptScorer(
-      name,
-      prompt,
-      threshold,
-      model,
-      options,
-      description,
-      judgmentApiKey,
-      organizationId,
-    );
-
-    await scorer.pushPromptScorer();
-
-    return scorer;
   }
 }

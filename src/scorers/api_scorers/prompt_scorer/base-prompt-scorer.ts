@@ -1,6 +1,5 @@
 import { JUDGMENT_API_KEY, JUDGMENT_ORG_ID } from "../../../env";
 import { RemoteScorer } from "../../remote-scorer";
-import { pushPromptScorer } from "./prompt-scorer-utils";
 
 export abstract class BasePromptScorer extends RemoteScorer {
   public prompt: string;
@@ -44,38 +43,6 @@ export abstract class BasePromptScorer extends RemoteScorer {
   protected abstract getScoreType(): string;
   protected abstract getIsTrace(): boolean;
 
-  async updateThreshold(threshold: number): Promise<void> {
-    if (threshold < 0 || threshold > 1) {
-      throw new Error(`Threshold must be between 0 and 1, got: ${threshold}`);
-    }
-    await this.pushPromptScorer();
-  }
-
-  async setPrompt(prompt: string): Promise<void> {
-    this.prompt = prompt;
-    await this.pushPromptScorer();
-  }
-
-  async setOptions(options: Record<string, number> | null): Promise<void> {
-    this.options = options;
-    await this.pushPromptScorer();
-  }
-
-  async setModel(model: string | null): Promise<void> {
-    this.model = model;
-    await this.pushPromptScorer();
-  }
-
-  async setDescription(description: string | null): Promise<void> {
-    this.description = description;
-    await this.pushPromptScorer();
-  }
-
-  async appendToPrompt(promptAddition: string): Promise<void> {
-    this.prompt += promptAddition;
-    await this.pushPromptScorer();
-  }
-
   getThreshold(): number {
     return this.threshold;
   }
@@ -109,20 +76,6 @@ export abstract class BasePromptScorer extends RemoteScorer {
       options: this.options,
       description: this.description,
     };
-  }
-
-  protected async pushPromptScorer(): Promise<void> {
-    await pushPromptScorer(
-      this.name,
-      this.prompt,
-      this.threshold,
-      this.model,
-      this.options,
-      this.description,
-      this.judgmentApiKey,
-      this.organizationId,
-      this.getIsTrace(),
-    );
   }
 
   toString(): string {

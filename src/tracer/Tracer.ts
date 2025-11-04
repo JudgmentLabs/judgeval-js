@@ -4,6 +4,7 @@ import { JudgmentApiClient } from "../internal/api";
 import {
   ExampleEvaluationRun as ExampleEvaluationRunModel,
   Example as ExampleModel,
+  TraceEvaluationRun as TraceEvaluationRunModel,
 } from "../internal/api/models";
 import { remoteScorerToScorerConfig } from "../scorers/adapters";
 import { RemoteScorer } from "../scorers/remote-scorer";
@@ -250,7 +251,7 @@ export abstract class Tracer {
     model: string | undefined,
     traceId: string,
     spanId: string,
-  ): Record<string, unknown> {
+  ): TraceEvaluationRunModel {
     const evalName = `async_trace_evaluate_${spanId || Date.now()}`;
     const modelName = model ?? JUDGMENT_DEFAULT_GPT_MODEL;
 
@@ -259,11 +260,9 @@ export abstract class Tracer {
     return {
       project_name: this.configuration.projectName,
       eval_name: evalName,
-      scorer: scorerConfig,
+      judgment_scorers: [scorerConfig],
       model: modelName,
-      organization_id: this.configuration.organizationId,
-      trace_id: traceId,
-      trace_span_id: spanId,
+      trace_and_span_ids: [[traceId, spanId]],
     };
   }
 
