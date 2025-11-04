@@ -3,7 +3,7 @@
  * DO NOT EDIT MANUALLY - This file is generated automatically
  */
 
-export type OtelTraceSpan = {
+export interface OtelTraceSpan {
   organization_id: string;
   project_id?: string | null;
   user_id: string;
@@ -18,16 +18,8 @@ export type OtelTraceSpan = {
   resource_attributes?: Record<string, any> | null;
   span_attributes?: Record<string, any> | null;
   duration?: number | null;
-  status_code?: string | null;
+  status_code?: number | null;
   status_message?: string | null;
   events?: Array<Record<string, any>> | null;
   links?: Array<Record<string, any>> | null;
-  legacy_span_id?: string | null;
-  inputs?: Record<string, any> | null;
-  output: any;
-  error?: Record<string, any> | null;
-  agent_id?: string | null;
-  cumulative_llm_cost?: number | null;
-  state_after?: Record<string, any> | null;
-  state_before?: Record<string, any> | null;
-};
+}

@@ -3,6 +3,6 @@
  * DO NOT EDIT MANUALLY - This file is generated automatically
  */
 
-export type ResolveProjectNameResponse = {
+export interface ResolveProjectNameResponse {
   project_id: string;
-};
+}

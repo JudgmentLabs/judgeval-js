@@ -20,6 +20,9 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Test
+        run: bun test
+
       - name: Build package
         run: bun run build
 
@@ -32,4 +35,5 @@ jobs:
         run: |
           test -f dist/index.mjs
           test -f dist/index.umd.js
+          test -f dist/index.cjs
           test -f dist/index.d.ts

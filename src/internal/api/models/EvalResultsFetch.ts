@@ -3,7 +3,7 @@
  * DO NOT EDIT MANUALLY - This file is generated automatically
  */
 
-export type EvalResultsFetch = {
+export interface EvalResultsFetch {
   experiment_run_id: string;
   project_name: string;
-};
+}

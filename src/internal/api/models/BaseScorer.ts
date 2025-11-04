@@ -3,7 +3,7 @@
  * DO NOT EDIT MANUALLY - This file is generated automatically
  */
 
-export type BaseScorer = {
+export interface BaseScorer {
   score_type: string;
   threshold?: number;
   name?: string | null;
@@ -20,4 +20,4 @@ export type BaseScorer = {
   additional_metadata?: Record<string, any> | null;
   user?: string | null;
   server_hosted?: boolean;
-};
+}

@@ -33,7 +33,7 @@ export class TracerConfiguration {
     public readonly enableEvaluation: boolean,
     public readonly tracerName: string = JUDGEVAL_TRACER_INSTRUMENTING_MODULE_NAME,
     public readonly resourceAttributes: Record<string, unknown> = {},
-    public readonly initialize: boolean = true,
+    public readonly initialize = true,
   ) {}
 
   /**
@@ -87,10 +87,10 @@ export class TracerConfigurationBuilder {
   private _apiKey: string | null = JUDGMENT_API_KEY;
   private _organizationId: string | null = JUDGMENT_ORG_ID;
   private _apiUrl: string = JUDGMENT_API_URL;
-  private _enableEvaluation: boolean = true;
+  private _enableEvaluation = true;
   private _tracerName: string = JUDGEVAL_TRACER_INSTRUMENTING_MODULE_NAME;
   private _resourceAttributes: Record<string, unknown> = {};
-  private _initialize: boolean = true;
+  private _initialize = true;
 
   public projectName(projectName: string): this {
     this._projectName = projectName;

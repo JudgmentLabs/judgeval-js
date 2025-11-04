@@ -1,9 +1,10 @@
 import { Example as ExampleModel } from "../internal/api/models/Example";
 
-export type Example<T extends Record<string, any> = Record<string, any>> =
-  ExampleModel & T;
+export type Example<
+  T extends Record<string, unknown> = Record<string, unknown>,
+> = ExampleModel & T & Record<string, unknown>;
 
-export function Example<T extends Record<string, any>>(
+export function Example<T extends Record<string, unknown>>(
   properties: T,
 ): Example<T> {
   const example: Example<T> = {

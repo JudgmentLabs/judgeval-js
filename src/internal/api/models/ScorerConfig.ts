@@ -3,11 +3,12 @@
  * DO NOT EDIT MANUALLY - This file is generated automatically
  */
 
-export type ScorerConfig = {
+export interface ScorerConfig {
   score_type: string;
   name?: string | null;
   threshold?: number;
+  model?: string | null;
   strict_mode?: boolean;
   required_params?: Array<string>;
   kwargs?: Record<string, any> | null;
-};
+}
