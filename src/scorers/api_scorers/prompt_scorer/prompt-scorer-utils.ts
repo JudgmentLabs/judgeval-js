@@ -19,7 +19,9 @@ export async function pushPromptScorer(
   name: string,
   prompt: string,
   threshold: number,
+  model: string | null,
   options?: Record<string, number> | null,
+  description?: string | null,
   judgmentApiKey: string = JUDGMENT_API_KEY ?? "",
   organizationId: string = JUDGMENT_ORG_ID ?? "",
   isTrace?: boolean,
@@ -37,7 +39,9 @@ export async function pushPromptScorer(
     name,
     prompt,
     threshold,
+    model: model ?? undefined,
     options,
+    description,
     is_trace: isTrace,
   });
   return response.name;
@@ -61,8 +65,7 @@ export async function fetchPromptScorer(
   if (response.scorers.length === 0) {
     throw new JudgmentAPIError(404, `Scorer with name ${name} not found`);
   }
-  const { created_at: _, updated_at: __, ...config } = response.scorers[0];
-  return config;
+  return response.scorers[0];
 }
 
 export async function scorerExists(

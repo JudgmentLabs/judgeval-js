@@ -11,7 +11,9 @@ export class TracePromptScorer extends BasePromptScorer {
     name: string,
     prompt: string,
     threshold: number,
+    model: string | null,
     options?: Record<string, number> | null,
+    description?: string | null,
     judgmentApiKey: string = JUDGMENT_API_KEY ?? "",
     organizationId: string = JUDGMENT_ORG_ID ?? "",
   ) {
@@ -20,7 +22,9 @@ export class TracePromptScorer extends BasePromptScorer {
       name,
       prompt,
       threshold,
+      model,
       options,
+      description,
       judgmentApiKey,
       organizationId,
     );
@@ -56,7 +60,9 @@ export class TracePromptScorer extends BasePromptScorer {
       config.name,
       config.prompt,
       config.threshold,
+      config.model ?? null,
       config.options,
+      config.description,
       judgmentApiKey,
       organizationId,
     );
@@ -66,7 +72,9 @@ export class TracePromptScorer extends BasePromptScorer {
     name: string,
     prompt: string,
     threshold = 0.5,
+    model: string | null = null,
     options?: Record<string, number> | null,
+    description?: string | null,
     judgmentApiKey: string = JUDGMENT_API_KEY ?? "",
     organizationId: string = JUDGMENT_ORG_ID ?? "",
   ): Promise<TracePromptScorer> {
@@ -81,7 +89,9 @@ export class TracePromptScorer extends BasePromptScorer {
       name,
       prompt,
       threshold,
+      model,
       options,
+      description,
       judgmentApiKey,
       organizationId,
     );

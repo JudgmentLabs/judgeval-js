@@ -4,7 +4,9 @@ import { pushPromptScorer } from "./prompt-scorer-utils";
 
 export abstract class BasePromptScorer extends RemoteScorer {
   public prompt: string;
+  public model: string | null;
   public options?: Record<string, number> | null;
+  public description?: string | null;
   public judgmentApiKey: string;
   public organizationId: string;
 
@@ -13,7 +15,9 @@ export abstract class BasePromptScorer extends RemoteScorer {
     name: string,
     prompt: string,
     threshold: number,
+    model: string | null,
     options?: Record<string, number> | null,
+    description?: string | null,
     judgmentApiKey: string = JUDGMENT_API_KEY ?? "",
     organizationId: string = JUDGMENT_ORG_ID ?? "",
   ) {
@@ -21,14 +25,18 @@ export abstract class BasePromptScorer extends RemoteScorer {
       scoreType,
       name,
       threshold,
+      model,
       requiredParams: [],
       kwargs: {
         prompt,
         ...(options ? { options } : {}),
+        ...(description ? { description } : {}),
       },
     });
     this.prompt = prompt;
+    this.model = model;
     this.options = options;
+    this.description = description;
     this.judgmentApiKey = judgmentApiKey;
     this.organizationId = organizationId;
   }
@@ -53,6 +61,16 @@ export abstract class BasePromptScorer extends RemoteScorer {
     await this.pushPromptScorer();
   }
 
+  async setModel(model: string | null): Promise<void> {
+    this.model = model;
+    await this.pushPromptScorer();
+  }
+
+  async setDescription(description: string | null): Promise<void> {
+    this.description = description;
+    await this.pushPromptScorer();
+  }
+
   async appendToPrompt(promptAddition: string): Promise<void> {
     this.prompt += promptAddition;
     await this.pushPromptScorer();
@@ -70,6 +88,14 @@ export abstract class BasePromptScorer extends RemoteScorer {
     return this.options ? { ...this.options } : null;
   }
 
+  getModel(): string | null {
+    return this.model;
+  }
+
+  getDescription(): string | null | undefined {
+    return this.description;
+  }
+
   getName(): string {
     return this.name;
   }
@@ -79,7 +105,9 @@ export abstract class BasePromptScorer extends RemoteScorer {
       name: this.name,
       prompt: this.prompt,
       threshold: this.threshold,
+      model: this.model,
       options: this.options,
+      description: this.description,
     };
   }
 
@@ -88,7 +116,9 @@ export abstract class BasePromptScorer extends RemoteScorer {
       this.name,
       this.prompt,
       this.threshold,
+      this.model,
       this.options,
+      this.description,
       this.judgmentApiKey,
       this.organizationId,
       this.getIsTrace(),
@@ -98,6 +128,6 @@ export abstract class BasePromptScorer extends RemoteScorer {
   toString(): string {
     return `${this.constructor.name}(name=${this.name}, prompt=${
       this.prompt
-    }, threshold=${this.threshold}, options=${JSON.stringify(this.options)})`;
+    }, threshold=${this.threshold}, model=${this.model}, options=${JSON.stringify(this.options)}, description=${this.description})`;
   }
 }
