@@ -28,27 +28,22 @@ export class NodeTracer extends BaseTracer {
     enableEvaluation: boolean,
     apiClient: JudgmentApiClient,
     serializer: Serializer,
-    resourceAttributes: Record<string, unknown>
+    resourceAttributes: Record<string, unknown>,
   ) {
-    super(
-      projectName,
-      enableEvaluation,
-      apiClient,
-      serializer
-    );
+    super(projectName, enableEvaluation, apiClient, serializer);
     this.resourceAttributes = resourceAttributes;
   }
 
   static async create(
     config: InternalNodeTracerConfig,
-    apiClient: JudgmentApiClient
+    apiClient: JudgmentApiClient,
   ): Promise<NodeTracer> {
     const tracer = new NodeTracer(
       config.projectName,
       config.enableEvaluation,
       apiClient,
       config.serializer,
-      config.resourceAttributes
+      config.resourceAttributes,
     );
 
     await tracer.resolveAndSetProjectId();
@@ -85,7 +80,7 @@ export class NodeTracer extends BaseTracer {
       Logger.info("NodeTracer initialized successfully");
     } catch (error) {
       throw new Error(
-        `Failed to initialize NodeTracer: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to initialize NodeTracer: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }

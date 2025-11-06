@@ -1,294 +1,160 @@
 import { APIScorerType } from "../../data/APIScorerType";
 import { APIScorer } from "../APIScorer";
 
-export class FaithfulnessScorer extends APIScorer {
-  private constructor(builder: FaithfulnessScorerBuilder) {
-    super(APIScorerType.FAITHFULNESS);
-    this.setRequiredParams(["context", "actual_output"]);
-    if (builder.threshold !== undefined) {
-      this.setThreshold(builder.threshold);
-    }
-    if (builder.name) {
-      this.setName(builder.name);
-    }
-    if (builder.strictMode !== undefined) {
-      this.setStrictMode(builder.strictMode);
-    }
-    if (builder.model) {
-      this.setModel(builder.model);
-    }
-  }
-
-  static builder(): FaithfulnessScorerBuilder {
-    return new FaithfulnessScorerBuilder();
-  }
-}
-
-export class FaithfulnessScorerBuilder {
+export interface FaithfulnessScorerConfig {
   threshold?: number;
   name?: string;
   strictMode?: boolean;
   model?: string;
+}
 
-  setThreshold(threshold: number): this {
-    this.threshold = threshold;
-    return this;
+export class FaithfulnessScorer extends APIScorer {
+  constructor(config: FaithfulnessScorerConfig = {}) {
+    super(APIScorerType.FAITHFULNESS);
+    this.setRequiredParams(["context", "actual_output"]);
+    if (config.threshold !== undefined) {
+      this.setThreshold(config.threshold);
+    }
+    if (config.name) {
+      this.setName(config.name);
+    }
+    if (config.strictMode !== undefined) {
+      this.setStrictMode(config.strictMode);
+    }
+    if (config.model) {
+      this.setModel(config.model);
+    }
   }
+}
 
-  setName(name: string): this {
-    this.name = name;
-    return this;
-  }
-
-  setStrictMode(strictMode: boolean): this {
-    this.strictMode = strictMode;
-    return this;
-  }
-
-  setModel(model: string): this {
-    this.model = model;
-    return this;
-  }
-
-  build(): FaithfulnessScorer {
-    return new FaithfulnessScorer(this);
-  }
+export interface AnswerCorrectnessScorerConfig {
+  threshold?: number;
+  name?: string;
+  strictMode?: boolean;
+  model?: string;
 }
 
 export class AnswerCorrectnessScorer extends APIScorer {
-  private constructor(builder: AnswerCorrectnessScorerBuilder) {
+  constructor(config: AnswerCorrectnessScorerConfig = {}) {
     super(APIScorerType.ANSWER_CORRECTNESS);
     this.setRequiredParams(["input", "actual_output", "expected_output"]);
-    if (builder.threshold !== undefined) {
-      this.setThreshold(builder.threshold);
+    if (config.threshold !== undefined) {
+      this.setThreshold(config.threshold);
     }
-    if (builder.name) {
-      this.setName(builder.name);
+    if (config.name) {
+      this.setName(config.name);
     }
-    if (builder.strictMode !== undefined) {
-      this.setStrictMode(builder.strictMode);
+    if (config.strictMode !== undefined) {
+      this.setStrictMode(config.strictMode);
     }
-    if (builder.model) {
-      this.setModel(builder.model);
+    if (config.model) {
+      this.setModel(config.model);
     }
-  }
-
-  static builder(): AnswerCorrectnessScorerBuilder {
-    return new AnswerCorrectnessScorerBuilder();
   }
 }
 
-export class AnswerCorrectnessScorerBuilder {
+export interface AnswerRelevancyScorerConfig {
   threshold?: number;
   name?: string;
   strictMode?: boolean;
   model?: string;
-
-  setThreshold(threshold: number): this {
-    this.threshold = threshold;
-    return this;
-  }
-
-  setName(name: string): this {
-    this.name = name;
-    return this;
-  }
-
-  setStrictMode(strictMode: boolean): this {
-    this.strictMode = strictMode;
-    return this;
-  }
-
-  setModel(model: string): this {
-    this.model = model;
-    return this;
-  }
-
-  build(): AnswerCorrectnessScorer {
-    return new AnswerCorrectnessScorer(this);
-  }
 }
 
 export class AnswerRelevancyScorer extends APIScorer {
-  private constructor(builder: AnswerRelevancyScorerBuilder) {
+  constructor(config: AnswerRelevancyScorerConfig = {}) {
     super(APIScorerType.ANSWER_RELEVANCY);
     this.setRequiredParams(["input", "actual_output"]);
-    if (builder.threshold !== undefined) {
-      this.setThreshold(builder.threshold);
+    if (config.threshold !== undefined) {
+      this.setThreshold(config.threshold);
     }
-    if (builder.name) {
-      this.setName(builder.name);
+    if (config.name) {
+      this.setName(config.name);
     }
-    if (builder.strictMode !== undefined) {
-      this.setStrictMode(builder.strictMode);
+    if (config.strictMode !== undefined) {
+      this.setStrictMode(config.strictMode);
     }
-    if (builder.model) {
-      this.setModel(builder.model);
+    if (config.model) {
+      this.setModel(config.model);
     }
-  }
-
-  static builder(): AnswerRelevancyScorerBuilder {
-    return new AnswerRelevancyScorerBuilder();
   }
 }
 
-export class AnswerRelevancyScorerBuilder {
+export interface InstructionAdherenceScorerConfig {
   threshold?: number;
   name?: string;
   strictMode?: boolean;
   model?: string;
-
-  setThreshold(threshold: number): this {
-    this.threshold = threshold;
-    return this;
-  }
-
-  setName(name: string): this {
-    this.name = name;
-    return this;
-  }
-
-  setStrictMode(strictMode: boolean): this {
-    this.strictMode = strictMode;
-    return this;
-  }
-
-  setModel(model: string): this {
-    this.model = model;
-    return this;
-  }
-
-  build(): AnswerRelevancyScorer {
-    return new AnswerRelevancyScorer(this);
-  }
 }
 
 export class InstructionAdherenceScorer extends APIScorer {
-  private constructor(builder: InstructionAdherenceScorerBuilder) {
+  constructor(config: InstructionAdherenceScorerConfig = {}) {
     super(APIScorerType.INSTRUCTION_ADHERENCE);
     this.setRequiredParams(["input", "actual_output"]);
-    if (builder.threshold !== undefined) {
-      this.setThreshold(builder.threshold);
+    if (config.threshold !== undefined) {
+      this.setThreshold(config.threshold);
     }
-    if (builder.name) {
-      this.setName(builder.name);
+    if (config.name) {
+      this.setName(config.name);
     }
-    if (builder.strictMode !== undefined) {
-      this.setStrictMode(builder.strictMode);
+    if (config.strictMode !== undefined) {
+      this.setStrictMode(config.strictMode);
     }
-    if (builder.model) {
-      this.setModel(builder.model);
+    if (config.model) {
+      this.setModel(config.model);
     }
-  }
-
-  static builder(): InstructionAdherenceScorerBuilder {
-    return new InstructionAdherenceScorerBuilder();
   }
 }
 
-export class InstructionAdherenceScorerBuilder {
+export interface DerailmentScorerConfig {
   threshold?: number;
   name?: string;
   strictMode?: boolean;
   model?: string;
-
-  setThreshold(threshold: number): this {
-    this.threshold = threshold;
-    return this;
-  }
-
-  setName(name: string): this {
-    this.name = name;
-    return this;
-  }
-
-  setStrictMode(strictMode: boolean): this {
-    this.strictMode = strictMode;
-    return this;
-  }
-
-  setModel(model: string): this {
-    this.model = model;
-    return this;
-  }
-
-  build(): InstructionAdherenceScorer {
-    return new InstructionAdherenceScorer(this);
-  }
 }
 
 export class DerailmentScorer extends APIScorer {
-  private constructor(builder: DerailmentScorerBuilder) {
+  constructor(config: DerailmentScorerConfig = {}) {
     super(APIScorerType.DERAILMENT);
     this.setRequiredParams(["input", "actual_output"]);
-    if (builder.threshold !== undefined) {
-      this.setThreshold(builder.threshold);
+    if (config.threshold !== undefined) {
+      this.setThreshold(config.threshold);
     }
-    if (builder.name) {
-      this.setName(builder.name);
+    if (config.name) {
+      this.setName(config.name);
     }
-    if (builder.strictMode !== undefined) {
-      this.setStrictMode(builder.strictMode);
+    if (config.strictMode !== undefined) {
+      this.setStrictMode(config.strictMode);
     }
-    if (builder.model) {
-      this.setModel(builder.model);
+    if (config.model) {
+      this.setModel(config.model);
     }
-  }
-
-  static builder(): DerailmentScorerBuilder {
-    return new DerailmentScorerBuilder();
-  }
-}
-
-export class DerailmentScorerBuilder {
-  threshold?: number;
-  name?: string;
-  strictMode?: boolean;
-  model?: string;
-
-  setThreshold(threshold: number): this {
-    this.threshold = threshold;
-    return this;
-  }
-
-  setName(name: string): this {
-    this.name = name;
-    return this;
-  }
-
-  setStrictMode(strictMode: boolean): this {
-    this.strictMode = strictMode;
-    return this;
-  }
-
-  setModel(model: string): this {
-    this.model = model;
-    return this;
-  }
-
-  build(): DerailmentScorer {
-    return new DerailmentScorer(this);
   }
 }
 
 export class BuiltInScorersFactory {
-  answerCorrectness(): AnswerCorrectnessScorerBuilder {
-    return AnswerCorrectnessScorer.builder();
+  answerCorrectness(
+    config: AnswerCorrectnessScorerConfig = {},
+  ): AnswerCorrectnessScorer {
+    return new AnswerCorrectnessScorer(config);
   }
 
-  answerRelevancy(): AnswerRelevancyScorerBuilder {
-    return AnswerRelevancyScorer.builder();
+  answerRelevancy(
+    config: AnswerRelevancyScorerConfig = {},
+  ): AnswerRelevancyScorer {
+    return new AnswerRelevancyScorer(config);
   }
 
-  faithfulness(): FaithfulnessScorerBuilder {
-    return FaithfulnessScorer.builder();
+  faithfulness(config: FaithfulnessScorerConfig = {}): FaithfulnessScorer {
+    return new FaithfulnessScorer(config);
   }
 
-  instructionAdherence(): InstructionAdherenceScorerBuilder {
-    return InstructionAdherenceScorer.builder();
+  instructionAdherence(
+    config: InstructionAdherenceScorerConfig = {},
+  ): InstructionAdherenceScorer {
+    return new InstructionAdherenceScorer(config);
   }
 
-  derailment(): DerailmentScorerBuilder {
-    return DerailmentScorer.builder();
+  derailment(config: DerailmentScorerConfig = {}): DerailmentScorer {
+    return new DerailmentScorer(config);
   }
 }

@@ -31,7 +31,7 @@ export class BrowserTracer extends BaseTracer {
     enableEvaluation: boolean,
     apiClient: JudgmentApiClient,
     serializer: Serializer,
-    resourceAttributes: Record<string, unknown>
+    resourceAttributes: Record<string, unknown>,
   ) {
     super(projectName, enableEvaluation, apiClient, serializer);
     this.resourceAttributes = resourceAttributes;
@@ -39,14 +39,14 @@ export class BrowserTracer extends BaseTracer {
 
   static async create(
     config: InternalBrowserTracerConfig,
-    apiClient: JudgmentApiClient
+    apiClient: JudgmentApiClient,
   ): Promise<BrowserTracer> {
     const tracer = new BrowserTracer(
       config.projectName,
       config.enableEvaluation,
       apiClient,
       config.serializer,
-      config.resourceAttributes
+      config.resourceAttributes,
     );
 
     await tracer.resolveAndSetProjectId();
@@ -83,7 +83,7 @@ export class BrowserTracer extends BaseTracer {
       Logger.info("BrowserTracer initialized successfully");
     } catch (error) {
       throw new Error(
-        `Failed to initialize BrowserTracer: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to initialize BrowserTracer: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }

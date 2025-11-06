@@ -1,17 +1,24 @@
 import { randomUUID } from "node:crypto";
 import type { Example as APIExample } from "../../internal/api/models";
 
+export interface ExampleConfig {
+  name?: string;
+  properties?: Record<string, unknown>;
+  exampleId?: string;
+  createdAt?: string;
+}
+
 export class Example {
   exampleId: string;
   createdAt: string;
   name?: string | null;
   private properties: Record<string, unknown>;
 
-  constructor() {
-    this.exampleId = randomUUID();
-    this.createdAt = new Date().toISOString();
-    this.name = null;
-    this.properties = {};
+  constructor(config: ExampleConfig = {}) {
+    this.exampleId = config.exampleId ?? randomUUID();
+    this.createdAt = config.createdAt ?? new Date().toISOString();
+    this.name = config.name ?? null;
+    this.properties = config.properties ?? {};
   }
 
   setProperty(key: string, value: unknown): this {
@@ -35,31 +42,4 @@ export class Example {
       ...this.properties,
     };
   }
-
-  static builder(): ExampleBuilder {
-    return new ExampleBuilder();
-  }
 }
-
-export class ExampleBuilder {
-  private example: Example;
-
-  constructor() {
-    this.example = new Example();
-  }
-
-  property(key: string, value: unknown): this {
-    this.example.setProperty(key, value);
-    return this;
-  }
-
-  name(name: string): this {
-    this.example.name = name;
-    return this;
-  }
-
-  build(): Example {
-    return this.example;
-  }
-}
-

@@ -1,4 +1,4 @@
 export * from "./APIScorerType";
-export { Example, ExampleBuilder } from "./Example";
-export { ScorerData, ScorerDataBuilder } from "./ScorerData";
-export { ScoringResult, ScoringResultBuilder } from "./ScoringResult";
+export { Example, type ExampleConfig } from "./Example";
+export { ScorerData, type ScorerDataConfig } from "./ScorerData";
+export { ScoringResult, type ScoringResultConfig } from "./ScoringResult";

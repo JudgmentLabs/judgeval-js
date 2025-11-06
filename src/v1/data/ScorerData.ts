@@ -1,5 +1,18 @@
 import type { ScorerData as APIScorerData } from "../../internal/api/models";
 
+export interface ScorerDataConfig {
+  name?: string;
+  threshold?: number;
+  success?: boolean;
+  score?: number;
+  reason?: string;
+  strictMode?: boolean;
+  evaluationModel?: string;
+  error?: string;
+  additionalMetadata?: Record<string, unknown>;
+  id?: string;
+}
+
 export class ScorerData {
   name?: string | null;
   threshold?: number | null;
@@ -12,8 +25,17 @@ export class ScorerData {
   additionalMetadata?: Record<string, unknown>;
   id?: string | null;
 
-  constructor() {
-    this.additionalMetadata = {};
+  constructor(config: ScorerDataConfig = {}) {
+    this.name = config.name ?? null;
+    this.threshold = config.threshold ?? null;
+    this.success = config.success ?? null;
+    this.score = config.score ?? null;
+    this.reason = config.reason ?? null;
+    this.strictMode = config.strictMode ?? null;
+    this.evaluationModel = config.evaluationModel ?? null;
+    this.error = config.error ?? null;
+    this.additionalMetadata = config.additionalMetadata ?? {};
+    this.id = config.id ?? null;
   }
 
   toModel(): APIScorerData {
@@ -49,74 +71,5 @@ export class ScorerData {
     }
 
     return result;
-  }
-
-  static builder(): ScorerDataBuilder {
-    return new ScorerDataBuilder();
-  }
-}
-
-export class ScorerDataBuilder {
-  private scorerData: ScorerData;
-
-  constructor() {
-    this.scorerData = new ScorerData();
-  }
-
-  name(name: string): this {
-    this.scorerData.name = name;
-    return this;
-  }
-
-  score(score: number): this {
-    this.scorerData.score = score;
-    return this;
-  }
-
-  success(success: boolean): this {
-    this.scorerData.success = success;
-    return this;
-  }
-
-  reason(reason: string): this {
-    this.scorerData.reason = reason;
-    return this;
-  }
-
-  threshold(threshold: number): this {
-    this.scorerData.threshold = threshold;
-    return this;
-  }
-
-  strictMode(strictMode: boolean): this {
-    this.scorerData.strictMode = strictMode;
-    return this;
-  }
-
-  evaluationModel(evaluationModel: string): this {
-    this.scorerData.evaluationModel = evaluationModel;
-    return this;
-  }
-
-  error(error: string): this {
-    this.scorerData.error = error;
-    return this;
-  }
-
-  additionalMetadata(additionalMetadata: Record<string, unknown>): this {
-    this.scorerData.additionalMetadata = additionalMetadata;
-    return this;
-  }
-
-  metadata(key: string, value: unknown): this {
-    if (!this.scorerData.additionalMetadata) {
-      this.scorerData.additionalMetadata = {};
-    }
-    this.scorerData.additionalMetadata[key] = value;
-    return this;
-  }
-
-  build(): ScorerData {
-    return this.scorerData;
   }
 }

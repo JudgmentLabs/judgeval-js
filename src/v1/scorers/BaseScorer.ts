@@ -4,4 +4,3 @@ export abstract class BaseScorer {
   abstract getName(): string;
   abstract getScorerConfig(): ScorerConfig;
 }
-

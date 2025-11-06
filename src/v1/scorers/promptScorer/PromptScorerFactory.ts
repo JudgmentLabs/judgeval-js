@@ -46,7 +46,7 @@ export class PromptScorerFactory {
           : "PromptScorer";
         const actualType = scorerIsTrace ? "TracePromptScorer" : "PromptScorer";
         throw new Error(
-          `Scorer with name ${name} is a ${actualType}, not a ${expectedType}`
+          `Scorer with name ${name} is a ${actualType}, not a ${expectedType}`,
         );
       }
 

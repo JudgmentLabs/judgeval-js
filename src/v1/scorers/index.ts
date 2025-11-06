@@ -1,8 +1,26 @@
+export { APIScorer } from "./APIScorer";
 export { BaseScorer } from "./BaseScorer";
-export { APIScorer, type APIScorerConfig } from "./APIScorer";
-export { ScorersFactory } from "./ScorersFactory";
-export { PromptScorer, type PromptScorerConfig } from "./promptScorer/PromptScorer";
-export { PromptScorerFactory } from "./promptScorer/PromptScorerFactory";
-export { CustomScorer, type CustomScorerConfig } from "./customScorer/CustomScorer";
+export {
+  AnswerCorrectnessScorer,
+  AnswerRelevancyScorer,
+  BuiltInScorersFactory,
+  DerailmentScorer,
+  FaithfulnessScorer,
+  InstructionAdherenceScorer,
+  type AnswerCorrectnessScorerConfig,
+  type AnswerRelevancyScorerConfig,
+  type DerailmentScorerConfig,
+  type FaithfulnessScorerConfig,
+  type InstructionAdherenceScorerConfig,
+} from "./builtIn";
+export {
+  CustomScorer,
+  type CustomScorerConfig,
+} from "./customScorer/CustomScorer";
 export { CustomScorerFactory } from "./customScorer/CustomScorerFactory";
-export { BuiltInScorersFactory } from "./builtIn/BuiltInScorersFactory";
+export {
+  PromptScorer,
+  type PromptScorerConfig,
+} from "./promptScorer/PromptScorer";
+export { PromptScorerFactory } from "./promptScorer/PromptScorerFactory";
+export { ScorersFactory } from "./ScorersFactory";

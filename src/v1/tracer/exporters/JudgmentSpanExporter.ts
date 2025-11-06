@@ -1,10 +1,8 @@
-import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
-import type {
-  ReadableSpan,
-} from "@opentelemetry/sdk-trace-base";
-import { SpanExporter } from "@opentelemetry/sdk-trace-base";
-import * as AttributeKeys from "../attributeKeys";
 import { type ExportResult } from "@opentelemetry/core";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+import type { ReadableSpan } from "@opentelemetry/sdk-trace-base";
+import { SpanExporter } from "@opentelemetry/sdk-trace-base";
+import { ResourceKeys } from "../../../attributeKeys";
 
 export class JudgmentSpanExporter implements SpanExporter {
   private delegate: SpanExporter;
@@ -20,7 +18,7 @@ export class JudgmentSpanExporter implements SpanExporter {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "X-Organization-Id": organizationId,
-        [AttributeKeys.JUDGMENT_PROJECT_ID]: projectId,
+        [ResourceKeys.JUDGMENT_PROJECT_ID]: projectId,
       },
     });
   }
@@ -43,4 +41,3 @@ export class JudgmentSpanExporter implements SpanExporter {
     return Promise.resolve();
   }
 }
-

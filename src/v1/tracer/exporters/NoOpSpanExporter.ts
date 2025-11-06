@@ -1,7 +1,5 @@
 import { type ExportResult } from "@opentelemetry/core";
-import type {
-  ReadableSpan,
-} from "@opentelemetry/sdk-trace-base";
+import type { ReadableSpan } from "@opentelemetry/sdk-trace-base";
 import { SpanExporter } from "@opentelemetry/sdk-trace-base";
 
 export class NoOpSpanExporter implements SpanExporter {
@@ -16,4 +14,3 @@ export class NoOpSpanExporter implements SpanExporter {
     return Promise.resolve();
   }
 }
-

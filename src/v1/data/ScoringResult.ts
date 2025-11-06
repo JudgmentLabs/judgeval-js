@@ -6,6 +6,16 @@ import type {
 import { Example } from "./Example";
 import { ScorerData } from "./ScorerData";
 
+export interface ScoringResultConfig {
+  success?: boolean;
+  scorersData?: ScorerData[];
+  name?: string;
+  dataObject?: OtelTraceSpan | Example;
+  traceId?: string;
+  runDuration?: number;
+  evaluationCost?: number;
+}
+
 export class ScoringResult {
   success?: boolean | null;
   scorersData?: ScorerData[];
@@ -15,8 +25,14 @@ export class ScoringResult {
   runDuration?: number | null;
   evaluationCost?: number | null;
 
-  constructor() {
-    this.scorersData = [];
+  constructor(config: ScoringResultConfig = {}) {
+    this.success = config.success ?? null;
+    this.scorersData = config.scorersData ?? [];
+    this.name = config.name ?? null;
+    this.dataObject = config.dataObject ?? null;
+    this.traceId = config.traceId ?? null;
+    this.runDuration = config.runDuration ?? null;
+    this.evaluationCost = config.evaluationCost ?? null;
   }
 
   toModel(): APIScoringResult {
@@ -47,44 +63,4 @@ export class ScoringResult {
 
     return result;
   }
-
-  static builder(): ScoringResultBuilder {
-    return new ScoringResultBuilder();
-  }
 }
-
-export class ScoringResultBuilder {
-  private result: ScoringResult;
-
-  constructor() {
-    this.result = new ScoringResult();
-  }
-
-  success(success: boolean): this {
-    this.result.success = success;
-    return this;
-  }
-
-  scorersData(scorersData: ScorerData[]): this {
-    this.result.scorersData = scorersData;
-    return this;
-  }
-
-  scorerData(scorerData: ScorerData): this {
-    if (!this.result.scorersData) {
-      this.result.scorersData = [];
-    }
-    this.result.scorersData.push(scorerData);
-    return this;
-  }
-
-  dataObject(dataObject: OtelTraceSpan | Example): this {
-    this.result.dataObject = dataObject;
-    return this;
-  }
-
-  build(): ScoringResult {
-    return this.result;
-  }
-}
-

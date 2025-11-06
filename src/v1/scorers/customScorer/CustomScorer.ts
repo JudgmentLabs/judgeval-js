@@ -2,21 +2,25 @@ import type { ScorerConfig } from "../../../internal/api/models";
 import { APIScorerType } from "../../data/APIScorerType";
 import { APIScorer } from "../APIScorer";
 
+export interface CustomScorerConfig {
+  name: string;
+  className?: string;
+  serverHosted?: boolean;
+}
+
 export class CustomScorer extends APIScorer {
   private _className?: string;
   private _serverHosted: boolean;
 
-  private constructor(builder: CustomScorerBuilder) {
+  constructor(config: CustomScorerConfig) {
     super(APIScorerType.CUSTOM);
-    if (builder.name) {
-      this.setName(builder.name);
+    this.setName(config.name);
+    if (config.className) {
+      this._className = config.className;
+      this.setAdditionalProperty("class_name", config.className);
     }
-    if (builder.className) {
-      this._className = builder.className;
-      this.setAdditionalProperty("class_name", builder.className);
-    }
-    this._serverHosted = true;
-    this.setAdditionalProperty("server_hosted", true);
+    this._serverHosted = config.serverHosted ?? true;
+    this.setAdditionalProperty("server_hosted", this._serverHosted);
   }
 
   getClassName(): string | undefined {
@@ -29,28 +33,5 @@ export class CustomScorer extends APIScorer {
 
   getScorerConfig(): ScorerConfig {
     throw new Error("CustomScorer does not use ScorerConfig");
-  }
-
-  static builder(): CustomScorerBuilder {
-    return new CustomScorerBuilder();
-  }
-}
-
-export class CustomScorerBuilder {
-  name?: string;
-  className?: string;
-
-  setName(name: string): this {
-    this.name = name;
-    return this;
-  }
-
-  setClassName(className: string): this {
-    this.className = className;
-    return this;
-  }
-
-  build(): CustomScorer {
-    return new CustomScorer(this);
   }
 }

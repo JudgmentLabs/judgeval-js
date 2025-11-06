@@ -10,6 +10,4 @@ export const APIScorerType = {
   CUSTOM: "Custom",
 } as const;
 
-export type APIScorerType =
-  (typeof APIScorerType)[keyof typeof APIScorerType];
-
+export type APIScorerType = (typeof APIScorerType)[keyof typeof APIScorerType];

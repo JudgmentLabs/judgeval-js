@@ -1,6 +1,5 @@
 import { JudgmentApiClient } from "../../internal/api";
-import type { EvaluationBuilder } from "./Evaluation";
-import { Evaluation } from "./Evaluation";
+import { Evaluation, type EvaluationConfig } from "./Evaluation";
 
 export class EvaluationFactory {
   private readonly client: JudgmentApiClient;
@@ -9,7 +8,10 @@ export class EvaluationFactory {
     this.client = client;
   }
 
-  create(): EvaluationBuilder {
-    return Evaluation.builder().setClient(this.client);
+  create(config: Omit<EvaluationConfig, "client"> = {}): Evaluation {
+    return new Evaluation({
+      ...config,
+      client: this.client,
+    });
   }
 }

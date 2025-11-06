@@ -43,7 +43,7 @@ export class JudgmentApiClient {
   }
 
   async addToRunEvalQueueExamples(
-    payload: Models.ExampleEvaluationRun
+    payload: Models.ExampleEvaluationRun,
   ): Promise<void> {
     const url = this.buildUrl("/add_to_run_eval_queue/examples");
     const response = await fetch(url, {
@@ -54,7 +54,7 @@ export class JudgmentApiClient {
 
     if (!response.ok) {
       throw new Error(
-        `HTTP Error: ${response.status} - ${await response.text()}`
+        `HTTP Error: ${response.status} - ${await response.text()}`,
       );
     }
 
@@ -62,7 +62,7 @@ export class JudgmentApiClient {
   }
 
   async addToRunEvalQueueTraces(
-    payload: Models.TraceEvaluationRun
+    payload: Models.TraceEvaluationRun,
   ): Promise<void> {
     const url = this.buildUrl("/add_to_run_eval_queue/traces");
     const response = await fetch(url, {
@@ -73,7 +73,7 @@ export class JudgmentApiClient {
 
     if (!response.ok) {
       throw new Error(
-        `HTTP Error: ${response.status} - ${await response.text()}`
+        `HTTP Error: ${response.status} - ${await response.text()}`,
       );
     }
 
@@ -81,7 +81,7 @@ export class JudgmentApiClient {
   }
 
   async logEvalResults(
-    payload: Models.EvalResults
+    payload: Models.EvalResults,
   ): Promise<{ ui_results_url: string }> {
     const url = this.buildUrl("/log_eval_results/");
     const response = await fetch(url, {
@@ -92,7 +92,7 @@ export class JudgmentApiClient {
 
     if (!response.ok) {
       throw new Error(
-        `HTTP Error: ${response.status} - ${await response.text()}`
+        `HTTP Error: ${response.status} - ${await response.text()}`,
       );
     }
 
@@ -100,7 +100,7 @@ export class JudgmentApiClient {
   }
 
   async fetchExperimentRun(
-    payload: Models.EvalResultsFetch
+    payload: Models.EvalResultsFetch,
   ): Promise<Models.EvalResultsFetchResponse> {
     const url = this.buildUrl("/fetch_experiment_run/");
     const response = await fetch(url, {
@@ -111,7 +111,7 @@ export class JudgmentApiClient {
 
     if (!response.ok) {
       throw new Error(
-        `HTTP Error: ${response.status} - ${await response.text()}`
+        `HTTP Error: ${response.status} - ${await response.text()}`,
       );
     }
 
@@ -119,7 +119,7 @@ export class JudgmentApiClient {
   }
 
   async scorerExists(
-    payload: Models.ScorerExistsRequest
+    payload: Models.ScorerExistsRequest,
   ): Promise<Models.ScorerExistsResponse> {
     const url = this.buildUrl("/scorer_exists/");
     const response = await fetch(url, {
@@ -130,7 +130,7 @@ export class JudgmentApiClient {
 
     if (!response.ok) {
       throw new Error(
-        `HTTP Error: ${response.status} - ${await response.text()}`
+        `HTTP Error: ${response.status} - ${await response.text()}`,
       );
     }
 
@@ -138,7 +138,7 @@ export class JudgmentApiClient {
   }
 
   async saveScorer(
-    payload: Models.SavePromptScorerRequest
+    payload: Models.SavePromptScorerRequest,
   ): Promise<Models.SavePromptScorerResponse> {
     const url = this.buildUrl("/save_scorer/");
     const response = await fetch(url, {
@@ -149,7 +149,7 @@ export class JudgmentApiClient {
 
     if (!response.ok) {
       throw new Error(
-        `HTTP Error: ${response.status} - ${await response.text()}`
+        `HTTP Error: ${response.status} - ${await response.text()}`,
       );
     }
 
@@ -157,7 +157,7 @@ export class JudgmentApiClient {
   }
 
   async fetchScorers(
-    payload: Models.FetchPromptScorersRequest
+    payload: Models.FetchPromptScorersRequest,
   ): Promise<Models.FetchPromptScorersResponse> {
     const url = this.buildUrl("/fetch_scorers/");
     const response = await fetch(url, {
@@ -168,7 +168,7 @@ export class JudgmentApiClient {
 
     if (!response.ok) {
       throw new Error(
-        `HTTP Error: ${response.status} - ${await response.text()}`
+        `HTTP Error: ${response.status} - ${await response.text()}`,
       );
     }
 
@@ -176,7 +176,7 @@ export class JudgmentApiClient {
   }
 
   async projectsResolve(
-    payload: Models.ResolveProjectNameRequest
+    payload: Models.ResolveProjectNameRequest,
   ): Promise<Models.ResolveProjectNameResponse> {
     const url = this.buildUrl("/projects/resolve/");
     const response = await fetch(url, {
@@ -187,7 +187,7 @@ export class JudgmentApiClient {
 
     if (!response.ok) {
       throw new Error(
-        `HTTP Error: ${response.status} - ${await response.text()}`
+        `HTTP Error: ${response.status} - ${await response.text()}`,
       );
     }
 
