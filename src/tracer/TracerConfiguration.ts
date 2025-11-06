@@ -6,6 +6,9 @@ import { JUDGMENT_API_KEY, JUDGMENT_API_URL, JUDGMENT_ORG_ID } from "../env";
  *
  * This class encapsulates all configuration parameters needed to initialize a Tracer.
  *
+ * @deprecated Use v1 TracerFactory instead. This class will be removed in a future version.
+ * Import from 'judgeval/v1' instead.
+ *
  * @example
  * ```typescript
  * const config = TracerConfiguration.builder()

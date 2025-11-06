@@ -22,6 +22,10 @@ export interface TracerInitializeOptions {
   [key: string]: unknown;
 }
 
+/**
+ * @deprecated Use v1 BaseTracer and Tracer instead. This class will be removed in a future version.
+ * Import from 'judgeval/v1' instead.
+ */
 export abstract class Tracer {
   protected static instances = new Map<string, Tracer>();
 
