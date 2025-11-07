@@ -73,6 +73,7 @@
     "@typescript-eslint/parser": "^8.46.3",
     "eslint": "^9.39.1",
     "globals": "^16.5.0",
+    "jiti": "^2.6.1",
     "prettier": "^3.6.2",
     "rimraf": "^6.1.0",
     "typescript": "^5.9.3",
