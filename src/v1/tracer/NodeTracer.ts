@@ -1,3 +1,4 @@
+import type { Instrumentation } from "@opentelemetry/instrumentation";
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { JudgmentApiClient } from "../../internal/api";
@@ -11,17 +12,22 @@ export interface NodeTracerConfig {
   enableMonitoring?: boolean;
   serializer?: Serializer;
   resourceAttributes?: Record<string, unknown>;
+  instrumentations?: Instrumentation[];
   initialize?: boolean;
 }
 
 interface InternalNodeTracerConfig
-  extends Required<Omit<NodeTracerConfig, "resourceAttributes">> {
+  extends Required<
+    Omit<NodeTracerConfig, "resourceAttributes" | "instrumentations">
+  > {
   resourceAttributes: Record<string, unknown>;
+  instrumentations: Instrumentation[];
 }
 
 export class NodeTracer extends BaseTracer {
   private nodeSDK: NodeSDK | null = null;
   private resourceAttributes: Record<string, unknown>;
+  private instrumentations: Instrumentation[];
 
   private constructor(
     projectName: string,
@@ -29,9 +35,11 @@ export class NodeTracer extends BaseTracer {
     apiClient: JudgmentApiClient,
     serializer: Serializer,
     resourceAttributes: Record<string, unknown>,
+    instrumentations: Instrumentation[],
   ) {
     super(projectName, enableEvaluation, apiClient, serializer);
     this.resourceAttributes = resourceAttributes;
+    this.instrumentations = instrumentations;
   }
 
   static async create(
@@ -44,6 +52,7 @@ export class NodeTracer extends BaseTracer {
       apiClient,
       config.serializer,
       config.resourceAttributes,
+      config.instrumentations,
     );
 
     await tracer.resolveAndSetProjectId();
@@ -74,6 +83,7 @@ export class NodeTracer extends BaseTracer {
       this.nodeSDK = new NodeSDK({
         resource: resourceFromAttributes(attributes),
         traceExporter: spanExporter,
+        instrumentations: this.instrumentations,
       });
 
       this.nodeSDK.start();

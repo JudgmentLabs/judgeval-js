@@ -20,6 +20,7 @@ export class NodeTracerFactory {
         enableMonitoring: config.enableMonitoring ?? false,
         serializer: config.serializer ?? JSON.stringify,
         resourceAttributes: config.resourceAttributes ?? {},
+        instrumentations: config.instrumentations ?? [],
         initialize: config.initialize ?? false,
       },
       this.client,

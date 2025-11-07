@@ -2,7 +2,7 @@ import { type ExportResult } from "@opentelemetry/core";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-base";
 import { SpanExporter } from "@opentelemetry/sdk-trace-base";
-import { ResourceKeys } from "../../../attributeKeys";
+import { Logger } from "../../../utils";
 
 export class JudgmentSpanExporter implements SpanExporter {
   private delegate: SpanExporter;
@@ -18,7 +18,7 @@ export class JudgmentSpanExporter implements SpanExporter {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "X-Organization-Id": organizationId,
-        [ResourceKeys.JUDGMENT_PROJECT_ID]: projectId,
+        "X-Project-Id": projectId,
       },
     });
   }
@@ -27,6 +27,7 @@ export class JudgmentSpanExporter implements SpanExporter {
     spans: ReadableSpan[],
     resultCallback: (result: ExportResult) => void,
   ): void {
+    Logger.info(`JudgmentSpanExporter: exporting ${spans.length} spans`);
     this.delegate.export(spans, resultCallback);
   }
 
@@ -35,9 +36,6 @@ export class JudgmentSpanExporter implements SpanExporter {
   }
 
   forceFlush(): Promise<void> {
-    if ("forceFlush" in this.delegate && this.delegate.forceFlush) {
-      return this.delegate.forceFlush();
-    }
-    return Promise.resolve();
+    return this.delegate.forceFlush?.() ?? Promise.resolve();
   }
 }

@@ -6,7 +6,6 @@ import {
   type Tracer,
 } from "@opentelemetry/api";
 import type { SpanExporter } from "@opentelemetry/sdk-trace-base";
-import { AttributeKeys } from "../../attributeKeys";
 import { JUDGMENT_DEFAULT_GPT_MODEL } from "../../env";
 import { JudgmentApiClient } from "../../internal/api";
 import type {
@@ -15,6 +14,7 @@ import type {
   ResolveProjectNameResponse,
   TraceEvaluationRun,
 } from "../../internal/api/models";
+import { AttributeKeys } from "../../judgmentAttributeKeys";
 import { Logger } from "../../utils/logger";
 import { Example } from "../data/Example";
 import { BaseScorer } from "../scorers/BaseScorer";

@@ -1,4 +1,4 @@
-export { AttributeKeys, ResourceKeys } from "../../attributeKeys";
+export { AttributeKeys, ResourceKeys } from "../../judgmentAttributeKeys";
 export { BaseTracer, type Serializer } from "./BaseTracer";
 export { BrowserTracer, type BrowserTracerConfig } from "./BrowserTracer";
 export { BrowserTracerFactory } from "./BrowserTracerFactory";

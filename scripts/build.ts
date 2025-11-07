@@ -28,14 +28,14 @@ function handleBuildResult(result: BuildOutput, target: string) {
 
 async function buildLib() {
   const config: BuildConfig = {
-    entrypoints: ["./src/index.ts"],
+    entrypoints: ["./src/index.ts", "./src/v1/index.ts"],
     outdir: "./dist",
     target: "node",
     format: "esm",
     external: ["@opentelemetry/*"],
     minify: isProduction,
     sourcemap: isProduction ? "linked" : "inline",
-    naming: { entry: "index.mjs" },
+    naming: { entry: "[dir]/[name].mjs" },
   };
 
   const result = await build(config);
@@ -44,14 +44,14 @@ async function buildLib() {
 
 async function buildCjs() {
   const config: BuildConfig = {
-    entrypoints: ["./src/index.ts"],
+    entrypoints: ["./src/index.ts", "./src/v1/index.ts"],
     outdir: "./dist",
     target: "node",
     format: "cjs",
     external: ["@opentelemetry/*"],
     minify: isProduction,
     sourcemap: isProduction ? "linked" : "inline",
-    naming: { entry: "index.cjs" },
+    naming: { entry: "[dir]/[name].cjs" },
   };
 
   const result = await build(config);
