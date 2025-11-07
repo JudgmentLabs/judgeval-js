@@ -1,6 +1,6 @@
 import { Example } from "judgeval/v1";
 import OpenAI from "openai";
-import { client, tracer } from "./instrumentation";
+import { client, getTracer } from "./instrumentation";
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -32,22 +32,25 @@ async function _chatWithUser(userMessage: string): Promise<string> {
   console.log(`User: ${userMessage}`);
   console.log(`Assistant: ${result}`);
 
+  return result;
+}
+
+(async () => {
+  const tracer = await getTracer();
+  const chatWithUser = tracer.observe(_chatWithUser);
+
+  const result = await chatWithUser("What is the capital of France?");
+  console.log(result);
+
   tracer.asyncEvaluate(
     client.scorers.builtIn.answerRelevancy(),
     Example.create({
       properties: {
-        input: userMessage,
+        input: "What is the capital of France?",
         actual_output: result,
       },
     })
   );
 
-  return result;
-}
-
-const chatWithUser = tracer.observe(_chatWithUser);
-
-const result = await chatWithUser("What is the capital of France?");
-console.log(result);
-
-await tracer.shutdown();
+  await tracer.shutdown();
+})();

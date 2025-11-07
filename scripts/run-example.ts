@@ -10,7 +10,7 @@ const examplePath = `examples/${exampleName}`;
 process.chdir(examplePath);
 
 const { spawnSync } = require("child_process");
-const result = spawnSync("npx", ["tsx", "index.ts"], {
+const result = spawnSync("npm", ["run", "start"], {
   stdio: "inherit",
   cwd: process.cwd(),
 });

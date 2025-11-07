@@ -1,13 +1,26 @@
-import { JudgmentClient } from "judgeval/v1";
 import { OpenAIInstrumentation } from "@opentelemetry/instrumentation-openai";
+import { JudgmentClient, type NodeTracer } from "judgeval/v1";
 
 export const client = JudgmentClient.create();
 
-export const tracer = await client.nodeTracer.create({
-  projectName: "auto_instrumentation_example",
-  enableEvaluation: true,
-  enableMonitoring: true,
-  instrumentations: [new OpenAIInstrumentation()],
-  initialize: true,
-});
+let _tracer: NodeTracer | null = null;
 
+const initPromise = client.nodeTracer
+  .create({
+    projectName: "auto_instrumentation_example",
+    enableEvaluation: true,
+    enableMonitoring: true,
+    instrumentations: [new OpenAIInstrumentation()],
+    initialize: true,
+  })
+  .then((t: NodeTracer) => {
+    _tracer = t;
+    return t;
+  });
+
+export async function getTracer(): Promise<NodeTracer> {
+  if (!_tracer) {
+    await initPromise;
+  }
+  return _tracer!;
+}
