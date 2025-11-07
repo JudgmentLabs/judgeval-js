@@ -14,11 +14,15 @@ export class Example {
   name?: string | null;
   private properties: Record<string, unknown>;
 
-  constructor(config: ExampleConfig = {}) {
+  private constructor(config: ExampleConfig = {}) {
     this.exampleId = config.exampleId ?? randomUUID();
     this.createdAt = config.createdAt ?? new Date().toISOString();
     this.name = config.name ?? null;
     this.properties = config.properties ?? {};
+  }
+
+  static create(config: ExampleConfig = {}): Example {
+    return new Example(config);
   }
 
   setProperty(key: string, value: unknown): this {

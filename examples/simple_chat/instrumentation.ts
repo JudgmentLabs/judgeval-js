@@ -1,7 +1,7 @@
 import { JudgmentClient } from "judgeval/v1";
 import { OpenAIInstrumentation } from "@opentelemetry/instrumentation-openai";
 
-const client = JudgmentClient.create();
+export const client = JudgmentClient.create();
 
 export const tracer = await client.nodeTracer.create({
   projectName: "auto_instrumentation_example",

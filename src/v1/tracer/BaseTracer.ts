@@ -232,16 +232,17 @@ export abstract class BaseTracer {
     return tracer.startSpan(spanName);
   }
 
-  observe<T extends (...args: unknown[]) => unknown>(
-    func: T,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  observe<TArgs extends any[], TResult>(
+    func: (...args: TArgs) => TResult,
     spanType = "span",
     spanName?: string | null,
     attributes?: Record<string, unknown> | null,
-  ): T {
+  ): (...args: TArgs) => TResult {
     const tracer = this.getTracer();
     const name = spanName ?? func.name;
 
-    const wrapper = (...args: unknown[]) => {
+    return (...args: TArgs): TResult => {
       return tracer.startActiveSpan(name, (span) => {
         if (spanType) {
           span.setAttribute(AttributeKeys.JUDGMENT_SPAN_KIND, spanType);
@@ -261,7 +262,10 @@ export abstract class BaseTracer {
         }
 
         try {
-          const inputData = this.formatInputs(func, args);
+          const inputData = this.formatInputs(
+            func as (...args: unknown[]) => unknown,
+            args as unknown[],
+          );
           span.setAttribute(
             AttributeKeys.JUDGMENT_INPUT,
             this.serializer(inputData),
@@ -271,12 +275,12 @@ export abstract class BaseTracer {
 
           if (result instanceof Promise) {
             return result
-              .then((res) => {
+              .then((res: TResult) => {
                 span.setAttribute(
                   AttributeKeys.JUDGMENT_OUTPUT,
                   this.serializer(res),
                 );
-                return res as unknown as ReturnType<T>;
+                return res;
               })
               .catch((err: unknown) => {
                 span.recordException(err as Error);
@@ -288,7 +292,7 @@ export abstract class BaseTracer {
               })
               .finally(() => {
                 span.end();
-              });
+              }) as TResult;
           }
 
           span.setAttribute(
@@ -305,8 +309,6 @@ export abstract class BaseTracer {
         }
       });
     };
-
-    return wrapper as T;
   }
 
   private async resolveProjectId(name: string): Promise<string> {
@@ -451,7 +453,15 @@ export abstract class BaseTracer {
     args: unknown[],
   ): Record<string, unknown> {
     try {
-      const paramNames = this.getFunctionParamNames(f);
+      const funcStr = f.toString();
+      const match = /\(([^)]*)\)/.exec(funcStr);
+      const paramNames = match
+        ? match[1]
+            .split(",")
+            .map((param) => param.trim().split("=")[0].trim())
+            .filter((param) => param.length > 0)
+        : [];
+
       const inputs: Record<string, unknown> = {};
       paramNames.forEach((name, index) => {
         if (index < args.length) {
@@ -462,17 +472,5 @@ export abstract class BaseTracer {
     } catch {
       return {};
     }
-  }
-
-  private getFunctionParamNames(
-    func: (...args: unknown[]) => unknown,
-  ): string[] {
-    const funcStr = func.toString();
-    const match = /\(([^)]*)\)/.exec(funcStr);
-    if (!match) return [];
-    return match[1]
-      .split(",")
-      .map((param) => param.trim().split("=")[0].trim())
-      .filter((param) => param.length > 0);
   }
 }
