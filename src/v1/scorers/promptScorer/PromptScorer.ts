@@ -1,4 +1,5 @@
 import type { ScorerConfig } from "../../../internal/api/models";
+import { APIScorerType } from "../../data/APIScorerType";
 import { BaseScorer } from "../BaseScorer";
 
 export interface PromptScorerConfig {
@@ -80,7 +81,9 @@ export class PromptScorer extends BaseScorer {
   }
 
   getScorerConfig(): ScorerConfig {
-    const scoreType = this.isTrace ? "trace_prompt_scorer" : "prompt_scorer";
+    const scoreType = this.isTrace
+      ? APIScorerType.TRACE_PROMPT_SCORER
+      : APIScorerType.PROMPT_SCORER;
     const kwargs: Record<string, unknown> = {
       prompt: this._prompt,
     };
