@@ -4,6 +4,6 @@
  */
 
 export interface FetchExperimentRunResponse {
-  results: Array<any>;
-  ui_results_url: string;
+  results?: Array<any> | null;
+  ui_results_url?: string | null;
 }

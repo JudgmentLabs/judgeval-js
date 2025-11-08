@@ -15,7 +15,7 @@ export class JudgmentClient {
 
   constructor(
     apiKey: string | null = JUDGMENT_API_KEY,
-    organizationId: string | null = JUDGMENT_ORG_ID,
+    organizationId: string | null = JUDGMENT_ORG_ID
   ) {
     if (apiKey === null || organizationId === null) {
       throw new Error("API key and organization ID are required");
@@ -24,7 +24,7 @@ export class JudgmentClient {
     this.apiClient = new JudgmentApiClient(
       JUDGMENT_API_URL,
       apiKey,
-      organizationId,
+      organizationId
     );
   }
 
@@ -33,21 +33,21 @@ export class JudgmentClient {
     scorers: RemoteScorer[],
     projectName: string,
     evalRunName: string,
-    model?: string,
+    model?: string
   ): Promise<ScoringResult[]>;
   async runEvaluation(
     examples: Example[],
     scorers: LocalScorer[],
     projectName: string,
     evalRunName: string,
-    model?: string,
+    model?: string
   ): Promise<ScoringResult[]>;
   async runEvaluation(
     examples: Example[],
     scorers: RemoteScorer[] | LocalScorer[],
     projectName: string,
     evalRunName: string,
-    model?: string,
+    model?: string
   ): Promise<ScoringResult[]> {
     if (examples.length === 0) {
       throw new Error("No examples provided");
@@ -66,7 +66,7 @@ export class JudgmentClient {
 
     if (hasLocalScorers && hasRemoteScorers) {
       throw new Error(
-        "Cannot run both local and remote scorers at the same time",
+        "Cannot run both local and remote scorers at the same time"
       );
     }
 
@@ -78,7 +78,7 @@ export class JudgmentClient {
   }
 
   private async runRemoteScorers(
-    evaluationRun: ExampleEvaluationRun,
+    evaluationRun: ExampleEvaluationRun
   ): Promise<ScoringResult[]> {
     console.log("Running evaluation...");
 
@@ -87,7 +87,7 @@ export class JudgmentClient {
     const response = await this.pollForResults(
       evaluationRun.project_name,
       evaluationRun.id,
-      evaluationRun.examples.length,
+      evaluationRun.examples.length
     );
 
     console.log(`View results at: ${response.ui_results_url}/example`);
@@ -96,7 +96,7 @@ export class JudgmentClient {
   }
 
   private async runLocalScorers(
-    evaluationRun: ExampleEvaluationRun,
+    evaluationRun: ExampleEvaluationRun
   ): Promise<ScoringResult[]> {
     console.log("Running local evaluation...");
 
@@ -113,7 +113,7 @@ export class JudgmentClient {
   }
 
   private async executeLocalScorers(
-    evaluationRun: ExampleEvaluationRun,
+    evaluationRun: ExampleEvaluationRun
   ): Promise<ScoringResult[]> {
     const results: ScoringResult[] = [];
 
@@ -156,7 +156,7 @@ export class JudgmentClient {
   private async pollForResults(
     projectName: string,
     experimentRunId: string,
-    expectedCount: number,
+    expectedCount: number
   ) {
     for (let i = 0; i < 60; i++) {
       const response = await this.apiClient.fetchExperimentRun({
@@ -164,7 +164,7 @@ export class JudgmentClient {
         project_name: projectName,
       });
 
-      if (response.results.length === expectedCount) {
+      if (response.results?.length === expectedCount) {
         return response;
       }
 
