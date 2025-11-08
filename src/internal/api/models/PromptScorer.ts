@@ -4,6 +4,9 @@
  */
 
 export interface PromptScorer {
+  id: string;
+  user_id: string;
+  organization_id: string;
   name: string;
   prompt: string;
   threshold: number;
@@ -13,4 +16,5 @@ export interface PromptScorer {
   created_at?: string | null;
   updated_at?: string | null;
   is_trace?: boolean | null;
+  is_bucket_rubric?: boolean | null;
 }

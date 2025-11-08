@@ -92,7 +92,7 @@ export class JudgmentClient {
 
     console.log(`View results at: ${response.ui_results_url}/example`);
 
-    return response.results;
+    return response.results as unknown as ScoringResult[];
   }
 
   private async runLocalScorers(

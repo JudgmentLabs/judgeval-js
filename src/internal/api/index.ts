@@ -15,7 +15,7 @@ export class JudgmentApiClient {
     this.organizationId = organizationId;
   }
 
-  getApiUrl(): string {
+  getBaseUrl(): string {
     return this.baseUrl;
   }
 
@@ -82,7 +82,7 @@ export class JudgmentApiClient {
 
   async logEvalResults(
     payload: Models.EvalResults,
-  ): Promise<{ ui_results_url: string }> {
+  ): Promise<Models.LogEvalResultsResponse> {
     const url = this.buildUrl("/log_eval_results/");
     const response = await fetch(url, {
       method: "POST",
@@ -96,12 +96,12 @@ export class JudgmentApiClient {
       );
     }
 
-    return (await response.json()) as { ui_results_url: string };
+    return (await response.json()) as Models.LogEvalResultsResponse;
   }
 
   async fetchExperimentRun(
     payload: Models.EvalResultsFetch,
-  ): Promise<Models.EvalResultsFetchResponse> {
+  ): Promise<Models.FetchExperimentRunResponse> {
     const url = this.buildUrl("/fetch_experiment_run/");
     const response = await fetch(url, {
       method: "POST",
@@ -115,7 +115,7 @@ export class JudgmentApiClient {
       );
     }
 
-    return (await response.json()) as Models.EvalResultsFetchResponse;
+    return (await response.json()) as Models.FetchExperimentRunResponse;
   }
 
   async scorerExists(

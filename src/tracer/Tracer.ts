@@ -265,8 +265,12 @@ export abstract class Tracer {
       project_name: this.configuration.projectName,
       eval_name: evalName,
       judgment_scorers: [scorerConfig],
+      custom_scorers: [],
       model: modelName,
       trace_and_span_ids: [[traceId, spanId]],
+      created_at: new Date().toISOString(),
+      is_offline: false,
+      is_bucket_run: false,
     };
   }
 
@@ -304,6 +308,7 @@ export abstract class Tracer {
       model: modelName,
       trace_id: traceId,
       trace_span_id: spanId,
+      created_at: new Date().toISOString(),
     };
 
     return evaluationRun;

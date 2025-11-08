@@ -16,4 +16,5 @@ export interface TraceEvaluationRun {
   created_at?: string;
   trace_and_span_ids: Array<[string, string]>;
   is_offline?: boolean;
+  is_bucket_run?: boolean;
 }

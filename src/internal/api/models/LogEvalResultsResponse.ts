@@ -3,9 +3,6 @@
  * DO NOT EDIT MANUALLY - This file is generated automatically
  */
 
-import { ScoringResult } from "./ScoringResult";
-
-export interface EvalResultsFetchResponse {
-  results: Array<ScoringResult>;
+export interface LogEvalResultsResponse {
   ui_results_url: string;
 }

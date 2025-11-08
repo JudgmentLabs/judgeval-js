@@ -3,7 +3,8 @@
  * DO NOT EDIT MANUALLY - This file is generated automatically
  */
 
+import { PromptScorer } from "./PromptScorer";
+
 export interface SavePromptScorerResponse {
-  message: string;
-  name: string;
+  scorer_response: PromptScorer;
 }

@@ -338,7 +338,7 @@ export abstract class BaseTracer {
 
   private createJudgmentSpanExporter(projectId: string): SpanExporter {
     return new JudgmentSpanExporter(
-      this.buildEndpoint(this.apiClient.getApiUrl()),
+      this.buildEndpoint(this.apiClient.getBaseUrl()),
       this.apiClient.getApiKey(),
       this.apiClient.getOrganizationId(),
       projectId,
