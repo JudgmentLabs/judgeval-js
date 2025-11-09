@@ -51,6 +51,5 @@ async function _chatWithUser(userMessage: string): Promise<string> {
       },
     })
   );
-
   await tracer.shutdown();
 })();
