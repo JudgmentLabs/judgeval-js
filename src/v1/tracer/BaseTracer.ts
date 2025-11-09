@@ -6,7 +6,6 @@ import {
   type Tracer,
 } from "@opentelemetry/api";
 import type { SpanExporter } from "@opentelemetry/sdk-trace-base";
-import { JUDGMENT_DEFAULT_GPT_MODEL } from "../../env";
 import { JudgmentApiClient } from "../../internal/api";
 import type {
   ExampleEvaluationRun,
@@ -133,11 +132,7 @@ export abstract class BaseTracer {
     this.setAttribute(AttributeKeys.JUDGMENT_OUTPUT, outputData);
   }
 
-  asyncEvaluate(
-    scorer: BaseScorer,
-    example: Example,
-    model?: string | null,
-  ): void {
+  asyncEvaluate(scorer: BaseScorer, example: Example): void {
     this.safeExecute("evaluate scorer", () => {
       if (!this.enableEvaluation) {
         return;
@@ -161,7 +156,6 @@ export abstract class BaseTracer {
       const evaluationRun = this.createEvaluationRun(
         scorer,
         example,
-        model,
         traceId,
         spanId,
       );
@@ -172,7 +166,7 @@ export abstract class BaseTracer {
     });
   }
 
-  asyncTraceEvaluate(scorer: BaseScorer, model?: string | null): void {
+  asyncTraceEvaluate(scorer: BaseScorer): void {
     this.safeExecute("evaluate trace scorer", () => {
       if (!this.enableEvaluation) {
         return;
@@ -196,7 +190,6 @@ export abstract class BaseTracer {
 
       const evaluationRun = this.createTraceEvaluationRun(
         scorer,
-        model,
         traceId,
         spanId,
       );
@@ -237,7 +230,6 @@ export abstract class BaseTracer {
     func: (...args: TArgs) => TResult,
     spanType = "span",
     spanName?: string | null,
-    attributes?: Record<string, unknown> | null,
   ): (...args: TArgs) => TResult {
     const tracer = this.getTracer();
     const name = spanName ?? func.name;
@@ -246,19 +238,6 @@ export abstract class BaseTracer {
       return tracer.startActiveSpan(name, (span) => {
         if (spanType) {
           span.setAttribute(AttributeKeys.JUDGMENT_SPAN_KIND, spanType);
-        }
-        if (attributes) {
-          for (const [key, value] of Object.entries(attributes)) {
-            if (value !== null && value !== undefined) {
-              const serialized =
-                typeof value === "string" ||
-                typeof value === "number" ||
-                typeof value === "boolean"
-                  ? value
-                  : this.serializer(value);
-              span.setAttribute(key, serialized);
-            }
-          }
         }
 
         try {
@@ -352,17 +331,14 @@ export abstract class BaseTracer {
   private createEvaluationRun(
     scorer: BaseScorer,
     example: Example,
-    model: string | null | undefined,
     traceId: string,
     spanId: string,
   ): ExampleEvaluationRun {
     const runId = this.generateRunId("async_evaluate_", spanId);
-    const modelName = model ?? JUDGMENT_DEFAULT_GPT_MODEL;
 
     return {
       project_name: this.projectName,
       eval_name: runId,
-      model: modelName,
       trace_id: traceId,
       trace_span_id: spanId,
       examples: [example.toModel()],
@@ -373,17 +349,14 @@ export abstract class BaseTracer {
 
   private createTraceEvaluationRun(
     scorer: BaseScorer,
-    model: string | null | undefined,
     traceId: string,
     spanId: string,
   ): TraceEvaluationRun {
     const evalName = this.generateRunId("async_trace_evaluate_", spanId);
-    const modelName = model ?? JUDGMENT_DEFAULT_GPT_MODEL;
 
     return {
       project_name: this.projectName,
       eval_name: evalName,
-      model: modelName,
       trace_and_span_ids: [[traceId, spanId]],
       judgment_scorers: [scorer.getScorerConfig()],
       custom_scorers: [],

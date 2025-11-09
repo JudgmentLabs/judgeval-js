@@ -32,15 +32,7 @@ async function _chatWithUser(userMessage: string): Promise<string> {
   console.log(`User: ${userMessage}`);
   console.log(`Assistant: ${result}`);
 
-  return result;
-}
-
-(async () => {
   const tracer = await getTracer();
-  const chatWithUser = tracer.observe(_chatWithUser);
-
-  const result = await chatWithUser("What is the capital of France?");
-  console.log(result);
 
   tracer.asyncEvaluate(
     client.scorers.builtIn.answerRelevancy(),
@@ -51,5 +43,17 @@ async function _chatWithUser(userMessage: string): Promise<string> {
       },
     })
   );
+
+  return result;
+}
+
+(async () => {
+  const tracer = await getTracer();
+  const chatWithUser = tracer.observe(_chatWithUser);
+
+  const result = await chatWithUser("What is the capital of France?");
+  console.log(result);
+
+  await new Promise((resolve) => setTimeout(resolve, 10000));
   await tracer.shutdown();
 })();
