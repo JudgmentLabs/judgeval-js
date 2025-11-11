@@ -1,7 +1,7 @@
 import { OpenAIInstrumentation } from "@opentelemetry/instrumentation-openai";
-import { JudgmentClient, type NodeTracer } from "judgeval/v1";
+import { Judgeval, type NodeTracer } from "judgeval/v1";
 
-export const client = JudgmentClient.create();
+export const client = Judgeval.create();
 
 let _tracer: NodeTracer | null = null;
 
