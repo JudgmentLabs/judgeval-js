@@ -21,7 +21,7 @@ export class NodeTracerFactory {
         serializer: config.serializer ?? JSON.stringify,
         resourceAttributes: config.resourceAttributes ?? {},
         instrumentations: config.instrumentations ?? [],
-        initialize: config.initialize ?? false,
+        initialize: config.initialize ?? true,
       },
       this.client,
     );

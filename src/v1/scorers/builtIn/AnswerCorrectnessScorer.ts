@@ -26,4 +26,3 @@ export class AnswerCorrectnessScorer extends APIScorer {
     }
   }
 }
-

@@ -20,7 +20,7 @@ export class BrowserTracerFactory {
         enableMonitoring: config.enableMonitoring ?? false,
         serializer: config.serializer ?? JSON.stringify,
         resourceAttributes: config.resourceAttributes ?? {},
-        initialize: config.initialize ?? false,
+        initialize: config.initialize ?? true,
       },
       this.client,
     );

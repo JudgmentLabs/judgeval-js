@@ -26,4 +26,3 @@ export class AnswerRelevancyScorer extends APIScorer {
     }
   }
 }
-

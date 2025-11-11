@@ -12,13 +12,13 @@ import {
 } from "./FaithfulnessScorer";
 export class BuiltInScorersFactory {
   answerCorrectness(
-    config: AnswerCorrectnessScorerConfig = {}
+    config: AnswerCorrectnessScorerConfig = {},
   ): AnswerCorrectnessScorer {
     return new AnswerCorrectnessScorer(config);
   }
 
   answerRelevancy(
-    config: AnswerRelevancyScorerConfig = {}
+    config: AnswerRelevancyScorerConfig = {},
   ): AnswerRelevancyScorer {
     return new AnswerRelevancyScorer(config);
   }
