@@ -3,7 +3,7 @@
  * DO NOT EDIT MANUALLY - This file is generated automatically
  */
 
-export interface FetchPromptScorersRequest {
-  names?: Array<string> | null;
-  is_trace?: boolean | null;
+export interface FetchExperimentRunResponse {
+  results?: Array<any> | null;
+  ui_results_url?: string | null;
 }

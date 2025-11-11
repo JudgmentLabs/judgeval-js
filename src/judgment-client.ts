@@ -6,6 +6,10 @@ import { ScorerData, ScoringResult } from "./internal/api/models";
 import { LocalScorer } from "./scorers/local-scorer";
 import { RemoteScorer } from "./scorers/remote-scorer";
 
+/**
+ * @deprecated Use v1 JudgmentClient instead. This class will be removed in a future version.
+ * Import from 'judgeval/v1' instead.
+ */
 export class JudgmentClient {
   private readonly apiClient: JudgmentApiClient;
 
@@ -88,7 +92,7 @@ export class JudgmentClient {
 
     console.log(`View results at: ${response.ui_results_url}/example`);
 
-    return response.results;
+    return response.results as unknown as ScoringResult[];
   }
 
   private async runLocalScorers(
@@ -160,7 +164,7 @@ export class JudgmentClient {
         project_name: projectName,
       });
 
-      if (response.results.length === expectedCount) {
+      if (response.results?.length === expectedCount) {
         return response;
       }
 
