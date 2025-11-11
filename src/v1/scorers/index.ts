@@ -4,14 +4,10 @@ export {
   AnswerCorrectnessScorer,
   AnswerRelevancyScorer,
   BuiltInScorersFactory,
-  DerailmentScorer,
   FaithfulnessScorer,
-  InstructionAdherenceScorer,
   type AnswerCorrectnessScorerConfig,
   type AnswerRelevancyScorerConfig,
-  type DerailmentScorerConfig,
   type FaithfulnessScorerConfig,
-  type InstructionAdherenceScorerConfig,
 } from "./builtIn";
 export {
   CustomScorer,

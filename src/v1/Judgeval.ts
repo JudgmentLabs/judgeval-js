@@ -5,16 +5,16 @@ import { ScorersFactory } from "./scorers/ScorersFactory";
 import { BrowserTracerFactory } from "./tracer/BrowserTracerFactory";
 import { NodeTracerFactory } from "./tracer/NodeTracerFactory";
 
-export interface JudgmentClientConfig {
+export interface JudgevalConfig {
   apiKey?: string;
   organizationId?: string;
   apiUrl?: string;
 }
 
-export class JudgmentClient {
+export class Judgeval {
   private readonly internalClient: JudgmentApiClient;
 
-  protected constructor(config: JudgmentClientConfig = {}) {
+  protected constructor(config: JudgevalConfig = {}) {
     const apiKey = config.apiKey ?? JUDGMENT_API_KEY;
     const organizationId = config.organizationId ?? JUDGMENT_ORG_ID;
     const apiUrl = config.apiUrl ?? JUDGMENT_API_URL;
@@ -32,8 +32,8 @@ export class JudgmentClient {
     this.internalClient = new JudgmentApiClient(apiUrl, apiKey, organizationId);
   }
 
-  static create(config: JudgmentClientConfig = {}): JudgmentClient {
-    return new JudgmentClient(config);
+  static create(config: JudgevalConfig = {}): Judgeval {
+    return new Judgeval(config);
   }
 
   get nodeTracer(): NodeTracerFactory {

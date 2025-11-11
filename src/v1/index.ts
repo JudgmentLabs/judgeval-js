@@ -1,4 +1,4 @@
-export { JudgmentClient, type JudgmentClientConfig } from "./JudgmentClient";
+export { Judgeval, type JudgevalConfig } from "./Judgeval";
 
 export {
   Example,
@@ -17,18 +17,14 @@ export {
   BuiltInScorersFactory,
   CustomScorer,
   CustomScorerFactory,
-  DerailmentScorer,
   FaithfulnessScorer,
-  InstructionAdherenceScorer,
   PromptScorer,
   PromptScorerFactory,
   ScorersFactory,
   type AnswerCorrectnessScorerConfig,
   type AnswerRelevancyScorerConfig,
   type CustomScorerConfig,
-  type DerailmentScorerConfig,
   type FaithfulnessScorerConfig,
-  type InstructionAdherenceScorerConfig,
   type PromptScorerConfig,
 } from "./scorers";
 
