@@ -37,10 +37,8 @@ async function _chatWithUser(userMessage: string): Promise<string> {
   tracer.asyncEvaluate(
     client.scorers.builtIn.answerRelevancy(),
     Example.create({
-      properties: {
-        input: "What is the capital of France?",
-        actual_output: result,
-      },
+      input: "What is the capital of France?",
+      actual_output: result,
     })
   );
 
