@@ -1,11 +1,15 @@
 import {
+  context,
+  type Context,
   type Span,
   type SpanContext,
+  type SpanOptions,
   SpanStatusCode,
   trace,
   type Tracer,
 } from "@opentelemetry/api";
 import type { SpanExporter } from "@opentelemetry/sdk-trace-base";
+import { Example } from "../data/Example";
 import { JudgmentApiClient } from "../internal/api";
 import type {
   ExampleEvaluationRun,
@@ -14,9 +18,8 @@ import type {
   TraceEvaluationRun,
 } from "../internal/api/models";
 import { AttributeKeys } from "../judgmentAttributeKeys";
-import { Logger } from "../utils/logger";
-import { Example } from "../data/Example";
 import { BaseScorer } from "../scorers/BaseScorer";
+import { Logger } from "../utils/logger";
 import { JudgmentSpanExporter, NoOpSpanExporter } from "./exporters";
 
 export type Serializer = (obj: unknown) => string;
@@ -205,24 +208,29 @@ export abstract class BaseTracer {
     });
   }
 
-  span<T>(spanName: string, callableFunc: () => T): T {
+  span<T>(
+    spanName: string,
+    callableFunc: () => T,
+    options?: SpanOptions,
+    ctx?: Context,
+  ): T {
     const tracer = this.getTracer();
-    return tracer.startActiveSpan(spanName, (span) => {
-      try {
-        return callableFunc();
-      } catch (e) {
-        span.setStatus({ code: SpanStatusCode.ERROR });
-        span.recordException(e as Error);
-        throw e;
-      } finally {
-        span.end();
-      }
-    });
-  }
-
-  static startSpan(spanName: string): Span {
-    const tracer = trace.getTracer(BaseTracer.TRACER_NAME);
-    return tracer.startSpan(spanName);
+    return tracer.startActiveSpan(
+      spanName,
+      options ?? {},
+      ctx ?? context.active(),
+      (span) => {
+        try {
+          return callableFunc();
+        } catch (e) {
+          span.setStatus({ code: SpanStatusCode.ERROR });
+          span.recordException(e as Error);
+          throw e;
+        } finally {
+          span.end();
+        }
+      },
+    );
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -230,63 +238,70 @@ export abstract class BaseTracer {
     func: (...args: TArgs) => TResult,
     spanType = "span",
     spanName?: string | null,
+    options?: SpanOptions,
+    ctx?: Context,
   ): (...args: TArgs) => TResult {
     const tracer = this.getTracer();
     const name = spanName ?? func.name;
 
     return (...args: TArgs): TResult => {
-      return tracer.startActiveSpan(name, (span) => {
-        if (spanType) {
-          span.setAttribute(AttributeKeys.JUDGMENT_SPAN_KIND, spanType);
-        }
-
-        try {
-          const inputData = this.formatInputs(
-            func as (...args: unknown[]) => unknown,
-            args as unknown[],
-          );
-          span.setAttribute(
-            AttributeKeys.JUDGMENT_INPUT,
-            this.serializer(inputData),
-          );
-
-          const result = func(...args);
-
-          if (result instanceof Promise) {
-            return result
-              .then((res: TResult) => {
-                span.setAttribute(
-                  AttributeKeys.JUDGMENT_OUTPUT,
-                  this.serializer(res),
-                );
-                return res;
-              })
-              .catch((err: unknown) => {
-                span.recordException(err as Error);
-                span.setStatus({
-                  code: SpanStatusCode.ERROR,
-                  message: String(err),
-                });
-                throw err;
-              })
-              .finally(() => {
-                span.end();
-              }) as TResult;
+      return tracer.startActiveSpan(
+        name,
+        options ?? {},
+        ctx ?? context.active(),
+        (span) => {
+          if (spanType) {
+            span.setAttribute(AttributeKeys.JUDGMENT_SPAN_KIND, spanType);
           }
 
-          span.setAttribute(
-            AttributeKeys.JUDGMENT_OUTPUT,
-            this.serializer(result),
-          );
-          span.end();
-          return result;
-        } catch (e) {
-          span.recordException(e as Error);
-          span.setStatus({ code: SpanStatusCode.ERROR, message: String(e) });
-          span.end();
-          throw e;
-        }
-      });
+          try {
+            const inputData = this.formatInputs(
+              func as (...args: unknown[]) => unknown,
+              args as unknown[],
+            );
+            span.setAttribute(
+              AttributeKeys.JUDGMENT_INPUT,
+              this.serializer(inputData),
+            );
+
+            const result = func(...args);
+
+            if (result instanceof Promise) {
+              return result
+                .then((res: TResult) => {
+                  span.setAttribute(
+                    AttributeKeys.JUDGMENT_OUTPUT,
+                    this.serializer(res),
+                  );
+                  return res;
+                })
+                .catch((err: unknown) => {
+                  span.recordException(err as Error);
+                  span.setStatus({
+                    code: SpanStatusCode.ERROR,
+                    message: String(err),
+                  });
+                  throw err;
+                })
+                .finally(() => {
+                  span.end();
+                }) as TResult;
+            }
+
+            span.setAttribute(
+              AttributeKeys.JUDGMENT_OUTPUT,
+              this.serializer(result),
+            );
+            span.end();
+            return result;
+          } catch (e) {
+            span.recordException(e as Error);
+            span.setStatus({ code: SpanStatusCode.ERROR, message: String(e) });
+            span.end();
+            throw e;
+          }
+        },
+      );
     };
   }
 
