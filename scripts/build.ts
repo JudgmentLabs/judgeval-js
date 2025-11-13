@@ -1,99 +1,32 @@
 #!/usr/bin/env bun
 
-import type { BuildConfig, BuildOutput } from "bun";
 import { build } from "bun";
+import { exec } from "child_process";
+import { promisify } from "util";
 
-const isDev = process.argv.includes("--dev");
-const isProduction = !isDev;
+const execAsync = promisify(exec);
+const minify = !process.argv.includes("--dev");
+const external = ["@opentelemetry/*"];
 
-function handleBuildResult(result: BuildOutput, target: string) {
-  if (!result.success) {
-    console.error(`Build failed for target '${target}':`);
-    result.logs.forEach((log) => {
-      const level = log.level === "error" ? "ERROR" : log.level.toUpperCase();
-      console.error(`  [${level}] ${log.message}`);
-      if (log.position) {
-        console.error(
-          `    at ${log.position.file}:${log.position.line}:${log.position.column}`
-        );
-      }
-    });
-    process.exit(1);
-  }
+const configs = [
+  { format: "esm", naming: "[dir]/[name].mjs" },
+  { format: "cjs", naming: "[dir]/[name].cjs" },
+] as const;
 
-  console.log(
-    `✓ Built ${target} bundle: ${result.outputs.map((o) => o.path).join(", ")}`
-  );
-}
+await Promise.all(
+  configs.map((config) =>
+    build({
+      entrypoints: ["./src/index.ts"],
+      outdir: "./dist",
+      target: "node",
+      format: config.format,
+      external,
+      minify,
+      sourcemap: minify ? "linked" : "inline",
+      naming: { entry: config.naming },
+    })
+  )
+);
 
-async function buildLib() {
-  const config: BuildConfig = {
-    entrypoints: ["./src/index.ts"],
-    outdir: "./dist",
-    target: "node",
-    format: "esm",
-    external: ["@opentelemetry/*"],
-    minify: isProduction,
-    sourcemap: isProduction ? "linked" : "inline",
-    naming: { entry: "[dir]/[name].mjs" },
-  };
-
-  const result = await build(config);
-  handleBuildResult(result, "lib");
-}
-
-async function buildCjs() {
-  const config: BuildConfig = {
-    entrypoints: ["./src/index.ts"],
-    outdir: "./dist",
-    target: "node",
-    format: "cjs",
-    external: ["@opentelemetry/*"],
-    minify: isProduction,
-    sourcemap: isProduction ? "linked" : "inline",
-    naming: { entry: "[dir]/[name].cjs" },
-  };
-
-  const result = await build(config);
-  handleBuildResult(result, "cjs");
-}
-
-async function buildUmd() {
-  const config: BuildConfig = {
-    entrypoints: ["./src/index.ts"],
-    outdir: "./dist",
-    target: "browser",
-    format: "iife",
-    external: ["@opentelemetry/*"],
-    minify: isProduction,
-    sourcemap: isProduction ? "linked" : "inline",
-    naming: { entry: "index.umd.js" },
-  };
-
-  const result = await build(config);
-  handleBuildResult(result, "umd");
-}
-
-async function main() {
-  const args = process.argv.slice(2).filter((arg) => !arg.startsWith("--"));
-  const targetsToBuild = args.length > 0 ? args : ["lib", "cjs", "umd"];
-
-  const buildPromises = targetsToBuild.map((target) => {
-    switch (target) {
-      case "lib":
-        return buildLib();
-      case "cjs":
-        return buildCjs();
-      case "umd":
-        return buildUmd();
-      default:
-        console.error(`Unknown target: ${target}`);
-        console.error("Available targets: lib, cjs, umd");
-        process.exit(1);
-    }
-  });
-
-  await Promise.all(buildPromises);
-}
-
-main().catch(console.error);
+await execAsync("bunx tsc -p tsconfig.build.json");
+console.log("✓ Build complete");
