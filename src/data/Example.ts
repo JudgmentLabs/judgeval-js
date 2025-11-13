@@ -1,43 +1,36 @@
 import { randomUUID } from "crypto";
 import type { Example as APIExample } from "../internal/api/models";
 
-export interface ExampleConfig {
+export interface ExampleConfig<
+  TData extends Record<string, unknown> = Record<string, unknown>,
+> {
   name?: string;
-  properties?: Record<string, unknown>;
+  properties?: TData;
   exampleId?: string;
   createdAt?: string;
 }
 
-export class Example {
+export class Example<
+  TData extends Record<string, unknown> = Record<string, unknown>,
+> {
   exampleId: string;
   createdAt: string;
   name?: string | null;
-  private properties: Record<string, unknown>;
+  private properties: TData | null;
 
-  private constructor(config: ExampleConfig = {}) {
+  private constructor(config: ExampleConfig<TData> = {}) {
     this.exampleId = config.exampleId ?? randomUUID();
     this.createdAt = config.createdAt ?? new Date().toISOString();
     this.name = config.name ?? null;
-    this.properties = config.properties ?? {};
+    this.properties = config.properties ?? null;
   }
 
-  static create(data: Record<string, unknown>): Example {
+  static create<
+    TData extends Record<string, unknown> = Record<string, unknown>,
+  >(data: TData): Example<TData> {
     return new Example({
       properties: data,
     });
-  }
-
-  setProperty(key: string, value: unknown): this {
-    this.properties[key] = value;
-    return this;
-  }
-
-  getProperty(key: string): unknown {
-    return this.properties[key];
-  }
-
-  getProperties(): Record<string, unknown> {
-    return { ...this.properties };
   }
 
   toModel(): APIExample {
@@ -45,7 +38,7 @@ export class Example {
       example_id: this.exampleId,
       created_at: this.createdAt,
       name: this.name ?? undefined,
-      ...this.properties,
+      ...(this.properties ?? {}),
     };
   }
 }
