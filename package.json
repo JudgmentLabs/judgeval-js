@@ -1,17 +1,16 @@
 {
   "name": "judgeval",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "JavaScript/TypeScript client for Judgment evaluation platform",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.cjs"
     },
-    "./umd": "./dist/index.umd.js",
     "./package.json": "./package.json"
   },
   "files": [
@@ -20,12 +19,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "bun run check && bun run build:types && bun scripts/build.ts lib cjs umd",
-    "build:types": "tsc -p tsconfig.build.json",
-    "build:lib": "bun scripts/build.ts lib",
-    "build:cjs": "bun scripts/build.ts cjs",
-    "build:umd": "bun scripts/build.ts umd",
-    "build:dev": "bun run build:types && bun scripts/build.ts lib --dev",
+    "build": "bun run check && bun scripts/build.ts",
+    "build:dev": "bun scripts/build.ts --dev",
     "check": "tsc --noEmit && eslint src/**/*.ts --no-warn-ignored",
     "lint": "eslint src/**/*.ts --no-warn-ignored",
     "lint:fix": "eslint src/**/*.ts --fix --no-warn-ignored",
