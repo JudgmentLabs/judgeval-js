@@ -1,1 +1,1 @@
-export { SpanFilterSampler } from "./SpanFilterSampler";
+export { ExperimentalSpanFilterSampler } from "./ExperimentalSpanFilterSampler";
