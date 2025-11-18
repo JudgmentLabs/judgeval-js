@@ -6,4 +6,4 @@ export { JudgmentSpanExporter } from "./exporters/JudgmentSpanExporter";
 export { NoOpSpanExporter } from "./exporters/NoOpSpanExporter";
 export { NodeTracer, type NodeTracerConfig } from "./NodeTracer";
 export { NodeTracerFactory } from "./NodeTracerFactory";
-export { ExperimentalSpanFilterSampler } from "./samplers";
+export { ExperimentalSpanFilterSampler, SamplingDecision } from "./samplers";
