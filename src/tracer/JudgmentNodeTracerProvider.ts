@@ -18,7 +18,7 @@ interface JudgmentNodeTracerProviderConfig extends NodeTracerConfig {
    * Filters what tracers are allowed to be created. This is useful when you want to disable any instrumentation / control instrumentation
    * that is automatically created by auto-instrumentations or other libraries.
    *
-   * If set to false, the tracer
+   * If set to false, the caller will receive a NoOpTracer.
    *
    * @param params The parameters of the tracer to check if it should be allowed.
    * @returns Whether the tracer should be allowed.
