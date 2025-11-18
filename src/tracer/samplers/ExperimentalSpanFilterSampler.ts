@@ -17,7 +17,7 @@ const SPAN_KEY_NAME = "OpenTelemetry Context Key SPAN" as const;
 
 export class ExperimentalSpanFilterSampler implements Sampler {
   constructor(
-    private readonly filterFn: (span: ReadableSpan) => SamplingDecision
+    private readonly filterFn: (span: ReadableSpan) => SamplingDecision,
   ) {}
 
   shouldSample(
@@ -26,7 +26,7 @@ export class ExperimentalSpanFilterSampler implements Sampler {
     _spanName: string,
     _spanKind: SpanKind,
     _attributes: Attributes,
-    _links: Link[]
+    _links: Link[],
   ): SamplingResult {
     // @ts-expect-error - not intended to be public API but exists
     const currentContext = context._currentContext as Map<symbol, unknown>;
@@ -37,7 +37,7 @@ export class ExperimentalSpanFilterSampler implements Sampler {
     }
 
     const spanKey = Array.from(currentContext.keys()).find(
-      (key) => key.description === SPAN_KEY_NAME
+      (key) => key.description === SPAN_KEY_NAME,
     );
 
     // // @ref https://github.com/open-telemetry/opentelemetry-js/blob/main/api/src/context/context.ts
@@ -46,13 +46,13 @@ export class ExperimentalSpanFilterSampler implements Sampler {
       const decision = this.filterFn(span as ReadableSpan);
       if (decision === SamplingDecision.NOT_RECORD) {
         Logger.info(
-          `[ExperimentalSpanFilterSampler] Dropping span because it does not match the filter function.`
+          `[ExperimentalSpanFilterSampler] Dropping span because it does not match the filter function.`,
         );
       }
       return { decision };
     } catch (error) {
       Logger.error(
-        `[ExperimentalSpanFilterSampler] Error filtering span: ${error}`
+        `[ExperimentalSpanFilterSampler] Error filtering span: ${error}`,
       );
       return { decision: SamplingDecision.RECORD_AND_SAMPLED };
     }
