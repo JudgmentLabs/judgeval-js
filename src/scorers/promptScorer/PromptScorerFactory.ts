@@ -5,7 +5,8 @@ import type {
   FetchPromptScorersRequest,
   FetchPromptScorersResponse,
 } from "../../internal/api/models";
-import { PromptScorer, type PromptScorerConfig } from "./PromptScorer";
+import { Logger } from "../../utils";
+import { PromptScorer } from "./PromptScorer";
 
 export class PromptScorerFactory {
   private readonly client: JudgmentApiClient;
@@ -17,12 +18,12 @@ export class PromptScorerFactory {
     this.isTrace = isTrace;
   }
 
-  async get(name: string): Promise<PromptScorer> {
+  async get(name: string): Promise<PromptScorer | null> {
     const cacheKey = this.getCacheKey(name);
     const cached = PromptScorerFactory.cache.get(cacheKey);
 
     if (cached) {
-      return this.createFromModel(cached, name);
+      return this._create(cached, name);
     }
 
     try {
@@ -51,34 +52,18 @@ export class PromptScorerFactory {
       }
 
       PromptScorerFactory.cache.set(cacheKey, scorer);
-      return this.createFromModel(scorer, name);
+      return this._create(scorer, name);
     } catch (error) {
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error(`Failed to fetch prompt scorer '${name}': ${error}`);
+      Logger.error(`Failed to fetch prompt scorer '${name}': ${error}`);
+      return null;
     }
   }
 
-  create(config: PromptScorerConfig): PromptScorer {
-    if (!config.name) {
-      throw new Error("Name is required");
-    }
-    if (!config.prompt) {
-      throw new Error("Prompt is required");
-    }
-
-    return new PromptScorer({
-      ...config,
-      isTrace: this.isTrace,
-    });
-  }
-
-  private createFromModel(model: APIPromptScorer, name: string): PromptScorer {
+  private _create(scorer: APIPromptScorer, name: string): PromptScorer {
     let options: Record<string, number> | undefined;
-    if (model.options && typeof model.options === "object") {
+    if (scorer.options && typeof scorer.options === "object") {
       options = {};
-      for (const [key, value] of Object.entries(model.options)) {
+      for (const [key, value] of Object.entries(scorer.options)) {
         if (typeof value === "number") {
           options[key] = value;
         }
@@ -87,11 +72,11 @@ export class PromptScorerFactory {
 
     return new PromptScorer({
       name,
-      prompt: model.prompt,
-      threshold: model.threshold,
+      prompt: scorer.prompt,
+      threshold: scorer.threshold,
       options: options ?? {},
-      model: model.model ?? JUDGMENT_DEFAULT_GPT_MODEL,
-      description: model.description ?? "",
+      model: scorer.model ?? JUDGMENT_DEFAULT_GPT_MODEL,
+      description: scorer.description ?? "",
       isTrace: this.isTrace,
     });
   }

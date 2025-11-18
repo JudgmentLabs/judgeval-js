@@ -14,13 +14,9 @@ export const JUDGMENT_API_URL = getEnvVar(
   "JUDGMENT_API_URL",
   "https://api.judgmentlabs.ai",
 );
-export const JUDGMENT_LLM_PROXY_URL = getEnvVar(
-  "JUDGMENT_LLM_PROXY_URL",
-  "https://api.judgmentlabs.ai/llm/proxy/v1",
-);
 export const JUDGMENT_DEFAULT_GPT_MODEL = getEnvVar(
   "JUDGMENT_DEFAULT_GPT_MODEL",
-  "gpt-4.1",
+  "gpt-5-mini",
 );
 export const JUDGMENT_ENABLE_MONITORING = getEnvVar(
   "JUDGMENT_ENABLE_MONITORING",
