@@ -22,6 +22,7 @@ export class NodeTracerFactory {
         resourceAttributes: config.resourceAttributes ?? {},
         instrumentations: config.instrumentations ?? [],
         sampler: config.sampler,
+        filterTracer: config.filterTracer,
         initialize: config.initialize ?? true,
       },
       this.client,
