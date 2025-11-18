@@ -12,9 +12,9 @@ const initPromise = client.nodeTracer.create({
   projectName: "auto_instrumentation_example",
   instrumentations: [new OpenAIInstrumentation()],
   sampler: new ExperimentalSpanFilterSampler({
-    filter: (span) => {
+    filter: ({ span }) => {
       console.log(span);
-      return span.resource.attributes["service.name"] === "judgeval"
+      return span?.resource.attributes["service.name"] === "judgeval"
         ? SamplingDecision.RECORD_AND_SAMPLED
         : SamplingDecision.NOT_RECORD;
     },
