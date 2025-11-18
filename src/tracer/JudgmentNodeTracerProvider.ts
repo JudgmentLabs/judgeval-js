@@ -37,7 +37,7 @@ export class JudgmentNodeTracerProvider extends NodeTracerProvider {
   getTracer(
     name: string,
     version?: string,
-    options?: { schemaUrl?: string }
+    options?: { schemaUrl?: string },
   ): Tracer {
     if (name === BaseTracer.TRACER_NAME) {
       return super.getTracer(name, version, options);
@@ -48,13 +48,13 @@ export class JudgmentNodeTracerProvider extends NodeTracerProvider {
         return super.getTracer(name, version, options);
       } else {
         Logger.debug(
-          `[JudgmentNodeTracerProvider] Returning NoOpTracer for tracer ${name} as it is disallowed by the filterTracer callback.`
+          `[JudgmentNodeTracerProvider] Returning NoOpTracer for tracer ${name} as it is disallowed by the filterTracer callback.`,
         );
         return new NoOpTracer();
       }
     } catch (error: unknown) {
       Logger.error(
-        `[JudgmentNodeTracerProvider] Failed to filter tracer ${name}: ${error}.`
+        `[JudgmentNodeTracerProvider] Failed to filter tracer ${name}: ${error}.`,
       );
       return super.getTracer(name, version, options);
     }
