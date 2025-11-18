@@ -21,6 +21,8 @@ import { AttributeKeys } from "../judgmentAttributeKeys";
 import { BaseScorer } from "../scorers/BaseScorer";
 import { Logger } from "../utils/logger";
 import { JudgmentSpanExporter, NoOpSpanExporter } from "./exporters";
+import { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
+import { NoOpSpanProcessor } from "./processors/NoOpSpanProcessor";
 
 export type Serializer = (obj: unknown) => string;
 
@@ -68,12 +70,27 @@ export abstract class BaseTracer {
 
   getSpanExporter(): SpanExporter {
     if (this.projectId !== null) {
-      return this.createJudgmentSpanExporter(this.projectId);
+      return new JudgmentSpanExporter(
+        this.buildEndpoint(this.apiClient.getBaseUrl()),
+        this.apiClient.getApiKey(),
+        this.apiClient.getOrganizationId(),
+        this.projectId,
+      );
     }
     Logger.error(
       "Project not resolved; cannot create exporter, returning NoOpSpanExporter",
     );
     return new NoOpSpanExporter();
+  }
+
+  getSpanProcessor(): JudgmentSpanProcessor {
+    if (this.projectId !== null) {
+      return new JudgmentSpanProcessor(this, this.getSpanExporter());
+    }
+    Logger.error(
+      "Project not resolved; cannot create processor, returning NoOpSpanProcessor",
+    );
+    return new NoOpSpanProcessor(this);
   }
 
   getTracer(): Tracer {
@@ -328,15 +345,6 @@ export abstract class BaseTracer {
     return baseUrl.endsWith("/")
       ? baseUrl + "otel/v1/traces"
       : baseUrl + "/otel/v1/traces";
-  }
-
-  private createJudgmentSpanExporter(projectId: string): SpanExporter {
-    return new JudgmentSpanExporter(
-      this.buildEndpoint(this.apiClient.getBaseUrl()),
-      this.apiClient.getApiKey(),
-      this.apiClient.getOrganizationId(),
-      projectId,
-    );
   }
 
   private generateRunId(prefix: string, spanId?: string | null): string {

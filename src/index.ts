@@ -36,6 +36,7 @@ export {
   NodeTracer,
   NodeTracerFactory,
   NoOpSpanExporter,
+  SpanFilterSampler,
   type BrowserTracerConfig,
   type NodeTracerConfig,
   type Serializer,

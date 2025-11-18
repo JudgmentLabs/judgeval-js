@@ -92,6 +92,10 @@ export class PromptScorer extends BaseScorer {
       kwargs.options = this._options;
     }
 
+    if (this._model) {
+      kwargs.model = this._model;
+    }
+
     if (this._description) {
       kwargs.description = this._description;
     }
@@ -100,7 +104,6 @@ export class PromptScorer extends BaseScorer {
       score_type: scoreType,
       threshold: this._threshold,
       name: this._name,
-      model: this._model,
       kwargs,
     };
   }

@@ -1,6 +1,7 @@
 import type { Instrumentation } from "@opentelemetry/instrumentation";
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import { NodeSDK } from "@opentelemetry/sdk-node";
+import type { Sampler } from "@opentelemetry/sdk-trace-base";
 import { JudgmentApiClient } from "../internal/api";
 import { Logger } from "../utils/logger";
 import { VERSION } from "../version";
@@ -13,21 +14,27 @@ export interface NodeTracerConfig {
   serializer?: Serializer;
   resourceAttributes?: Record<string, unknown>;
   instrumentations?: Instrumentation[];
+  sampler?: Sampler;
   initialize?: boolean;
 }
 
 interface InternalNodeTracerConfig
   extends Required<
-    Omit<NodeTracerConfig, "resourceAttributes" | "instrumentations">
+    Omit<
+      NodeTracerConfig,
+      "resourceAttributes" | "instrumentations" | "sampler"
+    >
   > {
   resourceAttributes: Record<string, unknown>;
   instrumentations: Instrumentation[];
+  sampler?: Sampler;
 }
 
 export class NodeTracer extends BaseTracer {
   private nodeSDK: NodeSDK | null = null;
   private resourceAttributes: Record<string, unknown>;
   private instrumentations: Instrumentation[];
+  private sampler?: Sampler;
 
   private constructor(
     projectName: string,
@@ -36,10 +43,12 @@ export class NodeTracer extends BaseTracer {
     serializer: Serializer,
     resourceAttributes: Record<string, unknown>,
     instrumentations: Instrumentation[],
+    sampler?: Sampler,
   ) {
     super(projectName, enableEvaluation, apiClient, serializer);
     this.resourceAttributes = resourceAttributes;
     this.instrumentations = instrumentations;
+    this.sampler = sampler;
   }
 
   static async create(
@@ -53,6 +62,7 @@ export class NodeTracer extends BaseTracer {
       config.serializer,
       config.resourceAttributes,
       config.instrumentations,
+      config.sampler,
     );
 
     await tracer.resolveAndSetProjectId();
@@ -72,18 +82,15 @@ export class NodeTracer extends BaseTracer {
     }
 
     try {
-      const attributes = {
-        "service.name": this.projectName,
-        "telemetry.sdk.version": VERSION,
-        ...this.resourceAttributes,
-      };
-
-      const spanExporter = this.getSpanExporter();
-
       this.nodeSDK = new NodeSDK({
-        resource: resourceFromAttributes(attributes),
-        traceExporter: spanExporter,
+        resource: resourceFromAttributes({
+          "service.name": this.projectName,
+          "telemetry.sdk.version": VERSION,
+          ...this.resourceAttributes,
+        }),
+        traceExporter: this.getSpanExporter(),
         instrumentations: this.instrumentations,
+        sampler: this.sampler,
       });
 
       this.nodeSDK.start();

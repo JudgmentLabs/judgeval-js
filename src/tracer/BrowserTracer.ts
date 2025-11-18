@@ -1,8 +1,6 @@
 import { resourceFromAttributes } from "@opentelemetry/resources";
-import {
-  BatchSpanProcessor,
-  WebTracerProvider,
-} from "@opentelemetry/sdk-trace-web";
+import type { Sampler } from "@opentelemetry/sdk-trace-base";
+import { WebTracerProvider } from "@opentelemetry/sdk-trace-web";
 import { JudgmentApiClient } from "../internal/api";
 import { Logger } from "../utils/logger";
 import { VERSION } from "../version";
@@ -14,17 +12,22 @@ export interface BrowserTracerConfig {
   enableMonitoring?: boolean;
   serializer?: Serializer;
   resourceAttributes?: Record<string, unknown>;
+  sampler?: Sampler;
   initialize?: boolean;
 }
 
 interface InternalBrowserTracerConfig
-  extends Required<Omit<BrowserTracerConfig, "resourceAttributes">> {
+  extends Required<
+    Omit<BrowserTracerConfig, "resourceAttributes" | "sampler">
+  > {
   resourceAttributes: Record<string, unknown>;
+  sampler?: Sampler;
 }
 
 export class BrowserTracer extends BaseTracer {
   private webTracerProvider: WebTracerProvider | null = null;
   private resourceAttributes: Record<string, unknown>;
+  private sampler?: Sampler;
 
   private constructor(
     projectName: string,
@@ -32,9 +35,11 @@ export class BrowserTracer extends BaseTracer {
     apiClient: JudgmentApiClient,
     serializer: Serializer,
     resourceAttributes: Record<string, unknown>,
+    sampler?: Sampler,
   ) {
     super(projectName, enableEvaluation, apiClient, serializer);
     this.resourceAttributes = resourceAttributes;
+    this.sampler = sampler;
   }
 
   static async create(
@@ -47,6 +52,7 @@ export class BrowserTracer extends BaseTracer {
       apiClient,
       config.serializer,
       config.resourceAttributes,
+      config.sampler,
     );
 
     await tracer.resolveAndSetProjectId();
@@ -72,11 +78,12 @@ export class BrowserTracer extends BaseTracer {
         ...this.resourceAttributes,
       };
 
-      const spanExporter = this.getSpanExporter();
+      const spanProcessor = this.getSpanProcessor();
 
       this.webTracerProvider = new WebTracerProvider({
         resource: resourceFromAttributes(attributes),
-        spanProcessors: [new BatchSpanProcessor(spanExporter)],
+        spanProcessors: [spanProcessor],
+        sampler: this.sampler,
       });
 
       this.webTracerProvider.register();
