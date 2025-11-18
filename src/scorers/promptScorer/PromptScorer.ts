@@ -1,5 +1,5 @@
-import type { ScorerConfig } from "../../internal/api/models";
 import { APIScorerType } from "../../data/APIScorerType";
+import type { ScorerConfig } from "../../internal/api/models";
 import { BaseScorer } from "../BaseScorer";
 
 export interface PromptScorerConfig {
@@ -91,9 +91,7 @@ export class PromptScorer extends BaseScorer {
     if (this._options) {
       kwargs.options = this._options;
     }
-    if (this._model) {
-      kwargs.model = this._model;
-    }
+
     if (this._description) {
       kwargs.description = this._description;
     }
@@ -102,6 +100,7 @@ export class PromptScorer extends BaseScorer {
       score_type: scoreType,
       threshold: this._threshold,
       name: this._name,
+      model: this._model,
       kwargs,
     };
   }
