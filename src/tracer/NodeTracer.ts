@@ -1,3 +1,5 @@
+import { context } from "@opentelemetry/api";
+import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
 import {
   registerInstrumentations,
   type Instrumentation,
@@ -45,6 +47,7 @@ interface InternalNodeTracerConfig
 
 export class NodeTracer extends BaseTracer {
   private tracerProvider: NodeTracerProvider | null = null;
+  private contextManager: AsyncLocalStorageContextManager | null = null;
   private resourceAttributes: Record<string, unknown>;
   private instrumentations: Instrumentation[];
   private sampler?: Sampler;
@@ -99,6 +102,10 @@ export class NodeTracer extends BaseTracer {
     }
 
     try {
+      this.contextManager = new AsyncLocalStorageContextManager();
+      this.contextManager.enable();
+      context.setGlobalContextManager(this.contextManager);
+
       const resource = defaultResource().merge(
         resourceFromAttributes({
           [ResourceKeys.SERVICE_NAME]: this.projectName,
@@ -138,6 +145,12 @@ export class NodeTracer extends BaseTracer {
     try {
       await this.tracerProvider.shutdown();
       this.tracerProvider = null;
+
+      if (this.contextManager) {
+        this.contextManager.disable();
+        this.contextManager = null;
+      }
+
       Logger.info("NodeTracer shut down successfully");
     } catch (error) {
       Logger.error(`Failed to shutdown NodeTracer: ${error}`);
