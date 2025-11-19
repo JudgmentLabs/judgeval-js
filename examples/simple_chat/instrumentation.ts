@@ -3,16 +3,10 @@ import { Judgeval, type NodeTracer } from "judgeval";
 
 export const client = Judgeval.create();
 
-const initPromise = client.nodeTracer
-  .create({
-    projectName: "auto_instrumentation_example",
-    enableEvaluation: true,
-    enableMonitoring: true,
-    instrumentations: [new OpenAIInstrumentation()],
-  })
-  .then((t: NodeTracer) => {
-    return t;
-  });
+const initPromise = client.nodeTracer.create({
+  projectName: "auto_instrumentation_example",
+  instrumentations: [new OpenAIInstrumentation()],
+});
 
 export async function getTracer(): Promise<NodeTracer> {
   return await initPromise;

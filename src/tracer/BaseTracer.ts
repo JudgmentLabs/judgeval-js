@@ -21,6 +21,8 @@ import { AttributeKeys } from "../judgmentAttributeKeys";
 import { BaseScorer } from "../scorers/BaseScorer";
 import { Logger } from "../utils/logger";
 import { JudgmentSpanExporter, NoOpSpanExporter } from "./exporters";
+import { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
+import { NoOpSpanProcessor } from "./processors/NoOpJudgmentSpanProcessor";
 
 export type Serializer = (obj: unknown) => string;
 
@@ -39,7 +41,7 @@ export abstract class BaseTracer {
     enableEvaluation: boolean,
     apiClient: JudgmentApiClient,
     serializer: Serializer,
-    jsonEncoder: (obj: unknown) => string = JSON.stringify,
+    jsonEncoder: (obj: unknown) => string = JSON.stringify
   ) {
     this.projectName = projectName;
     this.enableEvaluation = enableEvaluation;
@@ -57,7 +59,7 @@ export abstract class BaseTracer {
       Logger.error(
         `Failed to resolve project ${this.projectName}, ` +
           `please create it first at https://app.judgmentlabs.ai/org/${this.apiClient.getOrganizationId()}/projects. ` +
-          "Skipping Judgment export.",
+          "Skipping Judgment export."
       );
       this.projectId = null;
     }
@@ -68,12 +70,27 @@ export abstract class BaseTracer {
 
   getSpanExporter(): SpanExporter {
     if (this.projectId !== null) {
-      return this.createJudgmentSpanExporter(this.projectId);
+      return new JudgmentSpanExporter(
+        this.buildEndpoint(this.apiClient.getBaseUrl()),
+        this.apiClient.getApiKey(),
+        this.apiClient.getOrganizationId(),
+        this.projectId
+      );
     }
     Logger.error(
-      "Project not resolved; cannot create exporter, returning NoOpSpanExporter",
+      "Project not resolved; cannot create exporter, returning NoOpSpanExporter"
     );
     return new NoOpSpanExporter();
+  }
+
+  getSpanProcessor(): JudgmentSpanProcessor {
+    if (this.projectId !== null) {
+      return new JudgmentSpanProcessor(this, this.getSpanExporter());
+    }
+    Logger.error(
+      "Project not resolved; cannot create processor, returning NoOpSpanProcessor"
+    );
+    return new NoOpSpanProcessor(this);
   }
 
   getTracer(): Tracer {
@@ -153,14 +170,14 @@ export abstract class BaseTracer {
         "asyncEvaluate",
         traceId,
         spanId,
-        scorer.getName(),
+        scorer.getName()
       );
 
       const evaluationRun = this.createEvaluationRun(
         scorer,
         example,
         traceId,
-        spanId,
+        spanId
       );
 
       this.enqueueEvaluation(evaluationRun).catch((e: unknown) => {
@@ -188,19 +205,19 @@ export abstract class BaseTracer {
         "asyncTraceEvaluate",
         traceId,
         spanId,
-        scorer.getName(),
+        scorer.getName()
       );
 
       const evaluationRun = this.createTraceEvaluationRun(
         scorer,
         traceId,
-        spanId,
+        spanId
       );
       try {
         const traceEvalJson = JSON.stringify(evaluationRun);
         currentSpan.setAttribute(
           AttributeKeys.JUDGMENT_PENDING_TRACE_EVAL,
-          traceEvalJson,
+          traceEvalJson
         );
       } catch (e) {
         Logger.error(`Failed to serialize trace evaluation: ${e}`);
@@ -208,12 +225,71 @@ export abstract class BaseTracer {
     });
   }
 
-  span<T>(
+  /**
+   * Creates a new span for manual instrumentation.
+   *
+   * WARNING: You probably don't want this method. Use with() instead for most cases.
+   *
+   * This returns a span that is NOT active in the context, meaning child operations
+   * will NOT automatically link to it as a parent. You must manually manage the span
+   * lifecycle including calling span.end() and handling errors.
+   *
+   * To make the span active so child operations auto-link to it:
+   * ```
+   * import { context, trace } from "@opentelemetry/api";
+   * const span = tracer.span("my-span");
+   * context.with(trace.setSpan(context.active(), span), () => {
+   *   // span is active here, child ops auto-link
+   * });
+   * span.end();
+   * ```
+   *
+   * Consider using with() instead, which handles context and lifecycle automatically.
+   *
+   * @param spanName - The name of the span
+   * @param options - Optional span configuration (attributes, links, etc)
+   * @param ctx - Optional context to use as parent. Defaults to the active context
+   * @returns A Span object that must be manually ended
+   */
+  span(spanName: string, options?: SpanOptions, ctx?: Context): Span {
+    const tracer = this.getTracer();
+    return tracer.startSpan(spanName, options ?? {}, ctx ?? context.active());
+  }
+
+  /**
+   * Wraps a function execution in a span with automatic lifecycle management.
+   *
+   * Automatically handles span creation, ending, and error recording. The span is passed to
+   * your callback function, allowing you to add custom attributes or access span properties.
+   * The span will be ended automatically when the function completes or throws an error.
+   *
+   * Supports both synchronous and asynchronous functions. For async functions, the span
+   * remains active until the Promise resolves or rejects.
+   *
+   * @param spanName - The name of the span
+   * @param callableFunc - The function to execute within the span. Receives the span as a parameter
+   * @param options - Optional span configuration
+   * @param ctx - Optional context to use as parent. Defaults to the active context
+   * @returns The return value of callableFunc (Promise if async, direct value if sync)
+   */
+  with<T>(
     spanName: string,
-    callableFunc: () => T,
+    callableFunc: (span: Span) => Promise<T>,
     options?: SpanOptions,
-    ctx?: Context,
-  ): T {
+    ctx?: Context
+  ): Promise<T>;
+  with<T>(
+    spanName: string,
+    callableFunc: (span: Span) => T,
+    options?: SpanOptions,
+    ctx?: Context
+  ): T;
+  with<T>(
+    spanName: string,
+    callableFunc: (span: Span) => T | Promise<T>,
+    options?: SpanOptions,
+    ctx?: Context
+  ): T | Promise<T> {
     const tracer = this.getTracer();
     return tracer.startActiveSpan(
       spanName,
@@ -221,25 +297,58 @@ export abstract class BaseTracer {
       ctx ?? context.active(),
       (span) => {
         try {
-          return callableFunc();
+          const result = callableFunc(span);
+
+          if (result instanceof Promise) {
+            return result
+              .catch((err: unknown) => {
+                span.recordException(err as Error);
+                span.setStatus({
+                  code: SpanStatusCode.ERROR,
+                  message: String(err),
+                });
+                throw err;
+              })
+              .finally(() => {
+                span.end();
+              });
+          }
+
+          span.end();
+          return result;
         } catch (e) {
           span.setStatus({ code: SpanStatusCode.ERROR });
           span.recordException(e as Error);
-          throw e;
-        } finally {
           span.end();
+          throw e;
         }
-      },
+      }
     );
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  observe<TArgs extends any[], TResult>(
+  /**
+   * Wraps a function to automatically trace all its invocations.
+   *
+   * Returns a new function that, when called, will automatically create a span, capture input
+   * arguments, execute the original function, capture the output, and handle errors. The span
+   * is automatically ended after the function completes.
+   *
+   * Supports both synchronous and asynchronous functions. Input arguments are serialized and
+   * stored as span attributes, and the return value is captured as output.
+   *
+   * @param func - The function to wrap with automatic tracing
+   * @param spanType - The type of span to create (default: "span"). Common values: "span", "llm", "tool"
+   * @param spanName - Optional custom name for the span. Defaults to the function name
+   * @param options - Optional span configuration
+   * @param ctx - Optional context to use as parent. Defaults to the active context
+   * @returns A wrapped version of the function that creates spans on each invocation
+   */
+  observe<TArgs extends unknown[], TResult>(
     func: (...args: TArgs) => TResult,
     spanType = "span",
     spanName?: string | null,
     options?: SpanOptions,
-    ctx?: Context,
+    ctx?: Context
   ): (...args: TArgs) => TResult {
     const tracer = this.getTracer();
     const name = spanName ?? func.name;
@@ -257,11 +366,11 @@ export abstract class BaseTracer {
           try {
             const inputData = this.formatInputs(
               func as (...args: unknown[]) => unknown,
-              args as unknown[],
+              args as unknown[]
             );
             span.setAttribute(
               AttributeKeys.JUDGMENT_INPUT,
-              this.serializer(inputData),
+              this.serializer(inputData)
             );
 
             const result = func(...args);
@@ -271,7 +380,7 @@ export abstract class BaseTracer {
                 .then((res: TResult) => {
                   span.setAttribute(
                     AttributeKeys.JUDGMENT_OUTPUT,
-                    this.serializer(res),
+                    this.serializer(res)
                   );
                   return res;
                 })
@@ -290,7 +399,7 @@ export abstract class BaseTracer {
 
             span.setAttribute(
               AttributeKeys.JUDGMENT_OUTPUT,
-              this.serializer(result),
+              this.serializer(result)
             );
             span.end();
             return result;
@@ -300,7 +409,7 @@ export abstract class BaseTracer {
             span.end();
             throw e;
           }
-        },
+        }
       );
     };
   }
@@ -319,7 +428,7 @@ export abstract class BaseTracer {
       return projectId;
     } catch (error) {
       throw new Error(
-        `Failed to resolve project ID: ${error instanceof Error ? error.message : String(error)}`,
+        `Failed to resolve project ID: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }
@@ -330,15 +439,6 @@ export abstract class BaseTracer {
       : baseUrl + "/otel/v1/traces";
   }
 
-  private createJudgmentSpanExporter(projectId: string): SpanExporter {
-    return new JudgmentSpanExporter(
-      this.buildEndpoint(this.apiClient.getBaseUrl()),
-      this.apiClient.getApiKey(),
-      this.apiClient.getOrganizationId(),
-      projectId,
-    );
-  }
-
   private generateRunId(prefix: string, spanId?: string | null): string {
     return prefix + (spanId ?? Date.now().toString());
   }
@@ -347,7 +447,7 @@ export abstract class BaseTracer {
     scorer: BaseScorer,
     example: Example,
     traceId: string,
-    spanId: string,
+    spanId: string
   ): ExampleEvaluationRun {
     const runId = this.generateRunId("async_evaluate_", spanId);
 
@@ -365,7 +465,7 @@ export abstract class BaseTracer {
   private createTraceEvaluationRun(
     scorer: BaseScorer,
     traceId: string,
-    spanId: string,
+    spanId: string
   ): TraceEvaluationRun {
     const evalName = this.generateRunId("async_trace_evaluate_", spanId);
 
@@ -380,7 +480,7 @@ export abstract class BaseTracer {
   }
 
   private async enqueueEvaluation(
-    evaluationRun: ExampleEvaluationRun,
+    evaluationRun: ExampleEvaluationRun
   ): Promise<void> {
     try {
       await this.apiClient.addToRunEvalQueueExamples(evaluationRun);
@@ -417,10 +517,10 @@ export abstract class BaseTracer {
     method: string,
     traceId: string,
     spanId: string,
-    scorerName: string,
+    scorerName: string
   ): void {
     Logger.info(
-      `${method}: project=${this.projectName}, traceId=${traceId}, spanId=${spanId}, scorer=${scorerName}`,
+      `${method}: project=${this.projectName}, traceId=${traceId}, spanId=${spanId}, scorer=${scorerName}`
     );
   }
 
@@ -438,7 +538,7 @@ export abstract class BaseTracer {
 
   private formatInputs(
     f: (...args: unknown[]) => unknown,
-    args: unknown[],
+    args: unknown[]
   ): Record<string, unknown> {
     try {
       const funcStr = f.toString();

@@ -1,10 +1,24 @@
-import type { Instrumentation } from "@opentelemetry/instrumentation";
-import { resourceFromAttributes } from "@opentelemetry/resources";
-import { NodeSDK } from "@opentelemetry/sdk-node";
+import { context } from "@opentelemetry/api";
+import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
+import {
+  registerInstrumentations,
+  type Instrumentation,
+} from "@opentelemetry/instrumentation";
+import {
+  defaultResource,
+  resourceFromAttributes,
+} from "@opentelemetry/resources";
+import { type Sampler } from "@opentelemetry/sdk-trace-base";
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { JudgmentApiClient } from "../internal/api";
+import { ResourceKeys } from "../judgmentAttributeKeys";
 import { Logger } from "../utils/logger";
 import { VERSION } from "../version";
 import { BaseTracer, type Serializer } from "./BaseTracer";
+import {
+  JudgmentNodeTracerProvider,
+  filterTracerParams,
+} from "./JudgmentNodeTracerProvider";
 
 export interface NodeTracerConfig {
   projectName: string;
@@ -13,21 +27,31 @@ export interface NodeTracerConfig {
   serializer?: Serializer;
   resourceAttributes?: Record<string, unknown>;
   instrumentations?: Instrumentation[];
+  sampler?: Sampler;
   initialize?: boolean;
+  filterTracer?: (params: filterTracerParams) => boolean;
 }
 
 interface InternalNodeTracerConfig
   extends Required<
-    Omit<NodeTracerConfig, "resourceAttributes" | "instrumentations">
+    Omit<
+      NodeTracerConfig,
+      "resourceAttributes" | "instrumentations" | "sampler" | "filterTracer"
+    >
   > {
   resourceAttributes: Record<string, unknown>;
   instrumentations: Instrumentation[];
+  sampler?: Sampler;
+  filterTracer?: (params: filterTracerParams) => boolean;
 }
 
 export class NodeTracer extends BaseTracer {
-  private nodeSDK: NodeSDK | null = null;
+  private tracerProvider: NodeTracerProvider | null = null;
+  private contextManager: AsyncLocalStorageContextManager | null = null;
   private resourceAttributes: Record<string, unknown>;
   private instrumentations: Instrumentation[];
+  private sampler?: Sampler;
+  private filterTracer?: (params: filterTracerParams) => boolean;
 
   private constructor(
     projectName: string,
@@ -36,10 +60,14 @@ export class NodeTracer extends BaseTracer {
     serializer: Serializer,
     resourceAttributes: Record<string, unknown>,
     instrumentations: Instrumentation[],
+    sampler?: Sampler,
+    filterTracer?: (params: filterTracerParams) => boolean,
   ) {
     super(projectName, enableEvaluation, apiClient, serializer);
     this.resourceAttributes = resourceAttributes;
     this.instrumentations = instrumentations;
+    this.sampler = sampler;
+    this.filterTracer = filterTracer;
   }
 
   static async create(
@@ -53,6 +81,8 @@ export class NodeTracer extends BaseTracer {
       config.serializer,
       config.resourceAttributes,
       config.instrumentations,
+      config.sampler,
+      config.filterTracer,
     );
 
     await tracer.resolveAndSetProjectId();
@@ -66,27 +96,39 @@ export class NodeTracer extends BaseTracer {
 
   /* eslint-disable @typescript-eslint/require-await */
   async initialize(): Promise<void> {
-    if (this.nodeSDK !== null) {
+    if (this.tracerProvider !== null) {
       Logger.warn("NodeTracer already initialized");
       return;
     }
 
     try {
-      const attributes = {
-        "service.name": this.projectName,
-        "telemetry.sdk.version": VERSION,
-        ...this.resourceAttributes,
-      };
+      this.contextManager = new AsyncLocalStorageContextManager();
+      this.contextManager.enable();
+      context.setGlobalContextManager(this.contextManager);
 
-      const spanExporter = this.getSpanExporter();
+      const resource = defaultResource().merge(
+        resourceFromAttributes({
+          [ResourceKeys.SERVICE_NAME]: this.projectName,
+          [ResourceKeys.TELEMETRY_SDK_NAME]: BaseTracer.TRACER_NAME,
+          [ResourceKeys.TELEMETRY_SDK_VERSION]: VERSION,
+          ...this.resourceAttributes,
+        }),
+      );
 
-      this.nodeSDK = new NodeSDK({
-        resource: resourceFromAttributes(attributes),
-        traceExporter: spanExporter,
-        instrumentations: this.instrumentations,
+      this.tracerProvider = new JudgmentNodeTracerProvider({
+        resource,
+        sampler: this.sampler,
+        spanProcessors: [this.getSpanProcessor()],
+        filterTracer: this.filterTracer,
       });
 
-      this.nodeSDK.start();
+      this.tracerProvider.register();
+
+      if (this.instrumentations.length > 0) {
+        registerInstrumentations({
+          instrumentations: this.instrumentations,
+        });
+      }
       Logger.info("NodeTracer initialized successfully");
     } catch (error) {
       throw new Error(
@@ -96,13 +138,19 @@ export class NodeTracer extends BaseTracer {
   }
 
   async shutdown(): Promise<void> {
-    if (!this.nodeSDK) {
+    if (!this.tracerProvider) {
       Logger.warn("NodeTracer not initialized, skipping shutdown");
       return;
     }
     try {
-      await this.nodeSDK.shutdown();
-      this.nodeSDK = null;
+      await this.tracerProvider.shutdown();
+      this.tracerProvider = null;
+
+      if (this.contextManager) {
+        this.contextManager.disable();
+        this.contextManager = null;
+      }
+
       Logger.info("NodeTracer shut down successfully");
     } catch (error) {
       Logger.error(`Failed to shutdown NodeTracer: ${error}`);

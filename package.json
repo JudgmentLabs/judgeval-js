@@ -1,6 +1,6 @@
 {
   "name": "judgeval",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "JavaScript/TypeScript client for Judgment evaluation platform",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
@@ -26,7 +26,7 @@
     "lint:fix": "eslint src/**/*.ts --fix --no-warn-ignored",
     "format": "prettier --write \"src/**/*.ts\"",
     "generate-client": "bunx tsx scripts/generate-client.ts && bun run format",
-    "test": "bun test",
+    "test": "bun test --coverage",
     "clean": "rimraf dist",
     "prepublishOnly": "bun run clean && bun run build",
     "example": "bun scripts/run-example.ts"
@@ -48,6 +48,7 @@
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/context-async-hooks": "^2.2.0",
     "@opentelemetry/core": "^2.2.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.207.0",
     "@opentelemetry/resources": "^2.2.0",
