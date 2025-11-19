@@ -22,7 +22,7 @@ import { BaseScorer } from "../scorers/BaseScorer";
 import { Logger } from "../utils/logger";
 import { JudgmentSpanExporter, NoOpSpanExporter } from "./exporters";
 import { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
-import { NoOpSpanProcessor } from "./processors/NoOpSpanProcessor";
+import { NoOpSpanProcessor } from "./processors/NoOpJudgmentSpanProcessor";
 
 export type Serializer = (obj: unknown) => string;
 
