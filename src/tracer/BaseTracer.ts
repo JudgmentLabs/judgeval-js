@@ -225,12 +225,60 @@ export abstract class BaseTracer {
     });
   }
 
-  span<T>(
+  /**
+   * Creates a new span for manual instrumentation.
+   *
+   * Returns a Span object that must be manually managed. You are responsible for calling
+   * span.end() when the operation completes and for recording errors with span.recordException()
+   * and span.setStatus(). The span must be ended in both success and error cases.
+   *
+   * Use this when you need fine-grained control over span lifecycle, such as when spans
+   * don't follow a simple function call pattern.
+   *
+   * @param spanName - The name of the span
+   * @param options - Optional span configuration (attributes, links, etc)
+   * @param ctx - Optional context to use as parent. Defaults to the active context
+   * @returns A Span object that must be manually ended
+   */
+  span(spanName: string, options?: SpanOptions, ctx?: Context): Span {
+    const tracer = this.getTracer();
+    return tracer.startSpan(spanName, options ?? {}, ctx ?? context.active());
+  }
+
+  /**
+   * Wraps a function execution in a span with automatic lifecycle management.
+   *
+   * Automatically handles span creation, ending, and error recording. The span is passed to
+   * your callback function, allowing you to add custom attributes or access span properties.
+   * The span will be ended automatically when the function completes or throws an error.
+   *
+   * Supports both synchronous and asynchronous functions. For async functions, the span
+   * remains active until the Promise resolves or rejects.
+   *
+   * @param spanName - The name of the span
+   * @param callableFunc - The function to execute within the span. Receives the span as a parameter
+   * @param options - Optional span configuration
+   * @param ctx - Optional context to use as parent. Defaults to the active context
+   * @returns The return value of callableFunc (Promise if async, direct value if sync)
+   */
+  with<T>(
     spanName: string,
-    callableFunc: () => T,
+    callableFunc: (span: Span) => Promise<T>,
     options?: SpanOptions,
     ctx?: Context,
-  ): T {
+  ): Promise<T>;
+  with<T>(
+    spanName: string,
+    callableFunc: (span: Span) => T,
+    options?: SpanOptions,
+    ctx?: Context,
+  ): T;
+  with<T>(
+    spanName: string,
+    callableFunc: (span: Span) => T | Promise<T>,
+    options?: SpanOptions,
+    ctx?: Context,
+  ): T | Promise<T> {
     const tracer = this.getTracer();
     return tracer.startActiveSpan(
       spanName,
@@ -238,20 +286,53 @@ export abstract class BaseTracer {
       ctx ?? context.active(),
       (span) => {
         try {
-          return callableFunc();
+          const result = callableFunc(span);
+
+          if (result instanceof Promise) {
+            return result
+              .catch((err: unknown) => {
+                span.recordException(err as Error);
+                span.setStatus({
+                  code: SpanStatusCode.ERROR,
+                  message: String(err),
+                });
+                throw err;
+              })
+              .finally(() => {
+                span.end();
+              });
+          }
+
+          span.end();
+          return result;
         } catch (e) {
           span.setStatus({ code: SpanStatusCode.ERROR });
           span.recordException(e as Error);
-          throw e;
-        } finally {
           span.end();
+          throw e;
         }
       },
     );
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  observe<TArgs extends any[], TResult>(
+  /**
+   * Wraps a function to automatically trace all its invocations.
+   *
+   * Returns a new function that, when called, will automatically create a span, capture input
+   * arguments, execute the original function, capture the output, and handle errors. The span
+   * is automatically ended after the function completes.
+   *
+   * Supports both synchronous and asynchronous functions. Input arguments are serialized and
+   * stored as span attributes, and the return value is captured as output.
+   *
+   * @param func - The function to wrap with automatic tracing
+   * @param spanType - The type of span to create (default: "span"). Common values: "span", "llm", "tool"
+   * @param spanName - Optional custom name for the span. Defaults to the function name
+   * @param options - Optional span configuration
+   * @param ctx - Optional context to use as parent. Defaults to the active context
+   * @returns A wrapped version of the function that creates spans on each invocation
+   */
+  observe<TArgs extends unknown[], TResult>(
     func: (...args: TArgs) => TResult,
     spanType = "span",
     spanName?: string | null,
