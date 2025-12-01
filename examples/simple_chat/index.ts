@@ -52,6 +52,6 @@ async function _chatWithUser(userMessage: string): Promise<string> {
   const result = await chatWithUser("What is the capital of France?");
   console.log(result);
 
-  await new Promise((resolve) => setTimeout(resolve, 10000));
+  await tracer.forceFlush();
   await tracer.shutdown();
 })();

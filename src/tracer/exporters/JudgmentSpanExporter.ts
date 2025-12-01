@@ -4,6 +4,7 @@ import type { ReadableSpan } from "@opentelemetry/sdk-trace-base";
 import { SpanExporter } from "@opentelemetry/sdk-trace-base";
 import { Logger } from "../../utils/logger";
 
+
 export class JudgmentSpanExporter implements SpanExporter {
   private delegate: SpanExporter;
 

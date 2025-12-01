@@ -3,3 +3,4 @@ print = "yarn"
 
 [install]
 registry = "https://registry.npmjs.org"
+minimumReleaseAge = 259200

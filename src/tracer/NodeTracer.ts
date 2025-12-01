@@ -156,4 +156,16 @@ export class NodeTracer extends BaseTracer {
       Logger.error(`Failed to shutdown NodeTracer: ${error}`);
     }
   }
+
+  async forceFlush(): Promise<void> {
+    if (!this.tracerProvider) {
+      Logger.warn("NodeTracer not initialized, skipping force flush");
+      return;
+    }
+    try {
+      await this.tracerProvider.forceFlush();
+    } catch (error) {
+      Logger.error(`Failed to force flush NodeTracer: ${error}`);
+    }
+  }
 }
