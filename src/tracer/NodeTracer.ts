@@ -8,7 +8,10 @@ import {
   defaultResource,
   resourceFromAttributes,
 } from "@opentelemetry/resources";
-import { type Sampler } from "@opentelemetry/sdk-trace-base";
+import {
+  type Sampler,
+  type SpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { JudgmentApiClient } from "../internal/api";
 import { ResourceKeys } from "../judgmentAttributeKeys";
@@ -27,22 +30,27 @@ export interface NodeTracerConfig {
   serializer?: Serializer;
   resourceAttributes?: Record<string, unknown>;
   instrumentations?: Instrumentation[];
-  sampler?: Sampler;
   initialize?: boolean;
   filterTracer?: (params: filterTracerParams) => boolean;
 }
 
-interface InternalNodeTracerConfig
-  extends Required<
-    Omit<
-      NodeTracerConfig,
-      "resourceAttributes" | "instrumentations" | "sampler" | "filterTracer"
-    >
-  > {
+interface InternalNodeTracerConfig extends Required<
+  Omit<
+    NodeTracerConfig,
+    "resourceAttributes" | "instrumentations" | "filterTracer"
+  >
+> {
   resourceAttributes: Record<string, unknown>;
   instrumentations: Instrumentation[];
-  sampler?: Sampler;
   filterTracer?: (params: filterTracerParams) => boolean;
+  sampler?: Sampler;
+}
+
+export interface InitializeNodeTracerConfig {
+  spanProcessors?: SpanProcessor[];
+  resourceAttributes?: Record<string, unknown>;
+  instrumentations?: Instrumentation[];
+  sampler?: Sampler;
 }
 
 export class NodeTracer extends BaseTracer {
@@ -50,7 +58,6 @@ export class NodeTracer extends BaseTracer {
   private contextManager: AsyncLocalStorageContextManager | null = null;
   private resourceAttributes: Record<string, unknown>;
   private instrumentations: Instrumentation[];
-  private sampler?: Sampler;
   private filterTracer?: (params: filterTracerParams) => boolean;
 
   private constructor(
@@ -60,13 +67,11 @@ export class NodeTracer extends BaseTracer {
     serializer: Serializer,
     resourceAttributes: Record<string, unknown>,
     instrumentations: Instrumentation[],
-    sampler?: Sampler,
     filterTracer?: (params: filterTracerParams) => boolean,
   ) {
     super(projectName, enableEvaluation, apiClient, serializer);
     this.resourceAttributes = resourceAttributes;
     this.instrumentations = instrumentations;
-    this.sampler = sampler;
     this.filterTracer = filterTracer;
   }
 
@@ -81,21 +86,20 @@ export class NodeTracer extends BaseTracer {
       config.serializer,
       config.resourceAttributes,
       config.instrumentations,
-      config.sampler,
       config.filterTracer,
     );
 
     await tracer.resolveAndSetProjectId();
 
     if (config.initialize) {
-      await tracer.initialize();
+      await tracer.initialize({ sampler: config.sampler });
     }
 
     return tracer;
   }
 
   /* eslint-disable @typescript-eslint/require-await */
-  async initialize(): Promise<void> {
+  async initialize(config?: InitializeNodeTracerConfig): Promise<void> {
     if (this.tracerProvider !== null) {
       Logger.warn("NodeTracer already initialized");
       return;
@@ -112,21 +116,32 @@ export class NodeTracer extends BaseTracer {
           [ResourceKeys.TELEMETRY_SDK_NAME]: BaseTracer.TRACER_NAME,
           [ResourceKeys.TELEMETRY_SDK_VERSION]: VERSION,
           ...this.resourceAttributes,
+          ...config?.resourceAttributes,
         }),
       );
 
+      const spanProcessors = [
+        this.getSpanProcessor(),
+        ...(config?.spanProcessors ?? []),
+      ];
+
       this.tracerProvider = new JudgmentNodeTracerProvider({
         resource,
-        sampler: this.sampler,
-        spanProcessors: [this.getSpanProcessor()],
+        sampler: config?.sampler,
+        spanProcessors,
         filterTracer: this.filterTracer,
       });
 
       this.tracerProvider.register();
 
-      if (this.instrumentations.length > 0) {
+      const allInstrumentations = [
+        ...this.instrumentations,
+        ...(config?.instrumentations ?? []),
+      ];
+
+      if (allInstrumentations.length > 0) {
         registerInstrumentations({
-          instrumentations: this.instrumentations,
+          instrumentations: allInstrumentations,
         });
       }
       Logger.info("NodeTracer initialized successfully");
