@@ -16,10 +16,9 @@ export interface BrowserTracerConfig {
   initialize?: boolean;
 }
 
-interface InternalBrowserTracerConfig
-  extends Required<
-    Omit<BrowserTracerConfig, "resourceAttributes" | "sampler">
-  > {
+interface InternalBrowserTracerConfig extends Required<
+  Omit<BrowserTracerConfig, "resourceAttributes" | "sampler">
+> {
   resourceAttributes: Record<string, unknown>;
   sampler?: Sampler;
 }

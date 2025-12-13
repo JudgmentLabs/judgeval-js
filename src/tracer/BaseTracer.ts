@@ -41,7 +41,7 @@ export abstract class BaseTracer {
     enableEvaluation: boolean,
     apiClient: JudgmentApiClient,
     serializer: Serializer,
-    jsonEncoder: (obj: unknown) => string = JSON.stringify
+    jsonEncoder: (obj: unknown) => string = JSON.stringify,
   ) {
     this.projectName = projectName;
     this.enableEvaluation = enableEvaluation;
@@ -59,7 +59,7 @@ export abstract class BaseTracer {
       Logger.error(
         `Failed to resolve project ${this.projectName}, ` +
           `please create it first at https://app.judgmentlabs.ai/org/${this.apiClient.getOrganizationId()}/projects. ` +
-          "Skipping Judgment export."
+          "Skipping Judgment export.",
       );
       this.projectId = null;
     }
@@ -74,11 +74,11 @@ export abstract class BaseTracer {
         this.buildEndpoint(this.apiClient.getBaseUrl()),
         this.apiClient.getApiKey(),
         this.apiClient.getOrganizationId(),
-        this.projectId
+        this.projectId,
       );
     }
     Logger.error(
-      "Project not resolved; cannot create exporter, returning NoOpSpanExporter"
+      "Project not resolved; cannot create exporter, returning NoOpSpanExporter",
     );
     return new NoOpSpanExporter();
   }
@@ -88,7 +88,7 @@ export abstract class BaseTracer {
       return new JudgmentSpanProcessor(this, this.getSpanExporter());
     }
     Logger.error(
-      "Project not resolved; cannot create processor, returning NoOpSpanProcessor"
+      "Project not resolved; cannot create processor, returning NoOpSpanProcessor",
     );
     return new NoOpSpanProcessor(this);
   }
@@ -170,14 +170,14 @@ export abstract class BaseTracer {
         "asyncEvaluate",
         traceId,
         spanId,
-        scorer.getName()
+        scorer.getName(),
       );
 
       const evaluationRun = this.createEvaluationRun(
         scorer,
         example,
         traceId,
-        spanId
+        spanId,
       );
 
       this.enqueueEvaluation(evaluationRun).catch((e: unknown) => {
@@ -205,19 +205,19 @@ export abstract class BaseTracer {
         "asyncTraceEvaluate",
         traceId,
         spanId,
-        scorer.getName()
+        scorer.getName(),
       );
 
       const evaluationRun = this.createTraceEvaluationRun(
         scorer,
         traceId,
-        spanId
+        spanId,
       );
       try {
         const traceEvalJson = JSON.stringify(evaluationRun);
         currentSpan.setAttribute(
           AttributeKeys.JUDGMENT_PENDING_TRACE_EVAL,
-          traceEvalJson
+          traceEvalJson,
         );
       } catch (e) {
         Logger.error(`Failed to serialize trace evaluation: ${e}`);
@@ -276,19 +276,19 @@ export abstract class BaseTracer {
     spanName: string,
     callableFunc: (span: Span) => Promise<T>,
     options?: SpanOptions,
-    ctx?: Context
+    ctx?: Context,
   ): Promise<T>;
   with<T>(
     spanName: string,
     callableFunc: (span: Span) => T,
     options?: SpanOptions,
-    ctx?: Context
+    ctx?: Context,
   ): T;
   with<T>(
     spanName: string,
     callableFunc: (span: Span) => T | Promise<T>,
     options?: SpanOptions,
-    ctx?: Context
+    ctx?: Context,
   ): T | Promise<T> {
     const tracer = this.getTracer();
     return tracer.startActiveSpan(
@@ -322,7 +322,7 @@ export abstract class BaseTracer {
           span.end();
           throw e;
         }
-      }
+      },
     );
   }
 
@@ -348,7 +348,7 @@ export abstract class BaseTracer {
     spanType = "span",
     spanName?: string | null,
     options?: SpanOptions,
-    ctx?: Context
+    ctx?: Context,
   ): (...args: TArgs) => TResult {
     const tracer = this.getTracer();
     const name = spanName ?? func.name;
@@ -366,11 +366,11 @@ export abstract class BaseTracer {
           try {
             const inputData = this.formatInputs(
               func as (...args: unknown[]) => unknown,
-              args as unknown[]
+              args as unknown[],
             );
             span.setAttribute(
               AttributeKeys.JUDGMENT_INPUT,
-              this.serializer(inputData)
+              this.serializer(inputData),
             );
 
             const result = func(...args);
@@ -380,7 +380,7 @@ export abstract class BaseTracer {
                 .then((res: TResult) => {
                   span.setAttribute(
                     AttributeKeys.JUDGMENT_OUTPUT,
-                    this.serializer(res)
+                    this.serializer(res),
                   );
                   return res;
                 })
@@ -399,7 +399,7 @@ export abstract class BaseTracer {
 
             span.setAttribute(
               AttributeKeys.JUDGMENT_OUTPUT,
-              this.serializer(result)
+              this.serializer(result),
             );
             span.end();
             return result;
@@ -409,7 +409,7 @@ export abstract class BaseTracer {
             span.end();
             throw e;
           }
-        }
+        },
       );
     };
   }
@@ -428,7 +428,7 @@ export abstract class BaseTracer {
       return projectId;
     } catch (error) {
       throw new Error(
-        `Failed to resolve project ID: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to resolve project ID: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -447,7 +447,7 @@ export abstract class BaseTracer {
     scorer: BaseScorer,
     example: Example,
     traceId: string,
-    spanId: string
+    spanId: string,
   ): ExampleEvaluationRun {
     const runId = this.generateRunId("async_evaluate_", spanId);
 
@@ -465,7 +465,7 @@ export abstract class BaseTracer {
   private createTraceEvaluationRun(
     scorer: BaseScorer,
     traceId: string,
-    spanId: string
+    spanId: string,
   ): TraceEvaluationRun {
     const evalName = this.generateRunId("async_trace_evaluate_", spanId);
 
@@ -480,7 +480,7 @@ export abstract class BaseTracer {
   }
 
   private async enqueueEvaluation(
-    evaluationRun: ExampleEvaluationRun
+    evaluationRun: ExampleEvaluationRun,
   ): Promise<void> {
     try {
       await this.apiClient.addToRunEvalQueueExamples(evaluationRun);
@@ -517,10 +517,10 @@ export abstract class BaseTracer {
     method: string,
     traceId: string,
     spanId: string,
-    scorerName: string
+    scorerName: string,
   ): void {
     Logger.info(
-      `${method}: project=${this.projectName}, traceId=${traceId}, spanId=${spanId}, scorer=${scorerName}`
+      `${method}: project=${this.projectName}, traceId=${traceId}, spanId=${spanId}, scorer=${scorerName}`,
     );
   }
 
@@ -538,7 +538,7 @@ export abstract class BaseTracer {
 
   private formatInputs(
     f: (...args: unknown[]) => unknown,
-    args: unknown[]
+    args: unknown[],
   ): Record<string, unknown> {
     try {
       const funcStr = f.toString();

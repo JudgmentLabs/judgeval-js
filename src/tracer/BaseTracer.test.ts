@@ -65,7 +65,7 @@ describe("BaseTracer - Span Linking and Context Propagation", () => {
   }
 
   async function findSpanByName(
-    name: string
+    name: string,
   ): Promise<ReadableSpan | undefined> {
     const spans = await getSpans();
     return spans.find((s) => s.name === name);
@@ -90,7 +90,7 @@ describe("BaseTracer - Span Linking and Context Propagation", () => {
       expect(child).toBeDefined();
       expect(child?.spanContext().traceId).toBe(parent?.spanContext().traceId);
       expect(child?.parentSpanContext?.spanId).toBe(
-        parent?.spanContext().spanId
+        parent?.spanContext().spanId,
       );
     });
 
@@ -109,7 +109,7 @@ describe("BaseTracer - Span Linking and Context Propagation", () => {
       expect(parent).toBeDefined();
       expect(child).toBeDefined();
       expect(child?.parentSpanContext?.spanId).toBe(
-        parent?.spanContext().spanId
+        parent?.spanContext().spanId,
       );
     });
 
@@ -131,7 +131,7 @@ describe("BaseTracer - Span Linking and Context Propagation", () => {
       expect(parent).toBeDefined();
       expect(child).toBeDefined();
       expect(child?.parentSpanContext?.spanId).toBe(
-        parent?.spanContext().spanId
+        parent?.spanContext().spanId,
       );
     });
 
@@ -186,7 +186,7 @@ describe("BaseTracer - Span Linking and Context Propagation", () => {
       const child = await findSpanByName("child");
 
       expect(child?.parentSpanContext?.spanId).toBe(
-        parent?.spanContext().spanId
+        parent?.spanContext().spanId,
       );
     });
 
@@ -223,10 +223,10 @@ describe("BaseTracer - Span Linking and Context Propagation", () => {
       const child2 = await findSpanByName("child-2");
 
       expect(child1?.parentSpanContext?.spanId).toBe(
-        parent?.spanContext().spanId
+        parent?.spanContext().spanId,
       );
       expect(child2?.parentSpanContext?.spanId).toBe(
-        parent?.spanContext().spanId
+        parent?.spanContext().spanId,
       );
     });
 
@@ -244,7 +244,7 @@ describe("BaseTracer - Span Linking and Context Propagation", () => {
       const child = await findSpanByName("async-child");
 
       expect(child?.parentSpanContext?.spanId).toBe(
-        parent?.spanContext().spanId
+        parent?.spanContext().spanId,
       );
     });
 
@@ -306,7 +306,7 @@ describe("BaseTracer - Span Linking and Context Propagation", () => {
       const child = await findSpanByName("child-error");
 
       expect(child?.parentSpanContext?.spanId).toBe(
-        parent?.spanContext().spanId
+        parent?.spanContext().spanId,
       );
       expect(child?.status.code).toBe(SpanStatusCode.ERROR);
     });
@@ -340,7 +340,7 @@ describe("BaseTracer - Span Linking and Context Propagation", () => {
       const child = await findSpanByName("observed-child");
 
       expect(child?.parentSpanContext?.spanId).toBe(
-        parent?.spanContext().spanId
+        parent?.spanContext().spanId,
       );
     });
 
@@ -360,7 +360,7 @@ describe("BaseTracer - Span Linking and Context Propagation", () => {
       const innerSpan = await findSpanByName("inner");
 
       expect(innerSpan?.parentSpanContext?.spanId).toBe(
-        outerSpan?.spanContext().spanId
+        outerSpan?.spanContext().spanId,
       );
     });
 
@@ -383,7 +383,7 @@ describe("BaseTracer - Span Linking and Context Propagation", () => {
       const child = await findSpanByName("async-observed");
 
       expect(child?.parentSpanContext?.spanId).toBe(
-        parent?.spanContext().spanId
+        parent?.spanContext().spanId,
       );
     });
 
@@ -406,7 +406,7 @@ describe("BaseTracer - Span Linking and Context Propagation", () => {
       expect(children.length).toBe(3);
       children.forEach((child) => {
         expect(child.parentSpanContext?.spanId).toBe(
-          parent?.spanContext().spanId
+          parent?.spanContext().spanId,
         );
       });
     });
@@ -435,7 +435,7 @@ describe("BaseTracer - Span Linking and Context Propagation", () => {
 
       expect(child?.parentSpanContext?.spanId).toBe(root?.spanContext().spanId);
       expect(grandchild?.parentSpanContext?.spanId).toBe(
-        child?.spanContext().spanId
+        child?.spanContext().spanId,
       );
     });
 
@@ -458,10 +458,10 @@ describe("BaseTracer - Span Linking and Context Propagation", () => {
       const inner = await findSpanByName("inner-with");
 
       expect(middle?.parentSpanContext?.spanId).toBe(
-        outer?.spanContext().spanId
+        outer?.spanContext().spanId,
       );
       expect(inner?.parentSpanContext?.spanId).toBe(
-        middle?.spanContext().spanId
+        middle?.spanContext().spanId,
       );
     });
 
@@ -487,10 +487,10 @@ describe("BaseTracer - Span Linking and Context Propagation", () => {
       const leaf = await findSpanByName("error-leaf");
 
       expect(middle?.parentSpanContext?.spanId).toBe(
-        root?.spanContext().spanId
+        root?.spanContext().spanId,
       );
       expect(leaf?.parentSpanContext?.spanId).toBe(
-        middle?.spanContext().spanId
+        middle?.spanContext().spanId,
       );
       expect(leaf?.status.code).toBe(SpanStatusCode.ERROR);
     });
