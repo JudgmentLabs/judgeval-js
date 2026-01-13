@@ -533,4 +533,175 @@ describe("BaseTracer - Span Linking and Context Propagation", () => {
       expect(span?.attributes["judgment.span_kind"]).toBe("llm");
     });
   });
+
+  describe("observe() async generators", () => {
+    test("preserves context across yields", async () => {
+      const spanIds: (string | undefined)[] = [];
+
+      // eslint-disable-next-line @typescript-eslint/require-await
+      async function* gen() {
+        for (let i = 0; i < 3; i++) {
+          spanIds.push(trace.getActiveSpan()?.spanContext().spanId);
+          yield i;
+        }
+        return "done";
+      }
+
+      const wrapped = tracer.observe(gen, "span", "async-gen");
+      const g = wrapped();
+
+      for await (const _ of g) {
+        /* consume */
+      }
+
+      const spans = await getSpans();
+      const genSpan = spans.find((s) => s.name === "async-gen");
+
+      expect(genSpan).toBeDefined();
+      expect(spanIds.length).toBe(3);
+      expect(spanIds.every((id) => id === genSpan?.spanContext().spanId)).toBe(
+        true,
+      );
+      expect(genSpan?.attributes["judgment.output"]).toBe('"done"');
+    });
+
+    test("child spans link to generator span", async () => {
+      // eslint-disable-next-line @typescript-eslint/require-await
+      async function* gen() {
+        tracer.with("child-in-gen", () => {});
+        yield 1;
+      }
+
+      const wrapped = tracer.observe(gen, "span", "parent-gen");
+      const g = wrapped();
+      for await (const _ of g) {
+        /* consume */
+      }
+
+      const spans = await getSpans();
+      const parent = spans.find((s) => s.name === "parent-gen");
+      const child = spans.find((s) => s.name === "child-in-gen");
+
+      expect(parent).toBeDefined();
+      expect(child).toBeDefined();
+      expect(child?.parentSpanContext?.spanId).toBe(
+        parent?.spanContext().spanId,
+      );
+    });
+
+    test("records error on throw", async () => {
+      // eslint-disable-next-line @typescript-eslint/require-await
+      async function* gen() {
+        yield 1;
+        throw new Error("gen error");
+      }
+
+      const wrapped = tracer.observe(gen, "span", "error-gen");
+      const g = wrapped();
+
+      try {
+        for await (const _ of g) {
+          /* consume */
+        }
+      } catch {
+        /* expected */
+      }
+
+      const span = await findSpanByName("error-gen");
+      expect(span?.status.code).toBe(SpanStatusCode.ERROR);
+    });
+
+    test("captures output on early return", async () => {
+      // eslint-disable-next-line @typescript-eslint/require-await
+      async function* gen() {
+        yield 1;
+        yield 2;
+        return "final";
+      }
+
+      const wrapped = tracer.observe(gen, "span", "return-gen");
+      const g = wrapped();
+
+      await g.next();
+      await g.return("early");
+
+      const span = await findSpanByName("return-gen");
+      expect(span?.attributes["judgment.output"]).toBe('"early"');
+    });
+  });
+
+  describe("observe() sync generators", () => {
+    test("preserves context across yields", async () => {
+      const spanIds: (string | undefined)[] = [];
+
+      function* gen() {
+        for (let i = 0; i < 3; i++) {
+          spanIds.push(trace.getActiveSpan()?.spanContext().spanId);
+          yield i;
+        }
+        return "done";
+      }
+
+      const wrapped = tracer.observe(gen, "span", "sync-gen");
+      const g = wrapped();
+
+      for (const _ of g) {
+        /* consume */
+      }
+
+      const spans = await getSpans();
+      const genSpan = spans.find((s) => s.name === "sync-gen");
+
+      expect(genSpan).toBeDefined();
+      expect(spanIds.length).toBe(3);
+      expect(spanIds.every((id) => id === genSpan?.spanContext().spanId)).toBe(
+        true,
+      );
+      expect(genSpan?.attributes["judgment.output"]).toBe('"done"');
+    });
+
+    test("child spans link to generator span", async () => {
+      function* gen() {
+        tracer.with("sync-child", () => {});
+        yield 1;
+      }
+
+      const wrapped = tracer.observe(gen, "span", "sync-parent");
+      const g = wrapped();
+      for (const _ of g) {
+        /* consume */
+      }
+
+      const spans = await getSpans();
+      const parent = spans.find((s) => s.name === "sync-parent");
+      const child = spans.find((s) => s.name === "sync-child");
+
+      expect(parent).toBeDefined();
+      expect(child).toBeDefined();
+      expect(child?.parentSpanContext?.spanId).toBe(
+        parent?.spanContext().spanId,
+      );
+    });
+
+    test("records error on throw", async () => {
+      function* gen() {
+        yield 1;
+        throw new Error("sync gen error");
+      }
+
+      const wrapped = tracer.observe(gen, "span", "sync-error-gen");
+      const g = wrapped();
+
+      try {
+        for (const _ of g) {
+          /* consume */
+        }
+      } catch {
+        /* expected */
+      }
+
+      const span = await findSpanByName("sync-error-gen");
+      expect(span?.status.code).toBe(SpanStatusCode.ERROR);
+    });
+  });
 });
