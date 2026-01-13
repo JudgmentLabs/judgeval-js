@@ -330,6 +330,23 @@ export abstract class BaseTracer {
     );
   }
 
+  /**
+   * Wraps a function to automatically trace all its invocations.
+   *
+   * Returns a new function that, when called, will automatically create a span, capture input
+   * arguments, execute the original function, capture the output, and handle errors. The span
+   * is automatically ended after the function completes.
+   *
+   * Supports both synchronous and asynchronous functions. Input arguments are serialized and
+   * stored as span attributes, and the return value is captured as output.
+   *
+   * @param func - The function to wrap with automatic tracing
+   * @param spanType - The type of span to create (default: "span"). Common values: "span", "llm", "tool"
+   * @param spanName - Optional custom name for the span. Defaults to the function name
+   * @param options - Optional span configuration
+   * @param ctx - Optional context to use as parent. Defaults to the active context
+   * @returns A wrapped version of the function that creates spans on each invocation
+   */
   observe<TArgs extends unknown[], TResult>(
     func: (...args: TArgs) => TResult,
     spanType?: string,
@@ -341,11 +358,15 @@ export abstract class BaseTracer {
     func: (...args: TArgs) => AsyncGenerator<T, TReturn, TNext>,
     spanType?: string,
     spanName?: string | null,
+    options?: SpanOptions,
+    ctx?: Context,
   ): (...args: TArgs) => AsyncGenerator<T, TReturn, TNext>;
   observe<TArgs extends unknown[], T, TReturn, TNext>(
     func: (...args: TArgs) => Generator<T, TReturn, TNext>,
     spanType?: string,
     spanName?: string | null,
+    options?: SpanOptions,
+    ctx?: Context,
   ): (...args: TArgs) => Generator<T, TReturn, TNext>;
   observe<TArgs extends unknown[], TResult>(
     func: (...args: TArgs) => TResult,
@@ -357,15 +378,23 @@ export abstract class BaseTracer {
     const name = spanName ?? func.name;
 
     if (isAsyncGeneratorFunction(func)) {
-      return this.observeAsyncGenerator(func, spanType, name) as unknown as (
-        ...args: TArgs
-      ) => TResult;
+      return this.observeAsyncGenerator(
+        func,
+        spanType,
+        name,
+        options,
+        ctx,
+      ) as unknown as (...args: TArgs) => TResult;
     }
 
     if (isGeneratorFunction(func)) {
-      return this.observeGenerator(func, spanType, name) as unknown as (
-        ...args: TArgs
-      ) => TResult;
+      return this.observeGenerator(
+        func,
+        spanType,
+        name,
+        options,
+        ctx,
+      ) as unknown as (...args: TArgs) => TResult;
     }
 
     const tracer = this.getTracer();
@@ -435,10 +464,16 @@ export abstract class BaseTracer {
     func: (...args: TArgs) => AsyncGenerator<T, TReturn, TNext>,
     spanType: string,
     name: string,
+    options?: SpanOptions,
+    ctx?: Context,
   ): (...args: TArgs) => AsyncGenerator<T, TReturn, TNext> {
     return (...args: TArgs): AsyncGenerator<T, TReturn, TNext> => {
-      const parentContext = context.active();
-      const span = this.getTracer().startSpan(name, {}, parentContext);
+      const parentContext = ctx ?? context.active();
+      const span = this.getTracer().startSpan(
+        name,
+        options ?? {},
+        parentContext,
+      );
       const spanContext = trace.setSpan(parentContext, span);
 
       if (spanType) {
@@ -456,60 +491,73 @@ export abstract class BaseTracer {
 
       const generator = context.with(spanContext, () => func(...args));
 
-      return {
-        next: (
+      const wrappedNext = context.bind(
+        spanContext,
+        async (
           ...nextArgs: [] | [TNext]
-        ): Promise<IteratorResult<T, TReturn>> =>
-          context.with(spanContext, async () => {
-            try {
-              const result = await generator.next(...nextArgs);
-              if (result.done) {
-                span.end();
-              }
-              return result;
-            } catch (e) {
-              span.recordException(e as Error);
-              span.setStatus({
-                code: SpanStatusCode.ERROR,
-                message: String(e),
-              });
+        ): Promise<IteratorResult<T, TReturn>> => {
+          try {
+            const result = await generator.next(...nextArgs);
+            if (result.done) {
+              span.setAttribute(
+                AttributeKeys.JUDGMENT_OUTPUT,
+                this.serializer(result.value),
+              );
               span.end();
-              throw e;
             }
-          }),
-        return: (
+            return result;
+          } catch (e) {
+            span.recordException(e as Error);
+            span.setStatus({ code: SpanStatusCode.ERROR, message: String(e) });
+            span.end();
+            throw e;
+          }
+        },
+      );
+
+      const wrappedReturn = context.bind(
+        spanContext,
+        async (
           value: TReturn | PromiseLike<TReturn>,
-        ): Promise<IteratorResult<T, TReturn>> =>
-          context.with(spanContext, async () => {
-            try {
-              const result = await generator.return(value);
-              span.end();
-              return result;
-            } catch (e) {
-              span.recordException(e as Error);
-              span.setStatus({
-                code: SpanStatusCode.ERROR,
-                message: String(e),
-              });
-              span.end();
-              throw e;
-            }
-          }),
-        throw: (e: unknown): Promise<IteratorResult<T, TReturn>> =>
-          context.with(spanContext, async () => {
-            try {
-              const result = await generator.throw(e);
-              return result;
-            } catch (err) {
-              span.recordException(err as Error);
-              span.setStatus({
-                code: SpanStatusCode.ERROR,
-                message: String(err),
-              });
-              span.end();
-              throw err;
-            }
-          }),
+        ): Promise<IteratorResult<T, TReturn>> => {
+          try {
+            const result = await generator.return(value);
+            span.setAttribute(
+              AttributeKeys.JUDGMENT_OUTPUT,
+              this.serializer(result.value),
+            );
+            span.end();
+            return result;
+          } catch (e) {
+            span.recordException(e as Error);
+            span.setStatus({ code: SpanStatusCode.ERROR, message: String(e) });
+            span.end();
+            throw e;
+          }
+        },
+      );
+
+      const wrappedThrow = context.bind(
+        spanContext,
+        async (e: unknown): Promise<IteratorResult<T, TReturn>> => {
+          try {
+            return await generator.throw(e);
+          } catch (err) {
+            span.recordException(err as Error);
+            span.setStatus({
+              code: SpanStatusCode.ERROR,
+              message: String(err),
+            });
+            span.end();
+            throw err;
+          }
+        },
+      );
+
+      return {
+        next: wrappedNext,
+        return: wrappedReturn,
+        throw: wrappedThrow,
         [Symbol.asyncIterator]() {
           return this;
         },
@@ -521,10 +569,16 @@ export abstract class BaseTracer {
     func: (...args: TArgs) => Generator<T, TReturn, TNext>,
     spanType: string,
     name: string,
+    options?: SpanOptions,
+    ctx?: Context,
   ): (...args: TArgs) => Generator<T, TReturn, TNext> {
     return (...args: TArgs): Generator<T, TReturn, TNext> => {
-      const parentContext = context.active();
-      const span = this.getTracer().startSpan(name, {}, parentContext);
+      const parentContext = ctx ?? context.active();
+      const span = this.getTracer().startSpan(
+        name,
+        options ?? {},
+        parentContext,
+      );
       const spanContext = trace.setSpan(parentContext, span);
 
       if (spanType) {
@@ -542,56 +596,69 @@ export abstract class BaseTracer {
 
       const generator = context.with(spanContext, () => func(...args));
 
+      const wrappedNext = context.bind(
+        spanContext,
+        (...nextArgs: [] | [TNext]): IteratorResult<T, TReturn> => {
+          try {
+            const result = generator.next(...nextArgs);
+            if (result.done) {
+              span.setAttribute(
+                AttributeKeys.JUDGMENT_OUTPUT,
+                this.serializer(result.value),
+              );
+              span.end();
+            }
+            return result;
+          } catch (e) {
+            span.recordException(e as Error);
+            span.setStatus({ code: SpanStatusCode.ERROR, message: String(e) });
+            span.end();
+            throw e;
+          }
+        },
+      );
+
+      const wrappedReturn = context.bind(
+        spanContext,
+        (value: TReturn): IteratorResult<T, TReturn> => {
+          try {
+            const result = generator.return(value);
+            span.setAttribute(
+              AttributeKeys.JUDGMENT_OUTPUT,
+              this.serializer(result.value),
+            );
+            span.end();
+            return result;
+          } catch (e) {
+            span.recordException(e as Error);
+            span.setStatus({ code: SpanStatusCode.ERROR, message: String(e) });
+            span.end();
+            throw e;
+          }
+        },
+      );
+
+      const wrappedThrow = context.bind(
+        spanContext,
+        (e: unknown): IteratorResult<T, TReturn> => {
+          try {
+            return generator.throw(e);
+          } catch (err) {
+            span.recordException(err as Error);
+            span.setStatus({
+              code: SpanStatusCode.ERROR,
+              message: String(err),
+            });
+            span.end();
+            throw err;
+          }
+        },
+      );
+
       return {
-        next: (...nextArgs: [] | [TNext]): IteratorResult<T, TReturn> =>
-          context.with(spanContext, () => {
-            try {
-              const result = generator.next(...nextArgs);
-              if (result.done) {
-                span.end();
-              }
-              return result;
-            } catch (e) {
-              span.recordException(e as Error);
-              span.setStatus({
-                code: SpanStatusCode.ERROR,
-                message: String(e),
-              });
-              span.end();
-              throw e;
-            }
-          }),
-        return: (value: TReturn): IteratorResult<T, TReturn> =>
-          context.with(spanContext, () => {
-            try {
-              const result = generator.return(value);
-              span.end();
-              return result;
-            } catch (e) {
-              span.recordException(e as Error);
-              span.setStatus({
-                code: SpanStatusCode.ERROR,
-                message: String(e),
-              });
-              span.end();
-              throw e;
-            }
-          }),
-        throw: (e: unknown): IteratorResult<T, TReturn> =>
-          context.with(spanContext, () => {
-            try {
-              const result = generator.throw(e);
-              return result;
-            } catch (err) {
-              span.recordException(err as Error);
-              span.setStatus({
-                code: SpanStatusCode.ERROR,
-                message: String(err),
-              });
-              span.end();
-              throw err;
-            }
-          }),
+        next: wrappedNext,
+        return: wrappedReturn,
+        throw: wrappedThrow,
         [Symbol.iterator]() {
           return this;
         },
