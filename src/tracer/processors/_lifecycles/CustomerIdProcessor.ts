@@ -23,7 +23,9 @@ export class CustomerIdProcessor implements SpanProcessor {
     }
   }
 
-  onEnd(_span: ReadableSpan): void {}
+  onEnd(_span: ReadableSpan): void {
+    /* empty */
+  }
 
   shutdown(): Promise<void> {
     return Promise.resolve();
