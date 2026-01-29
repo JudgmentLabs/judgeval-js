@@ -20,6 +20,7 @@ import {
   JudgmentNodeTracerProvider,
   filterTracerParams,
 } from "./JudgmentNodeTracerProvider";
+import { getAll as getLifecycleProcessors } from "./processors/_lifecycles";
 
 export interface NodeTracerConfig {
   projectName: string;
@@ -114,6 +115,7 @@ export class NodeTracer extends BaseTracer {
       );
 
       const spanProcessors = [
+        ...getLifecycleProcessors(),
         this.getSpanProcessor(),
         ...(config?.spanProcessors ?? []),
       ];
