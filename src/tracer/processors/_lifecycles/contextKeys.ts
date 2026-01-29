@@ -7,6 +7,3 @@ export const CUSTOMER_ID_KEY = createContextKey(
 export const SESSION_ID_KEY = createContextKey(
   AttributeKeys.JUDGMENT_SESSION_ID,
 );
-export const PROJECT_ID_OVERRIDE_KEY = createContextKey(
-  AttributeKeys.JUDGMENT_PROJECT_ID_OVERRIDE,
-);

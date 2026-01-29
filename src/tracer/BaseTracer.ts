@@ -8,7 +8,7 @@ import {
   trace,
   type Tracer,
 } from "@opentelemetry/api";
-import type { ReadableSpan, SpanExporter } from "@opentelemetry/sdk-trace-base";
+import type { SpanExporter } from "@opentelemetry/sdk-trace-base";
 import { Example } from "../data/Example";
 import { JudgmentApiClient } from "../internal/api";
 import type {
@@ -168,37 +168,6 @@ export abstract class BaseTracer {
       return;
     }
     currentSpan.setAttribute(AttributeKeys.JUDGMENT_SESSION_ID, sessionId);
-  }
-
-  async overrideProject(projectName: string): Promise<void> {
-    const currentSpan = trace.getActiveSpan();
-    if (!currentSpan?.isRecording()) {
-      Logger.error(
-        "overrideProject() called outside of a span context. Ignoring.",
-      );
-      return;
-    }
-    const readableSpan = currentSpan as unknown as ReadableSpan;
-    if (readableSpan.parentSpanContext) {
-      Logger.error(
-        `overrideProject('${projectName}') called on non-root span. ` +
-          "Project override only allowed on root spans. Ignoring.",
-      );
-      return;
-    }
-    let resolvedId: string;
-    try {
-      resolvedId = await resolveProjectId(this.apiClient, projectName);
-    } catch {
-      Logger.error(
-        `Failed to resolve project '${projectName}' for override. Using default.`,
-      );
-      return;
-    }
-    currentSpan.setAttribute(
-      AttributeKeys.JUDGMENT_PROJECT_ID_OVERRIDE,
-      resolvedId,
-    );
   }
 
   asyncEvaluate(scorer: BaseScorer, example: Example): void {
