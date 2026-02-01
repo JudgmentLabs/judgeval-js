@@ -3,6 +3,8 @@ name: Notify Docs Update
 on:
   push:
     branches: [main]
+    paths:
+    - "src/*"
 
 jobs:
   notify-docs:
