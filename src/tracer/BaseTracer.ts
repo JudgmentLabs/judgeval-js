@@ -163,7 +163,7 @@ export abstract class BaseTracer {
   }
 
   setSessionId(sessionId: string): void {
-    const currentSpan = this.getSampledSpan();
+    const currentSpan = trace.getActiveSpan();
     if (!currentSpan) {
       return;
     }
