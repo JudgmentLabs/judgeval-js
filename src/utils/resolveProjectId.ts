@@ -7,7 +7,8 @@ export async function resolveProjectId(
   client: JudgmentApiClient,
   projectName: string,
 ): Promise<string> {
-  const cached = cache.get(projectName);
+  const cacheKey = `org:${client.getOrganizationId()}:project:${projectName}`;
+  const cached = cache.get(cacheKey);
   if (cached) {
     return cached;
   }
@@ -18,6 +19,6 @@ export async function resolveProjectId(
     throw new Error(`Project ID not found for project: ${projectName}`);
   }
   Logger.info(`Resolved project ID: ${projectId}`);
-  cache.set(projectName, projectId);
+  cache.set(cacheKey, projectId);
   return projectId;
 }
