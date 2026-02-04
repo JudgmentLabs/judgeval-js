@@ -5,6 +5,7 @@ export enum AttributeKeys {
   JUDGMENT_OFFLINE_MODE = "judgment.offline_mode",
   JUDGMENT_UPDATE_ID = "judgment.update_id",
   JUDGMENT_CUSTOMER_ID = "judgment.customer_id",
+  JUDGMENT_SESSION_ID = "judgment.session_id",
   JUDGMENT_AGENT_ID = "judgment.agent_id",
   JUDGMENT_PARENT_AGENT_ID = "judgment.parent_agent_id",
   JUDGMENT_AGENT_CLASS_NAME = "judgment.agent_class_name",

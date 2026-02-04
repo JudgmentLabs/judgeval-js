@@ -5,6 +5,7 @@ import { JudgmentApiClient } from "../internal/api";
 import { Logger } from "../utils/logger";
 import { VERSION } from "../version";
 import { BaseTracer, type Serializer } from "./BaseTracer";
+import { getAll as getLifecycleProcessors } from "./processors/_lifecycles";
 
 export interface BrowserTracerConfig {
   projectName: string;
@@ -77,11 +78,14 @@ export class BrowserTracer extends BaseTracer {
         ...this.resourceAttributes,
       };
 
-      const spanProcessor = this.getSpanProcessor();
+      const spanProcessors = [
+        ...getLifecycleProcessors(),
+        this.getSpanProcessor(),
+      ];
 
       this.webTracerProvider = new WebTracerProvider({
         resource: resourceFromAttributes(attributes),
-        spanProcessors: [spanProcessor],
+        spanProcessors,
         sampler: this.sampler,
       });
 
