@@ -13,8 +13,6 @@ import { Example } from "../data/Example";
 import { JudgmentApiClient } from "../internal/api";
 import type {
   ExampleEvaluationRun,
-  ResolveProjectNameRequest,
-  ResolveProjectNameResponse,
   TraceEvaluationRun,
 } from "../internal/api/models";
 import { AttributeKeys } from "../judgmentAttributeKeys";
@@ -24,6 +22,7 @@ import {
   isGeneratorFunction,
 } from "../utils/generators";
 import { Logger } from "../utils/logger";
+import { resolveProjectId } from "../utils/resolveProjectId";
 import { JudgmentSpanExporter, NoOpSpanExporter } from "./exporters";
 import { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
 import { NoOpSpanProcessor } from "./processors/NoOpJudgmentSpanProcessor";
@@ -57,8 +56,7 @@ export abstract class BaseTracer {
 
   protected async resolveAndSetProjectId(): Promise<void> {
     try {
-      this.projectId = await this.resolveProjectId(this.projectName);
-      Logger.info(`Successfully resolved project ID: ${this.projectId}`);
+      this.projectId = await resolveProjectId(this.apiClient, this.projectName);
     } catch {
       Logger.error(
         `Failed to resolve project ${this.projectName}, ` +
@@ -154,6 +152,22 @@ export abstract class BaseTracer {
 
   setOutput(outputData: unknown): void {
     this.setAttribute(AttributeKeys.JUDGMENT_OUTPUT, outputData);
+  }
+
+  setCustomerId(customerId: string): void {
+    const currentSpan = trace.getActiveSpan();
+    if (!currentSpan) {
+      return;
+    }
+    currentSpan.setAttribute(AttributeKeys.JUDGMENT_CUSTOMER_ID, customerId);
+  }
+
+  setSessionId(sessionId: string): void {
+    const currentSpan = trace.getActiveSpan();
+    if (!currentSpan) {
+      return;
+    }
+    currentSpan.setAttribute(AttributeKeys.JUDGMENT_SESSION_ID, sessionId);
   }
 
   asyncEvaluate(scorer: BaseScorer, example: Example): void {
@@ -664,25 +678,6 @@ export abstract class BaseTracer {
         },
       } as Generator<T, TReturn, TNext>;
     };
-  }
-
-  private async resolveProjectId(name: string): Promise<string> {
-    try {
-      Logger.info(`Resolving project ID for project: ${name}`);
-      const request: ResolveProjectNameRequest = { project_name: name };
-      const response: ResolveProjectNameResponse =
-        await this.apiClient.projectsResolve(request);
-      const projectId = response.project_id;
-      if (!projectId) {
-        throw new Error(`Project ID not found for project: ${name}`);
-      }
-      Logger.info(`Resolved project ID: ${projectId}`);
-      return projectId;
-    } catch (error) {
-      throw new Error(
-        `Failed to resolve project ID: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
   }
 
   private buildEndpoint(baseUrl: string): string {
