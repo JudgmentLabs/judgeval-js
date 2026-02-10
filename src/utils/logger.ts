@@ -1,5 +1,17 @@
 import { JUDGMENT_LOG_LEVEL } from "../env";
 
+type Writer = (msg: string) => void;
+
+const _process = globalThis.process as NodeJS.Process | undefined;
+
+const stdoutWriter: Writer = _process
+  ? (msg) => { _process.stdout.write(msg + "\n"); }
+  : (msg) => { console.log(msg); };
+
+const stderrWriter: Writer = _process
+  ? (msg) => { _process.stderr.write(msg + "\n"); }
+  : (msg) => { console.error(msg); };
+
 export class Logger {
   private static readonly RESET = "\x1b[0m";
   private static readonly RED = "\x1b[31m";
@@ -20,8 +32,8 @@ export class Logger {
 
   private static initialize(): void {
     if (!Logger.initialized) {
-      const noColor = process.env.JUDGMENT_NO_COLOR;
-      Logger.useColor = !noColor && process.stdout.isTTY;
+      const noColor = _process?.env.JUDGMENT_NO_COLOR;
+      Logger.useColor = !noColor && !!_process?.stdout.isTTY;
 
       const logLevel = JUDGMENT_LOG_LEVEL.toLowerCase();
       if (logLevel) {
@@ -75,9 +87,8 @@ export class Logger {
       formattedMessage = `${color}${formattedMessage}${Logger.RESET}`;
     }
 
-    const output =
-      level >= Logger.Level.ERROR ? process.stderr : process.stdout;
-    output.write(formattedMessage + "\n");
+    const write = level >= Logger.Level.ERROR ? stderrWriter : stdoutWriter;
+    write(formattedMessage);
   }
 
   public static debug(message: string): void {
