@@ -1,4 +1,3 @@
-import { randomUUID } from "crypto";
 import type { Example as APIExample } from "../internal/api/models";
 
 export interface ExampleConfig {
@@ -15,7 +14,7 @@ export class Example {
   private properties: Record<string, unknown>;
 
   private constructor(config: ExampleConfig = {}) {
-    this.exampleId = config.exampleId ?? randomUUID();
+    this.exampleId = config.exampleId ?? crypto.randomUUID();
     this.createdAt = config.createdAt ?? new Date().toISOString();
     this.name = config.name ?? null;
     this.properties = config.properties ?? {};

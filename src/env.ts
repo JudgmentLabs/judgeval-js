@@ -1,7 +1,9 @@
+const _process = globalThis.process as NodeJS.Process | undefined;
+
 function getEnvVar(varName: string): string | null;
 function getEnvVar(varName: string, defaultValue: string): string;
 function getEnvVar(varName: string, defaultValue?: string): string | null {
-  const value = process.env[varName];
+  const value = _process?.env[varName];
   if (!value) {
     return defaultValue ?? null;
   }
