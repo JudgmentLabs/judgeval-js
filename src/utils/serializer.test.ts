@@ -48,11 +48,11 @@ describe("safeStringify", () => {
     expect(b.a).toBe(a);
   });
 
-  test("shared non-circular references", () => {
+  test("shared non-circular references are preserved", () => {
     const shared = { x: 1 };
     const obj = { a: shared, b: shared };
     const result = safeStringify(obj);
-    expect(result).toBe('{"a":{"x":1},"b":"[Circular]"}');
+    expect(result).toBe('{"a":{"x":1},"b":{"x":1}}');
   });
 
   test("bigint", () => {
