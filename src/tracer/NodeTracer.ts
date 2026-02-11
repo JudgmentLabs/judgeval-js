@@ -14,8 +14,9 @@ import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { JudgmentApiClient } from "../internal/api";
 import { ResourceKeys } from "../judgmentAttributeKeys";
 import { Logger } from "../utils/logger";
+import { type Serializer } from "../utils/serializer";
 import { VERSION } from "../version";
-import { BaseTracer, type Serializer } from "./BaseTracer";
+import { BaseTracer } from "./BaseTracer";
 import {
   JudgmentNodeTracerProvider,
   filterTracerParams,

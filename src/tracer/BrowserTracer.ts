@@ -4,7 +4,8 @@ import { WebTracerProvider } from "@opentelemetry/sdk-trace-web";
 import { JudgmentApiClient } from "../internal/api";
 import { Logger } from "../utils/logger";
 import { VERSION } from "../version";
-import { BaseTracer, type Serializer } from "./BaseTracer";
+import type { Serializer } from "../utils/serializer";
+import { BaseTracer } from "./BaseTracer";
 import { getAll as getLifecycleProcessors } from "./processors/_lifecycles";
 
 export interface BrowserTracerConfig {

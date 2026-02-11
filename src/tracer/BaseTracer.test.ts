@@ -9,6 +9,7 @@ import {
 } from "@opentelemetry/sdk-trace-base";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { JudgmentApiClient } from "../internal/api";
+import { safeStringify } from "../utils/serializer";
 import { BaseTracer } from "./BaseTracer";
 
 class TestTracer extends BaseTracer {
@@ -47,7 +48,7 @@ describe("BaseTracer - Span Linking and Context Propagation", () => {
       "test-project",
       false,
       mockApiClient,
-      JSON.stringify,
+      safeStringify,
     ]) as TestTracer;
 
     tracer.getTracer = () => provider.getTracer(BaseTracer.TRACER_NAME);
