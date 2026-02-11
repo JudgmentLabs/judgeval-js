@@ -23,11 +23,10 @@ import {
 } from "../utils/generators";
 import { Logger } from "../utils/logger";
 import { resolveProjectId } from "../utils/resolveProjectId";
+import { safeStringify, type Serializer } from "../utils/serializer";
 import { JudgmentSpanExporter, NoOpSpanExporter } from "./exporters";
 import { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
 import { NoOpSpanProcessor } from "./processors/NoOpJudgmentSpanProcessor";
-
-export type Serializer = (obj: unknown) => string;
 
 export abstract class BaseTracer {
   static readonly TRACER_NAME = "judgeval";
@@ -44,7 +43,7 @@ export abstract class BaseTracer {
     enableEvaluation: boolean,
     apiClient: JudgmentApiClient,
     serializer: Serializer,
-    jsonEncoder: (obj: unknown) => string = JSON.stringify,
+    jsonEncoder: (obj: unknown) => string = safeStringify,
   ) {
     this.projectName = projectName;
     this.enableEvaluation = enableEvaluation;

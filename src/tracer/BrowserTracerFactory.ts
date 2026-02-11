@@ -1,4 +1,5 @@
 import { JudgmentApiClient } from "../internal/api";
+import { safeStringify } from "../utils/serializer";
 import { BrowserTracer, type BrowserTracerConfig } from "./BrowserTracer";
 
 export class BrowserTracerFactory {
@@ -18,7 +19,7 @@ export class BrowserTracerFactory {
         projectName: config.projectName,
         enableEvaluation: config.enableEvaluation ?? true,
         enableMonitoring: config.enableMonitoring ?? false,
-        serializer: config.serializer ?? JSON.stringify,
+        serializer: config.serializer ?? safeStringify,
         resourceAttributes: config.resourceAttributes ?? {},
         sampler: config.sampler,
         initialize: config.initialize ?? true,
