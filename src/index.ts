@@ -10,6 +10,14 @@ export {
 } from "./data";
 
 export {
+  BaseTracer,
+  BrowserTracer,
+  JudgmentSpanExporter,
+  NodeTracer,
+  NoOpSpanExporter,
+} from "./trace";
+
+export {
   AnswerCorrectnessScorer,
   AnswerRelevancyScorer,
   APIScorer,
@@ -27,19 +35,6 @@ export {
   type FaithfulnessScorerConfig,
   type PromptScorerConfig,
 } from "./scorers";
-
-export {
-  BaseTracer,
-  BrowserTracer,
-  BrowserTracerFactory,
-  JudgmentSpanExporter,
-  NodeTracer,
-  NodeTracerFactory,
-  NoOpSpanExporter,
-  type BrowserTracerConfig,
-  type NodeTracerConfig,
-  type Serializer,
-} from "./tracer";
 
 export {
   Evaluation,
