@@ -19,7 +19,9 @@ export async function resolveProjectId(
   }
   const request = (async (): Promise<string> => {
     Logger.info(`Resolving project ID for project: ${projectName}`);
-    const response = await client.projectsResolve({ project_name: projectName });
+    const response = await client.projectsResolve({
+      project_name: projectName,
+    });
     const projectId = response.project_id;
     if (!projectId) {
       throw new Error(`Project ID not found for project: ${projectName}`);
