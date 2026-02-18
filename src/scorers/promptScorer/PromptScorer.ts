@@ -1,5 +1,5 @@
 import { APIScorerType } from "../../data/APIScorerType";
-import type { ScorerConfig } from "../../internal/api/models";
+import type { ScorerConfig } from "../../internal/api";
 import { BaseScorer } from "../BaseScorer";
 
 export interface PromptScorerConfig {

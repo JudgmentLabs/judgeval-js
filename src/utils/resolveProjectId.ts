@@ -19,7 +19,7 @@ export async function resolveProjectId(
   }
   const request = (async (): Promise<string> => {
     Logger.info(`Resolving project ID for project: ${projectName}`);
-    const response = await client.projectsResolve({
+    const response = await client.postV1projectsResolve({
       project_name: projectName,
     });
     const projectId = response.project_id;

@@ -1,11 +1,8 @@
 import { JUDGMENT_DEFAULT_GPT_MODEL } from "../../env";
 import { JudgmentApiClient } from "../../internal/api";
-import type {
-  PromptScorer as APIPromptScorer,
-  FetchPromptScorersRequest,
-  FetchPromptScorersResponse,
-} from "../../internal/api/models";
+import type { PromptScorer as APIPromptScorer } from "../../internal/api";
 import { Logger } from "../../utils";
+import { resolveProjectId } from "../../utils/resolveProjectId";
 import { PromptScorer } from "./PromptScorer";
 
 export class PromptScorerFactory {
@@ -18,7 +15,7 @@ export class PromptScorerFactory {
     this.isTrace = isTrace;
   }
 
-  async get(name: string): Promise<PromptScorer | null> {
+  async get(projectName: string, name: string): Promise<PromptScorer | null> {
     const cacheKey = this.getCacheKey(name);
     const cached = PromptScorerFactory.cache.get(cacheKey);
 
@@ -27,12 +24,12 @@ export class PromptScorerFactory {
     }
 
     try {
-      const request: FetchPromptScorersRequest = {
-        names: [name],
-      };
-
-      const response: FetchPromptScorersResponse =
-        await this.client.fetchScorers(request);
+      const projectId = await resolveProjectId(this.client, projectName);
+      const response = await this.client.getV1projectsScorers(
+        projectId,
+        name,
+        this.isTrace ? "true" : "false",
+      );
 
       if (response.scorers.length === 0) {
         throw new Error(`Failed to fetch prompt scorer '${name}': not found`);

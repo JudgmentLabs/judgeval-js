@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import type { Example as APIExample } from "../internal/api/models";
+import type { Example as APIExample } from "../internal/api";
 
 export interface ExampleConfig {
   name?: string;

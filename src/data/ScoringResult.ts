@@ -1,7 +1,7 @@
 import type {
   ScoringResult as APIScoringResult,
-  OtelTraceSpan,
-} from "../internal/api/models";
+  TraceSpan,
+} from "../internal/api";
 import { Example } from "./Example";
 import { ScorerData } from "./ScorerData";
 
@@ -9,7 +9,7 @@ export interface ScoringResultConfig {
   success?: boolean;
   scorersData?: ScorerData[];
   name?: string;
-  dataObject?: OtelTraceSpan | Example;
+  dataObject?: TraceSpan | Example;
   traceId?: string;
   runDuration?: number;
   evaluationCost?: number;
@@ -19,7 +19,7 @@ export class ScoringResult {
   success?: boolean | null;
   scorersData?: ScorerData[];
   name?: string | null;
-  dataObject?: OtelTraceSpan | Example | null;
+  dataObject?: TraceSpan | Example | null;
   traceId?: string | null;
   runDuration?: number | null;
   evaluationCost?: number | null;
