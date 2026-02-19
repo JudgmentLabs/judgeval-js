@@ -2,6 +2,7 @@ import { type Span, SpanStatusCode, type Tracer } from "@opentelemetry/api";
 import type { Instrumentation } from "@opentelemetry/instrumentation";
 import type { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
 import { Example } from "../data";
+import { JudgmentApiClient } from "../internal/api";
 import { AttributeKeys } from "../judgmentAttributeKeys";
 import { parseFunctionArgs } from "../utils/annotate";
 import { Logger } from "../utils/logger";
@@ -48,6 +49,7 @@ export abstract class BaseTracer {
   environment: string | null;
   serializer: Serializer;
   _tracerProvider: BasicTracerProvider;
+  _client: JudgmentApiClient | null = null;
 
   // ------------------------------------------------------------------ //
   //  Initialization                                                    //
@@ -434,13 +436,14 @@ export abstract class BaseTracer {
     if (!tags || (Array.isArray(tags) && tags.length === 0)) return;
     const proxy = BaseTracer._getProxyProvider();
     const tracer = proxy.getActiveTracer();
-    if (!tracer?.projectId) return;
+    if (!tracer?.projectId || !tracer._client) return;
     const ids = BaseTracer._getCurrentTraceAndSpanId();
     if (!ids) return;
-    void Promise.resolve()
-      .then(() => {
-        void tags;
-        void ids;
+    const [traceId] = ids;
+    const tagArray = Array.isArray(tags) ? tags : [tags];
+    tracer._client
+      .postV1projectsTracesByTraceIdTags(tracer.projectId, traceId, {
+        tags: tagArray,
       })
       .catch((err: unknown) => {
         Logger.error(`tag failed: ${String(err)}`);

@@ -18,7 +18,6 @@ import { NoOpSpanProcessor } from "./processors/NoOpSpanProcessor";
 import type { TracerConfig } from "./types";
 
 export class NodeTracer extends BaseTracer {
-  private _client: JudgmentApiClient | null = null;
   private _spanExporter: JudgmentSpanExporter | null = null;
   private _spanProcessor: JudgmentSpanProcessor | null = null;
   private _enableMonitoring: boolean;
