@@ -1,4 +1,15 @@
-import type { ScorerData as APIScorerData } from "../internal/api/models";
+export interface APIScorerData {
+  name: string;
+  threshold: number;
+  success: boolean;
+  score?: number;
+  reason?: string;
+  strict_mode?: boolean;
+  evaluation_model?: string;
+  error?: string;
+  additional_metadata?: Record<string, unknown>;
+  id?: string;
+}
 
 export interface ScorerDataConfig {
   name?: string;

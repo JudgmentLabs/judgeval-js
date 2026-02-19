@@ -3,23 +3,15 @@
 import * as fs from "fs";
 import * as http from "http";
 import * as https from "https";
-import * as path from "path";
 
-const JUDGEVAL_PATHS = [
-  "/log_eval_results/",
-  "/fetch_experiment_run/",
-  "/add_to_run_eval_queue/examples",
-  "/add_to_run_eval_queue/traces",
-  "/get_evaluation_status/",
-  "/save_scorer/",
-  "/fetch_scorers/",
-  "/scorer_exists/",
-  "/projects/resolve/",
-];
+const INCLUDE_PREFIXES = ["/v1", "/otel"];
 
-const HTTP_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
-const SUCCESS_STATUS_CODES = new Set(["200", "201"]);
-const SCHEMA_REF_PREFIX = "#/components/schemas/";
+interface OpenAPISpec {
+  paths: Record<string, Record<string, any>>;
+  components?: {
+    schemas?: Record<string, any>;
+  };
+}
 
 interface QueryParam {
   name: string;
@@ -27,725 +19,477 @@ interface QueryParam {
   type: string;
 }
 
+interface PathParam {
+  name: string;
+  snakeName: string;
+}
+
 interface MethodInfo {
   name: string;
   path: string;
   method: string;
-  request_type?: string;
-  query_params: QueryParam[];
-  response_type: string;
+  requestType?: string;
+  pathParams: PathParam[];
+  queryParams: QueryParam[];
+  responseType: string;
 }
 
-interface OpenAPISpec {
-  paths: Record<string, Record<string, any>>;
-  components: {
-    schemas: Record<string, any>;
-  };
-}
-
-function resolveRef(ref: string): string {
-  if (!ref.startsWith(SCHEMA_REF_PREFIX)) {
-    throw new Error(`Reference must start with ${SCHEMA_REF_PREFIX}`);
-  }
-  return ref.replace(SCHEMA_REF_PREFIX, "");
+function toSnakeCase(name: string): string {
+  return name
+    .replace(/([a-z])([A-Z])/g, "$1_$2")
+    .replace(/([A-Z])([A-Z][a-z])/g, "$1_$2")
+    .toLowerCase();
 }
 
 function toCamelCase(name: string): string {
-  const parts = name.replace(/-/g, "_").split("_");
-  return (
-    parts[0] +
-    parts
-      .slice(1)
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join("")
-  );
+  return name.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 }
 
-function toClassName(name: string): string {
-  const camelCase = toCamelCase(name);
-  return camelCase.charAt(0).toUpperCase() + camelCase.slice(1);
+function toPascalCase(name: string): string {
+  if (name.includes("_")) {
+    return name
+      .split("_")
+      .map((p) => (p ? p[0].toUpperCase() + p.slice(1) : ""))
+      .join("");
+  }
+  return name;
 }
 
-function getMethodNameFromPath(path: string, method: string): string {
-  const cleanPath = path
-    .replace(/^\//, "")
-    .replace(/\//g, "_")
-    .replace(/-/g, "_");
-  return toCamelCase(cleanPath);
-}
+function collectSchemasWithId(spec: OpenAPISpec): Map<string, any> {
+  const schemasById = new Map<string, any>();
 
-function getQueryParameters(operation: any): QueryParam[] {
-  return (operation.parameters || [])
-    .filter((param: any) => param.in === "query")
-    .map((param: any) => ({
-      name: param.name,
-      required: param.required || false,
-      type: param.schema?.type || "string",
-    }));
-}
+  function collect(value: any): void {
+    if (typeof value !== "object" || value === null) return;
 
-function getSchemaFromContent(content: any): string | null {
-  if (!content || typeof content !== "object") {
-    return null;
-  }
-
-  if (content["application/json"]) {
-    const schema = content["application/json"].schema || {};
-    if (schema.$ref) {
-      return resolveRef(schema.$ref);
+    if (Array.isArray(value)) {
+      for (const item of value) collect(item);
+      return;
     }
 
-    if (Object.keys(schema).length === 0) {
-      return "EMPTY_SCHEMA";
+    if ("$id" in value && !schemasById.has(value.$id)) {
+      const { $id, ...schemaWithoutId } = value;
+      schemasById.set($id, schemaWithoutId);
     }
 
-    if (schema.type) {
-      return null; // For now, we only handle $ref schemas
+    if (!("$ref" in value)) {
+      for (const v of Object.values(value)) collect(v);
     }
   }
 
-  for (const contentType of Object.keys(content)) {
-    if (content[contentType] && content[contentType].schema) {
-      const schema = content[contentType].schema;
-      if (schema.$ref) {
-        return resolveRef(schema.$ref);
-      }
-
-      if (Object.keys(schema).length === 0) {
-        return "EMPTY_SCHEMA";
-      }
-    }
-  }
-
-  return null;
-}
-
-function getRequestSchema(operation: any): string | null {
-  const requestBody = operation.requestBody;
-  return requestBody ? getSchemaFromContent(requestBody.content || {}) : null;
-}
-
-function getResponseSchema(operation: any): string | null {
-  const responses = operation.responses || {};
-  const SUCCESS_STATUS_CODES = new Set(["200", "201"]);
-
-  for (const statusCode of SUCCESS_STATUS_CODES) {
-    if (statusCode in responses) {
-      const response = responses[statusCode];
-      const result = getSchemaFromContent(response.content || {});
-      if (result) return result;
-    }
-  }
-
-  for (const [statusCode, response] of Object.entries(responses)) {
-    if (
-      statusCode.startsWith("2") &&
-      response &&
-      typeof response === "object" &&
-      "content" in response
-    ) {
-      const result = getSchemaFromContent(response.content || {});
-      if (result) return result;
-    }
-  }
-
-  for (const [statusCode, response] of Object.entries(responses)) {
-    if (
-      !statusCode.startsWith("4") &&
-      !statusCode.startsWith("5") &&
-      response &&
-      typeof response === "object" &&
-      "content" in response
-    ) {
-      const result = getSchemaFromContent(response.content || {});
-      if (result) return result;
-    }
-  }
-
-  return null;
-}
-
-function extractDependencies(
-  schema: any,
-  visited: Set<string> = new Set()
-): Set<string> {
-  const schemaKey = JSON.stringify(schema, Object.keys(schema).sort());
-  if (visited.has(schemaKey)) {
-    return new Set();
-  }
-
-  visited.add(schemaKey);
-  const dependencies = new Set<string>();
-
-  if (schema.$ref) {
-    return new Set([resolveRef(schema.$ref)]);
-  }
-
-  for (const key of ["anyOf", "oneOf", "allOf"]) {
-    if (schema[key]) {
-      for (const s of schema[key]) {
-        for (const dep of extractDependencies(s, visited)) {
-          dependencies.add(dep);
-        }
-      }
-    }
-  }
-
-  if (schema.properties) {
-    for (const propSchema of Object.values(schema.properties)) {
-      for (const dep of extractDependencies(propSchema as any, visited)) {
-        dependencies.add(dep);
-      }
-    }
-  }
-
-  if (schema.items) {
-    for (const dep of extractDependencies(schema.items, visited)) {
-      dependencies.add(dep);
-    }
-  }
-
-  if (
-    schema.additionalProperties &&
-    typeof schema.additionalProperties === "object"
-  ) {
-    for (const dep of extractDependencies(
-      schema.additionalProperties,
-      visited
-    )) {
-      dependencies.add(dep);
-    }
-  }
-
-  return dependencies;
-}
-
-function findUsedSchemas(spec: OpenAPISpec): Set<string> {
-  const usedSchemas = new Set<string>();
-  const schemas = spec.components?.schemas || {};
-  const HTTP_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
-
-  for (const path of JUDGEVAL_PATHS) {
-    if (path in spec.paths) {
-      for (const [method, operation] of Object.entries(spec.paths[path])) {
-        if (HTTP_METHODS.has(method.toUpperCase())) {
-          const requestSchema = getRequestSchema(operation);
-          const responseSchema = getResponseSchema(operation);
-
-          if (requestSchema) usedSchemas.add(requestSchema);
-          if (responseSchema) usedSchemas.add(responseSchema);
-        }
-      }
-    }
-  }
-
-  let changed = true;
-  while (changed) {
-    changed = false;
-    const newSchemas = new Set<string>();
-
-    for (const schemaName of usedSchemas) {
-      if (schemaName in schemas) {
-        const deps = extractDependencies(schemas[schemaName]);
-        for (const dep of deps) {
-          if (dep in schemas && !usedSchemas.has(dep)) {
-            newSchemas.add(dep);
-            changed = true;
-          }
-        }
-      }
-    }
-
-    for (const schema of newSchemas) {
-      usedSchemas.add(schema);
-    }
-  }
-
-  return usedSchemas;
+  collect(spec);
+  return schemasById;
 }
 
 function getTypeScriptType(
   schema: any,
-  referencedTypes: Set<string> = new Set(),
-  visited: Set<string> = new Set()
+  schemasById: Map<string, any>
 ): string {
-  if (!schema) {
-    return "any";
+  if (!schema || typeof schema !== "object") return "unknown";
+
+  if ("$ref" in schema) {
+    const ref = schema.$ref as string;
+    const name = ref.replace("#/components/schemas/", "");
+    return toPascalCase(name);
   }
 
-  if (schema.$ref) {
-    const typeName = toClassName(resolveRef(schema.$ref));
-    if (visited.has(typeName)) {
-      return typeName; // Avoid circular references
-    }
-    referencedTypes.add(typeName);
-    return typeName;
+  if ("$id" in schema) {
+    return schema.$id;
   }
 
-  if (schema.anyOf) {
-    const unions = schema.anyOf.map((s: any) =>
-      getTypeScriptType(s, referencedTypes, visited)
-    );
-    return `(${unions.join(" | ")})`;
-  }
+  for (const key of ["anyOf", "oneOf", "allOf"]) {
+    if (key in schema && Array.isArray(schema[key])) {
+      const types: string[] = [];
+      let hasNull = false;
 
-  if (schema.oneOf) {
-    const unions = schema.oneOf.map((s: any) =>
-      getTypeScriptType(s, referencedTypes, visited)
-    );
-    return `(${unions.join(" | ")})`;
-  }
-
-  if (schema.allOf) {
-    const intersections = schema.allOf.map((s: any) =>
-      getTypeScriptType(s, referencedTypes, visited)
-    );
-    return `(${intersections.join(" & ")})`;
-  }
-
-  if (schema.enum) {
-    if (schema.enum.length === 0) {
-      return "never";
-    }
-    const enumValues = schema.enum
-      .map((v: any) => (typeof v === "string" ? `"${v}"` : String(v)))
-      .join(" | ");
-    return enumValues;
-  }
-
-  if (!schema.type) {
-    if (schema.properties) {
-      return generateObjectType(schema, referencedTypes, visited);
-    }
-
-    if (schema.items) {
-      return `Array<${getTypeScriptType(
-        schema.items,
-        referencedTypes,
-        visited
-      )}>`;
-    }
-
-    if (schema.additionalProperties === true) {
-      return "Record<string, any>";
-    } else if (
-      schema.additionalProperties &&
-      typeof schema.additionalProperties === "object"
-    ) {
-      return `Record<string, ${getTypeScriptType(
-        schema.additionalProperties,
-        referencedTypes,
-        visited
-      )}>`;
-    }
-
-    return "any";
-  }
-
-  switch (schema.type) {
-    case "string":
-      if (schema.const) {
-        return `"${schema.const}"`;
+      for (const item of schema[key]) {
+        if (item?.type === "null") {
+          hasNull = true;
+        } else {
+          types.push(getTypeScriptType(item, schemasById));
+        }
       }
+
+      if (types.length === 0) return "unknown";
+
+      const unique = [...new Set(types)];
+      let result = unique.length === 1 ? unique[0] : `(${unique.join(" | ")})`;
+
+      if (hasNull) result = `${result} | null`;
+      return result;
+    }
+  }
+
+  const schemaType = schema.type ?? "object";
+
+  switch (schemaType) {
+    case "string":
       return "string";
-    case "number":
     case "integer":
+    case "number":
       return "number";
     case "boolean":
       return "boolean";
     case "null":
       return "null";
-    case "array":
-      if (schema.prefixItems) {
-        return `[${schema.prefixItems
-          .map((item: any) => getTypeScriptType(item, referencedTypes, visited))
-          .join(", ")}]`;
-      } else if (!schema.items) {
-        return "Array<any>";
+    case "array": {
+      const items = schema.items;
+      if (!items) return "unknown[]";
+      return `${getTypeScriptType(items, schemasById)}[]`;
+    }
+    case "object": {
+      if (!schema.properties) {
+        if (schema.additionalProperties === true) return "Record<string, unknown>";
+        if (typeof schema.additionalProperties === "object") {
+          return `Record<string, ${getTypeScriptType(schema.additionalProperties, schemasById)}>`;
+        }
+        return "Record<string, unknown>";
       }
-      return `Array<${getTypeScriptType(
-        schema.items,
-        referencedTypes,
-        visited
-      )}>`;
-    case "object":
-      return generateObjectType(schema, referencedTypes, visited);
+      return "Record<string, unknown>";
+    }
     default:
-      return "any";
+      return "unknown";
   }
 }
 
-function generateObjectType(
+function generateInterface(
+  name: string,
   schema: any,
-  referencedTypes: Set<string>,
-  visited: Set<string>
+  schemasById: Map<string, any>
 ): string {
-  if (!schema.properties) {
-    if (schema.additionalProperties === true) {
-      return "Record<string, any>";
-    } else if (
-      schema.additionalProperties &&
-      typeof schema.additionalProperties === "object"
-    ) {
-      return `Record<string, ${getTypeScriptType(
-        schema.additionalProperties,
-        referencedTypes,
-        visited
-      )}>`;
-    }
-    return "{}";
+  if (schema.type === "array") {
+    const itemType = schema.items
+      ? getTypeScriptType(schema.items, schemasById)
+      : "unknown";
+    return `export type ${name} = ${itemType}[];`;
   }
 
-  const required = schema.required || [];
-  const propStrings = Object.entries(schema.properties).map(
-    ([propName, propSchema]) => {
-      const isRequired = required.includes(propName);
-      const propType = getTypeScriptType(
-        propSchema as any,
-        referencedTypes,
-        visited
-      );
-      const safePropName = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(propName)
-        ? propName
-        : `"${propName}"`;
-      return `  ${safePropName}${isRequired ? "" : "?"}: ${propType};`;
-    }
-  );
+  const lines: string[] = [`export interface ${name} {`];
+  const required = new Set<string>(schema.required ?? []);
+  const properties = schema.properties ?? {};
 
-  return `{\n${propStrings.join("\n")}\n}`;
-}
+  for (const [propName, propSchema] of Object.entries(properties)) {
+    const isRequired = required.has(propName);
+    const propType = getTypeScriptType(propSchema, schemasById);
+    const safeName = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(propName)
+      ? propName
+      : `"${propName}"`;
 
-function generateModelClass(className: string, schema: any): string {
-  const referencedTypes = new Set<string>();
-  const visited = new Set<string>();
-  const lines: string[] = [];
-
-  lines.push("/**");
-  lines.push(" * Auto-generated by scripts/generate-client.ts");
-  lines.push(" * DO NOT EDIT MANUALLY - This file is generated automatically");
-  lines.push(" */");
-  lines.push("");
-
-  const tsType = getTypeScriptType(schema, referencedTypes, visited);
-
-  const imports = Array.from(referencedTypes)
-    .filter((type) => type !== className)
-    .sort();
-
-  if (imports.length > 0) {
-    for (const importType of imports) {
-      lines.push(`import { ${importType} } from './${importType}';`);
-    }
-    lines.push("");
-  }
-
-  lines.push(`export interface ${className} ${tsType}`);
-
-  return lines.join("\n");
-}
-
-async function fetchSpec(specUrl: string): Promise<OpenAPISpec> {
-  return new Promise((resolve, reject) => {
-    const client = specUrl.startsWith("https") ? https : http;
-
-    client
-      .get(specUrl, (res) => {
-        let data = "";
-        res.on("data", (chunk) => {
-          data += chunk;
-        });
-        res.on("end", () => {
-          try {
-            resolve(JSON.parse(data));
-          } catch (error) {
-            reject(new Error(`Failed to parse JSON: ${error}`));
-          }
-        });
-      })
-      .on("error", (error) => {
-        reject(error);
-      });
-  });
-}
-
-function generateMethodSignature(
-  methodName: string,
-  requestType: string | null,
-  queryParams: QueryParam[],
-  responseType: string
-): string {
-  const params: string[] = [];
-
-  for (const param of queryParams) {
-    if (param.required) {
-      params.push(`${param.name}: string`);
+    if (isRequired) {
+      lines.push(`  ${safeName}: ${propType};`);
+    } else {
+      lines.push(`  ${safeName}?: ${propType} | null;`);
     }
   }
 
-  if (requestType) {
-    params.push(`payload: Models.${requestType}`);
-  }
-
-  for (const param of queryParams) {
-    if (!param.required) {
-      params.push(`${param.name}?: string`);
-    }
-  }
-
-  const returnType =
-    responseType === "void" ? "void" : `Models.${responseType}`;
-  return `  async ${methodName}(${params.join(
-    ", "
-  )}): Promise<${returnType}> {`;
-}
-
-function generateMethodBody(
-  methodName: string,
-  path: string,
-  method: string,
-  requestType: string | null,
-  queryParams: QueryParam[],
-  responseType: string
-): string {
-  const lines: string[] = [];
-
-  if (queryParams.length > 0) {
-    lines.push("    const queryParams = new URLSearchParams();");
-    for (const param of queryParams) {
-      if (param.required) {
-        lines.push(`    queryParams.set("${param.name}", ${param.name});`);
-      } else {
-        lines.push(`    if (${param.name}) {`);
-        lines.push(`      queryParams.set("${param.name}", ${param.name});`);
-        lines.push(`    }`);
-      }
-    }
-  }
-
-  const queryString =
-    queryParams.length > 0
-      ? " + (queryParams.toString() ? '?' + queryParams.toString() : '')"
-      : "";
-  lines.push(`    const url = this.buildUrl("${path}"${queryString});`);
-
-  if (method === "GET" || method === "DELETE") {
-    lines.push("    const response = await fetch(url, {");
-    lines.push(`      method: "${method}",`);
-    lines.push("      headers: this.buildHeaders(),");
-    lines.push("    });");
-  } else {
-    const payloadExpr = requestType ? "payload" : "{}";
-    lines.push(`    const response = await fetch(url, {`);
-    lines.push(`      method: "${method}",`);
-    lines.push("      headers: this.buildHeaders(),");
-    lines.push(`      body: JSON.stringify(${payloadExpr}),`);
-    lines.push("    });");
-  }
-
-  lines.push("");
-  lines.push("    if (!response.ok) {");
-  lines.push(
-    "      throw new Error(`HTTP Error: ${response.status} - ${await response.text()}`);"
-  );
-  lines.push("    }");
-  lines.push("");
-
-  if (responseType === "void") {
-    lines.push("    return;");
-  } else if (responseType === "any") {
-    lines.push("    return await response.json();");
-  } else {
-    lines.push(`    return await response.json() as Models.${responseType};`);
-  }
-
-  return lines.join("\n");
-}
-
-function generateClientClass(className: string, methods: MethodInfo[]): string {
-  const lines = [
-    "/**",
-    " * Auto-generated by scripts/generate-client.ts",
-    " * DO NOT EDIT MANUALLY - This file is generated automatically",
-    " */",
-    "import * as Models from './models';",
-    "",
-    "export class " + className + " {",
-    "  private baseUrl: string;",
-    "  private apiKey: string;",
-    "  private organizationId: string;",
-    "",
-    "  constructor(baseUrl: string, apiKey: string, organizationId: string) {",
-    "    this.baseUrl = baseUrl;",
-    "    this.apiKey = apiKey;",
-    "    this.organizationId = organizationId;",
-    "  }",
-    "",
-    "  getBaseUrl(): string {",
-    "    return this.baseUrl;",
-    "  }",
-    "",
-    "  getApiKey(): string {",
-    "    return this.apiKey;",
-    "  }",
-    "",
-    "  getOrganizationId(): string {",
-    "    return this.organizationId;",
-    "  }",
-    "",
-    "  private buildUrl(path: string): string {",
-    "    return this.baseUrl + path;",
-    "  }",
-    "",
-    "  private buildHeaders(): Record<string, string> {",
-    "    if (!this.apiKey || !this.organizationId) {",
-    "      throw new Error('API key and organization ID cannot be null');",
-    "    }",
-    "    return {",
-    "      'Content-Type': 'application/json',",
-    "      'Authorization': `Bearer ${this.apiKey}`,",
-    "      'X-Organization-Id': this.organizationId,",
-    "    };",
-    "  }",
-    "",
-  ];
-
-  for (const methodInfo of methods) {
-    const signature = generateMethodSignature(
-      methodInfo.name,
-      methodInfo.request_type || null,
-      methodInfo.query_params,
-      methodInfo.response_type
-    );
-    lines.push(signature);
-
-    const body = generateMethodBody(
-      methodInfo.name,
-      methodInfo.path,
-      methodInfo.method,
-      methodInfo.request_type || null,
-      methodInfo.query_params,
-      methodInfo.response_type
-    );
-    lines.push(body);
-    lines.push("  }");
-    lines.push("");
+  if (Object.keys(properties).length === 0) {
+    lines.push("  [key: string]: unknown;");
   }
 
   lines.push("}");
   return lines.join("\n");
 }
 
-async function generateApiFiles(spec: OpenAPISpec): Promise<void> {
-  const usedSchemas = findUsedSchemas(spec);
-  const schemas = spec.components?.schemas || {};
+function getSchemaNameFromContent(content: any): string | undefined {
+  if (!content) return undefined;
 
-  const modelsDir = "src/internal/api/models";
-  if (fs.existsSync(modelsDir)) {
-    console.error(`Clearing existing models directory: ${modelsDir}`);
-    fs.rmSync(modelsDir, { recursive: true, force: true });
-  }
+  for (const contentType of ["application/json", "text/plain"]) {
+    const mediaType = content[contentType];
+    if (!mediaType?.schema) continue;
 
-  fs.mkdirSync(modelsDir, { recursive: true });
-
-  console.error("Generating schema types...");
-  for (const schemaName of usedSchemas) {
-    if (schemaName in schemas) {
-      const className = toClassName(schemaName);
-      const modelClass = generateModelClass(className, schemas[schemaName]);
-
-      fs.writeFileSync(path.join(modelsDir, `${className}.ts`), modelClass);
-      console.error(`Generated schema type: ${className}`);
+    const schema = mediaType.schema;
+    if ("$id" in schema) return schema.$id;
+    if ("$ref" in schema) {
+      const ref = schema.$ref as string;
+      return toPascalCase(ref.replace("#/components/schemas/", ""));
     }
   }
 
-  const modelFiles = fs
-    .readdirSync(modelsDir)
-    .filter((file) => file.endsWith(".ts"))
-    .map((file) => file.replace(".ts", ""));
+  return undefined;
+}
 
-  const modelsIndex = [
-    "/**",
-    " * Auto-generated by scripts/generate-client.ts",
-    " * DO NOT EDIT MANUALLY - This file is generated automatically",
-    " */",
-    "",
-    ...modelFiles.map((file) => `export * from './models/${file}';`),
-    "",
-  ].join("\n");
+function getRequestSchema(operation: any): string | undefined {
+  return getSchemaNameFromContent(operation.requestBody?.content);
+}
 
-  const apiDir = "src/internal/api";
-  fs.mkdirSync(apiDir, { recursive: true });
-  fs.writeFileSync(path.join(apiDir, "models.ts"), modelsIndex);
-  console.error(`Generated: ${apiDir}/models.ts`);
-
-  const filteredPaths = Object.fromEntries(
-    Object.entries(spec.paths).filter(([path]) => JUDGEVAL_PATHS.includes(path))
-  );
-
-  for (const path of JUDGEVAL_PATHS) {
-    if (!(path in spec.paths)) {
-      console.error(`Path ${path} not found in OpenAPI spec`);
+function getResponseSchema(operation: any): string | undefined {
+  const responses = operation.responses ?? {};
+  for (const status of ["200", "201"]) {
+    if (status in responses) {
+      const result = getSchemaNameFromContent(responses[status].content);
+      if (result) return result;
     }
   }
+  return undefined;
+}
 
-  const methods: MethodInfo[] = [];
-  for (const [path, pathData] of Object.entries(filteredPaths)) {
-    for (const [method, operation] of Object.entries(pathData)) {
-      if (HTTP_METHODS.has(method.toUpperCase())) {
-        const methodName = getMethodNameFromPath(path, method.toUpperCase());
-        const requestSchema = getRequestSchema(operation);
-        const responseSchema = getResponseSchema(operation);
-        const queryParams = getQueryParameters(operation);
+function extractPathParams(path: string): PathParam[] {
+  const params: PathParam[] = [];
+  const regex = /\{(\w+)\}/g;
+  let match;
+  while ((match = regex.exec(path)) !== null) {
+    params.push({
+      name: match[1],
+      snakeName: toSnakeCase(match[1]),
+    });
+  }
+  return params;
+}
 
-        console.error(
-          `${methodName} ${requestSchema} ${responseSchema} ${JSON.stringify(
-            queryParams
-          )}`
-        );
+function getQueryParameters(operation: any): QueryParam[] {
+  return (operation.parameters ?? [])
+    .filter((p: any) => p.in === "query")
+    .map((p: any) => ({
+      name: p.name,
+      required: p.required ?? false,
+      type: p.schema?.type ?? "string",
+    }));
+}
 
-        const methodInfo: MethodInfo = {
-          name: methodName,
-          path,
-          method: method.toUpperCase(),
-          request_type: requestSchema ? toClassName(requestSchema) : undefined,
-          query_params: queryParams,
-          response_type:
-            responseSchema === "EMPTY_SCHEMA"
-              ? "void"
-              : responseSchema
-                ? toClassName(responseSchema)
-                : "any",
-        };
-        methods.push(methodInfo);
+function getMethodName(operation: any, path: string, method: string): string {
+  const operationId = operation.operationId;
+  if (operationId) {
+    let name = toSnakeCase(operationId);
+    name = name.replace(/^(get|post|put|patch|delete)_v1_/, "$1_");
+    name = name.replace(/_by_project_id/g, "");
+    name = name.replace(/-/g, "_");
+    return toCamelCase(name);
+  }
+
+  let name = path
+    .replace(/\{[^}]+\}/g, "")
+    .replace(/^\//, "")
+    .replace(/\//g, "_")
+    .replace(/-/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
+
+  if (name.startsWith("v1_")) name = name.slice(3);
+  if (!name || name === "v1") name = "index";
+
+  return toCamelCase(name);
+}
+
+function generateMethodSignature(method: MethodInfo): string {
+  const params: string[] = [];
+
+  for (const p of method.pathParams) {
+    params.push(`${toCamelCase(p.snakeName)}: string`);
+  }
+
+  for (const p of method.queryParams) {
+    if (p.required) params.push(`${p.name}: string`);
+  }
+
+  if (method.requestType) {
+    params.push(`payload: ${method.requestType}`);
+  }
+
+  for (const p of method.queryParams) {
+    if (!p.required) params.push(`${p.name}?: string`);
+  }
+
+  const returnType = method.responseType === "void" ? "void" : method.responseType;
+  return `async ${method.name}(${params.join(", ")}): Promise<${returnType}>`;
+}
+
+function generateMethodBody(method: MethodInfo): string {
+  const lines: string[] = [];
+
+  let urlExpr: string;
+  if (method.pathParams.length > 0) {
+    let urlPath = method.path;
+    for (const p of method.pathParams) {
+      urlPath = urlPath.replace(
+        `{${p.name}}`,
+        `\${${toCamelCase(p.snakeName)}}`
+      );
+    }
+    urlExpr = `\`${urlPath}\``;
+  } else {
+    urlExpr = `"${method.path}"`;
+  }
+
+  if (method.queryParams.length > 0) {
+    lines.push("    const params = new URLSearchParams();");
+    for (const p of method.queryParams) {
+      if (p.required) {
+        lines.push(`    params.set("${p.name}", ${p.name});`);
+      } else {
+        lines.push(`    if (${p.name} !== undefined) params.set("${p.name}", ${p.name});`);
       }
     }
+    lines.push(
+      `    const url = this.baseUrl + ${urlExpr} + (params.toString() ? "?" + params.toString() : "");`
+    );
+  } else {
+    lines.push(`    const url = this.baseUrl + ${urlExpr};`);
   }
 
-  const clientClass = generateClientClass("JudgmentApiClient", methods);
-  fs.writeFileSync(path.join(apiDir, "index.ts"), clientClass);
-  console.error(`Generated: ${apiDir}/index.ts`);
+  if (method.method === "GET") {
+    lines.push(`    return this.request("${method.method}", url, undefined);`);
+  } else if (method.requestType) {
+    lines.push(`    return this.request("${method.method}", url, payload);`);
+  } else {
+    lines.push(`    return this.request("${method.method}", url, {});`);
+  }
+
+  return lines.join("\n");
+}
+
+function generateClient(methods: MethodInfo[]): string {
+  const lines = [
+    `export class JudgmentApiClient {`,
+    `  private baseUrl: string;`,
+    `  private apiKey: string;`,
+    `  private organizationId: string;`,
+    ``,
+    `  constructor(baseUrl: string, apiKey: string, organizationId: string) {`,
+    `    this.baseUrl = baseUrl;`,
+    `    this.apiKey = apiKey;`,
+    `    this.organizationId = organizationId;`,
+    `  }`,
+    ``,
+    `  getBaseUrl(): string { return this.baseUrl; }`,
+    `  getApiKey(): string { return this.apiKey; }`,
+    `  getOrganizationId(): string { return this.organizationId; }`,
+    ``,
+    `  private async request<T>(method: string, url: string, body?: unknown): Promise<T> {`,
+    `    const response = await fetch(url, {`,
+    `      method,`,
+    `      headers: {`,
+    `        "Content-Type": "application/json",`,
+    `        "Authorization": \`Bearer \${this.apiKey}\`,`,
+    `        "X-Organization-Id": this.organizationId,`,
+    `      },`,
+    `      body: body !== undefined ? JSON.stringify(body) : undefined,`,
+    `    });`,
+    `    if (!response.ok) {`,
+    `      const text = await response.text();`,
+    `      throw new Error(\`HTTP \${response.status}: \${text}\`);`,
+    `    }`,
+    `    return response.json() as T;`,
+    `  }`,
+    ``,
+  ];
+
+  for (const m of methods) {
+    lines.push(`  ${generateMethodSignature(m)} {`);
+    lines.push(generateMethodBody(m));
+    lines.push(`  }`);
+    lines.push(``);
+  }
+
+  lines.push(`}`);
+  return lines.join("\n");
+}
+
+async function fetchSpec(url: string): Promise<OpenAPISpec> {
+  return new Promise((resolve, reject) => {
+    const client = url.startsWith("https") ? https : http;
+    client
+      .get(url, (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => {
+          try {
+            resolve(JSON.parse(data));
+          } catch (e) {
+            reject(new Error(`Failed to parse JSON: ${e}`));
+          }
+        });
+      })
+      .on("error", reject);
+  });
 }
 
 async function main(): Promise<void> {
-  const specFile = process.argv[2] || "http://localhost:8000/openapi.json";
+  const specFile = process.argv[2] ?? "http://localhost:10001/openapi/json";
 
-  try {
-    let spec: OpenAPISpec;
+  const spec: OpenAPISpec = specFile.startsWith("http")
+    ? await fetchSpec(specFile)
+    : JSON.parse(fs.readFileSync(specFile, "utf8"));
 
-    if (specFile.startsWith("http")) {
-      spec = await fetchSpec(specFile);
-    } else {
-      const specData = fs.readFileSync(specFile, "utf8");
-      spec = JSON.parse(specData);
-    }
+  const schemasById = collectSchemasWithId(spec);
+  console.error(`Collected ${schemasById.size} schemas with $id`);
 
-    await generateApiFiles(spec);
-  } catch (error) {
-    console.error(`Error generating API client: ${error}`);
-    process.exit(1);
+  const apiDir = "src/internal/api";
+  fs.mkdirSync(apiDir, { recursive: true });
+
+  const typeLines = [
+    `// Auto-generated by scripts/generate-client.ts`,
+    `// DO NOT EDIT MANUALLY`,
+    ``,
+    `export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";`,
+    ``,
+  ];
+
+  for (const [schemaId, schema] of [...schemasById.entries()].sort()) {
+    typeLines.push(generateInterface(schemaId, schema, schemasById));
+    typeLines.push(``);
+    console.error(`Generated: ${schemaId}`);
   }
+
+  fs.writeFileSync(`${apiDir}/types.ts`, typeLines.join("\n"));
+  console.error(`Generated: ${apiDir}/types.ts`);
+
+  const methods: MethodInfo[] = [];
+
+  for (const [path, pathData] of Object.entries(spec.paths)) {
+    if (!INCLUDE_PREFIXES.some((p) => path.startsWith(p))) continue;
+
+    for (const [httpMethod, operation] of Object.entries(pathData)) {
+      const method = httpMethod.toUpperCase();
+      if (!["GET", "POST", "PUT", "PATCH", "DELETE"].includes(method)) continue;
+
+      const name = getMethodName(operation, path, method);
+      const requestType = getRequestSchema(operation);
+      const responseType = getResponseSchema(operation) ?? "unknown";
+      const pathParams = extractPathParams(path);
+      const queryParams = getQueryParameters(operation);
+
+      console.error(
+        `${name} request=${requestType} response=${responseType} path=${JSON.stringify(pathParams)} query=${JSON.stringify(queryParams)}`
+      );
+
+      methods.push({
+        name,
+        path,
+        method,
+        requestType,
+        pathParams,
+        queryParams,
+        responseType,
+      });
+    }
+  }
+
+  const clientCode = [
+    `// Auto-generated by scripts/generate-client.ts`,
+    `// DO NOT EDIT MANUALLY`,
+    ``,
+    `import type {`,
+    ...([...schemasById.keys()].sort().map((k) => `  ${k},`)),
+    `} from "./types";`,
+    ``,
+    generateClient(methods),
+  ].join("\n");
+
+  fs.writeFileSync(`${apiDir}/client.ts`, clientCode);
+  console.error(`Generated: ${apiDir}/client.ts`);
+
+  const indexCode = [
+    `// Auto-generated by scripts/generate-client.ts`,
+    `// DO NOT EDIT MANUALLY`,
+    ``,
+    `export * from "./types";`,
+    `export * from "./client";`,
+  ].join("\n");
+
+  fs.writeFileSync(`${apiDir}/index.ts`, indexCode);
+  console.error(`Generated: ${apiDir}/index.ts`);
 }
 
-if (require.main === module) {
-  main().catch(console.error);
-}
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

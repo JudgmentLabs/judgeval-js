@@ -1,4 +1,4 @@
-import type { ScorerConfig } from "../../internal/api/models";
+import type { ScorerConfig } from "../../internal/api";
 import { APIScorerType } from "../../data/APIScorerType";
 import { APIScorer } from "../APIScorer";
 

@@ -1,0 +1,21 @@
+{
+  "name": "ai_sdk",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "tsc --noEmit",
+    "start": "npm run build && bun run index.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^3.0.29",
+    "ai": "^6.0.89",
+    "judgeval": "file:../.."
+  }
+}

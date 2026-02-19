@@ -1,10 +1,7 @@
 import { JUDGMENT_API_KEY, JUDGMENT_API_URL, JUDGMENT_ORG_ID } from "./env";
-import { JudgmentApiClient } from "./internal/api";
 import { EvaluationFactory } from "./evaluation/EvaluationFactory";
+import { JudgmentApiClient } from "./internal/api";
 import { ScorersFactory } from "./scorers/ScorersFactory";
-import { BrowserTracerFactory } from "./tracer/BrowserTracerFactory";
-import { NodeTracerFactory } from "./tracer/NodeTracerFactory";
-
 export interface JudgevalConfig {
   apiKey?: string;
   organizationId?: string;
@@ -34,14 +31,6 @@ export class Judgeval {
 
   static create(config: JudgevalConfig = {}): Judgeval {
     return new Judgeval(config);
-  }
-
-  get nodeTracer(): NodeTracerFactory {
-    return new NodeTracerFactory(this.internalClient);
-  }
-
-  get browserTracer(): BrowserTracerFactory {
-    return new BrowserTracerFactory(this.internalClient);
   }
 
   get scorers(): ScorersFactory {

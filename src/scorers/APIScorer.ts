@@ -1,4 +1,4 @@
-import type { ScorerConfig } from "../internal/api/models";
+import type { ScorerConfig } from "../internal/api";
 import type { APIScorerType } from "../data/APIScorerType";
 import { BaseScorer } from "./BaseScorer";
 
@@ -83,13 +83,15 @@ export class APIScorer extends BaseScorer {
   }
 
   getScorerConfig(): ScorerConfig {
-    const kwargs: Record<string, unknown> = { ...this.additionalProperties };
+    const kwargs: Record<string, unknown> = {
+      ...this.additionalProperties,
+      strict_mode: this._strictMode,
+    };
 
     return {
       score_type: this.scoreType,
       threshold: this._threshold,
       name: this._name,
-      strict_mode: this._strictMode,
       required_params: this.requiredParams,
       kwargs,
     };

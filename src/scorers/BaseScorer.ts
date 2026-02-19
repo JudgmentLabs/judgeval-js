@@ -1,4 +1,4 @@
-import type { ScorerConfig } from "../internal/api/models";
+import type { ScorerConfig } from "../internal/api";
 
 export abstract class BaseScorer {
   abstract getName(): string;
