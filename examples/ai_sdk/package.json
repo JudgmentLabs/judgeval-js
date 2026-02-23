@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.29",
+    "@vercel/otel": "^2.1.1",
     "ai": "^6.0.89",
     "judgeval": "file:../.."
   }

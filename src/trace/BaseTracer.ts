@@ -1,4 +1,9 @@
-import { type Span, SpanStatusCode, type Tracer } from "@opentelemetry/api";
+import {
+  type Attributes,
+  type Span,
+  SpanStatusCode,
+  type Tracer,
+} from "@opentelemetry/api";
 import type { Instrumentation } from "@opentelemetry/instrumentation";
 import type { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
 import { Example } from "../data";
@@ -49,7 +54,7 @@ export abstract class BaseTracer {
   environment: string | null;
   serializer: Serializer;
   _tracerProvider: BasicTracerProvider;
-  _client: JudgmentApiClient | null = null;
+  _client: JudgmentApiClient | null;
 
   // ------------------------------------------------------------------ //
   //  Initialization                                                    //
@@ -64,6 +69,7 @@ export abstract class BaseTracer {
     environment: string | null,
     serializer: Serializer,
     tracerProvider: BasicTracerProvider,
+    client: JudgmentApiClient | null,
   ) {
     this.projectName = projectName;
     this.projectId = projectId;
@@ -73,6 +79,7 @@ export abstract class BaseTracer {
     this.environment = environment;
     this.serializer = serializer;
     this._tracerProvider = tracerProvider;
+    this._client = client;
   }
 
   // ------------------------------------------------------------------ //
@@ -81,10 +88,6 @@ export abstract class BaseTracer {
 
   abstract getSpanProcessor(): JudgmentSpanProcessor;
   abstract getSpanExporter(): JudgmentSpanExporter;
-
-  getTracerProvider(): BasicTracerProvider {
-    return this._tracerProvider;
-  }
 
   // ------------------------------------------------------------------ //
   //  Internal Helpers                                                  //
@@ -133,86 +136,74 @@ export abstract class BaseTracer {
     await proxy.shutdown();
   }
 
-  static registerOTELInstrumentation(
-    instrumentation: Instrumentation | Instrumentation[],
-  ): void {
+  static registerOTELInstrumentation(instrumentor: Instrumentation): void {
     const proxy = BaseTracer._getProxyProvider();
-    proxy.addInstrumentation(instrumentation);
-  }
-
-  static getOTELTracer(name = TRACER_NAME): Tracer {
-    const proxy = BaseTracer._getProxyProvider();
-    return proxy.getTracer(name);
+    proxy.addInstrumentation(instrumentor);
   }
 
   // ------------------------------------------------------------------ //
-  //  Static: Span Context Manager                                      //
+  //  Static: Span Creation (OTEL-like signatures)                      //
   // ------------------------------------------------------------------ //
 
-  static span(spanName: string): Span;
-  static span<T>(spanName: string, fn: (span: Span) => T): T;
-  static span<T>(spanName: string, fn?: (span: Span) => T): Span | T {
+  static getOTELTracer(): Tracer {
     const proxy = BaseTracer._getProxyProvider();
-    const tracer = proxy.getTracer(TRACER_NAME);
-    if (!fn) return tracer.startSpan(spanName, {}, proxy.getCurrentContext());
-    return tracer.startActiveSpan(spanName, (span) => {
-      BaseTracer._emitPartial();
-      try {
+    return proxy.getTracer(TRACER_NAME);
+  }
+
+  static startSpan(name: string, attributes?: Attributes): Span {
+    const span = BaseTracer.getOTELTracer().startSpan(name, { attributes });
+    BaseTracer._emitPartial();
+    return span;
+  }
+
+  static startActiveSpan<T>(
+    name: string,
+    fn: (span: Span) => T,
+    attributes?: Attributes,
+  ): T {
+    return BaseTracer.getOTELTracer().startActiveSpan(
+      name,
+      { attributes },
+      (span) => {
+        BaseTracer._emitPartial();
         const result = fn(span);
         if (result instanceof Promise) {
-          return result
-            .catch((e: unknown) => {
-              span.recordException(e as Error);
-              span.setStatus({
-                code: SpanStatusCode.ERROR,
-                message: String(e),
-              });
-              throw e;
-            })
-            .finally(() => {
-              span.end();
-            }) as T;
+          return (result as Promise<unknown>).finally(() => {
+            span.end();
+          }) as T;
         }
         span.end();
         return result;
+      },
+    );
+  }
+
+  // ------------------------------------------------------------------ //
+  //  Static: Span Helpers                                              //
+  // ------------------------------------------------------------------ //
+
+  static span<T>(spanName: string, fn: (span: Span) => T): T {
+    return BaseTracer.startActiveSpan(spanName, (span) => {
+      try {
+        const result = fn(span);
+        if (result instanceof Promise) {
+          return result.catch((e: unknown) => {
+            span.setStatus({ code: SpanStatusCode.ERROR, message: String(e) });
+            span.recordException(e as Error);
+            throw e;
+          }) as T;
+        }
+        return result;
       } catch (e) {
-        span.recordException(e as Error);
         span.setStatus({ code: SpanStatusCode.ERROR, message: String(e) });
-        span.end();
+        span.recordException(e as Error);
         throw e;
       }
     });
   }
 
   static with<T>(spanName: string, fn: (span: Span) => T): T {
-    const proxy = BaseTracer._getProxyProvider();
-    const tracer = proxy.getTracer(TRACER_NAME);
-    return tracer.startActiveSpan(spanName, (span) => {
-      try {
-        const result = fn(span);
-        if (result instanceof Promise) {
-          return result
-            .catch((e: unknown) => {
-              span.setStatus({
-                code: SpanStatusCode.ERROR,
-                message: String(e),
-              });
-              span.recordException(e as Error);
-              throw e;
-            })
-            .finally(() => {
-              span.end();
-            }) as T;
-        }
-        span.end();
-        return result;
-      } catch (e) {
-        span.setStatus({ code: SpanStatusCode.ERROR, message: String(e) });
-        span.recordException(e as Error);
-        span.end();
-        throw e;
-      }
-    });
+    return BaseTracer.span(spanName, fn);
   }
 
   // ------------------------------------------------------------------ //

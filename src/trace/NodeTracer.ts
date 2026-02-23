@@ -43,9 +43,9 @@ export class NodeTracer extends BaseTracer {
       environment,
       serializer,
       tracerProvider,
+      client,
     );
     this._enableMonitoring = enableMonitoring;
-    this._client = client;
   }
 
   static async init(config: TracerConfig = {}): Promise<NodeTracer> {

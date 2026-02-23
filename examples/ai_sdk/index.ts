@@ -1,7 +1,8 @@
 import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
-import { NodeTracer } from "judgeval";
+import { NodeTracer, ProxyTracerProvider } from "judgeval";
 
+ProxyTracerProvider.installAsGlobalTracerProvider();
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`Environment variable ${name} is not set`);
@@ -15,7 +16,7 @@ async function _chatWithUser(userMessage: string): Promise<string> {
     model: openai("gpt-4o-mini"),
     system: "You are a helpful assistant.",
     prompt: userMessage,
-    experimental_telemetry: { isEnabled: true, tracer: NodeTracer.getOTELTracer() },
+    experimental_telemetry: { isEnabled: true },
   });
 
   console.log(`User: ${userMessage}`);

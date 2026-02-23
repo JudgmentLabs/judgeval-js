@@ -39,6 +39,7 @@ export class BrowserTracer extends BaseTracer {
       environment,
       serializer,
       tracerProvider,
+      null,
     );
     this._enableMonitoring = enableMonitoring;
   }

@@ -129,6 +129,17 @@ export class ProxyTracerProvider implements TracerProvider {
     return ProxyTracerProvider._instance;
   }
 
+  /**
+   * Install the ProxyTracerProvider as the global tracer provider.
+   * This generally does not need to be called - Judgeval automatically uses this for all its observability functionality.
+   * Only use this if you specifically want to override the global tracer provider, which will enable all Opentelemetry captured instrumentations to flow through judgeval.
+   * @returns True if the installation was successful, false otherwise.
+   */
+  static installAsGlobalTracerProvider(): boolean {
+    const instance = ProxyTracerProvider.getInstance();
+    return trace.setGlobalTracerProvider(instance);
+  }
+
   register(tracer: BaseTracer): void {
     this._tracers.add(tracer);
   }
@@ -188,18 +199,13 @@ export class ProxyTracerProvider implements TracerProvider {
     return this._proxyTracer;
   }
 
-  addInstrumentation(
-    instrumentations: Instrumentation | Instrumentation[],
-  ): void {
-    const list = Array.isArray(instrumentations)
-      ? instrumentations
-      : [instrumentations];
+  addInstrumentation(instrumentor: Instrumentation): void {
     try {
       registerInstrumentations({
         tracerProvider: this,
-        instrumentations: list,
+        instrumentations: [instrumentor],
       });
-      this._instrumentations.push(...list);
+      this._instrumentations.push(instrumentor);
     } catch (err: unknown) {
       Logger.error(`Failed to add instrumentation: ${String(err)}`);
     }
