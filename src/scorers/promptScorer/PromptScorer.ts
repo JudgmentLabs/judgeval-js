@@ -1,5 +1,5 @@
 import { APIScorerType } from "../../data/APIScorerType";
-import type { ScorerConfig } from "../../internal/api";
+import type { JudgmentScorerConfig } from "../../internal/api";
 import { BaseScorer } from "../BaseScorer";
 
 export interface PromptScorerConfig {
@@ -80,7 +80,7 @@ export class PromptScorer extends BaseScorer {
     this._prompt = this._prompt + addition;
   }
 
-  getScorerConfig(): ScorerConfig {
+  getScorerConfig(): JudgmentScorerConfig {
     const scoreType = this.isTrace
       ? APIScorerType.TRACE_PROMPT_SCORER
       : APIScorerType.PROMPT_SCORER;

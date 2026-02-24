@@ -8,16 +8,17 @@ import type {
   AddToRunEvalQueueTracesResponse,
   AddTraceTagsRequest,
   AddTraceTagsResponse,
-  BaseScorer,
   CreateDatasetRequest,
   CreateDatasetResponse,
   CustomScorerExistsResponse,
+  CustomScorerPayload,
   DatasetInfo,
   DeleteProjectResponse,
   E2EFetchSpanScoreRequest,
   E2EFetchSpanScoreResponse,
-  E2EFetchTraceRequest,
   E2EFetchTraceResponse,
+  E2ETracesPerProjectResponse,
+  E2ETracesPerProjectRow,
   ErrorResponse,
   Example,
   ExampleEvaluationRun,
@@ -33,6 +34,10 @@ import type {
   InsertExamplesResponse,
   InsertPromptRequest,
   InsertPromptResponse,
+  JudgmentScorerConfig,
+  LocalScorerResult,
+  LogEvalResultsExamplesRequest,
+  LogEvalResultsExamplesResponse,
   LogEvalResultsRequest,
   LogEvalResultsResponse,
   PromptCommitInfo,
@@ -41,7 +46,6 @@ import type {
   PullDatasetResponse,
   ResolveProjectRequest,
   ResolveProjectResponse,
-  ScorerConfig,
   ScorerExistsResponse,
   ScoringResult,
   TagPromptRequest,
@@ -57,7 +61,7 @@ import type {
   UploadCustomScorerRequest,
   UploadCustomScorerResponse,
   WelcomeResponse,
-} from "./types";
+} from "./models";
 
 export class JudgmentApiClient {
   private baseUrl: string;
@@ -191,6 +195,15 @@ export class JudgmentApiClient {
     return this.request("POST", url, payload);
   }
 
+  async postV1projectsEvalResultsExamples(
+    projectId: string,
+    payload: LogEvalResultsExamplesRequest,
+  ): Promise<LogEvalResultsExamplesResponse> {
+    const url =
+      this.baseUrl + `/v1/projects/${projectId}/eval-results/examples`;
+    return this.request("POST", url, payload);
+  }
+
   async getV1projectsExperimentsByRunId(
     projectId: string,
     runId: string,
@@ -317,11 +330,27 @@ export class JudgmentApiClient {
     return this.request("POST", url, payload);
   }
 
-  async postV1e2eFetchTrace(
-    payload: E2EFetchTraceRequest,
+  async getV1e2eFetchTraceByProjectNameByTraceId(
+    projectName: string,
+    traceId: string,
   ): Promise<E2EFetchTraceResponse> {
-    const url = this.baseUrl + "/v1/e2e_fetch_trace/";
-    return this.request("POST", url, payload);
+    const url = this.baseUrl + `/v1/e2e_fetch_trace/${projectName}/${traceId}`;
+    return this.request("GET", url, undefined);
+  }
+
+  async getV1e2eTracesPerProject(
+    projectId: string,
+    limit?: string,
+    offset?: string,
+  ): Promise<E2ETracesPerProjectResponse> {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.set("limit", limit);
+    if (offset !== undefined) params.set("offset", offset);
+    const url =
+      this.baseUrl +
+      `/v1/e2e_traces_per_project/${projectId}` +
+      (params.toString() ? "?" + params.toString() : "");
+    return this.request("GET", url, undefined);
   }
 
   async postV1e2eFetchSpanScore(

@@ -1,6 +1,6 @@
-import type { ScorerConfig } from "../internal/api";
+import type { JudgmentScorerConfig } from "../internal/api";
 
 export abstract class BaseScorer {
   abstract getName(): string;
-  abstract getScorerConfig(): ScorerConfig;
+  abstract getScorerConfig(): JudgmentScorerConfig;
 }
