@@ -130,7 +130,7 @@ export class JudgmentTracerProvider implements TracerProvider {
   }
 
   /**
-   * Install the ProxyTracerProvider as the global tracer provider.
+   * Install the JudgmentTracerProvider as the global tracer provider.
    * This generally does not need to be called - Judgeval automatically uses this for all its observability functionality.
    * Only use this if you specifically want to override the global tracer provider, which will enable all Opentelemetry captured instrumentations to flow through judgeval.
    * @returns True if the installation was successful, false otherwise.

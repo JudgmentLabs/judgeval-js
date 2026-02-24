@@ -1,6 +1,6 @@
+import type { ExportResult } from "@opentelemetry/core";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import type { ReadableSpan, SpanExporter } from "@opentelemetry/sdk-trace-base";
-import type { ExportResult } from "@opentelemetry/core";
 import { Logger } from "../../utils/logger";
 
 export class JudgmentSpanExporter implements SpanExporter {

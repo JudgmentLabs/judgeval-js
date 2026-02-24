@@ -9,13 +9,13 @@ import { Logger } from "../utils/logger";
 import { resolveProjectId } from "../utils/resolveProjectId";
 import { safeStringify } from "../utils/serializer";
 import { VERSION } from "../version";
+import type { TracerConfig } from "./BaseTracer";
 import { BaseTracer } from "./BaseTracer";
 import { JudgmentTracerProvider } from "./JudgmentTracerProvider";
 import { JudgmentSpanExporter } from "./exporters/JudgmentSpanExporter";
 import { NoOpSpanExporter } from "./exporters/NoOpSpanExporter";
 import { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
 import { NoOpSpanProcessor } from "./processors/NoOpSpanProcessor";
-import type { TracerConfig } from "./BaseTracer";
 
 export class NodeTracer extends BaseTracer {
   private _spanExporter: JudgmentSpanExporter | null = null;
@@ -30,8 +30,8 @@ export class NodeTracer extends BaseTracer {
     environment: string | null,
     serializer: (v: unknown) => string,
     tracerProvider: NodeTracerProvider,
-    enableMonitoring: boolean,
     client: JudgmentApiClient | null,
+    enableMonitoring: boolean,
   ) {
     super(
       projectName,
@@ -118,8 +118,8 @@ export class NodeTracer extends BaseTracer {
       config.environment ?? null,
       serializer,
       tracerProvider,
-      enableMonitoring,
       client,
+      enableMonitoring,
     );
 
     if (enableMonitoring) {

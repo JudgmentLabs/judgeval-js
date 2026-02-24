@@ -1,8 +1,8 @@
 import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
-import { NodeTracer, ProxyTracerProvider } from "judgeval";
+import { JudgmentTracerProvider, NodeTracer } from "judgeval";
 
-ProxyTracerProvider.installAsGlobalTracerProvider();
+JudgmentTracerProvider.installAsGlobalTracerProvider();
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`Environment variable ${name} is not set`);

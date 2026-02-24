@@ -4,7 +4,8 @@ import { JudgmentSpanExporter } from "./JudgmentSpanExporter";
 
 export class NoOpSpanExporter extends JudgmentSpanExporter {
   constructor() {
-    super("", "", "", "");
+    // Not used.
+    super("https://api.judgmentlabs.ai/otel/v1/traces", "", "", "");
     this._delegate = null;
   }
 

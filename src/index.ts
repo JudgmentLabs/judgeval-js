@@ -13,9 +13,9 @@ export {
   BaseTracer,
   BrowserTracer,
   JudgmentSpanExporter,
+  JudgmentTracerProvider,
   NodeTracer,
   NoOpSpanExporter,
-  ProxyTracerProvider,
 } from "./trace";
 
 export {
