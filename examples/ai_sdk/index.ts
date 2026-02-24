@@ -11,7 +11,8 @@ function requireEnv(name: string): string {
 
 requireEnv("OPENAI_API_KEY");
 
-async function _chatWithUser(userMessage: string): Promise<string> {
+
+const chatWithUser = NodeTracer.observe(async function _chatWithUser(userMessage: string): Promise<string> {
   const { text } = await generateText({
     model: openai("gpt-4o-mini"),
     system: "You are a helpful assistant.",
@@ -23,11 +24,10 @@ async function _chatWithUser(userMessage: string): Promise<string> {
   console.log(`Assistant: ${text}`);
 
   return text;
-}
+});
 
 (async () => {
   await NodeTracer.init({ projectName: "ai-sdk-example" });
-  const chatWithUser = NodeTracer.observe(_chatWithUser);
   const result = await chatWithUser("What is the capital of France?");
   console.log(result);
   await NodeTracer.forceFlush();

@@ -15,7 +15,7 @@ const openai = new OpenAI({
   apiKey: OPENAI_API_KEY,
 });
 
-async function _chatWithUser(userMessage: string): Promise<string> {
+const chatWithUser = NodeTracer.observe(async function _chatWithUser(userMessage: string): Promise<string> {
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: "You are a helpful assistant." },
     { role: "user", content: userMessage },
@@ -43,12 +43,10 @@ async function _chatWithUser(userMessage: string): Promise<string> {
   );
 
   return result;
-}
+});
 
 (async () => {
   await NodeTracer.init({ projectName: "js-new" });
-  const chatWithUser = NodeTracer.observe(_chatWithUser);
-
   const result = await chatWithUser("What is the capital of France?");
   console.log(result);
 
