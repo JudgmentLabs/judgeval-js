@@ -10,7 +10,7 @@ import {
   InternalAttributeKeys,
 } from "../../judgmentAttributeKeys";
 import type { BaseTracer } from "../BaseTracer";
-import { ProxyTracerProvider } from "../ProxyTracerProvider";
+import { JudgmentTracerProvider } from "../JudgmentTracerProvider";
 import { getAll } from "./_lifecycles";
 
 type SpanKey = `${string}:${string}`;
@@ -109,7 +109,7 @@ export class JudgmentSpanProcessor extends BatchSpanProcessor {
   }
 
   emitPartial(): void {
-    const proxy = ProxyTracerProvider.getInstance();
+    const proxy = JudgmentTracerProvider.getInstance();
     const span = proxy.getCurrentSpan();
     if (!span?.isRecording()) return;
     if (!isReadableSpan(span)) return;

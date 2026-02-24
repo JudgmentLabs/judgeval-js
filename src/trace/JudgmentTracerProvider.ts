@@ -26,9 +26,9 @@ const TRACER_NAME = "judgeval";
 const _contextStorage = new AsyncLocalStorage<Context>();
 
 class ProxyTracer implements Tracer {
-  private _provider: ProxyTracerProvider;
+  private _provider: JudgmentTracerProvider;
 
-  constructor(provider: ProxyTracerProvider) {
+  constructor(provider: JudgmentTracerProvider) {
     this._provider = provider;
   }
 
@@ -109,8 +109,8 @@ class NoOpTracer implements Tracer {
   }
 }
 
-export class ProxyTracerProvider implements TracerProvider {
-  private static _instance: ProxyTracerProvider | null = null;
+export class JudgmentTracerProvider implements TracerProvider {
+  private static _instance: JudgmentTracerProvider | null = null;
 
   private _activeTracer: BaseTracer | null = null;
   private _instrumentations: Instrumentation[] = [];
@@ -124,9 +124,9 @@ export class ProxyTracerProvider implements TracerProvider {
     installOtelContextBridge(() => this.getCurrentContext());
   }
 
-  static getInstance(): ProxyTracerProvider {
-    ProxyTracerProvider._instance ??= new ProxyTracerProvider();
-    return ProxyTracerProvider._instance;
+  static getInstance(): JudgmentTracerProvider {
+    JudgmentTracerProvider._instance ??= new JudgmentTracerProvider();
+    return JudgmentTracerProvider._instance;
   }
 
   /**
@@ -136,7 +136,7 @@ export class ProxyTracerProvider implements TracerProvider {
    * @returns True if the installation was successful, false otherwise.
    */
   static installAsGlobalTracerProvider(): boolean {
-    const instance = ProxyTracerProvider.getInstance();
+    const instance = JudgmentTracerProvider.getInstance();
     return trace.setGlobalTracerProvider(instance);
   }
 

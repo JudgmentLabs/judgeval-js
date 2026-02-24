@@ -3,12 +3,12 @@ import { WebTracerProvider } from "@opentelemetry/sdk-trace-web";
 import { safeStringify } from "../utils/serializer";
 import { VERSION } from "../version";
 import { BaseTracer } from "./BaseTracer";
-import { ProxyTracerProvider } from "./ProxyTracerProvider";
+import { JudgmentTracerProvider } from "./JudgmentTracerProvider";
 import { JudgmentSpanExporter } from "./exporters/JudgmentSpanExporter";
 import { NoOpSpanExporter } from "./exporters/NoOpSpanExporter";
 import { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
 import { NoOpSpanProcessor } from "./processors/NoOpSpanProcessor";
-import type { TracerConfig } from "./types";
+import type { TracerConfig } from "./BaseTracer";
 
 export interface BrowserTracerConfig extends TracerConfig {
   projectId?: string;
@@ -17,7 +17,6 @@ export interface BrowserTracerConfig extends TracerConfig {
 export class BrowserTracer extends BaseTracer {
   private _spanExporter: JudgmentSpanExporter | null = null;
   private _spanProcessor: JudgmentSpanProcessor | null = null;
-  private _enableMonitoring: boolean;
 
   private constructor(
     projectName: string | null,
@@ -40,8 +39,8 @@ export class BrowserTracer extends BaseTracer {
       serializer,
       tracerProvider,
       null,
+      enableMonitoring,
     );
-    this._enableMonitoring = enableMonitoring;
   }
 
   static init(config: BrowserTracerConfig = {}): BrowserTracer {
@@ -96,7 +95,7 @@ export class BrowserTracer extends BaseTracer {
       tracer._tracerProvider = providerWithProcessor;
     }
 
-    const proxy = ProxyTracerProvider.getInstance();
+    const proxy = JudgmentTracerProvider.getInstance();
     proxy.register(tracer);
 
     if (config.setActive ?? true) {
@@ -104,11 +103,6 @@ export class BrowserTracer extends BaseTracer {
     }
 
     return tracer;
-  }
-
-  setActive(): boolean {
-    const proxy = ProxyTracerProvider.getInstance();
-    return proxy.setActive(this);
   }
 
   getSpanExporter(): JudgmentSpanExporter {

@@ -12,16 +12,35 @@ import { AttributeKeys } from "../judgmentAttributeKeys";
 import { parseFunctionArgs } from "../utils/annotate";
 import { Logger } from "../utils/logger";
 import { safeStringify } from "../utils/serializer";
-import { ProxyTracerProvider } from "./ProxyTracerProvider";
+import { JudgmentTracerProvider } from "./JudgmentTracerProvider";
 import type { JudgmentSpanExporter } from "./exporters/JudgmentSpanExporter";
 import type { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
 import {
   CUSTOMER_ID_KEY,
   SESSION_ID_KEY,
 } from "./processors/_lifecycles/contextKeys";
-import type { LLMMetadata, Serializer } from "./types";
-
 const TRACER_NAME = "judgeval";
+
+export interface LLMMetadata {
+  non_cached_input_tokens?: number;
+  output_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+  total_cost_usd?: number;
+}
+
+export interface TracerConfig {
+  projectName?: string;
+  apiKey?: string;
+  organizationId?: string;
+  apiUrl?: string;
+  environment?: string;
+  setActive?: boolean;
+  serializer?: (value: unknown) => string;
+  resourceAttributes?: Record<string, string>;
+}
+
+export type Serializer = (value: unknown) => string;
 
 function serializeAttribute(
   value: unknown,
@@ -55,6 +74,7 @@ export abstract class BaseTracer {
   serializer: Serializer;
   _tracerProvider: BasicTracerProvider;
   _client: JudgmentApiClient | null;
+  _enableMonitoring: boolean;
 
   // ------------------------------------------------------------------ //
   //  Initialization                                                    //
@@ -70,6 +90,7 @@ export abstract class BaseTracer {
     serializer: Serializer,
     tracerProvider: BasicTracerProvider,
     client: JudgmentApiClient | null,
+    enableMonitoring: boolean,
   ) {
     this.projectName = projectName;
     this.projectId = projectId;
@@ -80,6 +101,11 @@ export abstract class BaseTracer {
     this.serializer = serializer;
     this._tracerProvider = tracerProvider;
     this._client = client;
+    this._enableMonitoring = enableMonitoring;
+  }
+
+  setActive(): boolean {
+    return JudgmentTracerProvider.getInstance().setActive(this);
   }
 
   // ------------------------------------------------------------------ //
@@ -93,8 +119,8 @@ export abstract class BaseTracer {
   //  Internal Helpers                                                  //
   // ------------------------------------------------------------------ //
 
-  private static _getProxyProvider(): ProxyTracerProvider {
-    return ProxyTracerProvider.getInstance();
+  private static _getProxyProvider(): JudgmentTracerProvider {
+    return JudgmentTracerProvider.getInstance();
   }
 
   private static _getSerializer(): Serializer {

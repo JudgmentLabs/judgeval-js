@@ -10,17 +10,16 @@ import { resolveProjectId } from "../utils/resolveProjectId";
 import { safeStringify } from "../utils/serializer";
 import { VERSION } from "../version";
 import { BaseTracer } from "./BaseTracer";
-import { ProxyTracerProvider } from "./ProxyTracerProvider";
+import { JudgmentTracerProvider } from "./JudgmentTracerProvider";
 import { JudgmentSpanExporter } from "./exporters/JudgmentSpanExporter";
 import { NoOpSpanExporter } from "./exporters/NoOpSpanExporter";
 import { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
 import { NoOpSpanProcessor } from "./processors/NoOpSpanProcessor";
-import type { TracerConfig } from "./types";
+import type { TracerConfig } from "./BaseTracer";
 
 export class NodeTracer extends BaseTracer {
   private _spanExporter: JudgmentSpanExporter | null = null;
   private _spanProcessor: JudgmentSpanProcessor | null = null;
-  private _enableMonitoring: boolean;
 
   private constructor(
     projectName: string | null,
@@ -44,8 +43,8 @@ export class NodeTracer extends BaseTracer {
       serializer,
       tracerProvider,
       client,
+      enableMonitoring,
     );
-    this._enableMonitoring = enableMonitoring;
   }
 
   static async init(config: TracerConfig = {}): Promise<NodeTracer> {
@@ -131,7 +130,7 @@ export class NodeTracer extends BaseTracer {
       tracer._tracerProvider = providerWithProcessor;
     }
 
-    const proxy = ProxyTracerProvider.getInstance();
+    const proxy = JudgmentTracerProvider.getInstance();
     proxy.register(tracer);
 
     if (config.setActive ?? true) {
@@ -139,11 +138,6 @@ export class NodeTracer extends BaseTracer {
     }
 
     return tracer;
-  }
-
-  setActive(): boolean {
-    const proxy = ProxyTracerProvider.getInstance();
-    return proxy.setActive(this);
   }
 
   getSpanExporter(): JudgmentSpanExporter {
