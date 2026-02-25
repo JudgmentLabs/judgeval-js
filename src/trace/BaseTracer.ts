@@ -22,11 +22,11 @@ import {
 const TRACER_NAME = "judgeval";
 
 export interface LLMMetadata {
-  non_cached_input_tokens?: number;
-  output_tokens?: number;
-  cache_read_input_tokens?: number;
-  cache_creation_input_tokens?: number;
-  total_cost_usd?: number;
+  non_cached_input_tokens?: number | null | undefined;
+  output_tokens?: number | null | undefined;
+  cache_read_input_tokens?: number | null | undefined;
+  cache_creation_input_tokens?: number | null | undefined;
+  total_cost_usd?: number | null | undefined;
 }
 
 export interface TracerConfig {
@@ -389,31 +389,31 @@ export abstract class BaseTracer {
     const currentSpan = BaseTracer._getProxyProvider().getCurrentSpan();
     if (!currentSpan?.isRecording()) return;
 
-    if (metadata.non_cached_input_tokens != null) {
-      currentSpan.setAttribute(
+    if (typeof metadata.non_cached_input_tokens === "number") {
+      currentSpan.setAttribute( 
         AttributeKeys.JUDGMENT_USAGE_NON_CACHED_INPUT_TOKENS,
         metadata.non_cached_input_tokens,
       );
     }
-    if (metadata.output_tokens != null) {
+    if (typeof metadata.output_tokens === "number") {
       currentSpan.setAttribute(
         AttributeKeys.JUDGMENT_USAGE_OUTPUT_TOKENS,
         metadata.output_tokens,
       );
     }
-    if (metadata.cache_read_input_tokens != null) {
+    if (typeof metadata.cache_read_input_tokens === "number") {
       currentSpan.setAttribute(
         AttributeKeys.JUDGMENT_USAGE_CACHE_READ_INPUT_TOKENS,
         metadata.cache_read_input_tokens,
       );
     }
-    if (metadata.cache_creation_input_tokens != null) {
+    if (typeof metadata.cache_creation_input_tokens === "number") {
       currentSpan.setAttribute(
         AttributeKeys.JUDGMENT_USAGE_CACHE_CREATION_INPUT_TOKENS,
         metadata.cache_creation_input_tokens,
       );
     }
-    if (metadata.total_cost_usd != null) {
+    if (typeof metadata.total_cost_usd === "number") {
       currentSpan.setAttribute(
         AttributeKeys.JUDGMENT_USAGE_TOTAL_COST_USD,
         metadata.total_cost_usd,
