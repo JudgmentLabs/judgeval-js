@@ -1,4 +1,4 @@
-import { Example, NodeTracer } from "judgeval";
+import { Example, Tracer } from "judgeval";
 import OpenAI from "openai";
 import "./instrumentation";
 
@@ -17,14 +17,14 @@ const sleep = (ms: number): Promise<void> =>
     new Promise((resolve) => setTimeout(resolve, ms));
 
 let fibonacci: (n: number) => Promise<number>;
-fibonacci = NodeTracer.observe(async (n: number): Promise<number> => {
+fibonacci = Tracer.observe(async (n: number): Promise<number> => {
     await sleep(100);
     if (n <= 1) return n;
     const [a, b] = await Promise.all([fibonacci(n - 1), fibonacci(n - 2)]);
     return a + b;
 });
 
-const fizzbuzz = NodeTracer.observe(async (n: number): Promise<string[]> => {
+const fizzbuzz = Tracer.observe(async (n: number): Promise<string[]> => {
     await sleep(100);
     const result: string[] = [];
     for (let i = 1; i <= n; i += 1) {
@@ -36,21 +36,21 @@ const fizzbuzz = NodeTracer.observe(async (n: number): Promise<string[]> => {
     return result;
 });
 
-const chat = NodeTracer.observe(async (message: string): Promise<string> => {
+const chat = Tracer.observe(async (message: string): Promise<string> => {
     const response = await client.chat.completions.create({
         model: "claude-opus-4-1",
         messages: [{ role: "user", content: message }],
         max_tokens: 50,
     });
-    NodeTracer.asyncTraceEvaluate("Hallucination");
+    Tracer.asyncTraceEvaluate("Hallucination");
     return response.choices[0]?.message?.content ?? "";
 });
 
-const longRunningTask = NodeTracer.observe(
+const longRunningTask = Tracer.observe(
     async (duration: number): Promise<string> => {
         await sleep(duration * 1000);
-        await NodeTracer.span("long_running_task_inner", async () => {
-            NodeTracer.setInput("hi");
+        await Tracer.span("long_running_task_inner", async () => {
+            Tracer.setInput("hi");
         });
         return `Sleeping for ${duration} seconds`;
     },
@@ -87,16 +87,16 @@ type RequestSpec =
     };
 
 async function handleRequest(spec: RequestSpec): Promise<number | string | string[]> {
-    await NodeTracer.init({ projectName: spec.name });
-    return NodeTracer.span("handle", async () => {
-        NodeTracer.setCustomerId(spec.customerId);
-        NodeTracer.setSessionId(spec.sessionId);
-        NodeTracer.tag(spec.tags);
+    await Tracer.init({ projectName: spec.name });
+    return Tracer.span("handle", async () => {
+        Tracer.setCustomerId(spec.customerId);
+        Tracer.setSessionId(spec.sessionId);
+        Tracer.tag(spec.tags);
         if (spec.name === "fibonacci") return fibonacci(spec.n);
         if (spec.name === "fizzbuzz") return fizzbuzz(spec.n);
         if (spec.name === "chat") {
             const result = await chat(spec.message);
-            NodeTracer.asyncEvaluate("answer_relevancy", [
+            Tracer.asyncEvaluate("answer_relevancy", [
                 Example.create({
                     input: spec.message,
                     actual_output: result,
@@ -208,4 +208,4 @@ async function main(): Promise<void> {
 }
 
 await main();
-await NodeTracer.shutdown();
+await Tracer.shutdown();

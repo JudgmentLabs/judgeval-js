@@ -1,6 +1,6 @@
 import { OpenAIInstrumentation } from "@opentelemetry/instrumentation-openai";
-import { NodeTracer } from "judgeval";
+import { Tracer } from "judgeval";
 
-NodeTracer.registerOTELInstrumentation(
+Tracer.registerOTELInstrumentation(
   new OpenAIInstrumentation({ captureMessageContent: true }),
 );

@@ -4,10 +4,9 @@ export {
   type Serializer,
   type TracerConfig,
 } from "./BaseTracer";
-export { BrowserTracer, type BrowserTracerConfig } from "./BrowserTracer";
 export { JudgmentSpanExporter } from "./exporters/JudgmentSpanExporter";
 export { NoOpSpanExporter } from "./exporters/NoOpSpanExporter";
 export { JudgmentTracerProvider } from "./JudgmentTracerProvider";
-export { NodeTracer } from "./NodeTracer";
+export { Tracer } from "./Tracer";
 export { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
 export { NoOpSpanProcessor } from "./processors/NoOpSpanProcessor";

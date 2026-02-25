@@ -1,6 +1,6 @@
 import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
-import { JudgmentTracerProvider, NodeTracer } from "judgeval";
+import { JudgmentTracerProvider, Tracer } from "judgeval";
 
 JudgmentTracerProvider.installAsGlobalTracerProvider();
 function requireEnv(name: string): string {
@@ -12,7 +12,7 @@ function requireEnv(name: string): string {
 requireEnv("OPENAI_API_KEY");
 
 
-const chatWithUser = NodeTracer.observe(async function _chatWithUser(userMessage: string): Promise<string> {
+const chatWithUser = Tracer.observe(async function _chatWithUser(userMessage: string): Promise<string> {
   const { text } = await generateText({
     model: openai("gpt-4o-mini"),
     system: "You are a helpful assistant.",
@@ -27,9 +27,9 @@ const chatWithUser = NodeTracer.observe(async function _chatWithUser(userMessage
 });
 
 (async () => {
-  await NodeTracer.init({ projectName: "ai-sdk-example" });
+  await Tracer.init({ projectName: "ai-sdk-example" });
   const result = await chatWithUser("What is the capital of France?");
   console.log(result);
-  await NodeTracer.forceFlush();
-  await NodeTracer.shutdown();
+  await Tracer.forceFlush();
+  await Tracer.shutdown();
 })();

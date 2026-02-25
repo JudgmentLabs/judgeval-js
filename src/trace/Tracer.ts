@@ -1,20 +1,23 @@
-import { resourceFromAttributes } from "@opentelemetry/resources";
-import { WebTracerProvider } from "@opentelemetry/sdk-trace-web";
+import {
+  defaultResource,
+  resourceFromAttributes,
+} from "@opentelemetry/resources";
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import { JUDGMENT_API_KEY, JUDGMENT_API_URL, JUDGMENT_ORG_ID } from "../env";
+import { JudgmentApiClient } from "../internal/api";
+import { Logger } from "../utils/logger";
+import { resolveProjectId } from "../utils/resolveProjectId";
 import { safeStringify } from "../utils/serializer";
 import { VERSION } from "../version";
+import type { TracerConfig } from "./BaseTracer";
 import { BaseTracer } from "./BaseTracer";
 import { JudgmentTracerProvider } from "./JudgmentTracerProvider";
 import { JudgmentSpanExporter } from "./exporters/JudgmentSpanExporter";
 import { NoOpSpanExporter } from "./exporters/NoOpSpanExporter";
 import { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
 import { NoOpSpanProcessor } from "./processors/NoOpSpanProcessor";
-import type { TracerConfig } from "./BaseTracer";
 
-export interface BrowserTracerConfig extends TracerConfig {
-  projectId?: string;
-}
-
-export class BrowserTracer extends BaseTracer {
+export class Tracer extends BaseTracer {
   private _spanExporter: JudgmentSpanExporter | null = null;
   private _spanProcessor: JudgmentSpanProcessor | null = null;
 
@@ -26,7 +29,8 @@ export class BrowserTracer extends BaseTracer {
     apiUrl: string | null,
     environment: string | null,
     serializer: (v: unknown) => string,
-    tracerProvider: WebTracerProvider,
+    tracerProvider: NodeTracerProvider,
+    client: JudgmentApiClient | null,
     enableMonitoring: boolean,
   ) {
     super(
@@ -38,26 +42,54 @@ export class BrowserTracer extends BaseTracer {
       environment,
       serializer,
       tracerProvider,
-      null,
+      client,
       enableMonitoring,
     );
   }
 
-  static init(config: BrowserTracerConfig = {}): BrowserTracer {
-    const apiKey = config.apiKey ?? null;
-    const organizationId = config.organizationId ?? null;
-    const apiUrl = config.apiUrl ?? "https://api.judgmentlabs.ai";
+  static async init(config: TracerConfig = {}): Promise<Tracer> {
+    const apiKey = config.apiKey ?? JUDGMENT_API_KEY;
+    const organizationId = config.organizationId ?? JUDGMENT_ORG_ID;
+    const apiUrl = config.apiUrl ?? JUDGMENT_API_URL;
     const projectName = config.projectName ?? null;
-    const projectId = config.projectId ?? null;
     const serializer = config.serializer ?? safeStringify;
 
     let enableMonitoring = true;
 
-    if (!projectName) enableMonitoring = false;
-    if (!projectId) enableMonitoring = false;
-    if (!apiKey) enableMonitoring = false;
-    if (!organizationId) enableMonitoring = false;
-    if (!apiUrl) enableMonitoring = false;
+    if (!projectName) {
+      Logger.warning(
+        "project_name not provided. Tracer will not export spans.",
+      );
+      enableMonitoring = false;
+    }
+    if (!apiKey) {
+      Logger.warning("api_key not provided. Tracer will not export spans.");
+      enableMonitoring = false;
+    }
+    if (!organizationId) {
+      Logger.warning(
+        "organization_id not provided. Tracer will not export spans.",
+      );
+      enableMonitoring = false;
+    }
+    if (!apiUrl) {
+      Logger.warning("api_url not provided. Tracer will not export spans.");
+      enableMonitoring = false;
+    }
+
+    let client: JudgmentApiClient | null = null;
+    let projectId: string | null = null;
+
+    if (enableMonitoring && projectName && apiKey && organizationId && apiUrl) {
+      client = new JudgmentApiClient(apiUrl, apiKey, organizationId);
+      projectId = await resolveProjectId(client, projectName).catch(() => null);
+      if (!projectId) {
+        Logger.warning(
+          `Project '${projectName}' not found. Tracer will not export spans.`,
+        );
+        enableMonitoring = false;
+      }
+    }
 
     const resourceAttrs: Record<string, string> = {
       "service.name": projectName ?? "unknown",
@@ -71,11 +103,13 @@ export class BrowserTracer extends BaseTracer {
       Object.assign(resourceAttrs, config.resourceAttributes);
     }
 
-    const resource = resourceFromAttributes(resourceAttrs);
+    const resource = defaultResource().merge(
+      resourceFromAttributes(resourceAttrs),
+    );
 
-    const tracerProvider = new WebTracerProvider({ resource });
+    const tracerProvider = new NodeTracerProvider({ resource });
 
-    const tracer = new BrowserTracer(
+    const tracer = new Tracer(
       projectName,
       projectId,
       apiKey,
@@ -84,11 +118,12 @@ export class BrowserTracer extends BaseTracer {
       config.environment ?? null,
       serializer,
       tracerProvider,
+      client,
       enableMonitoring,
     );
 
     if (enableMonitoring) {
-      const providerWithProcessor = new WebTracerProvider({
+      const providerWithProcessor = new NodeTracerProvider({
         resource,
         spanProcessors: [tracer.getSpanProcessor()],
       });

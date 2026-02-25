@@ -390,7 +390,7 @@ export abstract class BaseTracer {
     if (!currentSpan?.isRecording()) return;
 
     if (typeof metadata.non_cached_input_tokens === "number") {
-      currentSpan.setAttribute( 
+      currentSpan.setAttribute(
         AttributeKeys.JUDGMENT_USAGE_NON_CACHED_INPUT_TOKENS,
         metadata.non_cached_input_tokens,
       );

@@ -37,11 +37,11 @@ pnpm add judgeval
 
 ```typescript
 import { OpenAIInstrumentation } from "@opentelemetry/instrumentation-openai";
-import { Judgeval, type NodeTracer } from "judgeval";
+import { Judgeval, type Tracer } from "judgeval";
 
 const client = Judgeval.create();
 
-const tracer = await client.nodeTracer.create({
+const tracer = await client.tracer.create({
   projectName: "my-llm-app",
   enableEvaluation: true,
   enableMonitoring: true,
