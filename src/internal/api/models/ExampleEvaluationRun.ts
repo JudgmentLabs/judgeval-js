@@ -6,16 +6,16 @@ import type { Example } from "./Example";
 import type { JudgmentScorerConfig } from "./JudgmentScorerConfig";
 
 export interface ExampleEvaluationRun {
-  id?: string | null | null;
+  id?: string | null;
   project_id: string;
   eval_name: string;
-  model?: string | null | null;
-  created_at?: string | null | null;
+  model?: string | null;
+  created_at?: string | null;
   user_id?: string | null;
-  scorers?: Record<string, unknown>[] | null | null;
+  scorers?: Record<string, unknown>[] | null;
   custom_scorers: CustomScorerPayload[];
   judgment_scorers: JudgmentScorerConfig[];
   examples: Example[];
-  trace_span_id?: string | null | null;
-  trace_id?: string | null | null;
+  trace_span_id?: string | null;
+  trace_id?: string | null;
 }

@@ -5,13 +5,13 @@ import type { CustomScorerPayload } from "./CustomScorerPayload";
 import type { JudgmentScorerConfig } from "./JudgmentScorerConfig";
 
 export interface TraceEvaluationRun {
-  id?: string | null | null;
+  id?: string | null;
   project_id: string;
   eval_name: string;
-  model?: string | null | null;
-  created_at?: string | null | null;
+  model?: string | null;
+  created_at?: string | null;
   user_id?: string | null;
-  scorers?: Record<string, unknown>[] | null | null;
+  scorers?: Record<string, unknown>[] | null;
   custom_scorers: CustomScorerPayload[];
   judgment_scorers: JudgmentScorerConfig[];
   trace_and_span_ids: Record<string, unknown>[][];

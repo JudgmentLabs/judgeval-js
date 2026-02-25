@@ -177,7 +177,8 @@ function generateInterface(
     if (isRequired) {
       lines.push(`  ${safeName}: ${propType};`);
     } else {
-      lines.push(`  ${safeName}?: ${propType} | null;`);
+      const nullablePropType = propType.includes(" | null") ? propType : `${propType} | null`;
+      lines.push(`  ${safeName}?: ${nullablePropType};`);
     }
   }
 

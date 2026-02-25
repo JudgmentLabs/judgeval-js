@@ -9,8 +9,8 @@ export interface PromptScorer {
   prompt: string;
   threshold: number;
   model: string;
-  options?: Record<string, unknown> | null | null;
-  description?: string | null | null;
+  options?: Record<string, unknown> | null;
+  description?: string | null;
   created_at: string | null;
   updated_at: string | null;
   is_trace?: boolean | null;

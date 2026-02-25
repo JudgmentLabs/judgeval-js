@@ -5,9 +5,9 @@ import type { Example } from "./Example";
 
 export interface ExampleScoringResult {
   scorers_data: Record<string, unknown>[];
-  name?: string | null | null;
+  name?: string | null;
   data_object: Example;
-  trace_id?: string | null | null;
-  run_duration?: number | null | null;
-  evaluation_cost?: number | null | null;
+  trace_id?: string | null;
+  run_duration?: number | null;
+  evaluation_cost?: number | null;
 }

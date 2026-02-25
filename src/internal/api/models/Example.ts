@@ -4,5 +4,5 @@
 export interface Example {
   example_id: string;
   created_at: string;
-  name?: string | null | null;
+  name?: string | null;
 }
