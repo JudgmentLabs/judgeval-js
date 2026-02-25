@@ -1,15 +1,6 @@
 export { APIScorer } from "./APIScorer";
 export { BaseScorer } from "./BaseScorer";
 export {
-  AnswerCorrectnessScorer,
-  AnswerRelevancyScorer,
-  BuiltInScorersFactory,
-  FaithfulnessScorer,
-  type AnswerCorrectnessScorerConfig,
-  type AnswerRelevancyScorerConfig,
-  type FaithfulnessScorerConfig,
-} from "./builtIn";
-export {
   CustomScorer,
   type CustomScorerConfig,
 } from "./customScorer/CustomScorer";

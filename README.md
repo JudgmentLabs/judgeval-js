@@ -67,7 +67,11 @@ await tracer.shutdown();
 ```typescript
 import { Example } from "judgeval";
 
-const scorer = client.scorers.builtIn.answerRelevancy();
+const scorer = client.scorers.promptScorer.create({
+  name: "relevancy",
+  criteria: "The output should be relevant to the input.",
+  scale: [1, 5],
+});
 
 const example = Example.create({
   input: "What is the capital of France?",

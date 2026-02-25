@@ -1,5 +1,4 @@
 import { JudgmentApiClient } from "../internal/api";
-import { BuiltInScorersFactory } from "./builtIn/BuiltInScorersFactory";
 import { CustomScorerFactory } from "./customScorer/CustomScorerFactory";
 import { PromptScorerFactory } from "./promptScorer/PromptScorerFactory";
 
@@ -20,9 +19,5 @@ export class ScorersFactory {
 
   get customScorer(): CustomScorerFactory {
     return new CustomScorerFactory();
-  }
-
-  get builtIn(): BuiltInScorersFactory {
-    return new BuiltInScorersFactory();
   }
 }
