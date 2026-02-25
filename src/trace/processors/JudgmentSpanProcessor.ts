@@ -110,6 +110,7 @@ export class JudgmentSpanProcessor extends BatchSpanProcessor {
       )
     )
       return;
+    // TODO: review, is this fine?
     this._emitSpan(span as unknown as ReadableSpan);
   }
 
