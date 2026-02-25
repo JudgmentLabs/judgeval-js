@@ -19,16 +19,6 @@ function makeSpanKey(ctx: SpanContext): SpanKey {
   return `${ctx.traceId}:${ctx.spanId}`;
 }
 
-function isReadableSpan(span: unknown): span is ReadableSpan {
-  return (
-    typeof span === "object" &&
-    span !== null &&
-    "attributes" in span &&
-    "startTime" in span &&
-    "endTime" in span
-  );
-}
-
 export class JudgmentSpanProcessor extends BatchSpanProcessor {
   tracer: BaseTracer | null;
   private _internalAttributes = new Map<SpanKey, Map<string, unknown>>();
@@ -112,7 +102,6 @@ export class JudgmentSpanProcessor extends BatchSpanProcessor {
     const proxy = JudgmentTracerProvider.getInstance();
     const span = proxy.getCurrentSpan();
     if (!span?.isRecording()) return;
-    if (!isReadableSpan(span)) return;
     if (
       this.getInternalAttribute(
         span.spanContext(),
@@ -121,7 +110,7 @@ export class JudgmentSpanProcessor extends BatchSpanProcessor {
       )
     )
       return;
-    this._emitSpan(span);
+    this._emitSpan(span as unknown as ReadableSpan);
   }
 
   onStart(span: Span, parentContext: Context): void {
