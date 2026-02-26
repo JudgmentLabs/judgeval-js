@@ -1,4 +1,4 @@
-import type { JudgmentScorerConfig } from "../../internal/api";
+import type { ScorerConfig } from "../../internal/api";
 import { APIScorerType } from "../../data/APIScorerType";
 import { APIScorer } from "../APIScorer";
 
@@ -31,7 +31,7 @@ export class CustomScorer extends APIScorer {
     return this._serverHosted;
   }
 
-  getScorerConfig(): JudgmentScorerConfig {
+  getScorerConfig(): ScorerConfig {
     throw new Error("CustomScorer does not use ScorerConfig");
   }
 }

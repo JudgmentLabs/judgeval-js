@@ -471,10 +471,10 @@ export abstract class BaseTracer {
   //  Static API: Async Evaluation                                      //
   // ------------------------------------------------------------------ //
 
-  static asyncEvaluate(_judge: string, _examples: Example[]): void {
+  static asyncEvaluate(judge: string, example: Example): void {
     const proxy = BaseTracer._getProxyProvider();
     const tracer = proxy.getActiveTracer();
-    if (!tracer?.projectId) {
+    if (!tracer?.projectId || !tracer._client) {
       Logger.warning("asyncEvaluate: no active tracer or not configured");
       return;
     }
@@ -483,26 +483,20 @@ export abstract class BaseTracer {
       Logger.warning("asyncEvaluate: no active span");
       return;
     }
-    void Promise.resolve().catch((err: unknown) => {
-      Logger.error(`asyncEvaluate failed: ${String(err)}`);
-    });
-  }
-
-  static asyncTraceEvaluate(_judge: string): void {
-    const proxy = BaseTracer._getProxyProvider();
-    const tracer = proxy.getActiveTracer();
-    if (!tracer?.projectId) {
-      Logger.warning("asyncTraceEvaluate: no active tracer or not configured");
-      return;
-    }
-    const ids = BaseTracer._getCurrentTraceAndSpanId();
-    if (!ids) {
-      Logger.warning("asyncTraceEvaluate: no active span");
-      return;
-    }
-    void Promise.resolve().catch((err: unknown) => {
-      Logger.error(`asyncTraceEvaluate failed: ${String(err)}`);
-    });
+    const [traceId, spanId] = ids;
+    tracer._client
+      .postV1projectsEvalQueue(tracer.projectId, {
+        eval_name: traceId,
+        judges: [{ name: judge }],
+        examples: [
+          { ...example.toModel(), trace_id: traceId, span_id: spanId },
+        ],
+        is_offline: false,
+        is_behavior: false,
+      })
+      .catch((err: unknown) => {
+        Logger.error(`asyncEvaluate failed: ${String(err)}`);
+      });
   }
 }
 

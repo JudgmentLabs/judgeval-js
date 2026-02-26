@@ -4,14 +4,15 @@
 import type {
   AddProjectRequest,
   AddProjectResponse,
+  AddToJudgeEvalQueueResponse,
   AddToRunEvalQueueExamplesResponse,
   AddToRunEvalQueueTracesResponse,
   AddTraceTagsRequest,
   AddTraceTagsResponse,
+  BaseScorer,
   CreateDatasetRequest,
   CreateDatasetResponse,
   CustomScorerExistsResponse,
-  CustomScorerPayload,
   DatasetInfo,
   DeleteProjectResponse,
   E2EFetchSpanScoreRequest,
@@ -34,7 +35,7 @@ import type {
   InsertExamplesResponse,
   InsertPromptRequest,
   InsertPromptResponse,
-  JudgmentScorerConfig,
+  JudgeEvaluationRun,
   LocalScorerResult,
   LogEvalResultsExamplesRequest,
   LogEvalResultsExamplesResponse,
@@ -46,6 +47,7 @@ import type {
   PullDatasetResponse,
   ResolveProjectRequest,
   ResolveProjectResponse,
+  ScorerConfig,
   ScorerExistsResponse,
   ScoringResult,
   TagPromptRequest,
@@ -225,6 +227,14 @@ export class JudgmentApiClient {
     payload: TraceEvaluationRun,
   ): Promise<AddToRunEvalQueueTracesResponse> {
     const url = this.baseUrl + `/v1/projects/${projectId}/eval-queue/traces`;
+    return this.request("POST", url, payload);
+  }
+
+  async postV1projectsEvalQueue(
+    projectId: string,
+    payload: JudgeEvaluationRun,
+  ): Promise<AddToJudgeEvalQueueResponse> {
+    const url = this.baseUrl + `/v1/projects/${projectId}/eval-queue`;
     return this.request("POST", url, payload);
   }
 

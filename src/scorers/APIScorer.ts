@@ -1,4 +1,4 @@
-import type { JudgmentScorerConfig } from "../internal/api";
+import type { ScorerConfig } from "../internal/api";
 import type { APIScorerType } from "../data/APIScorerType";
 import { BaseScorer } from "./BaseScorer";
 
@@ -82,7 +82,7 @@ export class APIScorer extends BaseScorer {
     return { ...this.additionalProperties };
   }
 
-  getScorerConfig(): JudgmentScorerConfig {
+  getScorerConfig(): ScorerConfig {
     const kwargs: Record<string, unknown> = {
       ...this.additionalProperties,
       strict_mode: this._strictMode,

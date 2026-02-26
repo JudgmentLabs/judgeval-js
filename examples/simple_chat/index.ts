@@ -32,14 +32,11 @@ const chatWithUser = Tracer.observe(async function _chatWithUser(userMessage: st
   console.log(`Assistant: ${result}`);
 
 
-  Tracer.asyncEvaluate(
-    "answer_relevancy",
-    [
-      Example.create({
-        input: "What is the capital of France?",
-        actual_output: result,
-      })
-    ]
+  Tracer.asyncEvaluate("Relevancy Scorer", 
+    Example.create({
+      request: "chicken nuggest",
+      response: "penguins",
+    }),
   );
 
   return result;

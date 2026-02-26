@@ -5,4 +5,6 @@ export interface Example {
   example_id: string;
   created_at: string;
   name?: string | null;
+  trace_id?: string | null;
+  span_id?: string | null;
 }
