@@ -1,4 +1,4 @@
-import { Example, Tracer } from "judgeval";
+import { Tracer } from "judgeval";
 import OpenAI from "openai";
 
 function requireEnv(name: string): string {
@@ -15,7 +15,9 @@ const openai = new OpenAI({
   apiKey: OPENAI_API_KEY,
 });
 
-const chatWithUser = Tracer.observe(async function _chatWithUser(userMessage: string): Promise<string> {
+const chatWithUser = Tracer.observe(async function _chatWithUser(
+  userMessage: string,
+): Promise<string> {
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: "You are a helpful assistant." },
     { role: "user", content: userMessage },
@@ -31,14 +33,10 @@ const chatWithUser = Tracer.observe(async function _chatWithUser(userMessage: st
   console.log(`User: ${userMessage}`);
   console.log(`Assistant: ${result}`);
 
-
-  Tracer.asyncEvaluate("Relevancy Scorer", 
-    Example.create({
-      request: "chicken nuggest",
-      response: "penguins",
-    }),
-  );
-
+  Tracer.asyncEvaluate("Relevancy Scorer", {
+    request: "chicken nuggest",
+    response: "penguins",
+  });
   return result;
 });
 

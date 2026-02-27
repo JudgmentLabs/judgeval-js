@@ -1,7 +1,5 @@
 import { JUDGMENT_API_KEY, JUDGMENT_API_URL, JUDGMENT_ORG_ID } from "./env";
-import { EvaluationFactory } from "./evaluation/EvaluationFactory";
 import { JudgmentApiClient } from "./internal/api";
-import { ScorersFactory } from "./scorers/ScorersFactory";
 export interface JudgevalConfig {
   apiKey?: string;
   organizationId?: string;
@@ -31,13 +29,5 @@ export class Judgeval {
 
   static create(config: JudgevalConfig = {}): Judgeval {
     return new Judgeval(config);
-  }
-
-  get scorers(): ScorersFactory {
-    return new ScorersFactory(this.internalClient);
-  }
-
-  get evaluation(): EvaluationFactory {
-    return new EvaluationFactory(this.internalClient);
   }
 }

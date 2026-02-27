@@ -16,21 +16,3 @@ export {
   Tracer,
   NoOpSpanExporter,
 } from "./trace";
-
-export {
-  APIScorer,
-  BaseScorer,
-  CustomScorer,
-  CustomScorerFactory,
-  PromptScorer,
-  PromptScorerFactory,
-  ScorersFactory,
-  type CustomScorerConfig,
-  type PromptScorerConfig,
-} from "./scorers";
-
-export {
-  Evaluation,
-  EvaluationFactory,
-  type EvaluationConfig,
-} from "./evaluation";

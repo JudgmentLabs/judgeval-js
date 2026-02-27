@@ -11,8 +11,9 @@ function requireEnv(name: string): string {
 
 requireEnv("OPENAI_API_KEY");
 
-
-const chatWithUser = Tracer.observe(async function _chatWithUser(userMessage: string): Promise<string> {
+const chatWithUser = Tracer.observe(async function _chatWithUser(
+  userMessage: string,
+): Promise<string> {
   const { text } = await generateText({
     model: openai("gpt-4o-mini"),
     system: "You are a helpful assistant.",

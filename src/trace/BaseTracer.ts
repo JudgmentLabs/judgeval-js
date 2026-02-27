@@ -6,7 +6,7 @@ import {
 } from "@opentelemetry/api";
 import type { Instrumentation } from "@opentelemetry/instrumentation";
 import type { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
-import { Example } from "../data";
+import { randomUUID } from "crypto";
 import { JudgmentApiClient } from "../internal/api";
 import { AttributeKeys } from "../judgmentAttributeKeys";
 import { parseFunctionArgs } from "../utils/annotate";
@@ -19,6 +19,7 @@ import {
   CUSTOMER_ID_KEY,
   SESSION_ID_KEY,
 } from "./processors/_lifecycles/contextKeys";
+
 const TRACER_NAME = "judgeval";
 
 export interface LLMMetadata {
@@ -471,7 +472,7 @@ export abstract class BaseTracer {
   //  Static API: Async Evaluation                                      //
   // ------------------------------------------------------------------ //
 
-  static asyncEvaluate(judge: string, example: Example): void {
+  static asyncEvaluate(judge: string, example?: Record<string, unknown>): void {
     const proxy = BaseTracer._getProxyProvider();
     const tracer = proxy.getActiveTracer();
     if (!tracer?.projectId || !tracer._client) {
@@ -489,7 +490,13 @@ export abstract class BaseTracer {
         eval_name: traceId,
         judges: [{ name: judge }],
         examples: [
-          { ...example.toModel(), trace_id: traceId, span_id: spanId },
+          {
+            example_id: randomUUID(),
+            created_at: new Date().toISOString(),
+            trace_id: traceId,
+            span_id: spanId,
+            ...example,
+          },
         ],
         is_offline: false,
         is_behavior: false,
