@@ -4,7 +4,55 @@
 import type { TraceSpan } from "./TraceSpan";
 
 export interface TraceScoringResult {
-  scorers_data: Record<string, unknown>[];
+  scorers_data: (
+    | { scorer_name: string }
+    | (
+        | (
+            | {
+                reason: {
+                  text: string;
+                  citations?:
+                    | { span_id: string; span_attribute: string }[]
+                    | null;
+                };
+                metadata?: { evaluation_model?: string | null };
+                error?: string | null;
+              }
+            | {
+                score_type: string;
+                num_value: number;
+                minimum_score_range?: (string | number) | null;
+                maximum_score_range?: (string | number) | null;
+              }
+          )
+        | (
+            | {
+                reason: {
+                  text: string;
+                  citations?:
+                    | { span_id: string; span_attribute: string }[]
+                    | null;
+                };
+                metadata?: { evaluation_model?: string | null };
+                error?: string | null;
+              }
+            | { score_type: string; bool_value: boolean }
+          )
+        | (
+            | {
+                reason: {
+                  text: string;
+                  citations?:
+                    | { span_id: string; span_attribute: string }[]
+                    | null;
+                };
+                metadata?: { evaluation_model?: string | null };
+                error?: string | null;
+              }
+            | { score_type: string; str_value: string }
+          )
+      )
+  )[];
   name?: string | null;
   data_object: TraceSpan;
   trace_id?: string | null;

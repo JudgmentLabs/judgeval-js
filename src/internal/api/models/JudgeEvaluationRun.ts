@@ -7,7 +7,7 @@ export interface JudgeEvaluationRun {
   id?: string | null;
   eval_name: string;
   created_at?: string | null;
-  judges: Record<string, unknown>[];
+  judges: { name: string }[];
   examples: Example[];
   is_offline: boolean;
   is_behavior: boolean;

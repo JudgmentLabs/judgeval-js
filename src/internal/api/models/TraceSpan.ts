@@ -18,6 +18,10 @@ export interface TraceSpan {
   duration: string;
   status_code: number;
   status_message: string | null;
-  events: Record<string, unknown>[];
+  events: {
+    Timestamp: string;
+    Name: string;
+    Attributes: Record<string, unknown>;
+  }[];
   links: string | null;
 }
