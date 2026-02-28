@@ -29,3 +29,23 @@ export function safeStringify(obj: unknown): string {
     }
   }
 }
+
+/**
+ * Serializes an attribute to an "Attribute" compatible value. Primitives are returned as is, objects are serialized using the provided serializer.
+ *
+ * @param value - The value to serialize.
+ * @param serializer - The serializer to use.
+ * @returns A string, number, or boolean value.
+ */
+export function serializeAttribute(
+  value: unknown,
+  serializer: Serializer,
+): string | number | boolean {
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  )
+    return value;
+  return serializer(value);
+}

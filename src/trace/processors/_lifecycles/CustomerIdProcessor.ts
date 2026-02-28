@@ -4,7 +4,7 @@ import type {
   Span,
   SpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
-import { AttributeKeys } from "../../../judgmentAttributeKeys";
+import { AttributeKeys } from "../../../JudgmentAttributeKeys";
 import type { Maybe } from "../../../utils/type-helpers";
 import { CUSTOMER_ID_KEY } from "./contextKeys";
 import { register } from "./registry";

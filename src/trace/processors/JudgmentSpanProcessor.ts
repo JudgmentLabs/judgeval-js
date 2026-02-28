@@ -8,7 +8,7 @@ import {
 import {
   AttributeKeys,
   InternalAttributeKeys,
-} from "../../judgmentAttributeKeys";
+} from "../../JudgmentAttributeKeys";
 import type { BaseTracer } from "../BaseTracer";
 import { JudgmentTracerProvider } from "../JudgmentTracerProvider";
 import { getAll } from "./_lifecycles";

@@ -7,11 +7,15 @@ import {
 import type { Instrumentation } from "@opentelemetry/instrumentation";
 import type { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
 import { randomUUID } from "crypto";
+import { AttributeKeys } from "../JudgmentAttributeKeys";
 import { JudgmentApiClient } from "../internal/api";
-import { AttributeKeys } from "../judgmentAttributeKeys";
 import { parseFunctionArgs } from "../utils/annotate";
 import { Logger } from "../utils/logger";
-import { safeStringify } from "../utils/serializer";
+import {
+  safeStringify,
+  serializeAttribute,
+  Serializer,
+} from "../utils/serializer";
 import { JudgmentTracerProvider } from "./JudgmentTracerProvider";
 import type { JudgmentSpanExporter } from "./exporters/JudgmentSpanExporter";
 import type { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
@@ -39,21 +43,6 @@ export interface TracerConfig {
   setActive?: boolean;
   serializer?: (value: unknown) => string;
   resourceAttributes?: Record<string, string>;
-}
-
-export type Serializer = (value: unknown) => string;
-
-function serializeAttribute(
-  value: unknown,
-  serializer: Serializer,
-): string | number | boolean {
-  if (
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  )
-    return value;
-  return serializer(value);
 }
 
 /**
