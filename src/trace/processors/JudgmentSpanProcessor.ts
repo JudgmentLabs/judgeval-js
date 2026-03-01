@@ -90,8 +90,7 @@ export class JudgmentSpanProcessor extends BatchSpanProcessor {
       writable: false,
     });
     Object.defineProperty(emittedSpan, "endTime", {
-      /* eslint-disable-next-line @typescript-eslint/no-unnecessary-condition */
-      value: span.endTime ?? span.startTime,
+      value: span.startTime,
       writable: false,
     });
 
