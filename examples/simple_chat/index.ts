@@ -1,6 +1,5 @@
-import { Example } from "judgeval";
+import { Tracer } from "judgeval";
 import OpenAI from "openai";
-import { client, getTracer } from "./instrumentation";
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -16,7 +15,9 @@ const openai = new OpenAI({
   apiKey: OPENAI_API_KEY,
 });
 
-async function _chatWithUser(userMessage: string): Promise<string> {
+const chatWithUser = Tracer.observe(async function _chatWithUser(
+  userMessage: string,
+): Promise<string> {
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: "You are a helpful assistant." },
     { role: "user", content: userMessage },
@@ -32,26 +33,19 @@ async function _chatWithUser(userMessage: string): Promise<string> {
   console.log(`User: ${userMessage}`);
   console.log(`Assistant: ${result}`);
 
-  const tracer = await getTracer();
-
-  tracer.asyncEvaluate(
-    client.scorers.builtIn.answerRelevancy(),
-    Example.create({
-      input: "What is the capital of France?",
-      actual_output: result,
-    })
-  );
-
+  Tracer.asyncEvaluate("Relevancy Scorer", {
+    request: "chicken nuggest",
+    response: "penguins",
+  });
+  Tracer.asyncEvaluate("Sentiment");
   return result;
-}
+});
 
 (async () => {
-  const tracer = await getTracer();
-  const chatWithUser = tracer.observe(_chatWithUser);
-
+  await Tracer.init({ projectName: "js-new" });
   const result = await chatWithUser("What is the capital of France?");
   console.log(result);
 
-  await tracer.forceFlush();
-  await tracer.shutdown();
+  await Tracer.forceFlush();
+  await Tracer.shutdown();
 })();

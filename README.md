@@ -7,28 +7,8 @@
 
 Find the latest version on [npm](https://www.npmjs.com/package/judgeval).
 
-**npm:**
-
 ```bash
 npm install judgeval
-```
-
-**yarn:**
-
-```bash
-yarn add judgeval
-```
-
-**bun:**
-
-```bash
-bun add judgeval
-```
-
-**pnpm:**
-
-```bash
-pnpm add judgeval
 ```
 
 ## Usage
@@ -36,16 +16,10 @@ pnpm add judgeval
 ### Tracer
 
 ```typescript
-import { OpenAIInstrumentation } from "@opentelemetry/instrumentation-openai";
-import { Judgeval, type NodeTracer } from "judgeval";
+import { Tracer } from "judgeval";
 
-const client = Judgeval.create();
-
-const tracer = await client.nodeTracer.create({
+const tracer = await Tracer.init({
   projectName: "my-llm-app",
-  enableEvaluation: true,
-  enableMonitoring: true,
-  instrumentations: [new OpenAIInstrumentation()],
 });
 
 async function chatWithUser(userMessage: string): Promise<string> {
@@ -56,25 +30,31 @@ async function chatWithUser(userMessage: string): Promise<string> {
   return response.choices[0].message.content || "";
 }
 
-const tracedChat = tracer.observe(chatWithUser);
+const tracedChat = Tracer.observe(chatWithUser);
 const result = await tracedChat("What is the capital of France?");
 
-await tracer.shutdown();
+await Tracer.shutdown();
 ```
 
-### Scorer
+### Async Evaluation
+
+Trigger server-side evaluation on the current span:
 
 ```typescript
-import { Example } from "judgeval";
+import { Tracer } from "judgeval";
 
-const scorer = client.scorers.builtIn.answerRelevancy();
+const tracedChat = Tracer.observe(async (userMessage: string) => {
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [{ role: "user", content: userMessage }],
+  });
 
-const example = Example.create({
-  input: "What is the capital of France?",
-  actual_output: "Paris is the capital of France.",
+  Tracer.asyncEvaluate("Relevancy");
+
+  return response.choices[0].message.content || "";
 });
 
-await tracer.asyncEvaluate(scorer, example);
+await tracedChat("What is the capital of France?");
 ```
 
 ## Documentation

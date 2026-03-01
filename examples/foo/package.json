@@ -1,0 +1,21 @@
+{
+  "name": "foo",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "tsc --noEmit",
+    "start": "npm run build && bun run index.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@opentelemetry/instrumentation-openai": "^0.10.0",
+    "judgeval": "file:../..",
+    "openai": "^6.22.0"
+  }
+}
