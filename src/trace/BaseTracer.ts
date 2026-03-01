@@ -462,6 +462,7 @@ export abstract class BaseTracer {
   //  Static API: Async Evaluation                                      //
   // ------------------------------------------------------------------ //
 
+  // TODO: cleanup?
   private static _pendingEvals = new Map<string, PendingEvalPayload[]>();
 
   static asyncEvaluate(judge: string, example?: Record<string, unknown>): void {

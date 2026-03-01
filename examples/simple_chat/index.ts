@@ -37,6 +37,7 @@ const chatWithUser = Tracer.observe(async function _chatWithUser(
     request: "chicken nuggest",
     response: "penguins",
   });
+  Tracer.asyncEvaluate("Sentiment");
   return result;
 });
 
