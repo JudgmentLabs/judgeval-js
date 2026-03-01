@@ -9,6 +9,7 @@ import type { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
 import { randomUUID } from "crypto";
 import { AttributeKeys } from "../JudgmentAttributeKeys";
 import { JudgmentApiClient } from "../internal/api";
+import type { PendingEvalPayload } from "../internal/api/models/PendingEvalPayload";
 import { parseFunctionArgs } from "../utils/annotate";
 import { Logger } from "../utils/logger";
 import {
@@ -461,38 +462,53 @@ export abstract class BaseTracer {
   //  Static API: Async Evaluation                                      //
   // ------------------------------------------------------------------ //
 
+  private static _pendingEvals = new Map<string, PendingEvalPayload[]>();
+
   static asyncEvaluate(judge: string, example?: Record<string, unknown>): void {
     const proxy = BaseTracer._getProxyProvider();
     const tracer = proxy.getActiveTracer();
-    if (!tracer?.projectId || !tracer._client) {
-      Logger.warning("asyncEvaluate: no active tracer or not configured");
+    if (!tracer) {
+      Logger.warning("asyncEvaluate: no active tracer");
       return;
     }
-    const ids = BaseTracer._getCurrentTraceAndSpanId();
-    if (!ids) {
+    if (!tracer.projectId) {
+      Logger.warning("asyncEvaluate: no project configured");
+      return;
+    }
+    const currentSpan = proxy.getCurrentSpan();
+    if (!currentSpan?.isRecording()) {
       Logger.warning("asyncEvaluate: no active span");
       return;
     }
-    const [traceId, spanId] = ids;
-    tracer._client
-      .postV1projectsEvalQueue(tracer.projectId, {
-        eval_name: traceId,
-        judges: [{ name: judge }],
-        examples: [
-          {
-            example_id: randomUUID(),
-            created_at: new Date().toISOString(),
-            trace_id: traceId,
-            span_id: spanId,
-            ...example,
-          },
-        ],
-        is_offline: false,
-        is_behavior: false,
-      })
-      .catch((err: unknown) => {
-        Logger.error(`asyncEvaluate failed: ${String(err)}`);
-      });
+
+    const ctx = currentSpan.spanContext();
+    const spanKey = `${ctx.traceId}:${ctx.spanId}`;
+    const payloads = BaseTracer._pendingEvals.get(spanKey) ?? [];
+
+    const payload: PendingEvalPayload = {
+      project_id: tracer.projectId,
+      eval_name: `async_evaluate_${judge}_${payloads.length}`,
+      judges: [{ name: judge }],
+      examples: [
+        {
+          ...example,
+          example_id: randomUUID(),
+          created_at: new Date().toISOString(),
+          trace_id: ctx.traceId,
+          span_id: ctx.spanId,
+        },
+      ],
+      is_offline: false,
+      is_behavior: false,
+    };
+
+    payloads.push(payload);
+    BaseTracer._pendingEvals.set(spanKey, payloads);
+
+    currentSpan.setAttribute(
+      AttributeKeys.JUDGMENT_PENDING_TRACE_EVAL,
+      JSON.stringify(payloads),
+    );
   }
 }
 

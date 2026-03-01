@@ -3,7 +3,6 @@
 
 export type { AddProjectRequest } from "./AddProjectRequest";
 export type { AddProjectResponse } from "./AddProjectResponse";
-export type { AddToJudgeEvalQueueResponse } from "./AddToJudgeEvalQueueResponse";
 export type { AddToRunEvalQueueExamplesResponse } from "./AddToRunEvalQueueExamplesResponse";
 export type { AddToRunEvalQueueTracesResponse } from "./AddToRunEvalQueueTracesResponse";
 export type { AddTraceTagsRequest } from "./AddTraceTagsRequest";
@@ -34,12 +33,12 @@ export type { InsertExamplesRequest } from "./InsertExamplesRequest";
 export type { InsertExamplesResponse } from "./InsertExamplesResponse";
 export type { InsertPromptRequest } from "./InsertPromptRequest";
 export type { InsertPromptResponse } from "./InsertPromptResponse";
-export type { JudgeEvaluationRun } from "./JudgeEvaluationRun";
 export type { LocalScorerResult } from "./LocalScorerResult";
 export type { LogEvalResultsExamplesRequest } from "./LogEvalResultsExamplesRequest";
 export type { LogEvalResultsExamplesResponse } from "./LogEvalResultsExamplesResponse";
 export type { LogEvalResultsRequest } from "./LogEvalResultsRequest";
 export type { LogEvalResultsResponse } from "./LogEvalResultsResponse";
+export type { PendingEvalPayload } from "./PendingEvalPayload";
 export type { PromptCommitInfo } from "./PromptCommitInfo";
 export type { PromptScorer } from "./PromptScorer";
 export type { PullAllDatasetsResponse } from "./PullAllDatasetsResponse";
