@@ -1,4 +1,4 @@
-import type { Context, SpanContext } from "@opentelemetry/api";
+import type { Context, HrTime, SpanContext } from "@opentelemetry/api";
 import {
   BatchSpanProcessor,
   type ReadableSpan,
@@ -17,6 +17,10 @@ type SpanKey = `${string}:${string}`;
 
 function makeSpanKey(ctx: SpanContext): SpanKey {
   return `${ctx.traceId}:${ctx.spanId}`;
+}
+
+function isZeroHrTime(hrTime: HrTime): boolean {
+  return hrTime[0] === 0 && hrTime[1] === 0;
 }
 
 export class JudgmentSpanProcessor extends BatchSpanProcessor {
@@ -89,8 +93,12 @@ export class JudgmentSpanProcessor extends BatchSpanProcessor {
       value: newAttributes,
       writable: false,
     });
+    const endTime =
+      isZeroHrTime(span.endTime)
+        ? span.startTime
+        : span.endTime;
     Object.defineProperty(emittedSpan, "endTime", {
-      value: span.startTime,
+      value: endTime,
       writable: false,
     });
 
