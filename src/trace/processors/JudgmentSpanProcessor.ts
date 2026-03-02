@@ -93,10 +93,7 @@ export class JudgmentSpanProcessor extends BatchSpanProcessor {
       value: newAttributes,
       writable: false,
     });
-    const endTime =
-      isZeroHrTime(span.endTime)
-        ? span.startTime
-        : span.endTime;
+    const endTime = isZeroHrTime(span.endTime) ? span.startTime : span.endTime;
     Object.defineProperty(emittedSpan, "endTime", {
       value: endTime,
       writable: false,
