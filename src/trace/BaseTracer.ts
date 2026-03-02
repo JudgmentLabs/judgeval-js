@@ -17,6 +17,7 @@ import {
   serializeAttribute,
   Serializer,
 } from "../utils/serializer";
+import { Maybe } from "../utils/type-helpers";
 import { JudgmentTracerProvider } from "./JudgmentTracerProvider";
 import type { JudgmentSpanExporter } from "./exporters/JudgmentSpanExporter";
 import type { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
@@ -28,11 +29,13 @@ import {
 const TRACER_NAME = "judgeval";
 
 export interface LLMMetadata {
-  non_cached_input_tokens?: number | null | undefined;
-  output_tokens?: number | null | undefined;
-  cache_read_input_tokens?: number | null | undefined;
-  cache_creation_input_tokens?: number | null | undefined;
-  total_cost_usd?: number | null | undefined;
+  model?: Maybe<string>;
+  provider?: Maybe<string>;
+  non_cached_input_tokens?: Maybe<number>;
+  output_tokens?: Maybe<number>;
+  cache_read_input_tokens?: Maybe<number>;
+  cache_creation_input_tokens?: Maybe<number>;
+  total_cost_usd?: Maybe<number>;
 }
 
 export interface TracerConfig {
@@ -379,6 +382,20 @@ export abstract class BaseTracer {
   static recordLLMMetadata(metadata: LLMMetadata): void {
     const currentSpan = BaseTracer._getProxyProvider().getCurrentSpan();
     if (!currentSpan?.isRecording()) return;
+
+    if (typeof metadata.model === "string") {
+      currentSpan.setAttribute(
+        AttributeKeys.JUDGMENT_LLM_MODEL_NAME,
+        metadata.model,
+      );
+    }
+
+    if (typeof metadata.provider === "string") {
+      currentSpan.setAttribute(
+        AttributeKeys.JUDGMENT_LLM_PROVIDER,
+        metadata.provider,
+      );
+    }
 
     if (typeof metadata.non_cached_input_tokens === "number") {
       currentSpan.setAttribute(
