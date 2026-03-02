@@ -1,0 +1,11 @@
+examples/
+scripts/
+src/
+tests/
+.github/
+.env
+*.ts
+!dist/**
+tsconfig.json
+eslint.config.ts
+.prettierrc
