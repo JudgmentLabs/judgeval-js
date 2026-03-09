@@ -1,6 +1,6 @@
 import {
   INVALID_SPAN_CONTEXT,
-  context as otelContext,
+  ROOT_CONTEXT,
   SpanStatusCode,
   trace,
   type Context,
@@ -168,7 +168,7 @@ export class JudgmentTracerProvider implements TracerProvider {
   }
 
   getCurrentContext(): Context {
-    return _contextStorage.getStore() ?? otelContext.active();
+    return _contextStorage.getStore() ?? ROOT_CONTEXT;
   }
 
   getCurrentSpan(): Span | undefined {
