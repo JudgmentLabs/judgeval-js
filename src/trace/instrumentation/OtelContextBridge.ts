@@ -1,4 +1,8 @@
-import { context as otelContext, type Context } from "@opentelemetry/api";
+import {
+  ROOT_CONTEXT,
+  context as otelContext,
+  type Context,
+} from "@opentelemetry/api";
 import { AsyncLocalStorage } from "async_hooks";
 
 type OTelContextApi = typeof otelContext;
@@ -38,7 +42,7 @@ export function installOtelContextBridge(
     if (!isGateEnabled()) return originalActive();
     const bridged = bridgeContextStorage.getStore();
     if (bridged) return bridged;
-    return getJudgmentContext ? getJudgmentContext() : originalActive();
+    return getJudgmentContext ? getJudgmentContext() : ROOT_CONTEXT;
   };
 
   api.with = (contextValue, fn, thisArg, ...args) => {
