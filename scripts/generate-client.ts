@@ -80,10 +80,7 @@ function collectSchemasWithId(spec: OpenAPISpec): Map<string, any> {
   return schemasById;
 }
 
-function getTypeScriptType(
-  schema: any,
-  schemasById: Map<string, any>
-): string {
+function getTypeScriptType(schema: any, schemasById: Map<string, any>): string {
   if (!schema || typeof schema !== "object") return "unknown";
 
   if ("$ref" in schema) {
@@ -138,7 +135,8 @@ function getTypeScriptType(
     }
     case "object": {
       if (!schema.properties) {
-        if (schema.additionalProperties === true) return "Record<string, unknown>";
+        if (schema.additionalProperties === true)
+          return "Record<string, unknown>";
         if (typeof schema.additionalProperties === "object") {
           return `Record<string, ${getTypeScriptType(schema.additionalProperties, schemasById)}>`;
         }
@@ -148,11 +146,15 @@ function getTypeScriptType(
       const parts: string[] = [];
       for (const [pName, pSchema] of Object.entries(schema.properties)) {
         const pType = getTypeScriptType(pSchema, schemasById);
-        const safe = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(pName) ? pName : `"${pName}"`;
+        const safe = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(pName)
+          ? pName
+          : `"${pName}"`;
         if (req.has(pName)) {
           parts.push(`${safe}: ${pType}`);
         } else {
-          parts.push(`${safe}?: ${pType.includes(" | null") ? pType : `${pType} | null`}`);
+          parts.push(
+            `${safe}?: ${pType.includes(" | null") ? pType : `${pType} | null`}`,
+          );
         }
       }
       if (schema.additionalProperties) {
@@ -168,7 +170,7 @@ function getTypeScriptType(
 function generateInterface(
   name: string,
   schema: any,
-  schemasById: Map<string, any>
+  schemasById: Map<string, any>,
 ): string {
   if (schema.type === "array") {
     const itemType = schema.items
@@ -191,7 +193,9 @@ function generateInterface(
     if (isRequired) {
       lines.push(`  ${safeName}: ${propType};`);
     } else {
-      const nullablePropType = propType.includes(" | null") ? propType : `${propType} | null`;
+      const nullablePropType = propType.includes(" | null")
+        ? propType
+        : `${propType} | null`;
       lines.push(`  ${safeName}?: ${nullablePropType};`);
     }
   }
@@ -303,7 +307,8 @@ function generateMethodSignature(method: MethodInfo): string {
     if (!p.required) params.push(`${p.name}?: string`);
   }
 
-  const returnType = method.responseType === "void" ? "void" : method.responseType;
+  const returnType =
+    method.responseType === "void" ? "void" : method.responseType;
   return `async ${method.name}(${params.join(", ")}): Promise<${returnType}>`;
 }
 
@@ -316,7 +321,7 @@ function generateMethodBody(method: MethodInfo): string {
     for (const p of method.pathParams) {
       urlPath = urlPath.replace(
         `{${p.name}}`,
-        `\${${toCamelCase(p.snakeName)}}`
+        `\${${toCamelCase(p.snakeName)}}`,
       );
     }
     urlExpr = `\`${urlPath}\``;
@@ -330,11 +335,13 @@ function generateMethodBody(method: MethodInfo): string {
       if (p.required) {
         lines.push(`    params.set("${p.name}", ${p.name});`);
       } else {
-        lines.push(`    if (${p.name} !== undefined) params.set("${p.name}", ${p.name});`);
+        lines.push(
+          `    if (${p.name} !== undefined) params.set("${p.name}", ${p.name});`,
+        );
       }
     }
     lines.push(
-      `    const url = this.baseUrl + ${urlExpr} + (params.toString() ? "?" + params.toString() : "");`
+      `    const url = this.baseUrl + ${urlExpr} + (params.toString() ? "?" + params.toString() : "");`,
     );
   } else {
     lines.push(`    const url = this.baseUrl + ${urlExpr};`);
@@ -443,7 +450,7 @@ function collectReferencedTypes(schema: any): Set<string> {
 function generateModelFile(
   name: string,
   schema: any,
-  schemasById: Map<string, any>
+  schemasById: Map<string, any>,
 ): string {
   const refs = collectReferencedTypes(schema);
   refs.delete(name);
@@ -518,7 +525,7 @@ async function main(): Promise<void> {
       const queryParams = getQueryParameters(operation);
 
       console.error(
-        `${name} request=${requestType} response=${responseType} path=${JSON.stringify(pathParams)} query=${JSON.stringify(queryParams)}`
+        `${name} request=${requestType} response=${responseType} path=${JSON.stringify(pathParams)} query=${JSON.stringify(queryParams)}`,
       );
 
       methods.push({
@@ -536,12 +543,18 @@ async function main(): Promise<void> {
   const usedTypes = new Set<string>();
   for (const m of methods) {
     if (m.requestType) usedTypes.add(m.requestType);
-    if (m.responseType !== "unknown" && m.responseType !== "void") usedTypes.add(m.responseType);
+    if (m.responseType !== "unknown" && m.responseType !== "void")
+      usedTypes.add(m.responseType);
   }
 
-  const importBlock = usedTypes.size > 0
-    ? [`import type {`, ...([...usedTypes].sort().map((k) => `  ${k},`)), `} from "./models";`].join("\n")
-    : "";
+  const importBlock =
+    usedTypes.size > 0
+      ? [
+          `import type {`,
+          ...[...usedTypes].sort().map((k) => `  ${k},`),
+          `} from "./models";`,
+        ].join("\n")
+      : "";
 
   const clientCode = [
     `// Auto-generated by scripts/generate-client.ts`,

@@ -57,5 +57,5 @@ export default tseslint.config(
       "@typescript-eslint/no-unnecessary-type-arguments": "off",
       "@typescript-eslint/unified-signatures": "off",
     },
-  }
+  },
 );

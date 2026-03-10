@@ -24,8 +24,8 @@ await Promise.all(
       minify,
       sourcemap: minify ? "linked" : "inline",
       naming: { entry: config.naming },
-    })
-  )
+    }),
+  ),
 );
 
 await execAsync("bunx tsc -p tsconfig.build.json");

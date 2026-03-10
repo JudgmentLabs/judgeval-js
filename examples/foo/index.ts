@@ -1,6 +1,5 @@
 import { Tracer } from "judgeval";
 import OpenAI from "openai";
-import "./instrumentation";
 
 function requireEnv(name: string): string {
   const value = process.env[name];

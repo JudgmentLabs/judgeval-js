@@ -1,3 +1,5 @@
+import "./instrumentation";
+
 import { Tracer } from "judgeval";
 import OpenAI from "openai";
 
