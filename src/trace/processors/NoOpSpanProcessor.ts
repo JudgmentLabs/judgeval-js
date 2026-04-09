@@ -3,6 +3,11 @@ import type { ReadableSpan, Span } from "@opentelemetry/sdk-trace-base";
 import { NoOpSpanExporter } from "../exporters/NoOpSpanExporter";
 import { JudgmentSpanProcessor } from "./JudgmentSpanProcessor";
 
+/**
+ * A no-op span processor that discards all spans.
+ *
+ * Used when monitoring is disabled or credentials are missing.
+ */
 export class NoOpSpanProcessor extends JudgmentSpanProcessor {
   constructor() {
     super(null, new NoOpSpanExporter());

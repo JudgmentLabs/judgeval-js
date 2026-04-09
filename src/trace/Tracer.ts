@@ -17,6 +17,27 @@ import { NoOpSpanExporter } from "./exporters/NoOpSpanExporter";
 import { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
 import { NoOpSpanProcessor } from "./processors/NoOpSpanProcessor";
 
+/**
+ * Concrete tracer implementation for Node.js applications.
+ *
+ * Use `Tracer.init()` to create and activate a new tracer. This sets up
+ * OpenTelemetry span processing and export to the Judgment platform.
+ *
+ * @example
+ * ```typescript
+ * import { Tracer } from "judgeval";
+ *
+ * const tracer = await Tracer.init({ projectName: "my-project" });
+ *
+ * const traced = Tracer.observe(async (input: string) => {
+ *   return await processInput(input);
+ * });
+ *
+ * await traced("hello");
+ * await Tracer.forceFlush();
+ * await Tracer.shutdown();
+ * ```
+ */
 export class Tracer extends BaseTracer {
   private _spanExporter: JudgmentSpanExporter | null = null;
   private _spanProcessor: JudgmentSpanProcessor | null = null;
@@ -47,6 +68,23 @@ export class Tracer extends BaseTracer {
     );
   }
 
+  /**
+   * Create and activate a new Tracer.
+   *
+   * This is the recommended way to initialize tracing. Credentials are
+   * read from environment variables if not provided explicitly.
+   *
+   * @param config - Tracer configuration options.
+   * @returns A configured and activated `Tracer` instance.
+   *
+   * @example
+   * ```typescript
+   * const tracer = await Tracer.init({
+   *   projectName: "my-project",
+   *   environment: "production",
+   * });
+   * ```
+   */
   static async init(config: TracerConfig = {}): Promise<Tracer> {
     const apiKey = config.apiKey ?? JUDGMENT_API_KEY;
     const organizationId = config.organizationId ?? JUDGMENT_ORG_ID;
@@ -140,6 +178,11 @@ export class Tracer extends BaseTracer {
     return tracer;
   }
 
+  /**
+   * Get or create the span exporter for this tracer.
+   *
+   * @returns The span exporter instance.
+   */
   getSpanExporter(): JudgmentSpanExporter {
     if (this._spanExporter) return this._spanExporter;
 
@@ -165,6 +208,11 @@ export class Tracer extends BaseTracer {
     return this._spanExporter;
   }
 
+  /**
+   * Get or create the span processor for this tracer.
+   *
+   * @returns The span processor instance.
+   */
   getSpanProcessor(): JudgmentSpanProcessor {
     if (this._spanProcessor) return this._spanProcessor;
 

@@ -2,6 +2,11 @@ import { ExportResultCode, type ExportResult } from "@opentelemetry/core";
 import type { ReadableSpan } from "@opentelemetry/sdk-trace-base";
 import { JudgmentSpanExporter } from "./JudgmentSpanExporter";
 
+/**
+ * A no-op span exporter that discards all spans.
+ *
+ * Used when monitoring is disabled or credentials are missing.
+ */
 export class NoOpSpanExporter extends JudgmentSpanExporter {
   constructor() {
     // Not used.

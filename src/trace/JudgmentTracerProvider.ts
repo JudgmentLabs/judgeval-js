@@ -109,6 +109,12 @@ class NoOpTracer implements Tracer {
   }
 }
 
+/**
+ * Global singleton that manages tracer registration and context propagation.
+ *
+ * Acts as a proxy TracerProvider that delegates to the currently active
+ * tracer's underlying OpenTelemetry provider.
+ */
 export class JudgmentTracerProvider implements TracerProvider {
   private static _instance: JudgmentTracerProvider | null = null;
 
@@ -124,6 +130,11 @@ export class JudgmentTracerProvider implements TracerProvider {
     installOtelContextBridge(() => this.getCurrentContext());
   }
 
+  /**
+   * Get the singleton JudgmentTracerProvider instance.
+   *
+   * @returns The global provider instance.
+   */
   static getInstance(): JudgmentTracerProvider {
     JudgmentTracerProvider._instance ??= new JudgmentTracerProvider();
     return JudgmentTracerProvider._instance;
@@ -140,14 +151,32 @@ export class JudgmentTracerProvider implements TracerProvider {
     return trace.setGlobalTracerProvider(instance);
   }
 
+  /**
+   * Register a tracer with the provider.
+   *
+   * @param tracer - The tracer to register.
+   */
   register(tracer: BaseTracer): void {
     this._tracers.add(tracer);
   }
 
+  /**
+   * Remove a tracer from the provider.
+   *
+   * @param tracer - The tracer to deregister.
+   */
   deregister(tracer: BaseTracer): void {
     this._tracers.delete(tracer);
   }
 
+  /**
+   * Set a tracer as the active tracer.
+   *
+   * Cannot be called while a root span is active.
+   *
+   * @param tracer - The tracer to activate.
+   * @returns `true` if activation succeeded.
+   */
   setActive(tracer: BaseTracer): boolean {
     const currentSpan = this.getCurrentSpan();
     if (currentSpan?.isRecording()) {
@@ -163,19 +192,39 @@ export class JudgmentTracerProvider implements TracerProvider {
     return true;
   }
 
+  /**
+   * Get the currently active tracer.
+   *
+   * @returns The active tracer, or `null` if none.
+   */
   getActiveTracer(): BaseTracer | null {
     return this._activeTracer;
   }
 
+  /**
+   * Get the current OpenTelemetry context.
+   *
+   * @returns The current context.
+   */
   getCurrentContext(): Context {
     return _contextStorage.getStore() ?? ROOT_CONTEXT;
   }
 
+  /**
+   * Get the span from the current context.
+   *
+   * @returns The current span, or `undefined` if none.
+   */
   getCurrentSpan(): Span | undefined {
     const ctx = this.getCurrentContext();
     return trace.getSpan(ctx);
   }
 
+  /**
+   * Check whether there is an active root span.
+   *
+   * @returns `true` if a root span is currently recording.
+   */
   hasActiveRootSpan(): boolean {
     const currentSpan = this.getCurrentSpan();
     if (!currentSpan?.isRecording()) return false;
@@ -199,6 +248,11 @@ export class JudgmentTracerProvider implements TracerProvider {
     return this._proxyTracer;
   }
 
+  /**
+   * Register an OpenTelemetry instrumentation.
+   *
+   * @param instrumentor - The instrumentation to add.
+   */
   addInstrumentation(instrumentor: Instrumentation): void {
     try {
       registerInstrumentations({
@@ -267,12 +321,18 @@ export class JudgmentTracerProvider implements TracerProvider {
     _contextStorage.enterWith(ctx);
   }
 
+  /**
+   * Flush all registered tracers.
+   */
   async forceFlush(): Promise<void> {
     await Promise.all(
       Array.from(this._tracers).map((t) => t._tracerProvider.forceFlush()),
     );
   }
 
+  /**
+   * Shut down all registered tracers and clear state.
+   */
   async shutdown(): Promise<void> {
     await Promise.all(
       Array.from(this._tracers).map((t) => t._tracerProvider.shutdown()),

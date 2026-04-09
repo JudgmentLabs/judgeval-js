@@ -23,6 +23,13 @@ function isZeroHrTime(hrTime: HrTime): boolean {
   return hrTime[0] === 0 && hrTime[1] === 0;
 }
 
+/**
+ * Span processor that batches and exports spans to the Judgment platform.
+ *
+ * Extends OpenTelemetry's `BatchSpanProcessor` with support for partial
+ * span emission (sending in-progress spans before they complete) and
+ * lifecycle processor hooks for session/customer ID propagation.
+ */
 export class JudgmentSpanProcessor extends BatchSpanProcessor {
   tracer: BaseTracer | null;
   private _internalAttributes = new Map<SpanKey, Map<string, unknown>>();
@@ -45,6 +52,7 @@ export class JudgmentSpanProcessor extends BatchSpanProcessor {
     this._internalAttributes.delete(spanKey);
   }
 
+  /** Set an internal attribute on a span (not exported to the backend). */
   setInternalAttribute(
     spanContext: SpanContext,
     key: string,
@@ -59,6 +67,7 @@ export class JudgmentSpanProcessor extends BatchSpanProcessor {
     attrs.set(key, value);
   }
 
+  /** Get an internal attribute from a span. */
   getInternalAttribute(
     spanContext: SpanContext,
     key: string,
@@ -102,6 +111,7 @@ export class JudgmentSpanProcessor extends BatchSpanProcessor {
     super.onEnd(emittedSpan);
   }
 
+  /** Emit the current in-progress span as a partial update. */
   emitPartial(): void {
     const proxy = JudgmentTracerProvider.getInstance();
     const span = proxy.getCurrentSpan();

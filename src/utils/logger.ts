@@ -1,5 +1,19 @@
 import { JUDGMENT_LOG_LEVEL } from "../env";
 
+/**
+ * SDK logger with configurable levels and color output.
+ *
+ * Log level is controlled by the `JUDGMENT_LOG_LEVEL` environment variable.
+ * Defaults to "warn". Supported levels: "debug", "info", "warning", "error", "critical".
+ *
+ * @example
+ * ```typescript
+ * import { Logger } from "judgeval";
+ *
+ * Logger.setLevel("debug");
+ * Logger.info("Tracer initialized");
+ * ```
+ */
 export class Logger {
   private static readonly RESET = "\x1b[0m";
   private static readonly RED = "\x1b[31m";
@@ -40,10 +54,12 @@ export class Logger {
     }
   }
 
+  /** Set the minimum log level. */
   public static setLevel(level: number): void {
     Logger.currentLevel = level;
   }
 
+  /** Enable or disable colored output. */
   public static setUseColor(useColor: boolean): void {
     Logger.useColor = useColor;
   }
@@ -80,14 +96,17 @@ export class Logger {
     output.write(formattedMessage + "\n");
   }
 
+  /** Log a debug message. */
   public static debug(message: string): void {
     Logger.log(Logger.Level.DEBUG, message);
   }
 
+  /** Log an informational message. */
   public static info(message: string): void {
     Logger.log(Logger.Level.INFO, message);
   }
 
+  /** Log a warning message. */
   public static warning(message: string): void {
     Logger.log(Logger.Level.WARNING, message);
   }
@@ -96,10 +115,12 @@ export class Logger {
     Logger.log(Logger.Level.WARNING, message);
   }
 
+  /** Log an error message. */
   public static error(message: string): void {
     Logger.log(Logger.Level.ERROR, message);
   }
 
+  /** Log a critical error message. */
   public static critical(message: string): void {
     Logger.log(Logger.Level.CRITICAL, message);
   }

@@ -35,10 +35,6 @@ const chatWithUser = Tracer.observe(async function _chatWithUser(
   console.log(`User: ${userMessage}`);
   console.log(`Assistant: ${result}`);
 
-  Tracer.asyncEvaluate("Relevancy Scorer", {
-    request: "chicken nuggest",
-    response: "penguins",
-  });
   Tracer.asyncEvaluate("Sentiment");
   return result;
 });
