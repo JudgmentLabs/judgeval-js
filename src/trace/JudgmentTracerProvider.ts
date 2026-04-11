@@ -325,18 +325,28 @@ export class JudgmentTracerProvider implements TracerProvider {
    * Flush all registered tracers.
    */
   async forceFlush(): Promise<void> {
-    await Promise.all(
+    const results = await Promise.allSettled(
       Array.from(this._tracers).map((t) => t._tracerProvider.forceFlush()),
     );
+    for (const r of results) {
+      if (r.status === "rejected") {
+        Logger.error(`forceFlush failed: ${String(r.reason)}`);
+      }
+    }
   }
 
   /**
    * Shut down all registered tracers and clear state.
    */
   async shutdown(): Promise<void> {
-    await Promise.all(
+    const results = await Promise.allSettled(
       Array.from(this._tracers).map((t) => t._tracerProvider.shutdown()),
     );
+    for (const r of results) {
+      if (r.status === "rejected") {
+        Logger.error(`shutdown failed: ${String(r.reason)}`);
+      }
+    }
     this._activeTracer = null;
     this._tracers.clear();
   }

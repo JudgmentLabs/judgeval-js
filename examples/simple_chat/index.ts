@@ -39,11 +39,18 @@ const chatWithUser = Tracer.observe(async function _chatWithUser(
   return result;
 });
 
-(async () => {
+async function main() {
   await Tracer.init({ projectName: "js-new" });
-  const result = await chatWithUser("What is the capital of France?");
-  console.log(result);
+  await Tracer.with("main", async () => {
+    Tracer.setCustomerId("customer-123");
+    Tracer.setSessionId(`session-${Date.now()}`);
+    Tracer.setCustomerUserId(`user-${Math.random().toString(36).substring(2, 15)}`);
+    const result = await chatWithUser("What is the capital of France?");
+    console.log(result);
+  });
 
   await Tracer.forceFlush();
   await Tracer.shutdown();
-})();
+}
+
+main().catch(console.error);

@@ -33,4 +33,4 @@ const chatWithUser = Tracer.observe(async function _chatWithUser(
   console.log(result);
   await Tracer.forceFlush();
   await Tracer.shutdown();
-})();
+})().catch(console.error);

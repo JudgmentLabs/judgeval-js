@@ -145,7 +145,11 @@ export class Tracer extends BaseTracer {
       resourceFromAttributes(resourceAttrs),
     );
 
-    const tracerProvider = new NodeTracerProvider({ resource });
+    const tracerProvider = new NodeTracerProvider({
+      resource,
+      sampler: config.sampler,
+      spanLimits: config.spanLimits,
+    });
 
     const tracer = new Tracer(
       projectName,
@@ -163,7 +167,12 @@ export class Tracer extends BaseTracer {
     if (enableMonitoring) {
       const providerWithProcessor = new NodeTracerProvider({
         resource,
-        spanProcessors: [tracer.getSpanProcessor()],
+        sampler: config.sampler,
+        spanLimits: config.spanLimits,
+        spanProcessors: [
+          tracer.getSpanProcessor(),
+          ...(config.spanProcessors ?? []),
+        ],
       });
       tracer._tracerProvider = providerWithProcessor;
     }

@@ -33,19 +33,19 @@ export class NoOpSpanProcessor extends JudgmentSpanProcessor {
     /* empty */
   }
 
-  setInternalAttribute(
-    _spanContext: SpanContext,
-    _key: string,
-    _value: unknown,
-  ): void {
+  stateSet(_spanContext: SpanContext, _key: string, _value: unknown): void {
     /* empty */
   }
 
-  getInternalAttribute(
-    _spanContext: SpanContext,
-    _key: string,
-    defaultValue: unknown = null,
-  ): unknown {
+  stateGet<T>(_spanContext: SpanContext, _key: string, defaultValue: T): T {
     return defaultValue;
+  }
+
+  stateIncr(_spanContext: SpanContext, _key: string): number {
+    return 0;
+  }
+
+  stateAppend<T>(_spanContext: SpanContext, _key: string, item: T): T[] {
+    return [item];
   }
 }

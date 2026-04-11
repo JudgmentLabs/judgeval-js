@@ -5,12 +5,18 @@ import {
   type Tracer,
 } from "@opentelemetry/api";
 import type { Instrumentation } from "@opentelemetry/instrumentation";
-import type { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
+import type {
+  BasicTracerProvider,
+  Sampler,
+  SpanLimits,
+  SpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
 import { randomUUID } from "crypto";
-import { AttributeKeys } from "../JudgmentAttributeKeys";
+import { AttributeKeys, InternalAttributeKeys } from "../JudgmentAttributeKeys";
 import { JudgmentApiClient } from "../internal/api";
 import type { PendingEvalPayload } from "../internal/api/models/PendingEvalPayload";
 import { parseFunctionArgs } from "../utils/annotate";
+import { dontThrow } from "../utils/dont-throw";
 import { Logger } from "../utils/logger";
 import {
   safeStringify,
@@ -18,13 +24,10 @@ import {
   Serializer,
 } from "../utils/serializer";
 import { Maybe } from "../utils/type-helpers";
+import { setBaggage } from "./baggage";
 import { JudgmentTracerProvider } from "./JudgmentTracerProvider";
 import type { JudgmentSpanExporter } from "./exporters/JudgmentSpanExporter";
 import type { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
-import {
-  CUSTOMER_ID_KEY,
-  SESSION_ID_KEY,
-} from "./processors/_lifecycles/contextKeys";
 
 const TRACER_NAME = "judgeval";
 
@@ -71,6 +74,15 @@ export interface TracerConfig {
   serializer?: (value: unknown) => string;
   /** Additional OpenTelemetry resource attributes. */
   resourceAttributes?: Record<string, string>;
+  /** Custom OpenTelemetry sampler. Defaults to the SDK's default. */
+  sampler?: Sampler;
+  /** Custom OpenTelemetry span limits (attribute/event/link caps). */
+  spanLimits?: SpanLimits;
+  /**
+   * Additional span processors to register alongside Judgment's own
+   * processor. Useful for fan-out to other OTel backends.
+   */
+  spanProcessors?: SpanProcessor[];
 }
 
 /**
@@ -161,9 +173,11 @@ export abstract class BaseTracer {
   }
 
   private static _emitPartial(): void {
-    const tracer = BaseTracer._getProxyProvider().getActiveTracer();
-    if (!tracer) return;
-    tracer.getSpanProcessor().emitPartial();
+    dontThrow("BaseTracer._emitPartial", () => {
+      const tracer = BaseTracer._getProxyProvider().getActiveTracer();
+      if (!tracer) return;
+      tracer.getSpanProcessor().emitPartial();
+    });
   }
 
   // ------------------------------------------------------------------ //
@@ -220,8 +234,10 @@ export abstract class BaseTracer {
    * ```
    */
   static registerOTELInstrumentation(instrumentor: Instrumentation): void {
-    const proxy = BaseTracer._getProxyProvider();
-    proxy.addInstrumentation(instrumentor);
+    dontThrow("BaseTracer.registerOTELInstrumentation", () => {
+      const proxy = BaseTracer._getProxyProvider();
+      proxy.addInstrumentation(instrumentor);
+    });
   }
 
   // ------------------------------------------------------------------ //
@@ -464,11 +480,13 @@ export abstract class BaseTracer {
    * @param kind - The span kind (e.g. "llm", "tool", "span").
    */
   static setSpanKind(kind: string): void {
-    if (!kind) return;
-    const currentSpan = BaseTracer._getProxyProvider().getCurrentSpan();
-    if (currentSpan?.isRecording()) {
-      currentSpan.setAttribute(AttributeKeys.JUDGMENT_SPAN_KIND, kind);
-    }
+    dontThrow("BaseTracer.setSpanKind", () => {
+      if (!kind) return;
+      const currentSpan = BaseTracer._getProxyProvider().getCurrentSpan();
+      if (currentSpan?.isRecording()) {
+        currentSpan.setAttribute(AttributeKeys.JUDGMENT_SPAN_KIND, kind);
+      }
+    });
   }
 
   /**
@@ -503,13 +521,15 @@ export abstract class BaseTracer {
    * @param value - The attribute value (will be serialized).
    */
   static setAttribute(key: string, value: unknown): void {
-    const currentSpan = BaseTracer._getProxyProvider().getCurrentSpan();
-    if (!currentSpan?.isRecording()) return;
-    if (!key || value == null) return;
-    currentSpan.setAttribute(
-      key,
-      serializeAttribute(value, BaseTracer._getSerializer()),
-    );
+    dontThrow("BaseTracer.setAttribute", () => {
+      const currentSpan = BaseTracer._getProxyProvider().getCurrentSpan();
+      if (!currentSpan?.isRecording()) return;
+      if (!key || value == null) return;
+      currentSpan.setAttribute(
+        key,
+        serializeAttribute(value, BaseTracer._getSerializer()),
+      );
+    });
   }
 
   /**
@@ -556,53 +576,55 @@ export abstract class BaseTracer {
    * ```
    */
   static recordLLMMetadata(metadata: LLMMetadata): void {
-    const currentSpan = BaseTracer._getProxyProvider().getCurrentSpan();
-    if (!currentSpan?.isRecording()) return;
+    dontThrow("BaseTracer.recordLLMMetadata", () => {
+      const currentSpan = BaseTracer._getProxyProvider().getCurrentSpan();
+      if (!currentSpan?.isRecording()) return;
 
-    if (typeof metadata.model === "string") {
-      currentSpan.setAttribute(
-        AttributeKeys.JUDGMENT_LLM_MODEL_NAME,
-        metadata.model,
-      );
-    }
+      if (typeof metadata.model === "string") {
+        currentSpan.setAttribute(
+          AttributeKeys.JUDGMENT_LLM_MODEL_NAME,
+          metadata.model,
+        );
+      }
 
-    if (typeof metadata.provider === "string") {
-      currentSpan.setAttribute(
-        AttributeKeys.JUDGMENT_LLM_PROVIDER,
-        metadata.provider,
-      );
-    }
+      if (typeof metadata.provider === "string") {
+        currentSpan.setAttribute(
+          AttributeKeys.JUDGMENT_LLM_PROVIDER,
+          metadata.provider,
+        );
+      }
 
-    if (typeof metadata.non_cached_input_tokens === "number") {
-      currentSpan.setAttribute(
-        AttributeKeys.JUDGMENT_USAGE_NON_CACHED_INPUT_TOKENS,
-        metadata.non_cached_input_tokens,
-      );
-    }
-    if (typeof metadata.output_tokens === "number") {
-      currentSpan.setAttribute(
-        AttributeKeys.JUDGMENT_USAGE_OUTPUT_TOKENS,
-        metadata.output_tokens,
-      );
-    }
-    if (typeof metadata.cache_read_input_tokens === "number") {
-      currentSpan.setAttribute(
-        AttributeKeys.JUDGMENT_USAGE_CACHE_READ_INPUT_TOKENS,
-        metadata.cache_read_input_tokens,
-      );
-    }
-    if (typeof metadata.cache_creation_input_tokens === "number") {
-      currentSpan.setAttribute(
-        AttributeKeys.JUDGMENT_USAGE_CACHE_CREATION_INPUT_TOKENS,
-        metadata.cache_creation_input_tokens,
-      );
-    }
-    if (typeof metadata.total_cost_usd === "number") {
-      currentSpan.setAttribute(
-        AttributeKeys.JUDGMENT_USAGE_TOTAL_COST_USD,
-        metadata.total_cost_usd,
-      );
-    }
+      if (typeof metadata.non_cached_input_tokens === "number") {
+        currentSpan.setAttribute(
+          AttributeKeys.JUDGMENT_USAGE_NON_CACHED_INPUT_TOKENS,
+          metadata.non_cached_input_tokens,
+        );
+      }
+      if (typeof metadata.output_tokens === "number") {
+        currentSpan.setAttribute(
+          AttributeKeys.JUDGMENT_USAGE_OUTPUT_TOKENS,
+          metadata.output_tokens,
+        );
+      }
+      if (typeof metadata.cache_read_input_tokens === "number") {
+        currentSpan.setAttribute(
+          AttributeKeys.JUDGMENT_USAGE_CACHE_READ_INPUT_TOKENS,
+          metadata.cache_read_input_tokens,
+        );
+      }
+      if (typeof metadata.cache_creation_input_tokens === "number") {
+        currentSpan.setAttribute(
+          AttributeKeys.JUDGMENT_USAGE_CACHE_CREATION_INPUT_TOKENS,
+          metadata.cache_creation_input_tokens,
+        );
+      }
+      if (typeof metadata.total_cost_usd === "number") {
+        currentSpan.setAttribute(
+          AttributeKeys.JUDGMENT_USAGE_TOTAL_COST_USD,
+          metadata.total_cost_usd,
+        );
+      }
+    });
   }
 
   // ------------------------------------------------------------------ //
@@ -610,37 +632,60 @@ export abstract class BaseTracer {
   // ------------------------------------------------------------------ //
 
   /**
+   * Set a key on the current span and on baggage so it propagates to all
+   * child spans. Also reattaches the current context to the updated one.
+   */
+  private static _setPropagatingBaggageKey(key: string, value: string): void {
+    dontThrow("BaseTracer._setPropagatingBaggageKey", () => {
+      const proxy = BaseTracer._getProxyProvider();
+      const currentSpan = proxy.getCurrentSpan();
+      if (!currentSpan?.isRecording()) return;
+      currentSpan.setAttribute(key, value);
+      const ctx = setBaggage(key, value, proxy.getCurrentContext());
+      proxy.attachContext(ctx);
+    });
+  }
+
+  /**
    * Set the customer ID on the current span.
    *
-   * The ID is automatically propagated to all child spans.
+   * The ID is automatically propagated to all child spans via baggage.
    *
    * @param customerId - The customer identifier.
    */
   static setCustomerId(customerId: string): void {
-    const proxy = BaseTracer._getProxyProvider();
-    const currentSpan = proxy.getCurrentSpan();
-    if (!currentSpan?.isRecording()) return;
-    currentSpan.setAttribute(AttributeKeys.JUDGMENT_CUSTOMER_ID, customerId);
-    const ctx = proxy.getCurrentContext().setValue(CUSTOMER_ID_KEY, customerId);
-    proxy.attachContext(ctx);
+    BaseTracer._setPropagatingBaggageKey(
+      AttributeKeys.JUDGMENT_CUSTOMER_ID,
+      customerId,
+    );
+  }
+
+  /**
+   * Set the customer user ID on the current span.
+   *
+   * The ID is automatically propagated to all child spans via baggage.
+   *
+   * @param customerUserId - The customer user identifier.
+   */
+  static setCustomerUserId(customerUserId: string): void {
+    BaseTracer._setPropagatingBaggageKey(
+      AttributeKeys.JUDGMENT_CUSTOMER_USER_ID,
+      customerUserId,
+    );
   }
 
   /**
    * Set the session ID on the current span.
    *
-   * The ID is automatically propagated to all child spans.
+   * The ID is automatically propagated to all child spans via baggage.
    *
    * @param sessionId - The session identifier.
    */
   static setSessionId(sessionId: string): void {
-    const proxy = BaseTracer._getProxyProvider();
-    const currentSpan = proxy.getCurrentSpan();
-    if (!currentSpan?.isRecording()) return;
-    const spanCtx = currentSpan.spanContext();
-    if (!spanCtx.traceId || !(spanCtx.traceFlags & 0x01)) return;
-    currentSpan.setAttribute(AttributeKeys.JUDGMENT_SESSION_ID, sessionId);
-    const ctx = proxy.getCurrentContext().setValue(SESSION_ID_KEY, sessionId);
-    proxy.attachContext(ctx);
+    BaseTracer._setPropagatingBaggageKey(
+      AttributeKeys.JUDGMENT_SESSION_ID,
+      sessionId,
+    );
   }
 
   // ------------------------------------------------------------------ //
@@ -659,35 +704,41 @@ export abstract class BaseTracer {
    * ```
    */
   static tag(tags: string | string[]): void {
-    if (!tags || (Array.isArray(tags) && tags.length === 0)) return;
-    const proxy = BaseTracer._getProxyProvider();
-    const tracer = proxy.getActiveTracer();
-    if (!tracer?.projectId || !tracer._client) return;
-    const ids = BaseTracer._getCurrentTraceAndSpanId();
-    if (!ids) return;
-    const [traceId] = ids;
-    const tagArray = Array.isArray(tags) ? tags : [tags];
-    tracer._client
-      .postV1projectsTracesByTraceIdTags(tracer.projectId, traceId, {
-        tags: tagArray,
-      })
-      .catch((err: unknown) => {
-        Logger.error(`tag failed: ${String(err)}`);
-      });
+    dontThrow("BaseTracer.tag", () => {
+      if (!tags || (Array.isArray(tags) && tags.length === 0)) return;
+      const proxy = BaseTracer._getProxyProvider();
+      const tracer = proxy.getActiveTracer();
+      if (!tracer?.projectId || !tracer._client) return;
+      const ids = BaseTracer._getCurrentTraceAndSpanId();
+      if (!ids) return;
+      const [traceId] = ids;
+      const tagArray = Array.isArray(tags) ? tags : [tags];
+      tracer._client
+        .postV1projectsTracesByTraceIdTags(tracer.projectId, traceId, {
+          tags: tagArray,
+        })
+        .catch((err: unknown) => {
+          Logger.error(`tag failed: ${String(err)}`);
+        });
+    });
   }
 
   // ------------------------------------------------------------------ //
   //  Static API: Async Evaluation                                      //
   // ------------------------------------------------------------------ //
 
-  // TODO: cleanup?
-  private static _pendingEvals = new Map<string, PendingEvalPayload[]>();
-
   /**
    * Trigger an asynchronous server-side evaluation on the current span.
    *
-   * @param judge - The name of the hosted scorer to use.
-   * @param example - Optional example data for evaluation.
+   * The evaluation is queued and processed server-side by the Judgment
+   * platform after the span ends. Use this to score live traffic
+   * without blocking your application.
+   *
+   * @param judge - Name of the hosted judge/scorer (e.g. `"faithfulness"`,
+   *   `"answer_relevancy"`).
+   * @param example - Optional dict with evaluation data. Keys like
+   *   `input`, `actual_output`, `expected_output`, and `retrieval_context`
+   *   are commonly used.
    *
    * @example
    * ```typescript
@@ -698,50 +749,47 @@ export abstract class BaseTracer {
    * ```
    */
   static asyncEvaluate(judge: string, example?: Record<string, unknown>): void {
-    const proxy = BaseTracer._getProxyProvider();
-    const tracer = proxy.getActiveTracer();
-    if (!tracer) {
-      Logger.warning("asyncEvaluate: no active tracer");
-      return;
-    }
-    if (!tracer.projectId) {
-      Logger.warning("asyncEvaluate: no project configured");
-      return;
-    }
-    const currentSpan = proxy.getCurrentSpan();
-    if (!currentSpan?.isRecording()) {
-      Logger.warning("asyncEvaluate: no active span");
-      return;
-    }
+    dontThrow("BaseTracer.asyncEvaluate", () => {
+      const proxy = BaseTracer._getProxyProvider();
+      const tracer = proxy.getActiveTracer();
+      if (!tracer?.projectId) return;
+      const currentSpan = proxy.getCurrentSpan();
+      if (!currentSpan?.isRecording()) return;
 
-    const ctx = currentSpan.spanContext();
-    const spanKey = `${ctx.traceId}:${ctx.spanId}`;
-    const payloads = BaseTracer._pendingEvals.get(spanKey) ?? [];
+      const processor = tracer.getSpanProcessor();
+      const ctx = currentSpan.spanContext();
 
-    const payload: PendingEvalPayload = {
-      project_id: tracer.projectId,
-      eval_name: `async_evaluate_${judge}_${payloads.length}`,
-      judges: [{ name: judge }],
-      examples: [
-        {
-          ...example,
-          example_id: randomUUID(),
-          created_at: new Date().toISOString(),
-          trace_id: ctx.traceId,
-          span_id: ctx.spanId,
-        },
-      ],
-      is_offline: false,
-      is_behavior: false,
-    };
+      const idx = processor.stateIncr(
+        ctx,
+        InternalAttributeKeys.PENDING_EVALS_COUNT,
+      );
+      const payload: PendingEvalPayload = {
+        project_id: tracer.projectId,
+        eval_name: `async_evaluate_${judge}_${idx}`,
+        judges: [{ name: judge }],
+        examples: [
+          {
+            ...example,
+            example_id: randomUUID(),
+            created_at: new Date().toISOString(),
+            trace_id: ctx.traceId,
+            span_id: ctx.spanId,
+          },
+        ],
+        is_offline: false,
+        is_behavior: false,
+      };
+      const updated = processor.stateAppend<PendingEvalPayload>(
+        ctx,
+        InternalAttributeKeys.PENDING_EVALS,
+        payload,
+      );
 
-    payloads.push(payload);
-    BaseTracer._pendingEvals.set(spanKey, payloads);
-
-    currentSpan.setAttribute(
-      AttributeKeys.JUDGMENT_PENDING_TRACE_EVAL,
-      JSON.stringify(payloads),
-    );
+      currentSpan.setAttribute(
+        AttributeKeys.JUDGMENT_PENDING_TRACE_EVAL,
+        JSON.stringify(updated),
+      );
+    });
   }
 }
 
