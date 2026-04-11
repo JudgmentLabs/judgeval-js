@@ -37,11 +37,8 @@ import type {
   TagPromptRequest,
   TagPromptResponse,
   TraceEvaluationRun,
-  TriggerRootSpanRulesRequest,
-  TriggerRootSpanRulesResponse,
   UntagPromptRequest,
   UntagPromptResponse,
-  UploadCustomScorerRequest,
   UploadCustomScorerResponse,
 } from "./models";
 
@@ -90,13 +87,6 @@ export class JudgmentApiClient {
   async postOtelV1traces(): Promise<unknown> {
     const url = this.baseUrl + "/otel/v1/traces";
     return this.request("POST", url, {});
-  }
-
-  async postOtelTriggerRootSpanRules(
-    payload: TriggerRootSpanRulesRequest,
-  ): Promise<TriggerRootSpanRulesResponse> {
-    const url = this.baseUrl + "/otel/trigger_root_span_rules";
-    return this.request("POST", url, payload);
   }
 
   async postV1projectsResolve(
@@ -285,12 +275,17 @@ export class JudgmentApiClient {
     return this.request("GET", url, undefined);
   }
 
-  async postV1projectsScorersCustom(
-    projectId: string,
-    payload: UploadCustomScorerRequest,
-  ): Promise<UploadCustomScorerResponse> {
+  async postV1projectsScorersCustom(projectId: string): Promise<unknown> {
     const url = this.baseUrl + `/v1/projects/${projectId}/scorers/custom`;
-    return this.request("POST", url, payload);
+    return this.request("POST", url, {});
+  }
+
+  async postV1projectsScorersCustomBundle(
+    projectId: string,
+  ): Promise<UploadCustomScorerResponse> {
+    const url =
+      this.baseUrl + `/v1/projects/${projectId}/scorers/custom/bundle`;
+    return this.request("POST", url, {});
   }
 
   async getV1projectsScorersCustomByNameExists(
