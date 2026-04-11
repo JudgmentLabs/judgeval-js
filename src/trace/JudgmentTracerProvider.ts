@@ -322,6 +322,14 @@ export class JudgmentTracerProvider implements TracerProvider {
   }
 
   /**
+   * Run `fn` with `ctx` installed as the active context for the
+   * duration of the callback. Sync or async.
+   */
+  withContext<T>(ctx: Context, fn: () => T): T {
+    return _contextStorage.run(ctx, () => runWithOtelBridgeGate(ctx, fn));
+  }
+
+  /**
    * Flush all registered tracers.
    */
   async forceFlush(): Promise<void> {

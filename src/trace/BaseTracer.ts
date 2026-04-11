@@ -1,5 +1,6 @@
 import {
   type Attributes,
+  type Context,
   type Span,
   SpanStatusCode,
   type Tracer,
@@ -26,6 +27,7 @@ import {
 import { Maybe } from "../utils/type-helpers";
 import { createBaggage, getBaggage, setBaggage } from "./baggage";
 import { JudgmentTracerProvider } from "./JudgmentTracerProvider";
+import { extract } from "./propagation";
 import type { JudgmentSpanExporter } from "./exporters/JudgmentSpanExporter";
 import type { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
 
@@ -338,6 +340,66 @@ export abstract class BaseTracer {
    */
   static with<T>(spanName: string, fn: (span: Span) => T): T {
     return BaseTracer.span(spanName, fn);
+  }
+
+  /**
+   * Continue a distributed trace from an upstream service.
+   *
+   * Extracts W3C trace context and baggage from `carrier` and installs
+   * it as the active context for the duration of `fn`. Any span started
+   * inside — including `@Tracer.observe`-wrapped functions and
+   * `Tracer.with` blocks — becomes a child of the upstream parent,
+   * stitching your service into the caller's trace.
+   *
+   * Use this at the entry point of an inbound request (HTTP handler,
+   * message queue consumer, RPC dispatcher, etc.) to join a trace
+   * started by the upstream caller. If the carrier contains no trace
+   * context, `fn` still runs normally with a fresh context.
+   *
+   * @param carrier - A mapping containing propagation headers. Typically
+   *   `req.headers` from Node's `http`/Express/Fastify, but any dict-shaped
+   *   object with lowercase keys works (queue attributes, Lambda event
+   *   headers, RPC metadata, etc.).
+   * @param fn - Function to run inside the extracted context. Receives
+   *   the extracted {@link Context} as its argument; most callers ignore
+   *   it. Sync or async.
+   * @returns The return value of `fn`.
+   *
+   * @example
+   * ```typescript
+   * import { Tracer } from "judgeval";
+   *
+   * const handle = Tracer.observe(async (payload: unknown) => {
+   *   // ... your agent logic ...
+   * });
+   *
+   * // Express / Node http handler:
+   * app.post("/run", async (req, res) => {
+   *   await Tracer.continueTrace(req.headers, async () => {
+   *     const result = await handle(req.body);
+   *     res.json(result);
+   *   });
+   * });
+   * ```
+   *
+   * Propagating in the opposite direction (outbound):
+   *
+   * @example
+   * ```typescript
+   * import { propagation } from "judgeval";
+   *
+   * const headers: Record<string, string> = {};
+   * propagation.inject(headers);
+   * await fetch(downstreamUrl, { headers, method: "POST", body });
+   * ```
+   */
+  static continueTrace<T>(
+    carrier: Record<string, unknown>,
+    fn: (ctx: Context) => T,
+  ): T {
+    const proxy = BaseTracer._getProxyProvider();
+    const ctx = extract(carrier);
+    return proxy.withContext(ctx, () => fn(ctx));
   }
 
   // ------------------------------------------------------------------ //

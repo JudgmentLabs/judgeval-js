@@ -1,0 +1,14 @@
+{
+  "name": "basic-distributed-tracing",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "start:server": "npm run build && node ./dist/server.js",
+    "start:client": "npm run build && node ./dist/client.js"
+  },
+  "dependencies": {
+    "judgeval": "file:../..",
+    "tsx": "^4.19.2"
+  }
+}

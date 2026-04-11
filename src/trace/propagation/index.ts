@@ -73,25 +73,17 @@ export function inject<Carrier>(
 /**
  * Extract trace context and baggage from an incoming carrier.
  *
- * Call this when handling an inbound request to continue an existing
- * trace started by an upstream service.
+ * Low-level primitive — most callers should use
+ * {@link Tracer.continueTrace} instead, which extracts and installs the
+ * context in one step.
  *
  * @param carrier - A mapping containing propagation headers (e.g.
  *   `request.headers`).
  * @param context - Base context to merge into. Defaults to the current
- *   Judgment context.
+ *   active context.
  * @param getter - Strategy for reading values from the carrier.
  * @returns A new {@link Context} with the extracted trace and baggage
  *   data.
- *
- * @example
- * ```typescript
- * const ctx = propagation.extract(req.headers);
- * Tracer.getOTELTracer().startActiveSpan("handle", {}, ctx, (span) => {
- *   // ...
- *   span.end();
- * });
- * ```
  */
 export function extract<Carrier>(
   carrier: Carrier,
