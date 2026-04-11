@@ -20,7 +20,10 @@ import { JudgmentTracerProvider } from "../JudgmentTracerProvider";
  */
 
 let _globalTextmap: TextMapPropagator = new CompositePropagator({
-  propagators: [new W3CTraceContextPropagator(), new JudgmentBaggagePropagator()],
+  propagators: [
+    new W3CTraceContextPropagator(),
+    new JudgmentBaggagePropagator(),
+  ],
 });
 
 /** Return the active composite propagator (W3C TraceContext + Judgment Baggage). */
