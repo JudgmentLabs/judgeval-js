@@ -78,10 +78,7 @@ export interface TracerConfig {
   sampler?: Sampler;
   /** Custom OpenTelemetry span limits (attribute/event/link caps). */
   spanLimits?: SpanLimits;
-  /**
-   * Additional span processors to register alongside Judgment's own
-   * processor. Useful for fan-out to other OTel backends.
-   */
+  /** Additional span processors to register alongside Judgment's own processor. */
   spanProcessors?: SpanProcessor[];
 }
 
