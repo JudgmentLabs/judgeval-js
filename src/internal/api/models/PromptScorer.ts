@@ -7,7 +7,6 @@ export interface PromptScorer {
   organization_id: string;
   name: string;
   prompt: string;
-  threshold: number;
   model: string;
   options?: Record<string, unknown> | null;
   description?: string | null;
