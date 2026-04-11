@@ -6,7 +6,7 @@ import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { JUDGMENT_API_KEY, JUDGMENT_API_URL, JUDGMENT_ORG_ID } from "../env";
 import { JudgmentApiClient } from "../internal/api";
 import { Logger } from "../utils/logger";
-import { resolveProjectId } from "../utils/resolveProjectId";
+import { resolveProjectId } from "../utils/resolve-project-id";
 import { safeStringify } from "../utils/serializer";
 import { VERSION } from "../version";
 import type { TracerConfig } from "./BaseTracer";
