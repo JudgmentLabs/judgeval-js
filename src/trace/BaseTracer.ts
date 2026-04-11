@@ -394,7 +394,7 @@ export abstract class BaseTracer {
    * ```
    */
   static continueTrace<T>(
-    carrier: Record<string, unknown>,
+    carrier: object,
     fn: (ctx: Context) => T,
   ): T {
     const proxy = BaseTracer._getProxyProvider();
