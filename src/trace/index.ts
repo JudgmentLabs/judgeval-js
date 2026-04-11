@@ -9,5 +9,7 @@ export {
   JudgmentBaggageSpanProcessor,
   type BaggageKeyPredicate,
 } from "./processors/JudgmentBaggageSpanProcessor";
+export { JudgmentBaggagePropagator } from "./baggage/JudgmentBaggagePropagator";
 export * as baggage from "./baggage";
+export * as propagation from "./propagation";
 export { Tracer } from "./Tracer";

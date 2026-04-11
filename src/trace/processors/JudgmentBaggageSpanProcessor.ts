@@ -1,9 +1,10 @@
-import { type Context, propagation } from "@opentelemetry/api";
+import type { Context } from "@opentelemetry/api";
 import type {
   ReadableSpan,
   Span,
   SpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
+import { getBaggage } from "../baggage";
 
 /**
  * Predicate that decides which baggage keys are propagated to span
@@ -15,19 +16,11 @@ export type BaggageKeyPredicate = (baggageKey: string) => boolean;
 export const ALLOW_ALL_BAGGAGE_KEYS: BaggageKeyPredicate = () => true;
 
 /**
- * Span processor that copies OTel baggage entries onto span attributes at
- * span start.
- *
- * When a span starts, this processor reads all baggage from the parent
- * context and sets matching entries as span attributes. Use
- * `keyPredicate` to control which keys are propagated.
- *
- * Matches the behavior of Python's `JudgmentBaggageProcessor` and the
- * community `@opentelemetry/baggage-span-processor`.
+ * Span processor that copies baggage entries onto span attributes at
+ * span start. Use `keyPredicate` to control which keys are propagated.
  *
  * @example
  * ```typescript
- * // Allow only Judgment-prefixed baggage keys
  * const processor = new JudgmentBaggageSpanProcessor(
  *   (key) => key.startsWith("judgment."),
  * );
@@ -41,8 +34,7 @@ export class JudgmentBaggageSpanProcessor implements SpanProcessor {
   }
 
   onStart(span: Span, parentContext: Context): void {
-    const entries =
-      propagation.getBaggage(parentContext)?.getAllEntries() ?? [];
+    const entries = getBaggage(parentContext)?.getAllEntries() ?? [];
     for (const [key, entry] of entries) {
       if (this._keyPredicate(key)) {
         span.setAttribute(key, entry.value);

@@ -30,12 +30,10 @@ function isZeroHrTime(hrTime: HrTime): boolean {
 }
 
 /**
- * Span processor that manages span lifecycle, state, and batched export.
- *
- * Extends OpenTelemetry's `BatchSpanProcessor` with per-span mutable
- * state (counters, lists), partial-span emission for streaming updates,
- * automatic baggage propagation, and finalizer-based cleanup so
- * abandoned spans cannot leak state.
+ * Span processor that manages span lifecycle, state, and batched export
+ * to the Judgment platform. Supports per-span state (counters, lists),
+ * partial-span emission for streaming updates, and baggage propagation
+ * onto child spans.
  *
  * Created automatically by `Tracer.init()`. Use it directly only when
  * building a custom tracing pipeline.

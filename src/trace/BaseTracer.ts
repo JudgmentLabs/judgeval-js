@@ -24,7 +24,7 @@ import {
   Serializer,
 } from "../utils/serializer";
 import { Maybe } from "../utils/type-helpers";
-import { setBaggage } from "./baggage";
+import { createBaggage, getBaggage, setBaggage } from "./baggage";
 import { JudgmentTracerProvider } from "./JudgmentTracerProvider";
 import type { JudgmentSpanExporter } from "./exporters/JudgmentSpanExporter";
 import type { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
@@ -641,8 +641,11 @@ export abstract class BaseTracer {
       const currentSpan = proxy.getCurrentSpan();
       if (!currentSpan?.isRecording()) return;
       currentSpan.setAttribute(key, value);
-      const ctx = setBaggage(key, value, proxy.getCurrentContext());
-      proxy.attachContext(ctx);
+      const ctx = proxy.getCurrentContext();
+      const baggage = (getBaggage(ctx) ?? createBaggage()).setEntry(key, {
+        value,
+      });
+      proxy.attachContext(setBaggage(ctx, baggage));
     });
   }
 
