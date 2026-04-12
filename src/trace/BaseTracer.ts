@@ -393,10 +393,7 @@ export abstract class BaseTracer {
    * await fetch(downstreamUrl, { headers, method: "POST", body });
    * ```
    */
-  static continueTrace<T>(
-    carrier: object,
-    fn: (ctx: Context) => T,
-  ): T {
+  static continueTrace<T>(carrier: object, fn: (ctx: Context) => T): T {
     const proxy = BaseTracer._getProxyProvider();
     const ctx = extract(carrier);
     return proxy.withContext(ctx, () => fn(ctx));
@@ -413,6 +410,7 @@ export abstract class BaseTracer {
     recordInput?: boolean,
     recordOutput?: boolean,
     disableGeneratorYieldSpan?: boolean,
+    fork?: boolean,
   ): (...args: TArgs) => TReturn;
   static observe<TArgs extends unknown[], TReturn>(
     func?: undefined,
@@ -421,6 +419,7 @@ export abstract class BaseTracer {
     recordInput?: boolean,
     recordOutput?: boolean,
     disableGeneratorYieldSpan?: boolean,
+    fork?: boolean,
   ): (func: (...args: TArgs) => TReturn) => (...args: TArgs) => TReturn;
   /**
    * Wrap a function to automatically create spans and record inputs/outputs.
@@ -434,6 +433,11 @@ export abstract class BaseTracer {
    * @param recordInput - Whether to record function inputs. Defaults to `true`.
    * @param recordOutput - Whether to record function outputs. Defaults to `true`.
    * @param disableGeneratorYieldSpan - Reserved for future use.
+   * @param fork - If `true`, run the function in a fresh linked trace
+   *   instead of as a child of the current trace, when an active parent
+   *   span exists. The new trace's root span carries cross-trace
+   *   source/target attributes pointing back to a placeholder
+   *   "invocation" span left on the parent trace. Defaults to `false`.
    * @returns The wrapped function, or a decorator if `func` is omitted.
    *
    * @example
@@ -446,6 +450,17 @@ export abstract class BaseTracer {
    * // Use as decorator factory
    * const decorator = Tracer.observe(undefined, "llm");
    * const tracedFn = decorator(myFunction);
+   *
+   * // Fork a call into a linked trace
+   * const delegate = Tracer.observe(
+   *   runSubsystem,
+   *   "agent",
+   *   undefined,
+   *   undefined,
+   *   undefined,
+   *   undefined,
+   *   true,
+   * );
    * ```
    */
   static observe<TArgs extends unknown[], TReturn>(
@@ -455,6 +470,7 @@ export abstract class BaseTracer {
     recordInput = true,
     recordOutput = true,
     disableGeneratorYieldSpan = false,
+    fork = false,
   ):
     | ((...args: TArgs) => TReturn)
     | ((func: (...args: TArgs) => TReturn) => (...args: TArgs) => TReturn) {
@@ -466,6 +482,112 @@ export abstract class BaseTracer {
       const name = spanName ?? innerFunc.name;
       return (...args: TArgs): TReturn => {
         const otelTracer = proxy.getTracer(TRACER_NAME);
+
+        const shouldFork =
+          fork &&
+          proxy.getActiveTracer() !== null &&
+          proxy.getCurrentSpan()?.isRecording() === true;
+
+        if (shouldFork) {
+          const serializer = BaseTracer._getSerializer();
+
+          const invocationSpan = otelTracer.startSpan(name);
+          const invocationCtx = invocationSpan.spanContext();
+          if (spanType) {
+            invocationSpan.setAttribute(
+              AttributeKeys.JUDGMENT_SPAN_KIND,
+              spanType,
+            );
+          }
+
+          const linkedRootAttrs: Attributes = {
+            [AttributeKeys.JUDGMENT_LINK_SOURCE_TRACE_ID]:
+              invocationCtx.traceId,
+            [AttributeKeys.JUDGMENT_LINK_SOURCE_SPAN_ID]: invocationCtx.spanId,
+          };
+          if (spanType) {
+            linkedRootAttrs[AttributeKeys.JUDGMENT_SPAN_KIND] = spanType;
+          }
+
+          const linkedRoot = otelTracer.startSpan(
+            name,
+            { attributes: linkedRootAttrs },
+            proxy.createRootContext(),
+          );
+          const linkedRootCtx = linkedRoot.spanContext();
+          invocationSpan.setAttribute(
+            AttributeKeys.JUDGMENT_LINK_TARGET_TRACE_ID,
+            linkedRootCtx.traceId,
+          );
+          invocationSpan.setAttribute(
+            AttributeKeys.JUDGMENT_LINK_TARGET_SPAN_ID,
+            linkedRootCtx.spanId,
+          );
+
+          const endBoth = (): void => {
+            linkedRoot.end();
+            invocationSpan.end();
+          };
+          const recordErrorOnBoth = (e: unknown): void => {
+            for (const s of [linkedRoot, invocationSpan]) {
+              s.recordException(e as Error);
+              s.setStatus({
+                code: SpanStatusCode.ERROR,
+                message: String(e),
+              });
+            }
+          };
+          const recordOutputOnBoth = (value: unknown): void => {
+            const serialized = serializeAttribute(value, serializer);
+            linkedRoot.setAttribute(AttributeKeys.JUDGMENT_OUTPUT, serialized);
+            invocationSpan.setAttribute(
+              AttributeKeys.JUDGMENT_OUTPUT,
+              serialized,
+            );
+          };
+
+          if (recordInput) {
+            const serializedInput = serializeAttribute(
+              getInputs(innerFunc, args),
+              serializer,
+            );
+            linkedRoot.setAttribute(
+              AttributeKeys.JUDGMENT_INPUT,
+              serializedInput,
+            );
+            invocationSpan.setAttribute(
+              AttributeKeys.JUDGMENT_INPUT,
+              serializedInput,
+            );
+          }
+          BaseTracer._emitPartial();
+
+          return proxy.useSpan(linkedRoot, false, false, false, (): TReturn => {
+            try {
+              const result = innerFunc(...args);
+              if (result instanceof Promise) {
+                return (result as Promise<unknown>)
+                  .then((res) => {
+                    if (recordOutput) recordOutputOnBoth(res);
+                    return res as TReturn;
+                  })
+                  .catch((e: unknown) => {
+                    recordErrorOnBoth(e);
+                    throw e;
+                  })
+                  .finally(endBoth) as TReturn;
+              }
+              if (recordOutput) recordOutputOnBoth(result);
+              endBoth();
+              return result;
+            } catch (e) {
+              recordErrorOnBoth(e);
+              endBoth();
+              throw e;
+            }
+          });
+        }
+
         return otelTracer.startActiveSpan(name, (span) => {
           if (spanType) {
             span.setAttribute(AttributeKeys.JUDGMENT_SPAN_KIND, spanType);

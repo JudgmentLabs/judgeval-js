@@ -322,6 +322,15 @@ export class JudgmentTracerProvider implements TracerProvider {
   }
 
   /**
+   * Return a copy of the current context with no active span.
+   *
+   * A span started in this context becomes the root of a new trace.
+   */
+  createRootContext(): Context {
+    return trace.deleteSpan(this.getCurrentContext());
+  }
+
+  /**
    * Run `fn` with `ctx` installed as the active context for the
    * duration of the callback. Sync or async.
    */
