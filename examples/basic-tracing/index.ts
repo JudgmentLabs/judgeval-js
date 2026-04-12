@@ -7,7 +7,7 @@ const add = Tracer.observe(async function _add(
   a: number,
   b: number,
 ): Promise<number> {
-  Tracer.asyncEvaluate("Calculator");
+  Tracer.asyncEvaluate({ judge: "Calculator" });
   const response = await client.chat.completions.create({
     model: "gpt-5-mini",
     messages: [

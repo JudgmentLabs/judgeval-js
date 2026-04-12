@@ -54,6 +54,36 @@ export interface LLMMetadata {
 }
 
 /**
+ * Options for {@link BaseTracer.observe}.
+ */
+export interface ObserveOptions {
+  /** The span kind (e.g. `"llm"`, `"tool"`, `"span"`). Defaults to `"span"`. */
+  spanType?: string;
+  /** Custom span name. Defaults to the wrapped function's name. */
+  spanName?: string;
+  /** Whether to record function inputs as a span attribute. Defaults to `true`. */
+  recordInput?: boolean;
+  /** Whether to record function outputs as a span attribute. Defaults to `true`. */
+  recordOutput?: boolean;
+}
+
+/**
+ * Options for {@link BaseTracer.asyncEvaluate}.
+ */
+export interface AsyncEvaluateOptions {
+  /**
+   * Name of the hosted judge/scorer (e.g. `"faithfulness"`,
+   * `"answer_relevancy"`).
+   */
+  judge: string;
+  /**
+   * Optional dict with evaluation data. Keys like `input`, `actual_output`,
+   * `expected_output`, and `retrieval_context` are commonly used.
+   */
+  example?: Record<string, unknown>;
+}
+
+/**
  * Configuration options for initializing a Tracer.
  *
  * Credentials are resolved in order: explicit arguments first, then
@@ -271,16 +301,22 @@ export abstract class BaseTracer {
    *
    * The span is automatically ended when the function completes.
    *
-   * @param name - The span name.
+   * @param options - Span options. `name` is required; `attributes` is optional.
    * @param fn - Function to execute within the span context.
-   * @param attributes - Optional span attributes.
    * @returns The return value of `fn`.
+   *
+   * @example
+   * ```typescript
+   * Tracer.startActiveSpan({ name: "fetch-user" }, (span) => {
+   *   // ...
+   * });
+   * ```
    */
   static startActiveSpan<T>(
-    name: string,
+    options: { name: string; attributes?: Attributes },
     fn: (span: Span) => T,
-    attributes?: Attributes,
   ): T {
+    const { name, attributes } = options;
     return BaseTracer.getOTELTracer().startActiveSpan(
       name,
       { attributes },
@@ -312,7 +348,7 @@ export abstract class BaseTracer {
    * @returns The return value of `fn`.
    */
   static span<T>(spanName: string, fn: (span: Span) => T): T {
-    return BaseTracer.startActiveSpan(spanName, (span) => {
+    return BaseTracer.startActiveSpan({ name: spanName }, (span) => {
       try {
         const result = fn(span);
         if (result instanceof Promise) {
@@ -393,10 +429,7 @@ export abstract class BaseTracer {
    * await fetch(downstreamUrl, { headers, method: "POST", body });
    * ```
    */
-  static continueTrace<T>(
-    carrier: object,
-    fn: (ctx: Context) => T,
-  ): T {
+  static continueTrace<T>(carrier: object, fn: (ctx: Context) => T): T {
     const proxy = BaseTracer._getProxyProvider();
     const ctx = extract(carrier);
     return proxy.withContext(ctx, () => fn(ctx));
@@ -406,127 +439,92 @@ export abstract class BaseTracer {
   //  Static API: Observation Decorator                                 //
   // ------------------------------------------------------------------ //
 
-  static observe<TArgs extends unknown[], TReturn>(
-    func: (...args: TArgs) => TReturn,
-    spanType?: string,
-    spanName?: string,
-    recordInput?: boolean,
-    recordOutput?: boolean,
-    disableGeneratorYieldSpan?: boolean,
-  ): (...args: TArgs) => TReturn;
-  static observe<TArgs extends unknown[], TReturn>(
-    func?: undefined,
-    spanType?: string,
-    spanName?: string,
-    recordInput?: boolean,
-    recordOutput?: boolean,
-    disableGeneratorYieldSpan?: boolean,
-  ): (func: (...args: TArgs) => TReturn) => (...args: TArgs) => TReturn;
   /**
    * Wrap a function to automatically create spans and record inputs/outputs.
    *
-   * Can be called with a function to wrap it directly, or without a function
-   * to get a decorator.
-   *
-   * @param func - The function to wrap. Omit to get a decorator.
-   * @param spanType - The span kind (e.g. "llm", "tool", "span"). Defaults to "span".
-   * @param spanName - Custom span name. Defaults to the function name.
-   * @param recordInput - Whether to record function inputs. Defaults to `true`.
-   * @param recordOutput - Whether to record function outputs. Defaults to `true`.
-   * @param disableGeneratorYieldSpan - Reserved for future use.
-   * @returns The wrapped function, or a decorator if `func` is omitted.
+   * @param func - The function to wrap.
+   * @param options - Optional observation options.
+   * @returns The wrapped function.
    *
    * @example
    * ```typescript
-   * // Wrap a function
-   * const traced = Tracer.observe(async (query: string) => {
-   *   return await search(query);
-   * }, "tool");
-   *
-   * // Use as decorator factory
-   * const decorator = Tracer.observe(undefined, "llm");
-   * const tracedFn = decorator(myFunction);
+   * const traced = Tracer.observe(
+   *   async (query: string) => search(query),
+   *   { spanType: "tool" },
+   * );
    * ```
    */
   static observe<TArgs extends unknown[], TReturn>(
-    func?: (...args: TArgs) => TReturn,
-    spanType = "span",
-    spanName?: string,
-    recordInput = true,
-    recordOutput = true,
-    disableGeneratorYieldSpan = false,
-  ):
-    | ((...args: TArgs) => TReturn)
-    | ((func: (...args: TArgs) => TReturn) => (...args: TArgs) => TReturn) {
-    void disableGeneratorYieldSpan;
+    func: (...args: TArgs) => TReturn,
+    options: ObserveOptions = {},
+  ): (...args: TArgs) => TReturn {
+    const {
+      spanType = "span",
+      spanName,
+      recordInput = true,
+      recordOutput = true,
+    } = options;
     const proxy = BaseTracer._getProxyProvider();
-    const decorator = (
-      innerFunc: (...args: TArgs) => TReturn,
-    ): ((...args: TArgs) => TReturn) => {
-      const name = spanName ?? innerFunc.name;
-      return (...args: TArgs): TReturn => {
-        const otelTracer = proxy.getTracer(TRACER_NAME);
-        return otelTracer.startActiveSpan(name, (span) => {
-          if (spanType) {
-            span.setAttribute(AttributeKeys.JUDGMENT_SPAN_KIND, spanType);
+    const name = spanName ?? func.name;
+    return (...args: TArgs): TReturn => {
+      const otelTracer = proxy.getTracer(TRACER_NAME);
+      return otelTracer.startActiveSpan(name, (span) => {
+        if (spanType) {
+          span.setAttribute(AttributeKeys.JUDGMENT_SPAN_KIND, spanType);
+        }
+        try {
+          if (recordInput) {
+            span.setAttribute(
+              AttributeKeys.JUDGMENT_INPUT,
+              serializeAttribute(
+                getInputs(func, args),
+                BaseTracer._getSerializer(),
+              ),
+            );
           }
-          try {
-            if (recordInput) {
-              span.setAttribute(
-                AttributeKeys.JUDGMENT_INPUT,
-                serializeAttribute(
-                  getInputs(innerFunc, args),
-                  BaseTracer._getSerializer(),
-                ),
-              );
-            }
-            BaseTracer._emitPartial();
-            const result = innerFunc(...args);
+          BaseTracer._emitPartial();
+          const result = func(...args);
 
-            if (result instanceof Promise) {
-              return (result as Promise<unknown>)
-                .then((res) => {
-                  if (recordOutput) {
-                    span.setAttribute(
-                      AttributeKeys.JUDGMENT_OUTPUT,
-                      serializeAttribute(res, BaseTracer._getSerializer()),
-                    );
-                  }
-                  return res as TReturn;
-                })
-                .catch((e: unknown) => {
-                  span.recordException(e as Error);
-                  span.setStatus({
-                    code: SpanStatusCode.ERROR,
-                    message: String(e),
-                  });
-                  throw e;
-                })
-                .finally(() => {
-                  span.end();
-                }) as TReturn;
-            }
-
-            if (recordOutput) {
-              span.setAttribute(
-                AttributeKeys.JUDGMENT_OUTPUT,
-                serializeAttribute(result, BaseTracer._getSerializer()),
-              );
-            }
-            span.end();
-            return result;
-          } catch (e) {
-            span.recordException(e as Error);
-            span.setStatus({ code: SpanStatusCode.ERROR, message: String(e) });
-            span.end();
-            throw e;
+          if (result instanceof Promise) {
+            return (result as Promise<unknown>)
+              .then((res) => {
+                if (recordOutput) {
+                  span.setAttribute(
+                    AttributeKeys.JUDGMENT_OUTPUT,
+                    serializeAttribute(res, BaseTracer._getSerializer()),
+                  );
+                }
+                return res as TReturn;
+              })
+              .catch((e: unknown) => {
+                span.recordException(e as Error);
+                span.setStatus({
+                  code: SpanStatusCode.ERROR,
+                  message: String(e),
+                });
+                throw e;
+              })
+              .finally(() => {
+                span.end();
+              }) as TReturn;
           }
-        });
-      };
+
+          if (recordOutput) {
+            span.setAttribute(
+              AttributeKeys.JUDGMENT_OUTPUT,
+              serializeAttribute(result, BaseTracer._getSerializer()),
+            );
+          }
+          span.end();
+          return result;
+        } catch (e) {
+          span.recordException(e as Error);
+          span.setStatus({ code: SpanStatusCode.ERROR, message: String(e) });
+          span.end();
+          throw e;
+        }
+      });
     };
-
-    if (!func) return decorator;
-    return decorator(func);
   }
 
   // ------------------------------------------------------------------ //
@@ -796,21 +794,22 @@ export abstract class BaseTracer {
    * platform after the span ends. Use this to score live traffic
    * without blocking your application.
    *
-   * @param judge - Name of the hosted judge/scorer (e.g. `"faithfulness"`,
-   *   `"answer_relevancy"`).
-   * @param example - Optional dict with evaluation data. Keys like
-   *   `input`, `actual_output`, `expected_output`, and `retrieval_context`
-   *   are commonly used.
+   * @param options - Evaluation options. `judge` is required; `example`
+   *   is optional evaluation data.
    *
    * @example
    * ```typescript
-   * Tracer.asyncEvaluate("answer_relevancy", {
-   *   input: "What is AI?",
-   *   actual_output: response,
+   * Tracer.asyncEvaluate({
+   *   judge: "answer_relevancy",
+   *   example: {
+   *     input: "What is AI?",
+   *     actual_output: response,
+   *   },
    * });
    * ```
    */
-  static asyncEvaluate(judge: string, example?: Record<string, unknown>): void {
+  static asyncEvaluate(options: AsyncEvaluateOptions): void {
+    const { judge, example } = options;
     dontThrow("BaseTracer.asyncEvaluate", () => {
       const proxy = BaseTracer._getProxyProvider();
       const tracer = proxy.getActiveTracer();
