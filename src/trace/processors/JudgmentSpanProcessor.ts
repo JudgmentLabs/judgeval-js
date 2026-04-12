@@ -1,4 +1,9 @@
-import type { Context, HrTime, SpanContext } from "@opentelemetry/api";
+import type {
+  Attributes,
+  Context,
+  HrTime,
+  SpanContext,
+} from "@opentelemetry/api";
 import {
   BatchSpanProcessor,
   type ReadableSpan,
@@ -9,9 +14,10 @@ import {
   AttributeKeys,
   InternalAttributeKeys,
 } from "../../JudgmentAttributeKeys";
+import { dontThrow } from "../../utils/dont-throw";
 import type { BaseTracer } from "../BaseTracer";
 import { JudgmentTracerProvider } from "../JudgmentTracerProvider";
-import { getAll } from "./_lifecycles";
+import { JudgmentBaggageSpanProcessor } from "./JudgmentBaggageSpanProcessor";
 
 type SpanKey = `${string}:${string}`;
 
@@ -23,9 +29,20 @@ function isZeroHrTime(hrTime: HrTime): boolean {
   return hrTime[0] === 0 && hrTime[1] === 0;
 }
 
+/**
+ * Span processor that manages span lifecycle, state, and batched export
+ * to the Judgment platform. Supports per-span state (counters, lists),
+ * partial-span emission for streaming updates, and baggage propagation
+ * onto child spans.
+ *
+ * Created automatically by `Tracer.init()`. Use it directly only when
+ * building a custom tracing pipeline.
+ */
 export class JudgmentSpanProcessor extends BatchSpanProcessor {
   tracer: BaseTracer | null;
-  private _internalAttributes = new Map<SpanKey, Map<string, unknown>>();
+  private _state = new Map<SpanKey, Map<string, unknown>>();
+  private _spanFinalizers: FinalizationRegistry<SpanKey>;
+  private _baggageProcessor: JudgmentBaggageSpanProcessor;
 
   constructor(
     tracer: BaseTracer | null,
@@ -39,58 +56,91 @@ export class JudgmentSpanProcessor extends BatchSpanProcessor {
   ) {
     super(exporter, config);
     this.tracer = tracer;
+    this._spanFinalizers = new FinalizationRegistry<SpanKey>((spanKey) => {
+      this._cleanupSpanState(spanKey);
+    });
+    this._baggageProcessor = new JudgmentBaggageSpanProcessor();
   }
 
   private _cleanupSpanState(spanKey: SpanKey): void {
-    this._internalAttributes.delete(spanKey);
+    this._state.delete(spanKey);
   }
 
-  setInternalAttribute(
-    spanContext: SpanContext,
-    key: string,
-    value: unknown,
-  ): void {
+  private _registerSpan(span: Span): void {
+    const ctx = span.spanContext();
+    if (!ctx.traceId || !ctx.spanId) return;
+    const spanKey = makeSpanKey(ctx);
+    // Registers the live Span object with the GC; if it is ever
+    // collected without going through `onEnd`, cleanup still runs.
+    this._spanFinalizers.register(span, spanKey);
+  }
+
+  /** Store a value in the mutable state for a span. */
+  stateSet(spanContext: SpanContext, key: string, value: unknown): void {
     const spanKey = makeSpanKey(spanContext);
-    let attrs = this._internalAttributes.get(spanKey);
+    let attrs = this._state.get(spanKey);
     if (!attrs) {
       attrs = new Map();
-      this._internalAttributes.set(spanKey, attrs);
+      this._state.set(spanKey, attrs);
     }
     attrs.set(key, value);
   }
 
-  getInternalAttribute(
-    spanContext: SpanContext,
-    key: string,
-    defaultValue: unknown = null,
-  ): unknown {
+  /** Retrieve a value from the mutable state for a span. */
+  stateGet<T>(spanContext: SpanContext, key: string, defaultValue: T): T {
     const spanKey = makeSpanKey(spanContext);
-    const attrs = this._internalAttributes.get(spanKey);
-    if (!attrs) return defaultValue;
-    return attrs.has(key) ? attrs.get(key) : defaultValue;
+    const attrs = this._state.get(spanKey);
+    if (!attrs || !attrs.has(key)) return defaultValue;
+    return attrs.get(key) as T;
   }
 
-  private _emitSpan(span: ReadableSpan): void {
-    const ctx = span.spanContext();
-    const spanKey = makeSpanKey(ctx);
-    let attrs = this._internalAttributes.get(spanKey);
+  /** Atomically increment a counter. Returns the value before increment. */
+  stateIncr(spanContext: SpanContext, key: string): number {
+    const spanKey = makeSpanKey(spanContext);
+    let attrs = this._state.get(spanKey);
     if (!attrs) {
       attrs = new Map();
-      this._internalAttributes.set(spanKey, attrs);
+      this._state.set(spanKey, attrs);
     }
+    const stored = attrs.get(key);
+    const prev = typeof stored === "number" ? stored : 0;
+    attrs.set(key, prev + 1);
+    return prev;
+  }
 
-    const currId =
-      (attrs.get(AttributeKeys.JUDGMENT_UPDATE_ID) as number | undefined) ?? 0;
-    attrs.set(AttributeKeys.JUDGMENT_UPDATE_ID, currId + 1);
+  /** Atomically append to a list. Returns the new list. */
+  stateAppend<T>(spanContext: SpanContext, key: string, item: T): T[] {
+    const spanKey = makeSpanKey(spanContext);
+    let attrs = this._state.get(spanKey);
+    if (!attrs) {
+      attrs = new Map();
+      this._state.set(spanKey, attrs);
+    }
+    const stored = attrs.get(key);
+    const list: T[] = Array.isArray(stored)
+      ? [...(stored as T[]), item]
+      : [item];
+    attrs.set(key, list);
+    return list;
+  }
 
-    const newAttributes = {
+  private _emitSpan(span: ReadableSpan, isPartial = false): void {
+    const ctx = span.spanContext();
+    if (!ctx.traceId) return;
+    const currId = this.stateIncr(ctx, AttributeKeys.JUDGMENT_UPDATE_ID);
+    const attributes: Attributes = {
       ...span.attributes,
       [AttributeKeys.JUDGMENT_UPDATE_ID]: currId,
     };
 
+    if (isPartial) {
+      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+      delete attributes[AttributeKeys.JUDGMENT_PENDING_TRACE_EVAL];
+    }
+
     const emittedSpan = Object.create(span) as ReadableSpan;
     Object.defineProperty(emittedSpan, "attributes", {
-      value: newAttributes,
+      value: attributes,
       writable: false,
     });
     const endTime = isZeroHrTime(span.endTime) ? span.startTime : span.endTime;
@@ -102,42 +152,54 @@ export class JudgmentSpanProcessor extends BatchSpanProcessor {
     super.onEnd(emittedSpan);
   }
 
+  /** Export the current span's in-progress state for streaming updates. */
   emitPartial(): void {
-    const proxy = JudgmentTracerProvider.getInstance();
-    const span = proxy.getCurrentSpan();
-    if (!span?.isRecording()) return;
-    if (
-      this.getInternalAttribute(
-        span.spanContext(),
-        InternalAttributeKeys.DISABLE_PARTIAL_EMIT,
-        false,
-      )
-    )
-      return;
-    // TODO: review, is this fine?
-    this._emitSpan(span as unknown as ReadableSpan);
+    dontThrow("JudgmentSpanProcessor.emitPartial", () => {
+      const proxy = JudgmentTracerProvider.getInstance();
+      const span = proxy.getCurrentSpan();
+      if (!span?.isRecording()) return;
+      const ctx = span.spanContext();
+      if (!ctx.traceId) return;
+      if (
+        this.stateGet<boolean>(
+          ctx,
+          InternalAttributeKeys.DISABLE_PARTIAL_EMIT,
+          false,
+        )
+      ) {
+        return;
+      }
+      this._emitSpan(span as unknown as ReadableSpan, true);
+    });
   }
 
   onStart(span: Span, parentContext: Context): void {
-    for (const processor of getAll()) {
-      processor.onStart(span, parentContext);
-    }
+    dontThrow("JudgmentSpanProcessor.onStart", () => {
+      this._baggageProcessor.onStart(span, parentContext);
+      this._registerSpan(span);
+    });
   }
 
   onEnd(span: ReadableSpan): void {
-    for (const processor of getAll()) {
-      processor.onEnd(span);
-    }
-    const ctx = span.spanContext();
-    const isCancelled = this.getInternalAttribute(
-      ctx,
-      InternalAttributeKeys.CANCELLED,
-      false,
-    );
-    if (!isCancelled) {
-      this._emitSpan(span);
-    }
-    const spanKey = makeSpanKey(ctx);
-    this._cleanupSpanState(spanKey);
+    dontThrow("JudgmentSpanProcessor.onEnd", () => {
+      const ctx = span.spanContext();
+      if (!ctx.traceId) {
+        super.onEnd(span);
+        return;
+      }
+      const spanKey = makeSpanKey(ctx);
+      try {
+        const isCancelled = this.stateGet<boolean>(
+          ctx,
+          InternalAttributeKeys.CANCELLED,
+          false,
+        );
+        if (!isCancelled) {
+          this._emitSpan(span);
+        }
+      } finally {
+        this._cleanupSpanState(spanKey);
+      }
+    });
   }
 }

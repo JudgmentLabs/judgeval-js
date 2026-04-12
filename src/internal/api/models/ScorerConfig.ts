@@ -2,9 +2,8 @@
 // DO NOT EDIT MANUALLY
 
 export interface ScorerConfig {
-  score_type: string;
+  score_type?: string | null;
   name: string;
-  threshold: number;
   model?: string | null;
   required_params?: string[] | null;
   kwargs?: Record<string, unknown> | null;

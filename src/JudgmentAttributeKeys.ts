@@ -5,6 +5,7 @@ export enum AttributeKeys {
   JUDGMENT_OFFLINE_MODE = "judgment.offline_mode",
   JUDGMENT_UPDATE_ID = "judgment.update_id",
   JUDGMENT_CUSTOMER_ID = "judgment.customer_id",
+  JUDGMENT_CUSTOMER_USER_ID = "judgment.customer_user_id",
   JUDGMENT_AGENT_ID = "judgment.agent_id",
   JUDGMENT_PARENT_AGENT_ID = "judgment.parent_agent_id",
   JUDGMENT_AGENT_CLASS_NAME = "judgment.agent_class_name",
@@ -19,13 +20,19 @@ export enum AttributeKeys {
   JUDGMENT_LLM_PROVIDER = "judgment.llm.provider",
   JUDGMENT_LLM_MODEL_NAME = "judgment.llm.model",
   JUDGMENT_USAGE_NON_CACHED_INPUT_TOKENS = "judgment.usage.non_cached_input_tokens",
+  JUDGMENT_USAGE_NON_CACHED_INPUT_IMAGE_TOKENS = "judgment.usage.non_cached_input_image_tokens",
   JUDGMENT_USAGE_CACHE_CREATION_INPUT_TOKENS = "judgment.usage.cache_creation_input_tokens",
   JUDGMENT_USAGE_CACHE_READ_INPUT_TOKENS = "judgment.usage.cache_read_input_tokens",
   JUDGMENT_USAGE_OUTPUT_TOKENS = "judgment.usage.output_tokens",
+  JUDGMENT_USAGE_OUTPUT_IMAGE_TOKENS = "judgment.usage.output_image_tokens",
   JUDGMENT_USAGE_TOTAL_COST_USD = "judgment.usage.total_cost_usd",
 
   JUDGMENT_SESSION_ID = "judgment.session_id",
   JUDGMENT_PROJECT_ID_OVERRIDE = "judgment.project_id_override",
+  JUDGMENT_LINK_SOURCE_TRACE_ID = "judgment.link.source_trace_id",
+  JUDGMENT_LINK_SOURCE_SPAN_ID = "judgment.link.source_span_id",
+  JUDGMENT_LINK_TARGET_TRACE_ID = "judgment.link.target_trace_id",
+  JUDGMENT_LINK_TARGET_SPAN_ID = "judgment.link.target_span_id",
 
   GEN_AI_PROMPT = "gen_ai.prompt",
   GEN_AI_COMPLETION = "gen_ai.completion",
@@ -41,10 +48,16 @@ export enum AttributeKeys {
   GEN_AI_RESPONSE_FINISH_REASONS = "gen_ai.response.finish_reasons",
 }
 
+/**
+ * Internal attribute keys used for temporary state management in span processors.
+ * These are NOT exported and are used only for internal span lifecycle management.
+ */
 export enum InternalAttributeKeys {
   DISABLE_PARTIAL_EMIT = "disable_partial_emit",
   CANCELLED = "cancelled",
   IS_CUSTOMER_CONTEXT_OWNER = "is_customer_context_owner",
+  PENDING_EVALS = "pending_evals",
+  PENDING_EVALS_COUNT = "pending_evals_count",
 }
 
 export enum ResourceKeys {

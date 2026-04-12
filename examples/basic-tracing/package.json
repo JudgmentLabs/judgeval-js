@@ -1,0 +1,15 @@
+{
+  "name": "basic-tracing",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && node --require ./dist/instrumentation.js ./dist/index.js"
+  },
+  "dependencies": {
+    "@opentelemetry/instrumentation-openai": "^0.12.0",
+    "judgeval": "file:../..",
+    "openai": "^6.25.0",
+    "tsx": "^4.19.2"
+  }
+}
