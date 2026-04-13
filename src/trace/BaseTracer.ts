@@ -809,8 +809,8 @@ export abstract class BaseTracer {
    * ```
    */
   static asyncEvaluate(options: AsyncEvaluateOptions): void {
-    const { judge, example } = options;
     dontThrow("BaseTracer.asyncEvaluate", () => {
+      const { judge, example } = options;
       const proxy = BaseTracer._getProxyProvider();
       const tracer = proxy.getActiveTracer();
       if (!tracer?.projectId) return;
