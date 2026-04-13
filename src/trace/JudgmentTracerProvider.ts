@@ -5,6 +5,7 @@ import {
   trace,
   type Context,
   type Span,
+  type SpanContext,
   type SpanOptions,
   type Tracer,
   type TracerProvider,
@@ -211,6 +212,20 @@ export class JudgmentTracerProvider implements TracerProvider {
   }
 
   /**
+   * Set a span on a context, returning a new context.
+   */
+  setSpan(ctx: Context, span: Span): Context {
+    return trace.setSpan(ctx, span);
+  }
+
+  /**
+   * Wrap a SpanContext into a non-recording Span.
+   */
+  wrapSpanContext(spanContext: SpanContext): Span {
+    return trace.wrapSpanContext(spanContext);
+  }
+
+  /**
    * Get the span from the current context.
    *
    * @returns The current span, or `undefined` if none.
@@ -319,15 +334,6 @@ export class JudgmentTracerProvider implements TracerProvider {
 
   attachContext(ctx: Context): void {
     _contextStorage.enterWith(ctx);
-  }
-
-  /**
-   * Return a copy of the current context with no active span.
-   *
-   * A span started in this context becomes the root of a new trace.
-   */
-  createRootContext(): Context {
-    return trace.deleteSpan(this.getCurrentContext());
   }
 
   /**

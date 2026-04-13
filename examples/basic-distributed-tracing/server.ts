@@ -3,7 +3,7 @@ import { Tracer } from "judgeval";
 
 const handle = Tracer.observe(function _handle(message: string): string {
   return `server received: ${message}`;
-}, "agent");
+}, { spanType: "agent" });
 
 async function main() {
   await Tracer.init({

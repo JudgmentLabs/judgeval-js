@@ -7,14 +7,14 @@ const searchFlights = Tracer.observe(
       `Evening flight to ${destination}`,
     ];
   },
-  "tool",
+  { spanType: "tool" },
 );
 
 const searchHotels = Tracer.observe(
   function _searchHotels(destination: string): string {
     return `Central hotel in ${destination}`;
   },
-  "tool",
+  { spanType: "tool" },
 );
 
 const planTransportAndLodging = Tracer.observe(
@@ -29,12 +29,7 @@ const planTransportAndLodging = Tracer.observe(
       hotel,
     };
   },
-  "agent",
-  undefined,
-  undefined,
-  undefined,
-  undefined,
-  true,
+  { spanType: "agent", fork: true },
 );
 
 const buildTrip = Tracer.observe(
@@ -55,7 +50,7 @@ const buildTrip = Tracer.observe(
       summary: `Booked ${logistics.flight} and ${logistics.hotel}`,
     };
   },
-  "agent",
+  { spanType: "agent" },
 );
 
 async function main() {

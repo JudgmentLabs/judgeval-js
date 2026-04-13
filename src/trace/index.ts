@@ -1,4 +1,10 @@
-export { BaseTracer, type LLMMetadata, type TracerConfig } from "./BaseTracer";
+export {
+  BaseTracer,
+  type AsyncEvaluateOptions,
+  type LLMMetadata,
+  type ObserveOptions,
+  type TracerConfig,
+} from "./BaseTracer";
 export { JudgmentSpanExporter } from "./exporters/JudgmentSpanExporter";
 export { NoOpSpanExporter } from "./exporters/NoOpSpanExporter";
 export { JudgmentTracerProvider } from "./JudgmentTracerProvider";
