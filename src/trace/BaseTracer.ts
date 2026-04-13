@@ -450,57 +450,37 @@ export abstract class BaseTracer {
     func: (...args: TArgs) => TReturn,
     options?: ObserveOptions,
   ): (...args: TArgs) => TReturn;
-  static observe<TArgs extends unknown[], TReturn>(
-    func?: undefined,
+  static observe(
     options?: ObserveOptions,
-  ): (func: (...args: TArgs) => TReturn) => (...args: TArgs) => TReturn;
-  /**
-   * Wrap a function to automatically create spans and record inputs/outputs.
-   *
-   * Can be called with a function to wrap it directly, or without a function
-   * to get a decorator.
-   *
-   * @param func - The function to wrap. Omit to get a decorator.
-   * @param options - Optional observation options.
-   * @returns The wrapped function, or a decorator if `func` is omitted.
-   *
-   * @example
-   * ```typescript
-   * const traced = Tracer.observe(
-   *   async (query: string) => search(query),
-   *   { spanType: "tool" },
-   * );
-   *
-   * // Decorator form
-   * const decorator = Tracer.observe(undefined, { spanType: "llm" });
-   * const tracedFn = decorator(myFunction);
-   *
-   * // Fork into a linked trace
-   * const delegate = Tracer.observe(runSubsystem, {
-   *   spanType: "agent",
-   *   fork: true,
-   * });
-   * ```
-   */
+  ): <TArgs extends unknown[], TReturn>(
+    func: (...args: TArgs) => TReturn,
+    context?: unknown,
+  ) => (...args: TArgs) => TReturn;
   static observe<TArgs extends unknown[], TReturn>(
-    func?: (...args: TArgs) => TReturn,
-    options: ObserveOptions = {},
+    funcOrOptions?: ((...args: TArgs) => TReturn) | ObserveOptions,
+    options?: ObserveOptions,
   ):
     | ((...args: TArgs) => TReturn)
     | ((func: (...args: TArgs) => TReturn) => (...args: TArgs) => TReturn) {
+    let func: ((...args: TArgs) => TReturn) | undefined;
+    if (typeof funcOrOptions === "function") {
+      func = funcOrOptions;
+    } else {
+      options = funcOrOptions;
+    }
     const {
       spanType = "span",
       spanName,
       recordInput = true,
       recordOutput = true,
       fork = false,
-    } = options;
+    } = options ?? {};
     const proxy = BaseTracer._getProxyProvider();
     const decorator = (
       innerFunc: (...args: TArgs) => TReturn,
     ): ((...args: TArgs) => TReturn) => {
       const name = spanName ?? innerFunc.name;
-      return (...args: TArgs): TReturn => {
+      return function (this: unknown, ...args: TArgs): TReturn {
         const otelTracer = proxy.getTracer(TRACER_NAME);
 
         const shouldFork =
@@ -590,7 +570,7 @@ export abstract class BaseTracer {
 
           return proxy.useSpan(linkedRoot, false, false, false, (): TReturn => {
             try {
-              const result = innerFunc(...args);
+              const result = innerFunc.call(this, ...args);
               if (result instanceof Promise) {
                 return (result as Promise<unknown>)
                   .then((res) => {
@@ -629,7 +609,7 @@ export abstract class BaseTracer {
               );
             }
             BaseTracer._emitPartial();
-            const result = innerFunc(...args);
+            const result = innerFunc.call(this, ...args);
 
             if (result instanceof Promise) {
               return (result as Promise<unknown>)
