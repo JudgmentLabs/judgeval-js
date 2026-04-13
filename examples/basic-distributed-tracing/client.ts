@@ -11,7 +11,7 @@ const callServer = Tracer.observe(async function _callServer(
     body: JSON.stringify({ message }),
   });
   return res.json();
-}, "agent");
+}, { spanType: "agent" });
 
 async function main() {
   await Tracer.init({
