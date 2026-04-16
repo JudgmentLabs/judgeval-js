@@ -315,6 +315,10 @@ export abstract class BaseTracer {
   /**
    * Start a new span without setting it as active.
    *
+   * **Most users should prefer {@link observe} or {@link with}**, which
+   * handle activation, error recording, and span ending automatically.
+   * Use this only when you need low-level control over the span lifecycle.
+   *
    * @param name - The span name.
    * @param attributes - Optional span attributes.
    * @returns The created span.
@@ -329,6 +333,10 @@ export abstract class BaseTracer {
    * Start a new active span and run a function within it.
    *
    * The span is automatically ended when the function completes.
+   *
+   * **Most users should prefer {@link observe} or {@link with}**, which
+   * additionally record inputs/outputs and capture errors automatically.
+   * Use this only when you need low-level control over the span lifecycle.
    *
    * @param options - Span options. `name` is required; `attributes` is optional.
    * @param fn - Function to execute within the span context.
