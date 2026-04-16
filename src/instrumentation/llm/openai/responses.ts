@@ -2,16 +2,43 @@ import type { OpenAI } from "openai";
 import type {
   Response,
   ResponseStreamEvent,
+  ResponseUsage,
 } from "openai/resources/responses/responses";
 import type { Stream } from "openai/streaming";
 import { AttributeKeys } from "../../../JudgmentAttributeKeys";
+import { Tracer } from "../../../trace/Tracer";
+import { dontThrow } from "../../../utils/dont-throw";
 import { safeStringify } from "../../../utils/serializer";
-import { immutableWrapAsync, proxyAsyncIterable } from "../../../utils/wrappers";
 import {
-  recordSpanError,
-  setResponsesTokenAttributes,
-  startLLMSpan,
-} from "./utils";
+  immutableWrapAsync,
+  proxyAsyncIterable,
+} from "../../../utils/wrappers";
+
+function recordUsage(
+  span: import("@opentelemetry/api").Span,
+  usage: ResponseUsage,
+): void {
+  dontThrow("responses.recordUsage", () => {
+    const cacheRead = usage.input_tokens_details.cached_tokens;
+    const sum = usage.input_tokens + usage.output_tokens + cacheRead;
+    Tracer.recordLLMMetadata(
+      {
+        non_cached_input_tokens:
+          sum > usage.total_tokens
+            ? usage.input_tokens - cacheRead
+            : usage.input_tokens,
+        output_tokens: usage.output_tokens || undefined,
+        cache_read_input_tokens: cacheRead || undefined,
+      },
+      span,
+    );
+    Tracer.setAttribute(
+      AttributeKeys.JUDGMENT_USAGE_METADATA,
+      safeStringify(usage),
+      span,
+    );
+  });
+}
 
 /**
  * Wrap `client.responses.create` to produce Judgment spans.
@@ -21,10 +48,13 @@ export function wrapResponsesCreate(client: OpenAI): void {
   client.responses.create = immutableWrapAsync(
     client.responses.create.bind(client.responses),
     {
-      pre: (body) => ({
-        span: startLLMSpan("OPENAI_API_CALL", body.model, body),
-        proxied: false,
-      }),
+      pre: (body) => {
+        const span = Tracer.startSpan("OPENAI_API_CALL");
+        Tracer.setSpanKind("llm", span);
+        Tracer.recordLLMMetadata({ model: body.model }, span);
+        Tracer.setInput(body, span);
+        return { span, proxied: false };
+      },
 
       post: (ctx, result, args) => {
         if (!ctx) return;
@@ -41,23 +71,15 @@ export function wrapResponsesCreate(client: OpenAI): void {
               }
               if (chunk.type === "response.completed") {
                 const resp = chunk.response;
-                if (resp.usage) {
-                  setResponsesTokenAttributes(span, resp.usage);
-                }
-                span.setAttribute(
-                  AttributeKeys.JUDGMENT_LLM_MODEL_NAME,
-                  resp.model,
-                );
+                if (resp.usage) recordUsage(span, resp.usage);
+                Tracer.recordLLMMetadata({ model: resp.model }, span);
               }
             },
             onDone() {
-              span.setAttribute(
-                AttributeKeys.GEN_AI_COMPLETION,
-                accumulatedContent,
-              );
+              Tracer.setOutput(accumulatedContent, span);
             },
             onError(err) {
-              recordSpanError(span, err);
+              Tracer.setError(err, span);
             },
             onFinally() {
               span.end();
@@ -69,18 +91,16 @@ export function wrapResponsesCreate(client: OpenAI): void {
 
         // Non-streaming
         const resp = result as Response;
-        span.setAttribute(AttributeKeys.GEN_AI_COMPLETION, safeStringify(resp));
-        if (resp.usage) {
-          setResponsesTokenAttributes(span, resp.usage);
-        }
+        Tracer.setOutput(safeStringify(resp), span);
+        if (resp.usage) recordUsage(span, resp.usage);
         if (typeof resp.model === "string") {
-          span.setAttribute(AttributeKeys.JUDGMENT_LLM_MODEL_NAME, resp.model);
+          Tracer.recordLLMMetadata({ model: resp.model }, span);
         }
         return ctx;
       },
 
       error: (ctx, err) => {
-        if (ctx) recordSpanError(ctx.span, err);
+        if (ctx) Tracer.setError(err, ctx.span);
         return ctx;
       },
 

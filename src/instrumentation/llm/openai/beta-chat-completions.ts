@@ -1,8 +1,8 @@
 import type { OpenAI } from "openai";
-import { AttributeKeys } from "../../../JudgmentAttributeKeys";
+import { Tracer } from "../../../trace/Tracer";
 import { safeStringify } from "../../../utils/serializer";
 import { immutableWrapAsync } from "../../../utils/wrappers";
-import { recordSpanError, setChatTokenAttributes, startLLMSpan } from "./utils";
+import { recordChatUsage } from "./utils";
 
 /**
  * Wrap `client.chat.completions.parse` to produce Judgment spans.
@@ -12,23 +12,24 @@ export function wrapChatCompletionsParse(client: OpenAI): void {
   client.chat.completions.parse = immutableWrapAsync(
     client.chat.completions.parse.bind(client.chat.completions),
     {
-      pre: (body) => startLLMSpan("OPENAI_API_CALL", body.model, body),
+      pre: (body) => {
+        const span = Tracer.startSpan("OPENAI_API_CALL");
+        Tracer.setSpanKind("llm", span);
+        Tracer.recordLLMMetadata({ model: body.model }, span);
+        Tracer.setInput(body, span);
+        return span;
+      },
 
       post: (span, result) => {
         if (!span) return;
-        span.setAttribute(
-          AttributeKeys.GEN_AI_COMPLETION,
-          safeStringify(result),
-        );
-        if (result.usage) {
-          setChatTokenAttributes(span, result.usage);
-        }
-        span.setAttribute(AttributeKeys.JUDGMENT_LLM_MODEL_NAME, result.model);
+        Tracer.setOutput(safeStringify(result), span);
+        if (result.usage) recordChatUsage(span, result.usage);
+        Tracer.recordLLMMetadata({ model: result.model }, span);
         return span;
       },
 
       error: (span, err) => {
-        if (span) recordSpanError(span, err);
+        if (span) Tracer.setError(err, span);
         return span;
       },
 

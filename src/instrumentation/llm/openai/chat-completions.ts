@@ -4,14 +4,13 @@ import type {
   ChatCompletionChunk,
 } from "openai/resources/chat/completions/completions";
 import type { Stream } from "openai/streaming";
-import { AttributeKeys } from "../../../JudgmentAttributeKeys";
+import { Tracer } from "../../../trace/Tracer";
 import { safeStringify } from "../../../utils/serializer";
-import { immutableWrapAsync, proxyAsyncIterable } from "../../../utils/wrappers";
 import {
-  recordSpanError,
-  setChatTokenAttributes,
-  startLLMSpan,
-} from "./utils";
+  immutableWrapAsync,
+  proxyAsyncIterable,
+} from "../../../utils/wrappers";
+import { recordChatUsage } from "./utils";
 
 /**
  * Wrap `client.chat.completions.create` to produce Judgment spans.
@@ -23,10 +22,11 @@ export function wrapChatCompletionsCreate(client: OpenAI): void {
     {
       pre: (body) => {
         if (body.stream) body.stream_options ??= { include_usage: true };
-        return {
-          span: startLLMSpan("OPENAI_API_CALL", body.model, body),
-          proxied: false,
-        };
+        const span = Tracer.startSpan("OPENAI_API_CALL");
+        Tracer.setSpanKind("llm", span);
+        Tracer.recordLLMMetadata({ model: body.model }, span);
+        Tracer.setInput(body, span);
+        return { span, proxied: false };
       },
 
       post: (ctx, result, args) => {
@@ -42,18 +42,13 @@ export function wrapChatCompletionsCreate(client: OpenAI): void {
               if (typeof chunk.choices[0]?.delta.content === "string") {
                 accumulatedContent += chunk.choices[0].delta.content;
               }
-              if (chunk.usage) {
-                setChatTokenAttributes(span, chunk.usage);
-              }
+              if (chunk.usage) recordChatUsage(span, chunk.usage);
             },
             onDone() {
-              span.setAttribute(
-                AttributeKeys.GEN_AI_COMPLETION,
-                accumulatedContent,
-              );
+              Tracer.setOutput(accumulatedContent, span);
             },
             onError(err) {
-              recordSpanError(span, err);
+              Tracer.setError(err, span);
             },
             onFinally() {
               span.end();
@@ -65,22 +60,14 @@ export function wrapChatCompletionsCreate(client: OpenAI): void {
 
         // Non-streaming
         const completion = result as ChatCompletion;
-        span.setAttribute(
-          AttributeKeys.GEN_AI_COMPLETION,
-          safeStringify(completion),
-        );
-        if (completion.usage) {
-          setChatTokenAttributes(span, completion.usage);
-        }
-        span.setAttribute(
-          AttributeKeys.JUDGMENT_LLM_MODEL_NAME,
-          completion.model,
-        );
+        Tracer.setOutput(safeStringify(completion), span);
+        if (completion.usage) recordChatUsage(span, completion.usage);
+        Tracer.recordLLMMetadata({ model: completion.model }, span);
         return ctx;
       },
 
       error: (ctx, err) => {
-        if (ctx) recordSpanError(ctx.span, err);
+        if (ctx) Tracer.setError(err, ctx.span);
         return ctx;
       },
 
