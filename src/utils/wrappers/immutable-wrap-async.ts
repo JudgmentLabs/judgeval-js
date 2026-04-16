@@ -1,16 +1,21 @@
 import { dontThrow } from "../dont-throw";
-import type { ImmutableHooks } from "./types";
+import type { AsyncFn, ImmutableHooks } from "./types";
 
 export function immutableWrapAsync<
-  A extends unknown[],
-  R,
+  F extends AsyncFn,
   C1 = undefined,
   C2 = undefined,
   C3 = undefined,
 >(
-  fn: (...args: A) => Promise<R>,
-  hooks: ImmutableHooks<A, R, C1, C2, C3> = {},
-): (...args: A) => Promise<R> {
+  fn: F,
+  hooks: ImmutableHooks<
+    Parameters<F>,
+    Awaited<ReturnType<F>>,
+    C1,
+    C2,
+    C3
+  > = {} as never,
+): F {
   const {
     pre: preFn,
     post: postFn,
@@ -18,14 +23,18 @@ export function immutableWrapAsync<
     finally: finallyFn,
   } = hooks;
 
-  return async function wrapped(...args: A): Promise<R> {
+  return async function wrapped(
+    this: unknown,
+    ...args: Parameters<F>
+  ): Promise<Awaited<ReturnType<F>>> {
     const ctx1 = preFn
       ? dontThrow("immutableWrapAsync.pre", () => preFn(...args))
       : undefined;
 
     let finalCtx: C2 | C3 | undefined;
     try {
-      const result = await fn(...args);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const result: Awaited<ReturnType<F>> = await fn.apply(this, args);
       if (postFn) {
         finalCtx = dontThrow("immutableWrapAsync.post", () =>
           postFn(ctx1, result, args),
@@ -46,5 +55,5 @@ export function immutableWrapAsync<
         });
       }
     }
-  };
+  } as F;
 }
