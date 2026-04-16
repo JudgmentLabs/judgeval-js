@@ -63,7 +63,7 @@ function _resolveContext(context?: Context): Context {
 export function inject<Carrier>(
   carrier: Carrier,
   context?: Context,
-  setter: TextMapSetter<Carrier> = defaultTextMapSetter,
+  setter: TextMapSetter<Carrier> = defaultTextMapSetter as TextMapSetter<Carrier>,
 ): void {
   dontThrow("propagation.inject", () => {
     getGlobalTextmap().inject(_resolveContext(context), carrier, setter);
@@ -88,14 +88,12 @@ export function inject<Carrier>(
 export function extract<Carrier>(
   carrier: Carrier,
   context?: Context,
-  getter: TextMapGetter<Carrier> = defaultTextMapGetter,
+  getter: TextMapGetter<Carrier> = defaultTextMapGetter as TextMapGetter<Carrier>,
 ): Context {
   const base = _resolveContext(context);
-  return (
-    dontThrow<Context>(
-      "propagation.extract",
-      () => getGlobalTextmap().extract(base, carrier, getter),
-      base,
-    ) ?? base
+  return dontThrow<Context>(
+    "propagation.extract",
+    () => getGlobalTextmap().extract(base, carrier, getter),
+    base,
   );
 }

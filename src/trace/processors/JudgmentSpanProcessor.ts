@@ -90,7 +90,7 @@ export class JudgmentSpanProcessor extends BatchSpanProcessor {
   stateGet<T>(spanContext: SpanContext, key: string, defaultValue: T): T {
     const spanKey = makeSpanKey(spanContext);
     const attrs = this._state.get(spanKey);
-    if (!attrs || !attrs.has(key)) return defaultValue;
+    if (!attrs?.has(key)) return defaultValue;
     return attrs.get(key) as T;
   }
 
