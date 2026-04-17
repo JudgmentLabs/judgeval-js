@@ -446,6 +446,37 @@ export abstract class BaseTracer {
   //  Static API: Observation Decorator                                 //
   // ------------------------------------------------------------------ //
 
+  /**
+   * Wrap a function to automatically create spans and record inputs/outputs.
+   *
+   * Can be called with a function to wrap it directly, or with just options
+   * to get a decorator (e.g. for TC39 decorator syntax).
+   *
+   * @param func - The function to wrap. Omit to get a decorator.
+   * @param options - Optional observation options.
+   * @returns The wrapped function, or a decorator if `func` is omitted.
+   *
+   * @example
+   * ```typescript
+   * // Direct wrapping
+   * const traced = Tracer.observe(
+   *   async (query: string) => search(query),
+   *   { spanType: "tool" },
+   * );
+   *
+   * // Decorator form
+   * class Agent {
+   *   \@Tracer.observe({ spanType: "llm" })
+   *   async chat(input: string) { ... }
+   * }
+   *
+   * // Fork into a linked trace
+   * const delegate = Tracer.observe(runSubsystem, {
+   *   spanType: "agent",
+   *   fork: true,
+   * });
+   * ```
+   */
   static observe<TArgs extends unknown[], TReturn>(
     func: (...args: TArgs) => TReturn,
     options?: ObserveOptions,
