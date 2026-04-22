@@ -1,5 +1,5 @@
 import type { OpenAI } from "openai";
-import { Tracer } from "../../../trace/Tracer";
+import { BaseTracer } from "../../../trace/BaseTracer";
 import { safeStringify } from "../../../utils/serializer";
 import { immutableWrapAsync } from "../../../utils/wrappers";
 import { recordChatUsage } from "./utils";
@@ -13,23 +13,23 @@ export function wrapChatCompletionsParse(client: OpenAI): void {
     client.chat.completions.parse.bind(client.chat.completions),
     {
       pre: (body) => {
-        const span = Tracer.startSpan("OPENAI_API_CALL");
-        Tracer.setSpanKind("llm", span);
-        Tracer.recordLLMMetadata({ model: body.model }, span);
-        Tracer.setInput(body, span);
+        const span = BaseTracer.startSpan("OPENAI_API_CALL");
+        BaseTracer.setSpanKind("llm", span);
+        BaseTracer.recordLLMMetadata({ model: body.model }, span);
+        BaseTracer.setInput(body, span);
         return span;
       },
 
       post: (span, result) => {
         if (!span) return;
-        Tracer.setOutput(safeStringify(result), span);
+        BaseTracer.setOutput(safeStringify(result), span);
         if (result.usage) recordChatUsage(span, result.usage);
-        Tracer.recordLLMMetadata({ model: result.model }, span);
+        BaseTracer.recordLLMMetadata({ model: result.model }, span);
         return span;
       },
 
       error: (span, err) => {
-        if (span) Tracer.setError(err, span);
+        if (span) BaseTracer.setError(err, span);
         return span;
       },
 

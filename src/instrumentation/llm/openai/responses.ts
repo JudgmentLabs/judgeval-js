@@ -1,3 +1,4 @@
+import type { Span } from "@opentelemetry/api";
 import type { OpenAI } from "openai";
 import type {
   Response,
@@ -6,7 +7,7 @@ import type {
 } from "openai/resources/responses/responses";
 import type { Stream } from "openai/streaming";
 import { AttributeKeys } from "../../../JudgmentAttributeKeys";
-import { Tracer } from "../../../trace/Tracer";
+import { BaseTracer } from "../../../trace/BaseTracer";
 import { dontThrow } from "../../../utils/dont-throw";
 import { safeStringify } from "../../../utils/serializer";
 import {
@@ -14,14 +15,11 @@ import {
   proxyAsyncIterable,
 } from "../../../utils/wrappers";
 
-function recordUsage(
-  span: import("@opentelemetry/api").Span,
-  usage: ResponseUsage,
-): void {
+function recordUsage(span: Span, usage: ResponseUsage): void {
   dontThrow("responses.recordUsage", () => {
     const cacheRead = usage.input_tokens_details.cached_tokens;
     const sum = usage.input_tokens + usage.output_tokens + cacheRead;
-    Tracer.recordLLMMetadata(
+    BaseTracer.recordLLMMetadata(
       {
         non_cached_input_tokens:
           sum > usage.total_tokens
@@ -32,7 +30,7 @@ function recordUsage(
       },
       span,
     );
-    Tracer.setAttribute(
+    BaseTracer.setAttribute(
       AttributeKeys.JUDGMENT_USAGE_METADATA,
       safeStringify(usage),
       span,
@@ -49,10 +47,10 @@ export function wrapResponsesCreate(client: OpenAI): void {
     client.responses.create.bind(client.responses),
     {
       pre: (body) => {
-        const span = Tracer.startSpan("OPENAI_API_CALL");
-        Tracer.setSpanKind("llm", span);
-        Tracer.recordLLMMetadata({ model: body.model }, span);
-        Tracer.setInput(body, span);
+        const span = BaseTracer.startSpan("OPENAI_API_CALL");
+        BaseTracer.setSpanKind("llm", span);
+        BaseTracer.recordLLMMetadata({ model: body.model }, span);
+        BaseTracer.setInput(body, span);
         return { span, proxied: false };
       },
 
@@ -72,14 +70,14 @@ export function wrapResponsesCreate(client: OpenAI): void {
               if (chunk.type === "response.completed") {
                 const resp = chunk.response;
                 if (resp.usage) recordUsage(span, resp.usage);
-                Tracer.recordLLMMetadata({ model: resp.model }, span);
+                BaseTracer.recordLLMMetadata({ model: resp.model }, span);
               }
             },
             onDone() {
-              Tracer.setOutput(accumulatedContent, span);
+              BaseTracer.setOutput(accumulatedContent, span);
             },
             onError(err) {
-              Tracer.setError(err, span);
+              BaseTracer.setError(err, span);
             },
             onFinally() {
               span.end();
@@ -91,16 +89,16 @@ export function wrapResponsesCreate(client: OpenAI): void {
 
         // Non-streaming
         const resp = result as Response;
-        Tracer.setOutput(safeStringify(resp), span);
+        BaseTracer.setOutput(safeStringify(resp), span);
         if (resp.usage) recordUsage(span, resp.usage);
         if (typeof resp.model === "string") {
-          Tracer.recordLLMMetadata({ model: resp.model }, span);
+          BaseTracer.recordLLMMetadata({ model: resp.model }, span);
         }
         return ctx;
       },
 
       error: (ctx, err) => {
-        if (ctx) Tracer.setError(err, ctx.span);
+        if (ctx) BaseTracer.setError(err, ctx.span);
         return ctx;
       },
 

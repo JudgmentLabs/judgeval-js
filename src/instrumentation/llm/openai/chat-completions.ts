@@ -4,7 +4,7 @@ import type {
   ChatCompletionChunk,
 } from "openai/resources/chat/completions/completions";
 import type { Stream } from "openai/streaming";
-import { Tracer } from "../../../trace/Tracer";
+import { BaseTracer } from "../../../trace/BaseTracer";
 import { safeStringify } from "../../../utils/serializer";
 import {
   immutableWrapAsync,
@@ -22,10 +22,10 @@ export function wrapChatCompletionsCreate(client: OpenAI): void {
     {
       pre: (body) => {
         if (body.stream) body.stream_options ??= { include_usage: true };
-        const span = Tracer.startSpan("OPENAI_API_CALL");
-        Tracer.setSpanKind("llm", span);
-        Tracer.recordLLMMetadata({ model: body.model }, span);
-        Tracer.setInput(body, span);
+        const span = BaseTracer.startSpan("OPENAI_API_CALL");
+        BaseTracer.setSpanKind("llm", span);
+        BaseTracer.recordLLMMetadata({ model: body.model }, span);
+        BaseTracer.setInput(body, span);
         return { span, proxied: false };
       },
 
@@ -45,10 +45,10 @@ export function wrapChatCompletionsCreate(client: OpenAI): void {
               if (chunk.usage) recordChatUsage(span, chunk.usage);
             },
             onDone() {
-              Tracer.setOutput(accumulatedContent, span);
+              BaseTracer.setOutput(accumulatedContent, span);
             },
             onError(err) {
-              Tracer.setError(err, span);
+              BaseTracer.setError(err, span);
             },
             onFinally() {
               span.end();
@@ -60,14 +60,14 @@ export function wrapChatCompletionsCreate(client: OpenAI): void {
 
         // Non-streaming
         const completion = result as ChatCompletion;
-        Tracer.setOutput(safeStringify(completion), span);
+        BaseTracer.setOutput(safeStringify(completion), span);
         if (completion.usage) recordChatUsage(span, completion.usage);
-        Tracer.recordLLMMetadata({ model: completion.model }, span);
+        BaseTracer.recordLLMMetadata({ model: completion.model }, span);
         return ctx;
       },
 
       error: (ctx, err) => {
-        if (ctx) Tracer.setError(err, ctx.span);
+        if (ctx) BaseTracer.setError(err, ctx.span);
         return ctx;
       },
 
