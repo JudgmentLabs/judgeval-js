@@ -14,6 +14,7 @@ import type {
   SpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
 import { randomUUID } from "crypto";
+import type { Anthropic } from "@anthropic-ai/sdk";
 import type { OpenAI } from "openai";
 import { AttributeKeys, InternalAttributeKeys } from "../JudgmentAttributeKeys";
 import { wrap } from "../instrumentation";
@@ -281,20 +282,22 @@ export abstract class BaseTracer {
   /**
    * Wrap a supported LLM client to add automatic tracing.
    *
-   * Currently supports OpenAI clients. The client is instrumented
+   * Supports OpenAI and Anthropic clients. The client is instrumented
    * in-place and returned.
    *
-   * @param client - An LLM client instance (e.g. `new OpenAI()`).
+   * @param client - An LLM client instance (e.g. `new OpenAI()` or `new Anthropic()`).
    * @returns The same client instance, instrumented.
    *
    * @example
    * ```typescript
    * import OpenAI from "openai";
+   * import Anthropic from "@anthropic-ai/sdk";
    *
-   * const client = Tracer.wrap(new OpenAI());
+   * const openai = Tracer.wrap(new OpenAI());
+   * const anthropic = Tracer.wrap(new Anthropic());
    * ```
    */
-  static wrap<T extends OpenAI>(client: T): T {
+  static wrap<T extends OpenAI | Anthropic>(client: T): T {
     return wrap(client);
   }
 

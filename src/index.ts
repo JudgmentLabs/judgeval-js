@@ -15,4 +15,4 @@ export {
   propagation,
 } from "./trace";
 
-export { wrap, wrapOpenAI } from "./instrumentation";
+export { wrap, wrapAnthropic, wrapOpenAI } from "./instrumentation";

@@ -57,6 +57,7 @@
     "@opentelemetry/sdk-trace-web": "^2.2.0"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.90.0",
     "@types/bun": "^1.3.12",
     "@typescript-eslint/eslint-plugin": "^8.58.1",
     "@typescript-eslint/parser": "^8.58.1",
