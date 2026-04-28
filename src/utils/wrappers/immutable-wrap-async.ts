@@ -8,13 +8,7 @@ export function immutableWrapAsync<
   C3 = undefined,
 >(
   fn: F,
-  hooks: ImmutableHooks<
-    Parameters<F>,
-    Awaited<ReturnType<F>>,
-    C1,
-    C2,
-    C3
-  > = {} as never,
+  hooks: ImmutableHooks<Parameters<F>, Awaited<ReturnType<F>>, C1, C2, C3> = {},
 ): F {
   const {
     pre: preFn,

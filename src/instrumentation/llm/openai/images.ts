@@ -69,10 +69,7 @@ export function wrapImagesGenerate(client: OpenAI): void {
       pre: (body) => {
         const span = BaseTracer.startSpan("OPENAI_API_CALL");
         BaseTracer.setSpanKind("llm", span);
-        BaseTracer.recordLLMMetadata(
-          { model: body.model as string | undefined },
-          span,
-        );
+        BaseTracer.recordLLMMetadata({ model: body.model }, span);
         BaseTracer.setInput(body, span);
         return { span, proxied: false };
       },
