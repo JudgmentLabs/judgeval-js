@@ -21,9 +21,9 @@
   "scripts": {
     "build": "bun run check && bun scripts/build.ts",
     "build:dev": "bun scripts/build.ts --dev",
-    "check": "tsc --noEmit && eslint 'src/**/*.ts' --no-warn-ignored",
-    "lint": "eslint 'src/**/*.ts' --no-warn-ignored",
-    "lint:fix": "eslint 'src/**/*.ts' --fix --no-warn-ignored",
+    "check": "tsc --noEmit && oxlint src/",
+    "lint": "oxlint src/",
+    "lint:fix": "oxlint --fix src/",
     "format": "prettier --write \"src/**/*.ts\"",
     "generate-client": "bunx tsx scripts/generate-client.ts && bun run format",
     "test": "bun test --coverage",
@@ -58,14 +58,10 @@
   },
   "devDependencies": {
     "@types/bun": "^1.3.12",
-    "@typescript-eslint/eslint-plugin": "^8.59.0",
-    "@typescript-eslint/parser": "^8.59.0",
-    "eslint": "^10.2.1",
-    "globals": "^17.5.0",
+    "oxlint": "^1.2.0",
     "openai": "^6.34.0",
     "prettier": "^3.8.3",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.59.0"
+    "typescript": "^6.0.3"
   },
   "engines": {
     "node": ">=18.0.0",
