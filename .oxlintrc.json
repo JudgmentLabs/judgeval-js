@@ -1,0 +1,31 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicolo-ribaudo/oxc/json-schema/npm/oxlint/configuration_schema.json",
+  "plugins": ["typescript"],
+  "ignorePatterns": [
+    "src/internal/**",
+    "scripts/**",
+    "node_modules/**",
+    "dist/**",
+    "**/*.d.ts",
+    "**/build/**"
+  ],
+  "rules": {
+    "no-explicit-any": "error",
+    "no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "destructuredArrayIgnorePattern": "^_",
+        "varsIgnorePattern": "^_"
+      }
+    ],
+    "no-unsafe-declaration-merging": "error",
+    "prefer-nullish-coalescing": "warn",
+    "prefer-optional-chain": "error",
+    "require-await": "error",
+    "no-floating-promises": "error",
+    "no-misused-promises": "error",
+    "no-deprecated": "warn",
+    "no-extraneous-class": "off"
+  }
+}

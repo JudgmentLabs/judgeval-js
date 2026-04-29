@@ -1,7 +1,7 @@
-import { Tracer } from "judgeval";
+import { Tracer, wrap } from "judgeval";
 import OpenAI from "openai";
 
-const client = new OpenAI();
+const client = wrap(new OpenAI());
 
 const add = Tracer.observe(async function _add(
   a: number,

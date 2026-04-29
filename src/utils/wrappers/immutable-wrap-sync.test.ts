@@ -135,7 +135,7 @@ describe("immutableWrapSync", () => {
       pre: (a, b) => ({ sum: a + b }),
       post: (ctx, result) => ({ postResult: result + (ctx?.sum ?? 0) }),
       finally: (ctx) => {
-        finalCtx = ctx as { postResult: number } | undefined;
+        finalCtx = ctx;
       },
     });
     wrapped(1, 2);
@@ -150,7 +150,7 @@ describe("immutableWrapSync", () => {
         errMsg: `${ctx?.id}: ${(err as Error).message}`,
       }),
       finally: (ctx) => {
-        finalCtx = ctx as { errMsg: string } | undefined;
+        finalCtx = ctx;
       },
     });
     expect(() => wrapped()).toThrow();

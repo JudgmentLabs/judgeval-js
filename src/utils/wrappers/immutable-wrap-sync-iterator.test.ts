@@ -157,7 +157,7 @@ describe("immutableWrapSyncIterator", () => {
       pre: () => ({ id: "test" }),
       post: (ctx) => ({ completed: ctx?.id === "test" }),
       finally: (ctx) => {
-        finalCtx = ctx as { completed: boolean } | undefined;
+        finalCtx = ctx;
       },
     });
     collect(wrapped(1));
@@ -172,7 +172,7 @@ describe("immutableWrapSyncIterator", () => {
         errMsg: `${ctx?.id}: ${(err as Error).message}`,
       }),
       finally: (ctx) => {
-        finalCtx = ctx as { errMsg: string } | undefined;
+        finalCtx = ctx;
       },
     });
     expect(() => collect(wrapped())).toThrow();

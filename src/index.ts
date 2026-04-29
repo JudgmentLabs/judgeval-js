@@ -14,3 +14,5 @@ export {
   baggage,
   propagation,
 } from "./trace";
+
+export { wrap, wrapOpenAI } from "./instrumentation";

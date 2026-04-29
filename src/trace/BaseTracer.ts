@@ -14,7 +14,9 @@ import type {
   SpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
 import { randomUUID } from "crypto";
+import type { OpenAI } from "openai";
 import { AttributeKeys, InternalAttributeKeys } from "../JudgmentAttributeKeys";
+import { wrap } from "../instrumentation";
 import { JudgmentApiClient } from "../internal/api";
 import type { PendingEvalPayload } from "../internal/api/models/PendingEvalPayload";
 import { parseFunctionArgs } from "../utils/annotate";
@@ -35,7 +37,7 @@ import type { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
 const TRACER_NAME = "judgeval";
 
 /**
- * Metadata about an LLM call to record on the current span.
+ * Metadata about an LLM call to record on a span.
  */
 export interface LLMMetadata {
   /** Model name (e.g. "gpt-4o"). */
@@ -276,6 +278,26 @@ export abstract class BaseTracer {
     });
   }
 
+  /**
+   * Wrap a supported LLM client to add automatic tracing.
+   *
+   * Currently supports OpenAI clients. The client is instrumented
+   * in-place and returned.
+   *
+   * @param client - An LLM client instance (e.g. `new OpenAI()`).
+   * @returns The same client instance, instrumented.
+   *
+   * @example
+   * ```typescript
+   * import OpenAI from "openai";
+   *
+   * const client = Tracer.wrap(new OpenAI());
+   * ```
+   */
+  static wrap<T extends OpenAI>(client: T): T {
+    return wrap(client);
+  }
+
   // ------------------------------------------------------------------ //
   //  Static: Span Creation (OTEL-like signatures)                      //
   // ------------------------------------------------------------------ //
@@ -293,6 +315,10 @@ export abstract class BaseTracer {
   /**
    * Start a new span without setting it as active.
    *
+   * **Most users should prefer {@link observe} or {@link with}**, which
+   * handle activation, error recording, and span ending automatically.
+   * Use this only when you need low-level control over the span lifecycle.
+   *
    * @param name - The span name.
    * @param attributes - Optional span attributes.
    * @returns The created span.
@@ -307,6 +333,10 @@ export abstract class BaseTracer {
    * Start a new active span and run a function within it.
    *
    * The span is automatically ended when the function completes.
+   *
+   * **Most users should prefer {@link observe} or {@link with}**, which
+   * additionally record inputs/outputs and capture errors automatically.
+   * Use this only when you need low-level control over the span lifecycle.
    *
    * @param options - Span options. `name` is required; `attributes` is optional.
    * @param fn - Function to execute within the span context.
@@ -689,20 +719,32 @@ export abstract class BaseTracer {
   }
 
   // ------------------------------------------------------------------ //
+  //  Internal: resolve target span                                     //
+  // ------------------------------------------------------------------ //
+
+  private static _resolveSpan(span?: Span): Span | undefined {
+    if (span) return span;
+    return BaseTracer._getProxyProvider().getCurrentSpan();
+  }
+
+  // ------------------------------------------------------------------ //
   //  Static: Span Kind                                                 //
   // ------------------------------------------------------------------ //
 
   /**
-   * Set the kind of the current active span.
+   * Set the kind of a span.
    *
    * @param kind - The span kind (e.g. "llm", "tool", "span").
+   * @param span - Target span. Defaults to the current active span.
    */
-  static setSpanKind(kind: string): void {
+  static setSpanKind(kind: string): void;
+  static setSpanKind(kind: string, span: Span): void;
+  static setSpanKind(kind: string, span?: Span): void {
     dontThrow("BaseTracer.setSpanKind", () => {
       if (!kind) return;
-      const currentSpan = BaseTracer._getProxyProvider().getCurrentSpan();
-      if (currentSpan?.isRecording()) {
-        currentSpan.setAttribute(AttributeKeys.JUDGMENT_SPAN_KIND, kind);
+      const target = BaseTracer._resolveSpan(span);
+      if (target?.isRecording()) {
+        target.setAttribute(AttributeKeys.JUDGMENT_SPAN_KIND, kind);
       }
     });
   }
@@ -733,17 +775,20 @@ export abstract class BaseTracer {
   // ------------------------------------------------------------------ //
 
   /**
-   * Set a single attribute on the current active span.
+   * Set a single attribute on a span.
    *
    * @param key - The attribute key.
    * @param value - The attribute value (will be serialized).
+   * @param span - Target span. Defaults to the current active span.
    */
-  static setAttribute(key: string, value: unknown): void {
+  static setAttribute(key: string, value: unknown): void;
+  static setAttribute(key: string, value: unknown, span: Span): void;
+  static setAttribute(key: string, value: unknown, span?: Span): void {
     dontThrow("BaseTracer.setAttribute", () => {
-      const currentSpan = BaseTracer._getProxyProvider().getCurrentSpan();
-      if (!currentSpan?.isRecording()) return;
+      const target = BaseTracer._resolveSpan(span);
+      if (!target?.isRecording()) return;
       if (!key || value == null) return;
-      currentSpan.setAttribute(
+      target.setAttribute(
         key,
         serializeAttribute(value, BaseTracer._getSerializer()),
       );
@@ -751,38 +796,72 @@ export abstract class BaseTracer {
   }
 
   /**
-   * Set multiple attributes on the current active span.
+   * Set multiple attributes on a span.
    *
    * @param attributes - Key-value pairs to set.
+   * @param span - Target span. Defaults to the current active span.
    */
-  static setAttributes(attributes: Record<string, unknown>): void {
+  static setAttributes(attributes: Record<string, unknown>): void;
+  static setAttributes(attributes: Record<string, unknown>, span: Span): void;
+  static setAttributes(attributes: Record<string, unknown>, span?: Span): void {
     for (const [key, value] of Object.entries(attributes)) {
-      BaseTracer.setAttribute(key, value);
+      if (span) BaseTracer.setAttribute(key, value, span);
+      else BaseTracer.setAttribute(key, value);
     }
   }
 
   /**
-   * Set the input data on the current span.
+   * Set the input data on a span.
    *
    * @param inputData - The input data to record.
+   * @param span - Target span. Defaults to the current active span.
    */
-  static setInput(inputData: unknown): void {
-    BaseTracer.setAttribute(AttributeKeys.JUDGMENT_INPUT, inputData);
+  static setInput(inputData: unknown): void;
+  static setInput(inputData: unknown, span: Span): void;
+  static setInput(inputData: unknown, span?: Span): void {
+    if (span)
+      BaseTracer.setAttribute(AttributeKeys.JUDGMENT_INPUT, inputData, span);
+    else BaseTracer.setAttribute(AttributeKeys.JUDGMENT_INPUT, inputData);
   }
 
   /**
-   * Set the output data on the current span.
+   * Set the output data on a span.
    *
    * @param outputData - The output data to record.
+   * @param span - Target span. Defaults to the current active span.
    */
-  static setOutput(outputData: unknown): void {
-    BaseTracer.setAttribute(AttributeKeys.JUDGMENT_OUTPUT, outputData);
+  static setOutput(outputData: unknown): void;
+  static setOutput(outputData: unknown, span: Span): void;
+  static setOutput(outputData: unknown, span?: Span): void {
+    if (span)
+      BaseTracer.setAttribute(AttributeKeys.JUDGMENT_OUTPUT, outputData, span);
+    else BaseTracer.setAttribute(AttributeKeys.JUDGMENT_OUTPUT, outputData);
   }
 
   /**
-   * Record LLM usage metadata on the current span.
+   * Record an error on a span.
+   *
+   * Sets the span status to ERROR and records the exception.
+   *
+   * @param error - The error to record.
+   * @param span - Target span. Defaults to the current active span.
+   */
+  static setError(error: unknown): void;
+  static setError(error: unknown, span: Span): void;
+  static setError(error: unknown, span?: Span): void {
+    dontThrow("BaseTracer.setError", () => {
+      const target = BaseTracer._resolveSpan(span);
+      if (!target?.isRecording()) return;
+      target.recordException(error as Error);
+      target.setStatus({ code: SpanStatusCode.ERROR, message: String(error) });
+    });
+  }
+
+  /**
+   * Record LLM usage metadata on a span.
    *
    * @param metadata - LLM metadata including model, provider, and token counts.
+   * @param span - Target span. Defaults to the current active span.
    *
    * @example
    * ```typescript
@@ -793,51 +872,53 @@ export abstract class BaseTracer {
    * });
    * ```
    */
-  static recordLLMMetadata(metadata: LLMMetadata): void {
+  static recordLLMMetadata(metadata: LLMMetadata): void;
+  static recordLLMMetadata(metadata: LLMMetadata, span: Span): void;
+  static recordLLMMetadata(metadata: LLMMetadata, span?: Span): void {
     dontThrow("BaseTracer.recordLLMMetadata", () => {
-      const currentSpan = BaseTracer._getProxyProvider().getCurrentSpan();
-      if (!currentSpan?.isRecording()) return;
+      const target = BaseTracer._resolveSpan(span);
+      if (!target?.isRecording()) return;
 
       if (typeof metadata.model === "string") {
-        currentSpan.setAttribute(
+        target.setAttribute(
           AttributeKeys.JUDGMENT_LLM_MODEL_NAME,
           metadata.model,
         );
       }
 
       if (typeof metadata.provider === "string") {
-        currentSpan.setAttribute(
+        target.setAttribute(
           AttributeKeys.JUDGMENT_LLM_PROVIDER,
           metadata.provider,
         );
       }
 
       if (typeof metadata.non_cached_input_tokens === "number") {
-        currentSpan.setAttribute(
+        target.setAttribute(
           AttributeKeys.JUDGMENT_USAGE_NON_CACHED_INPUT_TOKENS,
           metadata.non_cached_input_tokens,
         );
       }
       if (typeof metadata.output_tokens === "number") {
-        currentSpan.setAttribute(
+        target.setAttribute(
           AttributeKeys.JUDGMENT_USAGE_OUTPUT_TOKENS,
           metadata.output_tokens,
         );
       }
       if (typeof metadata.cache_read_input_tokens === "number") {
-        currentSpan.setAttribute(
+        target.setAttribute(
           AttributeKeys.JUDGMENT_USAGE_CACHE_READ_INPUT_TOKENS,
           metadata.cache_read_input_tokens,
         );
       }
       if (typeof metadata.cache_creation_input_tokens === "number") {
-        currentSpan.setAttribute(
+        target.setAttribute(
           AttributeKeys.JUDGMENT_USAGE_CACHE_CREATION_INPUT_TOKENS,
           metadata.cache_creation_input_tokens,
         );
       }
       if (typeof metadata.total_cost_usd === "number") {
-        currentSpan.setAttribute(
+        target.setAttribute(
           AttributeKeys.JUDGMENT_USAGE_TOTAL_COST_USD,
           metadata.total_cost_usd,
         );
@@ -868,9 +949,11 @@ export abstract class BaseTracer {
   }
 
   /**
-   * Set the customer ID on the current span.
+   * Set the customer ID on the current active span.
    *
    * The ID is automatically propagated to all child spans via baggage.
+   * This method always targets the active span because it modifies
+   * the active context's baggage for propagation.
    *
    * @param customerId - The customer identifier.
    */
@@ -882,9 +965,11 @@ export abstract class BaseTracer {
   }
 
   /**
-   * Set the customer user ID on the current span.
+   * Set the customer user ID on the current active span.
    *
    * The ID is automatically propagated to all child spans via baggage.
+   * This method always targets the active span because it modifies
+   * the active context's baggage for propagation.
    *
    * @param customerUserId - The customer user identifier.
    */
@@ -896,9 +981,11 @@ export abstract class BaseTracer {
   }
 
   /**
-   * Set the session ID on the current span.
+   * Set the session ID on the current active span.
    *
    * The ID is automatically propagated to all child spans via baggage.
+   * This method always targets the active span because it modifies
+   * the active context's baggage for propagation.
    *
    * @param sessionId - The session identifier.
    */
@@ -949,7 +1036,7 @@ export abstract class BaseTracer {
   // ------------------------------------------------------------------ //
 
   /**
-   * Trigger an asynchronous server-side evaluation on the current span.
+   * Trigger an asynchronous server-side evaluation on a span.
    *
    * The evaluation is queued and processed server-side by the Judgment
    * platform after the span ends. Use this to score live traffic
@@ -957,6 +1044,7 @@ export abstract class BaseTracer {
    *
    * @param options - Evaluation options. `judge` is required; `example`
    *   is optional evaluation data.
+   * @param span - Target span. Defaults to the current active span.
    *
    * @example
    * ```typescript
@@ -969,17 +1057,19 @@ export abstract class BaseTracer {
    * });
    * ```
    */
-  static asyncEvaluate(options: AsyncEvaluateOptions): void {
+  static asyncEvaluate(options: AsyncEvaluateOptions): void;
+  static asyncEvaluate(options: AsyncEvaluateOptions, span: Span): void;
+  static asyncEvaluate(options: AsyncEvaluateOptions, span?: Span): void {
     dontThrow("BaseTracer.asyncEvaluate", () => {
       const { judge, example } = options;
       const proxy = BaseTracer._getProxyProvider();
       const tracer = proxy.getActiveTracer();
       if (!tracer?.projectId) return;
-      const currentSpan = proxy.getCurrentSpan();
-      if (!currentSpan?.isRecording()) return;
+      const target = BaseTracer._resolveSpan(span);
+      if (!target?.isRecording()) return;
 
       const processor = tracer.getSpanProcessor();
-      const ctx = currentSpan.spanContext();
+      const ctx = target.spanContext();
 
       const idx = processor.stateIncr(
         ctx,
@@ -1007,7 +1097,8 @@ export abstract class BaseTracer {
         payload,
       );
 
-      currentSpan.setAttribute(
+      // Raw setAttribute — value is already JSON-stringified, BaseTracer.setAttribute would double-serialize.
+      target.setAttribute(
         AttributeKeys.JUDGMENT_PENDING_TRACE_EVAL,
         JSON.stringify(updated),
       );

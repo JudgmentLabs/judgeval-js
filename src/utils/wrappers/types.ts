@@ -1,3 +1,6 @@
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AsyncFn = (...args: any[]) => Promise<any>;
+
 export interface ImmutableHooks<
   A extends unknown[],
   R,
