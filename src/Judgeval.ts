@@ -1,6 +1,6 @@
 import { JUDGMENT_API_KEY, JUDGMENT_API_URL, JUDGMENT_ORG_ID } from "./env";
 import { JudgmentApiClient } from "./internal/api";
-import { resolveProjectId } from "./utils/resolve";
+import { resolveProjectId } from "./utils/resolve-project-id";
 import { EvaluationFactory } from "./evaluation/EvaluationFactory";
 import { DatasetFactory } from "./datasets/DatasetFactory";
 
@@ -88,9 +88,10 @@ export class Judgeval {
     }
 
     const client = new JudgmentApiClient(apiUrl, apiKey, organizationId);
-    const projectId = await resolveProjectId(client, config.projectName);
-
-    if (!projectId) {
+    let projectId: string | null = null;
+    try {
+      projectId = await resolveProjectId(client, config.projectName);
+    } catch {
       console.warn(
         `Project '${config.projectName}' not found. ` +
           "Some operations requiring project_id will be skipped.",
