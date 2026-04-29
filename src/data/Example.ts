@@ -1,6 +1,12 @@
 import type { Example as APIExample } from "../internal/api/models/Example";
 
 /**
+ * The wire format for examples: the fixed API fields plus arbitrary
+ * user-defined properties (input, actual_output, etc.).
+ */
+export type ExampleDict = APIExample & Record<string, unknown>;
+
+/**
  * A single evaluation example with flexible key-value properties.
  *
  * Use `Example.create()` to construct an example with arbitrary fields
@@ -24,15 +30,15 @@ export class Example {
   private readonly _properties: Record<string, unknown>;
 
   private constructor(
-    exampleId?: string,
-    createdAt?: string,
-    name?: string | null,
-    properties?: Record<string, unknown>,
+    exampleId: string,
+    createdAt: string,
+    name: string | null,
+    properties: Record<string, unknown>,
   ) {
-    this.exampleId = exampleId ?? crypto.randomUUID();
-    this.createdAt = createdAt ?? new Date().toISOString();
-    this.name = name ?? null;
-    this._properties = properties ?? {};
+    this.exampleId = exampleId;
+    this.createdAt = createdAt;
+    this.name = name;
+    this._properties = properties;
   }
 
   /**
@@ -42,26 +48,39 @@ export class Example {
    * Common keys: `input`, `actual_output`, `expected_output`, `retrieval_context`.
    */
   static create(props: Record<string, unknown> = {}): Example {
-    return new Example(undefined, undefined, undefined, { ...props });
+    return new Example(crypto.randomUUID(), new Date().toISOString(), null, {
+      ...props,
+    });
   }
 
-  /**
-   * Reconstruct an Example from a raw API/dataset dict (snake_case keys).
-   * Used when pulling examples from a dataset or API response.
-   */
-  static fromDict(data: Record<string, unknown>): Example {
-    const exampleId = (data.example_id as string) ?? "";
-    const createdAt = (data.created_at as string) ?? "";
-    const name = (data.name as string | null) ?? null;
+  /** Known keys on the API Example interface that are not user properties. */
+  private static readonly META_KEYS = new Set([
+    "example_id",
+    "created_at",
+    "name",
+    "trace_id",
+    "span_id",
+  ]);
 
+  /**
+   * Reconstruct an Example from an API response dict.
+   *
+   * Separates the fixed metadata fields (`example_id`, `created_at`, `name`)
+   * from user-defined properties.
+   */
+  static fromDict(data: ExampleDict): Example {
     const properties: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(data)) {
-      if (key !== "example_id" && key !== "created_at" && key !== "name") {
-        properties[key] = value;
+    for (const key of Object.keys(data)) {
+      if (!Example.META_KEYS.has(key)) {
+        properties[key] = (data as Record<string, unknown>)[key];
       }
     }
-
-    return new Example(exampleId, createdAt, name, properties);
+    return new Example(
+      data.example_id ?? "",
+      data.created_at ?? "",
+      data.name ?? null,
+      properties,
+    );
   }
 
   /** Get a property by key. */
@@ -80,7 +99,7 @@ export class Example {
   }
 
   /** Serialize to the API wire format. */
-  toDict(): APIExample & Record<string, unknown> {
+  toDict(): ExampleDict {
     const result: Record<string, unknown> = {
       example_id: this.exampleId,
       created_at: this.createdAt,
@@ -89,6 +108,8 @@ export class Example {
     for (const [key, value] of Object.entries(this._properties)) {
       result[key] = value;
     }
-    return result as APIExample & Record<string, unknown>;
+    // result satisfies ExampleDict structurally — example_id and created_at
+    // are always present strings, plus arbitrary extra keys.
+    return result as ExampleDict;
   }
 }

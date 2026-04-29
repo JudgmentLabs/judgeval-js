@@ -1,9 +1,17 @@
+import pc from "picocolors";
 import type { ExampleEvaluationRun } from "../internal/api/models/ExampleEvaluationRun";
 import type { LocalScorerResult } from "../internal/api/models/LocalScorerResult";
 import type { Example } from "../data/Example";
 import type { Judge } from "../judges/Judge";
 import type { BaseResponse } from "../judges/responses";
 import { EvaluatorRunner } from "./EvaluatorRunner";
+
+interface ScorerJobResult {
+  exampleIdx: number;
+  scorer: Judge;
+  result: BaseResponse | null;
+  error: string | null;
+}
 
 export class LocalEvaluatorRunner extends EvaluatorRunner<Judge> {
   protected _buildPayload(
@@ -33,30 +41,43 @@ export class LocalEvaluatorRunner extends EvaluatorRunner<Judge> {
     payload: ExampleEvaluationRun,
   ): Promise<number> {
     const totalJobs = examples.length * scorers.length;
-    console.log(`  Running ${totalJobs} local scorer jobs...`);
     const startTime = Date.now();
 
-    // Run all (example, scorer) pairs concurrently
-    const jobs = examples.flatMap((example, exampleIdx) =>
-      scorers.map((scorer) =>
-        scorer
-          .score(example)
-          .then((result) => ({ exampleIdx, scorer, result, error: null }))
-          .catch((err: unknown) => ({
-            exampleIdx,
-            scorer,
-            result: null as BaseResponse | null,
-            error: String(err),
-          })),
-      ),
+    let completed = 0;
+    const update = () => {
+      process.stdout.write(
+        `\r  ${pc.dim(`Running local scorers... (${completed}/${totalJobs})`)}`,
+      );
+    };
+    update();
+
+    const jobs: Promise<ScorerJobResult>[] = examples.flatMap(
+      (example, exampleIdx) =>
+        scorers.map((scorer) =>
+          scorer
+            .score(example)
+            .then((result): ScorerJobResult => {
+              completed++;
+              update();
+              return { exampleIdx, scorer, result, error: null };
+            })
+            .catch((err: unknown): ScorerJobResult => {
+              completed++;
+              update();
+              return { exampleIdx, scorer, result: null, error: String(err) };
+            }),
+        ),
     );
 
     const jobResults = await Promise.all(jobs);
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`  Scoring completed in ${elapsed}s`);
+    process.stdout.write("\n");
+    console.log(
+      `${pc.green("\u2713")} Scoring completed in ${pc.bold(`${elapsed}s`)}`,
+    );
 
     // Group by example index
-    const byExample = new Map<number, (typeof jobResults)[number][]>();
+    const byExample = new Map<number, ScorerJobResult[]>();
     for (const jr of jobResults) {
       let list = byExample.get(jr.exampleIdx);
       if (!list) {
@@ -66,7 +87,6 @@ export class LocalEvaluatorRunner extends EvaluatorRunner<Judge> {
       list.push(jr);
     }
 
-    // Build API results using the LocalScorerResult shape directly
     const apiResults: LocalScorerResult[] = examples.map((example, i) => {
       const entries = byExample.get(i) ?? [];
       return {
@@ -100,7 +120,6 @@ export class LocalEvaluatorRunner extends EvaluatorRunner<Judge> {
       results: apiResults,
       run: payload,
     });
-    console.log("  Local scorer results logged to backend");
 
     return examples.length;
   }

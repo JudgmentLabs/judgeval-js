@@ -1,3 +1,4 @@
+import pc from "picocolors";
 import type { JudgmentApiClient } from "../internal/api/client";
 import type { ExampleEvaluationRun } from "../internal/api/models/ExampleEvaluationRun";
 import type { ExperimentRunItem } from "../internal/api/models/ExperimentRunItem";
@@ -64,12 +65,18 @@ export abstract class EvaluatorRunner<S extends string | Judge> {
         evalId,
       );
       const resultsData = response.results ?? [];
+      const completed = resultsData.length;
 
-      console.log(`  Evals completed: ${resultsData.length}/${expectedCount}`);
+      process.stdout.write(
+        `\r  ${pc.dim(`Evals completed: (${completed}/${expectedCount} completed)`)}`,
+      );
 
-      if (resultsData.length === expectedCount) {
+      if (completed === expectedCount) {
         const url = response.ui_results_url ?? "Failed to get UI results URL";
-        console.log(`  Evals completed and saved in ${elapsed.toFixed(1)}s`);
+        process.stdout.write("\n");
+        console.log(
+          `${pc.green("\u2713")} Evals completed and saved in ${pc.bold(`${elapsed.toFixed(1)}s`)}`,
+        );
         return { results: resultsData, url };
       }
 
@@ -87,21 +94,29 @@ export abstract class EvaluatorRunner<S extends string | Judge> {
     let passed = 0;
     let failed = 0;
 
+    console.log();
+
     for (let i = 0; i < resultsData.length; i++) {
       const res = resultsData[i];
       const success = res.scorers.every((s) => Boolean(s.success));
 
       if (success) {
         passed++;
-        console.log(`  Example ${i + 1}: PASSED`);
+        console.log(
+          `${pc.green("\u2713")} Example ${i + 1}: ${pc.green("PASSED")}`,
+        );
       } else {
         failed++;
-        console.log(`  Example ${i + 1}: FAILED`);
+        console.log(
+          `${pc.red("\u2717")} Example ${i + 1}: ${pc.red("FAILED")}`,
+        );
       }
 
       for (const s of res.scorers) {
+        const scoreStr = s.score !== null ? s.score.toFixed(3) : "N/A";
+        const colored = s.success ? pc.green(scoreStr) : pc.red(scoreStr);
         console.log(
-          `    ${s.name}: ${s.score.toFixed(3)} (threshold: ${s.threshold})`,
+          `  ${pc.dim(`${s.name}:`)} ${colored} ${pc.dim(`(threshold: ${s.threshold})`)}`,
         );
       }
 
@@ -110,11 +125,15 @@ export abstract class EvaluatorRunner<S extends string | Judge> {
 
     console.log();
     if (passed === results.length) {
-      console.log(`  All tests passed! (${passed}/${results.length})`);
+      console.log(
+        `${pc.bold(pc.green("\u2713 All tests passed!"))} (${passed}/${results.length})`,
+      );
     } else {
-      console.log(`  Results: ${passed} passed | ${failed} failed`);
+      console.log(
+        `${pc.bold(pc.yellow("\u26A0 Results:"))} ${pc.green(`${passed} passed`)} | ${pc.red(`${failed} failed`)}`,
+      );
     }
-    console.log(`  View full details: ${url}`);
+    console.log(`${pc.dim("View full details:")} ${pc.underline(url)}`);
     console.log();
 
     if (assertTest && results.some((r) => !r.success)) {
@@ -158,10 +177,12 @@ export abstract class EvaluatorRunner<S extends string | Judge> {
     const createdAt = new Date().toISOString();
 
     console.log();
-    console.log("Starting Evaluation");
-    console.log(`  Run: ${evalRunName}`);
-    console.log(`  Project: ${this._projectName}`);
-    console.log(`  Examples: ${examples.length} | Scorers: ${scorers.length}`);
+    console.log(pc.bold(pc.cyan("Starting Evaluation")));
+    console.log(`${pc.dim("Run:")} ${evalRunName}`);
+    console.log(`${pc.dim("Project:")} ${this._projectName}`);
+    console.log(
+      `${pc.dim("Examples:")} ${examples.length} | ${pc.dim("Scorers:")} ${scorers.length}`,
+    );
     console.log();
 
     const payload = this._buildPayload(

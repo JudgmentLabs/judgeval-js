@@ -1,6 +1,6 @@
 import type { JudgmentApiClient } from "../internal/api/client";
 import type { DatasetInfo } from "../internal/api/models/DatasetInfo";
-import { Example } from "../data/Example";
+import { Example, type ExampleDict } from "../data/Example";
 import { Dataset } from "./Dataset";
 
 /** Creates, retrieves, and lists datasets in your project. */
@@ -32,10 +32,10 @@ export class DatasetFactory {
     );
 
     const datasetKind = response.dataset_kind ?? "example";
-    const rawExamples = response.examples ?? [];
-    const examples = rawExamples.map((e) =>
-      Example.fromDict(e as unknown as Record<string, unknown>),
-    );
+    // The API returns examples with arbitrary user properties beyond the
+    // typed Example interface — cast to ExampleDict to reflect the real shape.
+    const rawExamples = (response.examples ?? []) as ExampleDict[];
+    const examples = rawExamples.map((e) => Example.fromDict(e));
 
     return new Dataset({
       name,

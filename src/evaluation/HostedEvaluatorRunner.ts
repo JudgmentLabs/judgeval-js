@@ -1,3 +1,4 @@
+import pc from "picocolors";
 import type { ExampleEvaluationRun } from "../internal/api/models/ExampleEvaluationRun";
 import type { Example } from "../data/Example";
 import { EvaluatorRunner } from "./EvaluatorRunner";
@@ -24,14 +25,15 @@ export class HostedEvaluatorRunner extends EvaluatorRunner<string> {
 
   protected async _submit(
     projectId: string,
-    evalId: string,
+    _evalId: string,
     examples: Example[],
     _scorers: string[],
     payload: ExampleEvaluationRun,
   ): Promise<number> {
-    console.log("  Submitting evaluation...");
+    process.stdout.write(`  ${pc.dim("Submitting evaluation...")}`);
     await this._client.postV1projectsEvalQueueExamples(projectId, payload);
-    console.log(`  Evaluation submitted: ${evalId}`);
+    process.stdout.write("\n");
+    console.log(`${pc.green("\u2713")} Evaluation submitted`);
     return examples.length;
   }
 }

@@ -1,5 +1,5 @@
 import type { JudgmentApiClient } from "../internal/api/client";
-import { Example } from "../data/Example";
+import { Example, type ExampleDict } from "../data/Example";
 
 /**
  * A collection of `Example` objects stored on the Judgment platform.
@@ -62,10 +62,10 @@ export class Dataset {
     const data: unknown[] = JSON.parse(raw);
 
     const examples: Example[] = data.map((item) => {
-      if (typeof item === "object" && item !== null) {
-        return Example.fromDict(item as Record<string, unknown>);
+      if (typeof item !== "object" || item === null) {
+        throw new Error("Each item in the JSON array must be an object");
       }
-      throw new Error("Each item in the JSON array must be an object");
+      return Example.fromDict(item as ExampleDict);
     });
 
     await this.addExamples(examples, batchSize);
