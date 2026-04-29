@@ -64,7 +64,7 @@ async function main() {
 
   for (const result of results) {
     console.log(`Success: ${result.success}`);
-    for (const scorer of result.scorersData) {
+    for (const scorer of result.scorers) {
       console.log(
         `  ${scorer.name}: score=${scorer.score}, reason=${scorer.reason}`,
       );

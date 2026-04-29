@@ -2,7 +2,6 @@ import type { JudgmentApiClient } from "../internal/api/client";
 import type { ExampleEvaluationRun } from "../internal/api/models/ExampleEvaluationRun";
 import type { ExperimentRunItem } from "../internal/api/models/ExperimentRunItem";
 import type { Example } from "../data/Example";
-import type { ScorerData } from "../data/ScorerData";
 import type { ScoringResult } from "../data/ScoringResult";
 import type { Judge } from "../judges/Judge";
 
@@ -11,9 +10,8 @@ const POLL_INTERVAL_MS = 2000;
 /**
  * Abstract base for evaluation runners.
  *
- * Provides the shared `run` → `_buildPayload` → `_submit` → `_poll` → `_displayResults` flow.
- * Subclasses implement `_buildPayload` and `_submit` for their specific mode
- * (local judges or hosted scorers).
+ * Provides the shared run -> poll -> display flow.
+ * Subclasses implement `_buildPayload` and `_submit` for local vs hosted mode.
  */
 export abstract class EvaluatorRunner<S extends string | Judge> {
   protected readonly _client: JudgmentApiClient;
@@ -66,11 +64,10 @@ export abstract class EvaluatorRunner<S extends string | Judge> {
         evalId,
       );
       const resultsData = response.results ?? [];
-      const completed = resultsData.length;
 
-      console.log(`  Evals completed: ${completed}/${expectedCount}`);
+      console.log(`  Evals completed: ${resultsData.length}/${expectedCount}`);
 
-      if (completed === expectedCount) {
+      if (resultsData.length === expectedCount) {
         const url = response.ui_results_url ?? "Failed to get UI results URL";
         console.log(`  Evals completed and saved in ${elapsed.toFixed(1)}s`);
         return { results: resultsData, url };
@@ -92,23 +89,7 @@ export abstract class EvaluatorRunner<S extends string | Judge> {
 
     for (let i = 0; i < resultsData.length; i++) {
       const res = resultsData[i];
-      const scorersRaw = res.scorers ?? [];
-
-      const scorersData: ScorerData[] = scorersRaw.map((s) => ({
-        name: s.name,
-        threshold: s.threshold,
-        success: Boolean(s.success),
-        score: s.score ?? null,
-        minimumScoreRange: s.minimum_score_range ?? 0,
-        maximumScoreRange: s.maximum_score_range ?? 1,
-        reason: s.reason ?? null,
-        evaluationModel: s.evaluation_model ?? null,
-        error: s.error ?? null,
-        additionalMetadata: s.additional_metadata ?? {},
-        id: s.scorer_data_id ?? null,
-      }));
-
-      const success = scorersData.every((s) => s.success);
+      const success = res.scorers.every((s) => Boolean(s.success));
 
       if (success) {
         passed++;
@@ -118,19 +99,13 @@ export abstract class EvaluatorRunner<S extends string | Judge> {
         console.log(`  Example ${i + 1}: FAILED`);
       }
 
-      for (const scorer of scorersData) {
-        const scoreStr =
-          scorer.score !== null ? scorer.score.toFixed(3) : "N/A";
+      for (const s of res.scorers) {
         console.log(
-          `    ${scorer.name}: ${scoreStr} (threshold: ${scorer.threshold})`,
+          `    ${s.name}: ${s.score.toFixed(3)} (threshold: ${s.threshold})`,
         );
       }
 
-      results.push({
-        success,
-        scorersData,
-        dataObject: examples[i],
-      });
+      results.push({ success, scorers: res.scorers, example: examples[i] });
     }
 
     console.log();
@@ -142,23 +117,19 @@ export abstract class EvaluatorRunner<S extends string | Judge> {
     console.log(`  View full details: ${url}`);
     console.log();
 
-    if (assertTest && !results.every((r) => r.success)) {
+    if (assertTest && results.some((r) => !r.success)) {
       const lines = [
         `Evaluation failed: ${failed}/${results.length} examples failed`,
       ];
       for (let i = 0; i < results.length; i++) {
-        const result = results[i];
-        if (!result.success) {
+        if (!results[i].success) {
           lines.push(`  Example ${i + 1}:`);
-          for (const s of result.scorersData) {
+          for (const s of results[i].scorers) {
             if (!s.success) {
-              const scoreStr = s.score !== null ? s.score.toFixed(3) : "N/A";
               lines.push(
-                `    ${s.name}: ${scoreStr} (threshold: ${s.threshold})`,
+                `    ${s.name}: ${s.score.toFixed(3)} (threshold: ${s.threshold})`,
               );
-              if (s.reason) {
-                lines.push(`      ${s.reason}`);
-              }
+              if (s.reason) lines.push(`      ${s.reason}`);
             }
           }
         }
@@ -183,7 +154,6 @@ export abstract class EvaluatorRunner<S extends string | Judge> {
       return [];
     }
     const projectId = this._projectId;
-
     const evalId = crypto.randomUUID();
     const createdAt = new Date().toISOString();
 

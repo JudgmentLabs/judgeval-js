@@ -1,7 +1,7 @@
 import type { JudgmentApiClient } from "../internal/api/client";
+import type { DatasetInfo } from "../internal/api/models/DatasetInfo";
 import { Example } from "../data/Example";
 import { Dataset } from "./Dataset";
-import type { DatasetInfo } from "./Dataset";
 
 /** Creates, retrieves, and lists datasets in your project. */
 export class DatasetFactory {
@@ -88,22 +88,11 @@ export class DatasetFactory {
   /**
    * List all datasets in the project.
    */
-  async list(): Promise<DatasetInfo[] | null> {
+  list(): Promise<DatasetInfo[] | null> {
     const projectId = this._expectProjectId();
-    if (!projectId) return null;
+    if (!projectId) return Promise.resolve(null);
 
-    const response = await this._client.getV1projectsDatasets(projectId);
-
-    // PullAllDatasetsResponse is DatasetInfo[] (the API type)
-    const items = response as unknown as Array<Record<string, unknown>>;
-    return items.map((d) => ({
-      datasetId: d.dataset_id as string,
-      name: d.name as string,
-      createdAt: d.created_at as string,
-      kind: d.kind as string,
-      entries: d.entries as number,
-      creator: d.creator as string,
-    }));
+    return this._client.getV1projectsDatasets(projectId);
   }
 
   private _expectProjectId(): string | null {

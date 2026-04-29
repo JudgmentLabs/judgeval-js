@@ -1,16 +1,6 @@
 import type { JudgmentApiClient } from "../internal/api/client";
 import { Example } from "../data/Example";
 
-/** Summary metadata returned when listing datasets. */
-export interface DatasetInfo {
-  datasetId: string;
-  name: string;
-  createdAt: string;
-  kind: string;
-  entries: number;
-  creator: string;
-}
-
 /**
  * A collection of `Example` objects stored on the Judgment platform.
  *

@@ -2,7 +2,7 @@ import type { ExampleEvaluationRun } from "../internal/api/models/ExampleEvaluat
 import type { LocalScorerResult } from "../internal/api/models/LocalScorerResult";
 import type { Example } from "../data/Example";
 import type { Judge } from "../judges/Judge";
-import type { ScorerResponse } from "../judges/responses";
+import type { BaseResponse } from "../judges/responses";
 import { EvaluatorRunner } from "./EvaluatorRunner";
 
 export class LocalEvaluatorRunner extends EvaluatorRunner<Judge> {
@@ -37,90 +37,65 @@ export class LocalEvaluatorRunner extends EvaluatorRunner<Judge> {
     const startTime = Date.now();
 
     // Run all (example, scorer) pairs concurrently
-    type ScorerResult = {
-      exampleIdx: number;
-      scorerName: string;
-      result: ScorerResponse | null;
-      error: string | null;
-    };
-
-    const jobs: Promise<ScorerResult>[] = [];
-    for (let i = 0; i < examples.length; i++) {
-      for (const scorer of scorers) {
-        const exampleIdx = i;
-        const scorerName = scorer.constructor.name;
-        jobs.push(
-          scorer
-            .score(examples[exampleIdx])
-            .then((result) => ({
-              exampleIdx,
-              scorerName,
-              result: result as ScorerResponse,
-              error: null,
-            }))
-            .catch((err: unknown) => ({
-              exampleIdx,
-              scorerName,
-              result: null,
-              error: String(err),
-            })),
-        );
-      }
-    }
+    const jobs = examples.flatMap((example, exampleIdx) =>
+      scorers.map((scorer) =>
+        scorer
+          .score(example)
+          .then((result) => ({ exampleIdx, scorer, result, error: null }))
+          .catch((err: unknown) => ({
+            exampleIdx,
+            scorer,
+            result: null as BaseResponse | null,
+            error: String(err),
+          })),
+      ),
+    );
 
     const jobResults = await Promise.all(jobs);
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`  Scoring completed in ${elapsed}s`);
 
-    // Group results by example index
-    const resultsByExample = new Map<number, ScorerResult[]>();
+    // Group by example index
+    const byExample = new Map<number, (typeof jobResults)[number][]>();
     for (const jr of jobResults) {
-      const list = resultsByExample.get(jr.exampleIdx) ?? [];
+      let list = byExample.get(jr.exampleIdx);
+      if (!list) {
+        list = [];
+        byExample.set(jr.exampleIdx, list);
+      }
       list.push(jr);
-      resultsByExample.set(jr.exampleIdx, list);
     }
 
-    // Build API results
-    const apiResults: LocalScorerResult[] = [];
-    for (let i = 0; i < examples.length; i++) {
-      const exampleResults = resultsByExample.get(i) ?? [];
-      const scorerEntries = exampleResults.map((jr) => {
-        if (jr.error !== null) {
+    // Build API results using the LocalScorerResult shape directly
+    const apiResults: LocalScorerResult[] = examples.map((example, i) => {
+      const entries = byExample.get(i) ?? [];
+      return {
+        scorers_data: entries.map((jr) => {
+          if (jr.error !== null) {
+            return {
+              scorer_name: jr.scorer.constructor.name,
+              value: 0,
+              reason: "",
+              error: jr.error,
+            };
+          }
+          const r = jr.result!;
           return {
-            scorer_name: jr.scorerName,
-            value: 0 as number | boolean | string,
-            reason: "",
-            error: jr.error,
+            scorer_name: jr.scorer.constructor.name,
+            value: r.value,
+            reason: r.reason,
+            ...(r.citations && {
+              citations: r.citations.map((c) => ({
+                span_id: c.spanId,
+                span_attribute: c.spanAttribute,
+              })),
+            }),
           };
-        }
-        const entry: {
-          scorer_name: string;
-          value: boolean | number | string;
-          reason: string;
-          citations?: { span_id: string; span_attribute: string }[];
-          error?: string | null;
-        } = {
-          scorer_name: jr.scorerName,
-          value: jr.result!.value,
-          reason: jr.result!.reason,
-          error: null,
-        };
-        if (jr.result!.citations) {
-          entry.citations = jr.result!.citations.map((c) => ({
-            span_id: c.spanId,
-            span_attribute: c.spanAttribute,
-          }));
-        }
-        return entry;
-      });
+        }),
+        data_object: example.toDict(),
+      };
+    });
 
-      apiResults.push({
-        scorers_data: scorerEntries,
-        data_object: examples[i].toDict(),
-      });
-    }
-
-    // Post results to backend
     await this._client.postV1projectsEvalResultsExamples(projectId, {
       results: apiResults,
       run: payload,

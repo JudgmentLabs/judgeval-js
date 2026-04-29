@@ -18,7 +18,7 @@ export {
 export { wrap, wrapOpenAI } from "./instrumentation";
 
 export { Example } from "./data";
-export type { ScorerData, ScoringResult } from "./data";
+export type { ScoringResult } from "./data";
 
 export { Judge } from "./judges";
 export type {
@@ -31,4 +31,6 @@ export type {
 
 export { Evaluation, type EvaluationRunOptions } from "./evaluation";
 
-export { Dataset, type DatasetInfo } from "./datasets";
+export { Dataset } from "./datasets";
+export type { DatasetInfo } from "./internal/api/models/DatasetInfo";
+export type { ExperimentScorer } from "./internal/api/models/ExperimentScorer";
