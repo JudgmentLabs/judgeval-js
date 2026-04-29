@@ -30,9 +30,7 @@ export class HostedEvaluatorRunner extends EvaluatorRunner<string> {
     _scorers: string[],
     payload: ExampleEvaluationRun,
   ): Promise<number> {
-    process.stdout.write(`  ${pc.dim("Submitting evaluation...")}`);
     await this._client.postV1projectsEvalQueueExamples(projectId, payload);
-    process.stdout.write("\n");
     console.log(`${pc.green("\u2713")} Evaluation submitted`);
     return examples.length;
   }

@@ -40,38 +40,34 @@ export class LocalEvaluatorRunner extends EvaluatorRunner<Judge> {
     scorers: Judge[],
     payload: ExampleEvaluationRun,
   ): Promise<number> {
-    const totalJobs = examples.length * scorers.length;
     const startTime = Date.now();
-
-    let completed = 0;
-    const update = () => {
-      process.stdout.write(
-        `\r  ${pc.dim(`Running local scorers... (${completed}/${totalJobs})`)}`,
-      );
-    };
-    update();
 
     const jobs: Promise<ScorerJobResult>[] = examples.flatMap(
       (example, exampleIdx) =>
         scorers.map((scorer) =>
           scorer
             .score(example)
-            .then((result): ScorerJobResult => {
-              completed++;
-              update();
-              return { exampleIdx, scorer, result, error: null };
-            })
-            .catch((err: unknown): ScorerJobResult => {
-              completed++;
-              update();
-              return { exampleIdx, scorer, result: null, error: String(err) };
-            }),
+            .then(
+              (result): ScorerJobResult => ({
+                exampleIdx,
+                scorer,
+                result,
+                error: null,
+              }),
+            )
+            .catch(
+              (err: unknown): ScorerJobResult => ({
+                exampleIdx,
+                scorer,
+                result: null,
+                error: String(err),
+              }),
+            ),
         ),
     );
 
     const jobResults = await Promise.all(jobs);
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    process.stdout.write("\n");
     console.log(
       `${pc.green("\u2713")} Scoring completed in ${pc.bold(`${elapsed}s`)}`,
     );
