@@ -13,6 +13,13 @@ interface ScorerJobResult {
   error: string | null;
 }
 
+/**
+ * Evaluation runner for custom (in-process) scorers.
+ *
+ * Runs all {@link Judge} instances locally against the provided examples,
+ * posts results to the Judgment platform, then polls for finalized scores.
+ * Used internally by {@link Evaluation}.
+ */
 export class LocalEvaluatorRunner extends EvaluatorRunner<Judge> {
   protected _buildPayload(
     evalId: string,
@@ -27,7 +34,7 @@ export class LocalEvaluatorRunner extends EvaluatorRunner<Judge> {
       project_id: projectId,
       eval_name: evalRunName,
       created_at: createdAt,
-      examples: examples.map((e) => e.toDict()),
+      examples: examples.map((e) => e.toJSON()),
       judgment_scorers: [],
       custom_scorers: [],
     };
@@ -108,7 +115,7 @@ export class LocalEvaluatorRunner extends EvaluatorRunner<Judge> {
             }),
           };
         }),
-        data_object: example.toDict(),
+        data_object: example.toJSON(),
       };
     });
 

@@ -3,7 +3,17 @@ import type { DatasetInfo } from "../internal/api/models/DatasetInfo";
 import { Example, type ExampleDict } from "../data/Example";
 import { Dataset } from "./Dataset";
 
-/** Creates, retrieves, and lists datasets in your project. */
+/**
+ * Creates, retrieves, and lists datasets in your project.
+ *
+ * Access via `client.datasets`.
+ *
+ * @example
+ * ```typescript
+ * const datasets = await client.datasets.list();
+ * const dataset = await client.datasets.get("golden-set");
+ * ```
+ */
 export class DatasetFactory {
   private readonly _client: JudgmentApiClient;
   private readonly _projectId: string | null;
@@ -21,6 +31,9 @@ export class DatasetFactory {
 
   /**
    * Retrieve a dataset by name, including all its examples.
+   *
+   * @param name - The dataset name.
+   * @returns The dataset with all examples hydrated, or `null` if the project is unresolved.
    */
   async get(name: string): Promise<Dataset | null> {
     const projectId = this._expectProjectId();
@@ -35,7 +48,7 @@ export class DatasetFactory {
     // The API returns examples with arbitrary user properties beyond the
     // typed Example interface — cast to ExampleDict to reflect the real shape.
     const rawExamples = (response.examples ?? []) as ExampleDict[];
-    const examples = rawExamples.map((e) => Example.fromDict(e));
+    const examples = rawExamples.map((e) => Example.from(e));
 
     return new Dataset({
       name,
@@ -49,6 +62,12 @@ export class DatasetFactory {
 
   /**
    * Create a new dataset, optionally pre-populated with examples.
+   *
+   * @param name - The dataset name.
+   * @param options.examples - Examples to upload after creation.
+   * @param options.overwrite - If `true`, overwrite an existing dataset with the same name.
+   * @param options.batchSize - Number of examples per batch upload request. Defaults to 100.
+   * @returns The newly created dataset, or `null` if the project is unresolved.
    */
   async create(
     name: string,
@@ -87,6 +106,8 @@ export class DatasetFactory {
 
   /**
    * List all datasets in the project.
+   *
+   * @returns An array of dataset metadata, or `null` if the project is unresolved.
    */
   list(): Promise<DatasetInfo[] | null> {
     const projectId = this._expectProjectId();

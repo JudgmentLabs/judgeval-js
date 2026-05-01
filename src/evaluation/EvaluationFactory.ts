@@ -1,7 +1,17 @@
 import type { JudgmentApiClient } from "../internal/api/client";
 import { Evaluation } from "./Evaluation";
 
-/** Creates `Evaluation` instances for running batch scoring. */
+/**
+ * Creates {@link Evaluation} instances for running batch scoring.
+ *
+ * Access via `client.evaluation`.
+ *
+ * @example
+ * ```typescript
+ * const evaluation = client.evaluation.create();
+ * const results = await evaluation.run({ examples, scorers, evalRunName: "my-eval" });
+ * ```
+ */
 export class EvaluationFactory {
   private readonly _client: JudgmentApiClient;
   private readonly _projectId: string | null;

@@ -68,7 +68,7 @@ export class Example {
    * Separates the fixed metadata fields (`example_id`, `created_at`, `name`)
    * from user-defined properties.
    */
-  static fromDict(data: ExampleDict): Example {
+  static from(data: ExampleDict): Example {
     const properties: Record<string, unknown> = {};
     for (const key of Object.keys(data)) {
       if (!Example.META_KEYS.has(key)) {
@@ -99,7 +99,7 @@ export class Example {
   }
 
   /** Serialize to the API wire format. */
-  toDict(): ExampleDict {
+  toJSON(): ExampleDict {
     const result: Record<string, unknown> = {
       example_id: this.exampleId,
       created_at: this.createdAt,

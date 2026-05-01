@@ -2,10 +2,19 @@ import type { JudgmentApiClient } from "../internal/api/client";
 import { Example, type ExampleDict } from "../data/Example";
 
 /**
- * A collection of `Example` objects stored on the Judgment platform.
+ * A collection of {@link Example} objects stored on the Judgment platform.
  *
- * Supports adding examples individually or from JSON files,
- * and iterating over the examples.
+ * Datasets are retrieved via {@link DatasetFactory.get} or created via
+ * {@link DatasetFactory.create}. Once obtained, you can iterate over
+ * the examples directly, or add new ones.
+ *
+ * @example
+ * ```typescript
+ * const dataset = await client.datasets.get("golden-set");
+ * for (const example of dataset) {
+ *   console.log(example.get("input"));
+ * }
+ * ```
  */
 export class Dataset {
   readonly name: string;
@@ -33,6 +42,9 @@ export class Dataset {
 
   /**
    * Upload examples to this dataset in batches.
+   *
+   * @param examples - The examples to upload.
+   * @param batchSize - Number of examples per batch request. Defaults to 100.
    */
   async addExamples(
     examples: Example[],
@@ -45,7 +57,7 @@ export class Dataset {
       await this._client.postV1projectsDatasetsByDatasetNameExamples(
         this.projectId,
         this.name,
-        { examples: batch.map((e) => e.toDict()) },
+        { examples: batch.map((e) => e.toJSON()) },
       );
     }
   }
@@ -55,6 +67,9 @@ export class Dataset {
    *
    * Expects the file to contain a JSON array of objects, each with
    * properties like `input`, `actual_output`, etc.
+   *
+   * @param filePath - Path to the JSON file.
+   * @param batchSize - Number of examples per batch request. Defaults to 100.
    */
   async addFromJson(filePath: string, batchSize: number = 100): Promise<void> {
     const fs = await import("fs");
@@ -65,7 +80,7 @@ export class Dataset {
       if (typeof item !== "object" || item === null) {
         throw new Error("Each item in the JSON array must be an object");
       }
-      return Example.fromDict(item as ExampleDict);
+      return Example.from(item as ExampleDict);
     });
 
     await this.addExamples(examples, batchSize);

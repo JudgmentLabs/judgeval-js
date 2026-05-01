@@ -32,10 +32,24 @@ export interface EvaluationRunOptions {
  *
  * Two modes are supported:
  *
- * - **Hosted scorers** -- pass scorer names as strings (e.g.
- *   `"faithfulness"`, `"answer_relevancy"`). Evaluation runs server-side.
- * - **Custom judges** -- pass `Judge` subclass instances for in-process
- *   evaluation with your own scoring logic.
+ * - **Hosted scorers** — pass scorer names as strings (e.g.
+ *   `"faithfulness"`, `"answer_relevancy"`). Evaluation runs server-side
+ *   on the Judgment platform.
+ * - **Custom judges** — pass {@link Judge} subclass instances for
+ *   in-process evaluation with your own scoring logic.
+ *
+ * Create an `Evaluation` via `client.evaluation.create()`, then call
+ * `.run()` to execute scorers against your examples.
+ *
+ * @example
+ * ```typescript
+ * const evaluation = client.evaluation.create();
+ * const results = await evaluation.run({
+ *   examples,
+ *   scorers: ["faithfulness", "answer_relevancy"],
+ *   evalRunName: "nightly-eval",
+ * });
+ * ```
  */
 export class Evaluation {
   private readonly _local: LocalEvaluatorRunner;
@@ -53,8 +67,11 @@ export class Evaluation {
   /**
    * Run scorers against your examples and return results.
    *
-   * Pass **either** hosted scorer names (strings) **or** custom `Judge`
+   * Pass **either** hosted scorer names (strings) **or** custom {@link Judge}
    * instances. Mixing both in one call is not supported.
+   *
+   * @param options - Evaluation configuration including examples, scorers, and run name.
+   * @returns A list of {@link ScoringResult} objects, one per example.
    */
   run(options: EvaluationRunOptions): Promise<ScoringResult[]> {
     const {

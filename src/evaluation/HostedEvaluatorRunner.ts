@@ -3,6 +3,12 @@ import type { ExampleEvaluationRun } from "../internal/api/models/ExampleEvaluat
 import type { Example } from "../data/Example";
 import { EvaluatorRunner } from "./EvaluatorRunner";
 
+/**
+ * Evaluation runner for hosted (server-side) scorers.
+ *
+ * Submits scorer names to the Judgment platform's evaluation queue
+ * and polls for results. Used internally by {@link Evaluation}.
+ */
 export class HostedEvaluatorRunner extends EvaluatorRunner<string> {
   protected _buildPayload(
     evalId: string,
@@ -17,7 +23,7 @@ export class HostedEvaluatorRunner extends EvaluatorRunner<string> {
       project_id: projectId,
       eval_name: evalRunName,
       created_at: createdAt,
-      examples: examples.map((e) => e.toDict()),
+      examples: examples.map((e) => e.toJSON()),
       judgment_scorers: scorers.map((name) => ({ name })),
       custom_scorers: [],
     };
