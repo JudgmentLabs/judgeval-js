@@ -1,5 +1,5 @@
 import type { JudgmentApiClient } from "../internal/api/client";
-import { Example, type ExampleDict } from "../data/Example";
+import { Example } from "../data/Example";
 
 /**
  * A collection of {@link Example} objects stored on the Judgment platform.
@@ -80,7 +80,7 @@ export class Dataset {
       if (typeof item !== "object" || item === null) {
         throw new Error("Each item in the JSON array must be an object");
       }
-      return Example.from(item as ExampleDict);
+      return Example.create(item as Record<string, unknown>);
     });
 
     await this.addExamples(examples, batchSize);

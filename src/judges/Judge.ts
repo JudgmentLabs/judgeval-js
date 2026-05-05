@@ -15,7 +15,7 @@ import type { BaseResponse } from "./responses";
  *     const actual = (data.get("actual_output") as string).toLowerCase();
  *     return {
  *       value: actual.includes(expected),
- *       reason: expected ? "Found" : "Not found",
+ *       reason: actual.includes(expected) ? "Found" : "Not found",
  *     };
  *   }
  * }
