@@ -1,4 +1,8 @@
-export { Judgeval, type JudgevalConfig } from "./Judgeval";
+export {
+  Judgeval,
+  type JudgevalConfig,
+  type JudgevalOfflineTracerOptions,
+} from "./Judgeval";
 
 export {
   BaseTracer,
@@ -7,8 +11,11 @@ export {
   JudgmentSpanExporter,
   JudgmentTracerProvider,
   Tracer,
+  OfflineTracer,
+  type OfflineTracerConfig,
   NoOpSpanExporter,
   NoOpSpanProcessor,
+  OfflineJudgmentSpanProcessor,
   ALLOW_ALL_BAGGAGE_KEYS,
   type BaggageKeyPredicate,
   baggage,

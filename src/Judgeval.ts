@@ -3,6 +3,18 @@ import { JudgmentApiClient } from "./internal/api";
 import { resolveProjectId } from "./utils/resolve-project-id";
 import { EvaluationFactory } from "./evaluation/EvaluationFactory";
 import { DatasetFactory } from "./datasets/DatasetFactory";
+import type { OfflineTracer, OfflineTracerConfig } from "./trace/OfflineTracer";
+
+/**
+ * Options for {@link Judgeval.offlineTracer}.
+ *
+ * Mirrors `OfflineTracerConfig` minus credentials and `projectName`,
+ * which are reused from the parent `Judgeval` instance.
+ */
+export type JudgevalOfflineTracerOptions = Omit<
+  OfflineTracerConfig,
+  "projectName" | "apiKey" | "organizationId" | "apiUrl"
+>;
 
 /**
  * Configuration options for the Judgeval client.
@@ -99,6 +111,36 @@ export class Judgeval {
     }
 
     return new Judgeval(client, config.projectName, projectId);
+  }
+
+  /**
+   * Create and activate an `OfflineTracer` for this project.
+   *
+   * Reuses the credentials supplied to this `Judgeval` instance. Each
+   * completed root span appends an `Example` to `dataset`, carrying
+   * the offline trace id and the static `exampleFields`.
+   *
+   * @example
+   * ```typescript
+   * const judgeval = await Judgeval.create({ projectName: "my-project" });
+   * const dataset: Example[] = [];
+   * const tracer = await judgeval.offlineTracer({
+   *   dataset,
+   *   exampleFields: { input: item.input, golden_output: item.goldenOutput },
+   * });
+   * ```
+   */
+  async offlineTracer(
+    options: JudgevalOfflineTracerOptions,
+  ): Promise<OfflineTracer> {
+    const { OfflineTracer } = await import("./trace/OfflineTracer");
+    return OfflineTracer.create({
+      ...options,
+      projectName: this._projectName,
+      apiKey: this._client.getApiKey(),
+      organizationId: this._client.getOrganizationId(),
+      apiUrl: this._client.getBaseUrl(),
+    });
   }
 
   /** Access dataset management (create, get, list). */
