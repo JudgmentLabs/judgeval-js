@@ -132,3 +132,59 @@ describe("ProxyTracer.startActiveSpan", () => {
     }
   });
 });
+
+describe("BaseTracer.startActiveSpan", () => {
+  test("ends the span when the callback returns synchronously", () => {
+    const { exporter, cleanup } = setupProxy();
+    try {
+      BaseTracer.startActiveSpan("sync-span", () => "ok");
+      expect(exporter.getFinishedSpans().length).toBe(1);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("ends the span when the callback throws synchronously", () => {
+    const { exporter, cleanup } = setupProxy();
+    try {
+      expect(() => {
+        BaseTracer.startActiveSpan("throwing-span", () => {
+          throw new Error("boom");
+        });
+      }).toThrow("boom");
+      expect(exporter.getFinishedSpans().length).toBe(1);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("ends the span when an async callback resolves", async () => {
+    const { exporter, cleanup } = setupProxy();
+    try {
+      await BaseTracer.startActiveSpan("async-resolve-span", async () => {
+        await Promise.resolve();
+        return "ok";
+      });
+      expect(exporter.getFinishedSpans().length).toBe(1);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("ends the span when an async callback rejects", async () => {
+    const { exporter, cleanup } = setupProxy();
+    try {
+      const promise = BaseTracer.startActiveSpan(
+        "async-reject-span",
+        async () => {
+          await Promise.resolve();
+          throw new Error("boom");
+        },
+      );
+      await expect(promise).rejects.toThrow("boom");
+      expect(exporter.getFinishedSpans().length).toBe(1);
+    } finally {
+      cleanup();
+    }
+  });
+});
