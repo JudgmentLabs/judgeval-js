@@ -73,7 +73,7 @@ class ProxyTracer implements Tracer {
     }
 
     const span = this.startSpan(name, options, context);
-    return this._provider.useSpan(span, true, true, true, () =>
+    return this._provider.useSpan(span, false, false, false, () =>
       fn(span),
     ) as ReturnType<F>;
   }
