@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { trace, type Span } from "@opentelemetry/api";
+import { SpanStatusCode, trace, type Span } from "@opentelemetry/api";
 import {
   BasicTracerProvider,
   InMemorySpanExporter,
@@ -127,6 +127,79 @@ describe("ProxyTracer.startActiveSpan", () => {
       expect(finished.length).toBe(1);
       expect(finished[0]?.attributes["ai.usage.inputTokens"]).toBe(13);
       expect(finished[0]?.attributes["ai.usage.outputTokens"]).toBe(12);
+    } finally {
+      cleanup();
+    }
+  });
+});
+
+describe("BaseTracer.startActiveSpan span lifecycle", () => {
+  test("ends the span on synchronous return", () => {
+    const { exporter, cleanup } = setupProxy();
+    try {
+      const result = BaseTracer.span("sync-ok", () => 42);
+      expect(result).toBe(42);
+      expect(exporter.getFinishedSpans().length).toBe(1);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("ends the span on async resolve", async () => {
+    const { exporter, cleanup } = setupProxy();
+    try {
+      const result = await BaseTracer.span(
+        "async-ok",
+        () => Promise.resolve(42),
+      );
+      expect(result).toBe(42);
+      expect(exporter.getFinishedSpans().length).toBe(1);
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("ends the span on synchronous throw and propagates the error", () => {
+    const { exporter, cleanup } = setupProxy();
+    try {
+      let caught: Error | undefined;
+      try {
+        BaseTracer.span("sync-throw", () => {
+          throw new Error("boom-sync");
+        });
+      } catch (e) {
+        caught = e as Error;
+      }
+      expect(caught?.message).toBe("boom-sync");
+      const finished = exporter.getFinishedSpans();
+      expect(finished.length).toBe(1);
+      expect(finished[0]?.status.code).toBe(SpanStatusCode.ERROR);
+      expect(finished[0]?.events.some((e) => e.name === "exception")).toBe(
+        true,
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("ends the span on async reject and propagates the error", async () => {
+    const { exporter, cleanup } = setupProxy();
+    try {
+      let caught: Error | undefined;
+      try {
+        await BaseTracer.span("async-reject", () =>
+          Promise.reject(new Error("boom-async")),
+        );
+      } catch (e) {
+        caught = e as Error;
+      }
+      expect(caught?.message).toBe("boom-async");
+      const finished = exporter.getFinishedSpans();
+      expect(finished.length).toBe(1);
+      expect(finished[0]?.status.code).toBe(SpanStatusCode.ERROR);
+      expect(finished[0]?.events.some((e) => e.name === "exception")).toBe(
+        true,
+      );
     } finally {
       cleanup();
     }
