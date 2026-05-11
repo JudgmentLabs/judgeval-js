@@ -1,7 +1,7 @@
 import http from "node:http";
 import { Tracer } from "judgeval";
 
-const handle = Tracer.observe(function _handle(message: string): string {
+const handle = Tracer.observe(function handle(message: string): string {
   return `server received: ${message}`;
 }, { spanType: "agent" });
 
@@ -32,9 +32,18 @@ async function main() {
     );
   });
 
-  server.listen(8000, "127.0.0.1", () => {
-    console.log("Server listening on http://127.0.0.1:8000");
+  const port = Number(process.env.PORT);
+  server.listen(port, "127.0.0.1", () => {
+    console.log(`Server listening on http://127.0.0.1:${port}`);
   });
+
+  const shutdown = async () => {
+    await Tracer.forceFlush();
+    await Tracer.shutdown();
+    process.exit(0);
+  };
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 }
 
 main().catch((err) => {

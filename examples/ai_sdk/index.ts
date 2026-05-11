@@ -3,15 +3,8 @@ import { generateText } from "ai";
 import { JudgmentTracerProvider, Tracer } from "judgeval";
 
 JudgmentTracerProvider.installAsGlobalTracerProvider();
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Environment variable ${name} is not set`);
-  return value;
-}
 
-requireEnv("OPENAI_API_KEY");
-
-const chatWithUser = Tracer.observe(async function _chatWithUser(
+const chatWithUser = Tracer.observe(async function chatWithUser(
   userMessage: string,
 ): Promise<string> {
   const { text } = await generateText({

@@ -4,8 +4,7 @@
   "private": true,
   "scripts": {
     "build": "tsc",
-    "start:server": "npm run build && node ./dist/server.js",
-    "start:client": "npm run build && node ./dist/client.js"
+    "start": "npm run build && node ./dist/index.js"
   },
   "dependencies": {
     "judgeval": "file:../..",
