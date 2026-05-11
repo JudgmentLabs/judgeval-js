@@ -361,14 +361,19 @@ export abstract class BaseTracer {
       { attributes },
       (span) => {
         BaseTracer._emitPartial();
-        const result = fn(span);
-        if (result instanceof Promise) {
-          return (result as Promise<unknown>).finally(() => {
-            span.end();
-          }) as T;
+        try {
+          const result = fn(span);
+          if (result instanceof Promise) {
+            return (result as Promise<unknown>).finally(() => {
+              span.end();
+            }) as T;
+          }
+          span.end();
+          return result;
+        } catch (e) {
+          span.end();
+          throw e;
         }
-        span.end();
-        return result;
       },
     );
   }
