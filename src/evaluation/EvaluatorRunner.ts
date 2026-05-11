@@ -67,7 +67,7 @@ export abstract class EvaluatorRunner<S extends string | Judge> {
       const resultsData = response.results ?? [];
       const completed = resultsData.length;
 
-      if (completed === expectedCount) {
+      if (completed >= expectedCount) {
         const url = response.ui_results_url ?? "Failed to get UI results URL";
         console.log(
           `${pc.green("\u2713")} Evals completed and saved in ${pc.bold(`${elapsed.toFixed(1)}s`)}`,
