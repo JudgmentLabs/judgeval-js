@@ -144,6 +144,8 @@ export abstract class BaseTracer {
   _client: JudgmentApiClient | null;
   _enableMonitoring: boolean;
 
+  readonly supportsLiveInstrumentation: boolean = true;
+
   // ------------------------------------------------------------------ //
   //  Initialization                                                    //
   // ------------------------------------------------------------------ //
@@ -213,7 +215,7 @@ export abstract class BaseTracer {
   private static _emitPartial(): void {
     dontThrow("BaseTracer._emitPartial", () => {
       const tracer = BaseTracer._getProxyProvider().getActiveTracer();
-      if (!tracer) return;
+      if (!tracer || !tracer.supportsLiveInstrumentation) return;
       tracer.getSpanProcessor().emitPartial();
     });
   }
@@ -1017,6 +1019,7 @@ export abstract class BaseTracer {
       const proxy = BaseTracer._getProxyProvider();
       const tracer = proxy.getActiveTracer();
       if (!tracer?.projectId || !tracer._client) return;
+      if (!tracer.supportsLiveInstrumentation) return;
       const ids = BaseTracer._getCurrentTraceAndSpanId();
       if (!ids) return;
       const [traceId] = ids;
@@ -1065,6 +1068,7 @@ export abstract class BaseTracer {
       const proxy = BaseTracer._getProxyProvider();
       const tracer = proxy.getActiveTracer();
       if (!tracer?.projectId) return;
+      if (!tracer.supportsLiveInstrumentation) return;
       const target = BaseTracer._resolveSpan(span);
       if (!target?.isRecording()) return;
 
