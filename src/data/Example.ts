@@ -60,6 +60,7 @@ export class Example {
     "name",
     "trace_id",
     "span_id",
+    "offline_trace_id",
   ]);
 
   /**

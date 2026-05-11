@@ -42,7 +42,7 @@ export class Tracer extends BaseTracer {
   private _spanExporter: JudgmentSpanExporter | null = null;
   private _spanProcessor: JudgmentSpanProcessor | null = null;
 
-  private constructor(
+  protected constructor(
     projectName: string | null,
     projectId: string | null,
     apiKey: string | null,
