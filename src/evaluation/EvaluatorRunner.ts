@@ -141,7 +141,7 @@ export abstract class EvaluatorRunner<S extends string | Judge> {
           for (const s of results[i].scorers) {
             if (!s.success) {
               lines.push(
-                `    ${s.name}: ${s.score.toFixed(3)} (threshold: ${s.threshold})`,
+                `    ${s.name}: ${s.score !== null ? s.score.toFixed(3) : "N/A"} (threshold: ${s.threshold})`,
               );
               if (s.reason) lines.push(`      ${s.reason}`);
             }
