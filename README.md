@@ -49,7 +49,7 @@ const tracedChat = Tracer.observe(async (userMessage: string) => {
     messages: [{ role: "user", content: userMessage }],
   });
 
-  Tracer.asyncEvaluate("Relevancy");
+  Tracer.asyncEvaluate({ judge: "Relevancy" });
 
   return response.choices[0].message.content || "";
 });

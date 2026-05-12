@@ -1,17 +1,17 @@
 import { Tracer, propagation } from "judgeval";
 
-const callServer = Tracer.observe(async function _callServer(
+const callServer = Tracer.observe(async function callServer(
   message: string,
 ): Promise<unknown> {
   const headers: Record<string, string> = {};
   propagation.inject(headers);
-  const res = await fetch("http://127.0.0.1:8000/run", {
+  const res = await fetch(`http://127.0.0.1:${process.env.PORT}/run`, {
     method: "POST",
     headers: { ...headers, "content-type": "application/json" },
     body: JSON.stringify({ message }),
   });
   return res.json();
-}, "agent");
+}, { spanType: "agent" });
 
 async function main() {
   await Tracer.init({

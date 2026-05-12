@@ -1,0 +1,13 @@
+{
+  "name": "basic-decorator",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && node ./dist/index.js"
+  },
+  "dependencies": {
+    "judgeval": "file:../..",
+    "tsx": "^4.19.2"
+  }
+}

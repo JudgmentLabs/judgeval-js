@@ -1,0 +1,14 @@
+{
+  "name": "offline-evaluation",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && node ./dist/index.js"
+  },
+  "dependencies": {
+    "judgeval": "file:../..",
+    "openai": "^6.34.0",
+    "tsx": "^4.19.2"
+  }
+}

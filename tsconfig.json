@@ -13,11 +13,13 @@
     "declarationMap": false,
     "sourceMap": true,
     "experimentalDecorators": true,
+    "ignoreDeprecations": "6.0",
     "moduleResolution": "node",
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true
+    "noEmit": true,
+    "types": ["bun"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "tests"]
