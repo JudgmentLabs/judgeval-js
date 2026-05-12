@@ -20,17 +20,13 @@ const OFFLINE_TRACES_PATH = "otel/v1/offline-traces";
 
 /**
  * Configuration for `OfflineTracer.create()`.
- *
- * Mirrors `TracerConfig`, plus a required `dataset` list that the
- * tracer mutates and an optional `exampleFields` dict copied onto every
- * emitted example.
  */
 export interface OfflineTracerConfig {
-  /** Caller-owned list. Each completed root span appends an `Example`. */
+  /** List that receives an `Example` for each completed root span. */
   dataset: Example[];
   /**
-   * Static fields copied onto every emitted example
-   * (e.g. `{ input: ..., golden_output: ... }`).
+   * Fields included on every `Example` in `dataset`
+   * (e.g. `{ input: ..., goldenOutput: ... }`).
    */
   exampleFields?: Record<string, unknown>;
   /** Your Judgment project name. Required. */
@@ -53,7 +49,7 @@ export interface OfflineTracerConfig {
   sampler?: Sampler;
   /** Custom OpenTelemetry span limits. */
   spanLimits?: SpanLimits;
-  /** Additional span processors appended after the default offline processor. */
+  /** Additional OpenTelemetry span processors. */
   spanProcessors?: SpanProcessor[];
 }
 
