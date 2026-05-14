@@ -7,4 +7,5 @@ export interface Example {
   name?: string | null;
   trace_id?: string | null;
   span_id?: string | null;
+  offline_trace_id?: string | null;
 }
