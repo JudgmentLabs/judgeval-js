@@ -3,7 +3,7 @@ import { JudgmentApiClient } from "./internal/api";
 import { resolveProjectId } from "./utils/resolve-project-id";
 import { EvaluationFactory } from "./evaluation/EvaluationFactory";
 import { DatasetFactory } from "./datasets/DatasetFactory";
-import { AgentJudgeFactory } from "./agentJudges/AgentJudgeFactory";
+import { AgentJudgeFactory } from "./agent-judges/AgentJudgeFactory";
 import type { OfflineTracer, OfflineTracerConfig } from "./trace/OfflineTracer";
 
 /**
