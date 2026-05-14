@@ -3,6 +3,7 @@ import { JudgmentApiClient } from "./internal/api";
 import { resolveProjectId } from "./utils/resolve-project-id";
 import { EvaluationFactory } from "./evaluation/EvaluationFactory";
 import { DatasetFactory } from "./datasets/DatasetFactory";
+import { AgentJudgeFactory } from "./agentJudges/AgentJudgeFactory";
 import type { OfflineTracer, OfflineTracerConfig } from "./trace/OfflineTracer";
 
 /**
@@ -151,6 +152,15 @@ export class Judgeval {
   /** Access evaluation (create evaluation runs). */
   get evaluation(): EvaluationFactory {
     return new EvaluationFactory(
+      this._client,
+      this._projectId,
+      this._projectName,
+    );
+  }
+
+  /** Manage Agent Judges (prompt-based scorers) on the platform. */
+  get agentJudges(): AgentJudgeFactory {
+    return new AgentJudgeFactory(
       this._client,
       this._projectId,
       this._projectName,

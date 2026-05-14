@@ -41,3 +41,6 @@ export { Evaluation, type EvaluationRunOptions } from "./evaluation";
 export { Dataset } from "./datasets";
 export type { DatasetInfo } from "./internal/api/models/DatasetInfo";
 export type { ExperimentScorer } from "./internal/api/models/ExperimentScorer";
+
+export { AgentJudgeFactory } from "./agentJudges";
+export type { AgentJudge, ScoreType } from "./agentJudges";
