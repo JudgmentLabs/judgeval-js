@@ -93,6 +93,11 @@ export class JudgmentApiClient {
     return this.request("POST", url, {});
   }
 
+  async postOtelV1offlineTraces(): Promise<unknown> {
+    const url = this.baseUrl + "/otel/v1/offline-traces";
+    return this.request("POST", url, {});
+  }
+
   async postV1projectsResolve(
     payload: ResolveProjectRequest,
   ): Promise<ResolveProjectResponse> {
