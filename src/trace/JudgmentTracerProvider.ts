@@ -2,6 +2,7 @@ import {
   INVALID_SPAN_CONTEXT,
   ROOT_CONTEXT,
   SpanStatusCode,
+  context as otelContextApi,
   trace,
   type Context,
   type Span,
@@ -17,10 +18,7 @@ import {
 import { AsyncLocalStorage } from "async_hooks";
 import { Logger } from "../utils/logger";
 import type { BaseTracer } from "./BaseTracer";
-import {
-  installOtelContextBridge,
-  runWithOtelBridgeGate,
-} from "./instrumentation/OtelContextBridge";
+import { JudgmentContextManager } from "./instrumentation/JudgmentContextManager";
 
 const TRACER_NAME = "judgeval";
 
@@ -128,7 +126,9 @@ export class JudgmentTracerProvider implements TracerProvider {
   private constructor() {
     this._noOpTracer = new NoOpTracer();
     this._proxyTracer = new ProxyTracer(this);
-    installOtelContextBridge(() => this.getCurrentContext());
+    otelContextApi.setGlobalContextManager(
+      new JudgmentContextManager(_contextStorage),
+    );
   }
 
   /**
@@ -289,47 +289,45 @@ export class JudgmentTracerProvider implements TracerProvider {
   ): T {
     const prevCtx = this.getCurrentContext();
     const ctx = trace.setSpan(prevCtx, span);
-    return _contextStorage.run(ctx, () =>
-      runWithOtelBridgeGate(ctx, () => {
-        try {
-          const result = fn();
-          if (result instanceof Promise) {
-            return result
-              .catch((exc: unknown) => {
-                if (span.isRecording()) {
-                  if (recordException) span.recordException(exc as Error);
-                  if (setStatusOnException) {
-                    const err = exc as Error;
-                    span.setStatus({
-                      code: SpanStatusCode.ERROR,
-                      message: `${err.name}: ${err.message}`,
-                    });
-                  }
+    return _contextStorage.run(ctx, () => {
+      try {
+        const result = fn();
+        if (result instanceof Promise) {
+          return result
+            .catch((exc: unknown) => {
+              if (span.isRecording()) {
+                if (recordException) span.recordException(exc as Error);
+                if (setStatusOnException) {
+                  const err = exc as Error;
+                  span.setStatus({
+                    code: SpanStatusCode.ERROR,
+                    message: `${err.name}: ${err.message}`,
+                  });
                 }
-                throw exc;
-              })
-              .finally(() => {
-                if (endOnExit) span.end();
-              }) as T;
-          }
-          if (endOnExit) span.end();
-          return result;
-        } catch (exc) {
-          if (span.isRecording()) {
-            if (recordException) span.recordException(exc as Error);
-            if (setStatusOnException) {
-              const err = exc as Error;
-              span.setStatus({
-                code: SpanStatusCode.ERROR,
-                message: `${err.name}: ${err.message}`,
-              });
-            }
-          }
-          if (endOnExit) span.end();
-          throw exc;
+              }
+              throw exc;
+            })
+            .finally(() => {
+              if (endOnExit) span.end();
+            }) as T;
         }
-      }),
-    );
+        if (endOnExit) span.end();
+        return result;
+      } catch (exc) {
+        if (span.isRecording()) {
+          if (recordException) span.recordException(exc as Error);
+          if (setStatusOnException) {
+            const err = exc as Error;
+            span.setStatus({
+              code: SpanStatusCode.ERROR,
+              message: `${err.name}: ${err.message}`,
+            });
+          }
+        }
+        if (endOnExit) span.end();
+        throw exc;
+      }
+    });
   }
 
   attachContext(ctx: Context): void {
@@ -341,7 +339,7 @@ export class JudgmentTracerProvider implements TracerProvider {
    * duration of the callback. Sync or async.
    */
   withContext<T>(ctx: Context, fn: () => T): T {
-    return _contextStorage.run(ctx, () => runWithOtelBridgeGate(ctx, fn));
+    return _contextStorage.run(ctx, fn);
   }
 
   /**
