@@ -7,9 +7,7 @@ import type { OfflineTracer, OfflineTracerConfig } from "./trace/OfflineTracer";
 
 /**
  * Options for {@link Judgeval.offlineTracer}.
- *
- * Mirrors `OfflineTracerConfig` minus credentials and `projectName`,
- * which are reused from the parent `Judgeval` instance.
+ * Credentials and `projectName` are taken from the parent `Judgeval` instance.
  */
 export type JudgevalOfflineTracerOptions = Omit<
   OfflineTracerConfig,
