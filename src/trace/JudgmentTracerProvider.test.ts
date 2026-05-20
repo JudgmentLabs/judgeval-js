@@ -148,9 +148,8 @@ describe("BaseTracer.startActiveSpan span lifecycle", () => {
   test("ends the span on async resolve", async () => {
     const { exporter, cleanup } = setupProxy();
     try {
-      const result = await BaseTracer.span(
-        "async-ok",
-        () => Promise.resolve(42),
+      const result = await BaseTracer.span("async-ok", () =>
+        Promise.resolve(42),
       );
       expect(result).toBe(42);
       expect(exporter.getFinishedSpans().length).toBe(1);
