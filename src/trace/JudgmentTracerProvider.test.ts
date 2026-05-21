@@ -33,7 +33,7 @@ class FakeTracer extends BaseTracer {
   }
 
   getSpanExporter(): JudgmentSpanExporter {
-    return new NoOpSpanExporter() as unknown as JudgmentSpanExporter;
+    return new NoOpSpanExporter();
   }
 }
 

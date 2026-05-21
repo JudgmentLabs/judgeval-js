@@ -2,15 +2,20 @@ import { Logger } from "./logger";
 
 export type Serializer = (obj: unknown) => string;
 
-let seen: WeakSet<object>;
-
-function safeReplacer(this: unknown, _key: string, value: unknown): unknown {
-  if (typeof value === "bigint") return value.toString();
-  if (typeof value === "object" && value !== null) {
-    if (seen.has(value)) return "[Circular]";
-    seen.add(value);
-  }
-  return value;
+function createCircularReplacer(): (
+  this: unknown,
+  key: string,
+  value: unknown,
+) => unknown {
+  const seen = new WeakSet<object>();
+  return function (_key: string, value: unknown): unknown {
+    if (typeof value === "bigint") return value.toString();
+    if (typeof value === "object" && value !== null) {
+      if (seen.has(value)) return "[Circular]";
+      seen.add(value);
+    }
+    return value;
+  };
 }
 
 export function safeStringify(obj: unknown): string {
@@ -20,8 +25,7 @@ export function safeStringify(obj: unknown): string {
     return String(result);
   } catch {
     try {
-      seen = new WeakSet<object>();
-      const result = JSON.stringify(obj, safeReplacer);
+      const result = JSON.stringify(obj, createCircularReplacer());
       return typeof result === "string" ? result : String(obj);
     } catch (e) {
       Logger.error(`safeStringify failed: ${e}`);

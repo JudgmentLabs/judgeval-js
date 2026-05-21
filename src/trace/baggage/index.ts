@@ -19,7 +19,7 @@ const BAGGAGE_KEY = createContextKey("baggage");
 
 /** Retrieve the baggage attached to the given context. */
 export function getBaggage(context: Context): Baggage | undefined {
-  return (context.getValue(BAGGAGE_KEY) as Baggage | undefined) ?? undefined;
+  return context.getValue(BAGGAGE_KEY) as Baggage | undefined;
 }
 
 /** Retrieve the baggage attached to the active context. */
