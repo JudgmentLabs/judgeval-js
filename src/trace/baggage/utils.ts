@@ -1,6 +1,5 @@
 import {
   type Baggage,
-  type BaggageEntry,
   type BaggageEntryMetadata,
   baggageEntryMetadataFromString,
 } from "@opentelemetry/api";
@@ -61,18 +60,3 @@ export function parsePairKeyValue(
   return { key, value, metadata };
 }
 
-/** Parse a baggage header string into a record of `BaggageEntry` values. */
-export function parseKeyPairsIntoRecord(
-  value: string | undefined,
-): Record<string, BaggageEntry> {
-  const result: Record<string, BaggageEntry> = {};
-  if (typeof value === "string" && value.length > 0) {
-    value.split(BAGGAGE_ITEMS_SEPARATOR).forEach((entry) => {
-      const keyPair = parsePairKeyValue(entry);
-      if (keyPair !== undefined && keyPair.value.length > 0) {
-        result[keyPair.key] = { value: keyPair.value };
-      }
-    });
-  }
-  return result;
-}

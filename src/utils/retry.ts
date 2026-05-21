@@ -30,14 +30,10 @@ export async function retry<T>(
 ): Promise<T> {
   const { maxRetries = 3, backoff = () => 1000, onRetry } = config;
 
-  let lastError: unknown;
-
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (error) {
-      lastError = error;
-
       if (attempt === maxRetries) {
         throw error;
       }
@@ -47,5 +43,6 @@ export async function retry<T>(
     }
   }
 
-  throw lastError;
+  // Unreachable: the loop always either returns or throws.
+  throw new Error("retry: exhausted all attempts");
 }
