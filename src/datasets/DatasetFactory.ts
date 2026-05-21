@@ -1,6 +1,7 @@
 import type { JudgmentApiClient } from "../internal/api/client";
 import type { DatasetInfo } from "../internal/api/models/DatasetInfo";
 import { Example, type ExampleDict } from "../data/Example";
+import { Logger } from "../utils/logger";
 import { Dataset } from "./Dataset";
 
 /**
@@ -118,7 +119,7 @@ export class DatasetFactory {
 
   private _expectProjectId(): string | null {
     if (!this._projectId) {
-      console.error(
+      Logger.error(
         "Project ID is not resolved. Dataset operations require a valid project.",
       );
       return null;

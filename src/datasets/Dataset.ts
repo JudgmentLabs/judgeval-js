@@ -72,8 +72,8 @@ export class Dataset {
    * @param batchSize - Number of examples per batch request. Defaults to 100.
    */
   async addFromJson(filePath: string, batchSize: number = 100): Promise<void> {
-    const fs = await import("fs");
-    const raw = fs.readFileSync(filePath, "utf-8");
+    const { readFile } = await import("fs/promises");
+    const raw = await readFile(filePath, "utf-8");
     const data: unknown[] = JSON.parse(raw);
 
     const examples: Example[] = data.map((item) => {

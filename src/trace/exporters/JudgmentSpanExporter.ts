@@ -26,6 +26,10 @@ export class JudgmentSpanExporter implements SpanExporter {
     organizationId: string,
     projectId: string,
   ) {
+    if (!endpoint) {
+      this._delegate = null;
+      return;
+    }
     this._delegate = new OTLPTraceExporter({
       url: endpoint,
       headers: {

@@ -5,6 +5,7 @@ import type { ExperimentRunItem } from "../internal/api/models/ExperimentRunItem
 import type { Example } from "../data/Example";
 import type { ScoringResult } from "../data/ScoringResult";
 import type { Judge } from "../judges/Judge";
+import { Logger } from "../utils/logger";
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -162,7 +163,7 @@ export abstract class EvaluatorRunner<S extends string | Judge> {
     timeoutSeconds: number = 300,
   ): Promise<ScoringResult[]> {
     if (!this._projectId) {
-      console.error(
+      Logger.error(
         "Project ID is not resolved. Evaluation requires a valid project.",
       );
       return [];

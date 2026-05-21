@@ -2,6 +2,7 @@ import type { JudgmentApiClient } from "../internal/api/client";
 import type { SDKCreateAgentJudgeRequest } from "../internal/api/models/SDKCreateAgentJudgeRequest";
 import type { SDKUpdateAgentJudgeRequest } from "../internal/api/models/SDKUpdateAgentJudgeRequest";
 import type { SDKUpdateAgentJudgeResponse } from "../internal/api/models/SDKUpdateAgentJudgeResponse";
+import { Logger } from "../utils/logger";
 import type { AgentJudge, ScoreType } from "./AgentJudge";
 
 /**
@@ -177,7 +178,7 @@ export class AgentJudgeFactory {
 
   private _expectProjectId(): string | null {
     if (!this._projectId) {
-      console.error(
+      Logger.error(
         "Project ID is not resolved. Agent judge operations require a valid project.",
       );
       return null;

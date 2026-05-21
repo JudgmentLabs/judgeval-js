@@ -2,6 +2,7 @@ import type { JudgmentApiClient } from "../internal/api/client";
 import type { Example } from "../data/Example";
 import type { ScoringResult } from "../data/ScoringResult";
 import { Judge } from "../judges/Judge";
+import { Logger } from "../utils/logger";
 import { LocalEvaluatorRunner } from "./LocalEvaluatorRunner";
 import { HostedEvaluatorRunner } from "./HostedEvaluatorRunner";
 
@@ -88,14 +89,14 @@ export class Evaluation {
     const localScorers = scorers.filter((s): s is Judge => s instanceof Judge);
 
     if (localScorers.length > 0 && hostedScorers.length > 0) {
-      console.error(
+      Logger.error(
         "Running both local and hosted scorers is not supported. " +
           "Please run your evaluation with either local or hosted scorers, but not both.",
       );
       return Promise.resolve([]);
     }
     if (localScorers.length === 0 && hostedScorers.length === 0) {
-      console.error(
+      Logger.error(
         "No valid local or hosted scorers provided. " +
           "Please provide at least one local or hosted scorer.",
       );
