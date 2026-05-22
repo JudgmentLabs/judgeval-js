@@ -27,9 +27,7 @@ jobs:
         run: bun run build
 
       - name: Dry run publish
-        run: bun publish --dry-run
-        env:
-          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --dry-run --access public
 
       - name: Check build output
         run: |
