@@ -639,6 +639,27 @@ export abstract class BaseTracer {
           return proxy.useSpan(linkedRoot, false, false, false, (): TReturn => {
             try {
               const result = innerFunc.call(this, ...args);
+
+              if (isAsyncGenerator(result)) {
+                return wrapAsyncGeneratorForked(
+                  result,
+                  recordOutput,
+                  recordOutputOnBoth,
+                  recordErrorOnBoth,
+                  endBoth,
+                ) as TReturn;
+              }
+
+              if (isSyncGenerator(result)) {
+                return wrapSyncGeneratorForked(
+                  result,
+                  recordOutput,
+                  recordOutputOnBoth,
+                  recordErrorOnBoth,
+                  endBoth,
+                ) as TReturn;
+              }
+
               if (result instanceof Promise) {
                 return (result as Promise<unknown>)
                   .then((res) => {
@@ -678,6 +699,24 @@ export abstract class BaseTracer {
             }
             BaseTracer._emitPartial();
             const result = innerFunc.call(this, ...args);
+
+            if (isAsyncGenerator(result)) {
+              return wrapAsyncGeneratorSpan(
+                result,
+                span,
+                recordOutput,
+                BaseTracer._getSerializer(),
+              ) as TReturn;
+            }
+
+            if (isSyncGenerator(result)) {
+              return wrapSyncGeneratorSpan(
+                result,
+                span,
+                recordOutput,
+                BaseTracer._getSerializer(),
+              ) as TReturn;
+            }
 
             if (result instanceof Promise) {
               return (result as Promise<unknown>)
@@ -1114,6 +1153,181 @@ export abstract class BaseTracer {
     });
   }
 }
+
+// ------------------------------------------------------------------ //
+//  Generator detection                                               //
+// ------------------------------------------------------------------ //
+
+// Duck typing following the convention used by co (https://github.com/tj/co).
+// Checked async-first since async generators also have .next/.throw.
+
+function isAsyncGenerator(value: unknown): value is AsyncGenerator {
+  return (
+    value != null &&
+    typeof (value as AsyncGenerator).next === "function" &&
+    typeof (value as AsyncGenerator)[Symbol.asyncIterator] === "function"
+  );
+}
+
+function isSyncGenerator(value: unknown): value is Generator {
+  return (
+    value != null &&
+    typeof (value as Generator).next === "function" &&
+    typeof (value as Generator).throw === "function" &&
+    !isAsyncGenerator(value)
+  );
+}
+
+// ------------------------------------------------------------------ //
+//  Generator span wrappers (normal path)                             //
+// ------------------------------------------------------------------ //
+
+function* wrapSyncGeneratorSpan(
+  generator: Generator,
+  span: Span,
+  recordOutput: boolean,
+  serializer: Serializer,
+): Generator {
+  const yielded: unknown[] = [];
+  let ended = false;
+  try {
+    for (const value of generator) {
+      yielded.push(value);
+      yield value;
+    }
+    if (recordOutput) {
+      span.setAttribute(
+        AttributeKeys.JUDGMENT_OUTPUT,
+        serializeAttribute(yielded, serializer),
+      );
+    }
+    ended = true;
+    span.end();
+  } catch (e) {
+    span.recordException(e as Error);
+    span.setStatus({ code: SpanStatusCode.ERROR, message: String(e) });
+    ended = true;
+    span.end();
+    throw e;
+  } finally {
+    if (!ended) {
+      // Consumer broke out of iteration early (break / .return())
+      if (recordOutput) {
+        span.setAttribute(
+          AttributeKeys.JUDGMENT_OUTPUT,
+          serializeAttribute(yielded, serializer),
+        );
+      }
+      span.end();
+    }
+  }
+}
+
+async function* wrapAsyncGeneratorSpan(
+  generator: AsyncGenerator,
+  span: Span,
+  recordOutput: boolean,
+  serializer: Serializer,
+): AsyncGenerator {
+  const yielded: unknown[] = [];
+  let ended = false;
+  try {
+    for await (const value of generator) {
+      yielded.push(value);
+      yield value;
+    }
+    if (recordOutput) {
+      span.setAttribute(
+        AttributeKeys.JUDGMENT_OUTPUT,
+        serializeAttribute(yielded, serializer),
+      );
+    }
+    ended = true;
+    span.end();
+  } catch (e) {
+    span.recordException(e as Error);
+    span.setStatus({ code: SpanStatusCode.ERROR, message: String(e) });
+    ended = true;
+    span.end();
+    throw e;
+  } finally {
+    if (!ended) {
+      if (recordOutput) {
+        span.setAttribute(
+          AttributeKeys.JUDGMENT_OUTPUT,
+          serializeAttribute(yielded, serializer),
+        );
+      }
+      span.end();
+    }
+  }
+}
+
+// ------------------------------------------------------------------ //
+//  Generator span wrappers (fork path)                               //
+// ------------------------------------------------------------------ //
+
+function* wrapSyncGeneratorForked(
+  generator: Generator,
+  recordOutput: boolean,
+  recordOutputOnBoth: (value: unknown) => void,
+  recordErrorOnBoth: (e: unknown) => void,
+  endBoth: () => void,
+): Generator {
+  const yielded: unknown[] = [];
+  let ended = false;
+  try {
+    for (const value of generator) {
+      yielded.push(value);
+      yield value;
+    }
+    if (recordOutput) recordOutputOnBoth(yielded);
+    ended = true;
+    endBoth();
+  } catch (e) {
+    recordErrorOnBoth(e);
+    ended = true;
+    endBoth();
+    throw e;
+  } finally {
+    if (!ended) {
+      if (recordOutput) recordOutputOnBoth(yielded);
+      endBoth();
+    }
+  }
+}
+
+async function* wrapAsyncGeneratorForked(
+  generator: AsyncGenerator,
+  recordOutput: boolean,
+  recordOutputOnBoth: (value: unknown) => void,
+  recordErrorOnBoth: (e: unknown) => void,
+  endBoth: () => void,
+): AsyncGenerator {
+  const yielded: unknown[] = [];
+  let ended = false;
+  try {
+    for await (const value of generator) {
+      yielded.push(value);
+      yield value;
+    }
+    if (recordOutput) recordOutputOnBoth(yielded);
+    ended = true;
+    endBoth();
+  } catch (e) {
+    recordErrorOnBoth(e);
+    ended = true;
+    endBoth();
+    throw e;
+  } finally {
+    if (!ended) {
+      if (recordOutput) recordOutputOnBoth(yielded);
+      endBoth();
+    }
+  }
+}
+
+// ------------------------------------------------------------------ //
 
 function getInputs<TArgs extends unknown[]>(
   f: (...args: TArgs) => unknown,

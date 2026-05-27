@@ -1,0 +1,11 @@
+{
+  "name": "basic-generator",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "bun run index.ts"
+  },
+  "dependencies": {
+    "judgeval": "file:../.."
+  }
+}

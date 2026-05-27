@@ -133,6 +133,218 @@ describe("ProxyTracer.startActiveSpan", () => {
   });
 });
 
+describe("BaseTracer.observe with generators", () => {
+  test("sync generator: span stays open during iteration, records yielded values as output", () => {
+    const { exporter, cleanup } = setupProxy();
+    try {
+      const gen = BaseTracer.observe(function* count(n: number) {
+        for (let i = 1; i <= n; i++) yield i;
+      });
+
+      const iter = gen(3);
+
+      // Span should NOT be finished yet — iteration hasn't started
+      expect(exporter.getFinishedSpans().length).toBe(0);
+
+      const values = [];
+      for (const v of iter) {
+        // Span stays open while we iterate
+        expect(exporter.getFinishedSpans().length).toBe(0);
+        values.push(v);
+      }
+
+      // Now the span should be finished
+      expect(values).toEqual([1, 2, 3]);
+      const finished = exporter.getFinishedSpans();
+      expect(finished.length).toBe(1);
+      expect(finished[0]?.attributes["judgment.output"]).toBe("1,2,3");
+      expect(finished[0]?.attributes["judgment.input"]).toBeDefined();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("sync generator: records error when generator throws", () => {
+    const { exporter, cleanup } = setupProxy();
+    try {
+      const gen = BaseTracer.observe(function* failing() {
+        yield "ok";
+        throw new Error("gen-boom");
+      });
+
+      let caught: Error | undefined;
+      try {
+        for (const _v of gen()) {
+          // consume
+        }
+      } catch (e) {
+        caught = e as Error;
+      }
+
+      expect(caught?.message).toBe("gen-boom");
+      const finished = exporter.getFinishedSpans();
+      expect(finished.length).toBe(1);
+      expect(finished[0]?.status.code).toBe(SpanStatusCode.ERROR);
+      expect(finished[0]?.events.some((e) => e.name === "exception")).toBe(
+        true,
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("async generator: span stays open during iteration, records yielded values as output", async () => {
+    const { exporter, cleanup } = setupProxy();
+    try {
+      const gen = BaseTracer.observe(async function* asyncCount(n: number) {
+        for (let i = 1; i <= n; i++) {
+          await Promise.resolve();
+          yield i;
+        }
+      });
+
+      const iter = gen(3);
+
+      // Span should NOT be finished yet
+      expect(exporter.getFinishedSpans().length).toBe(0);
+
+      const values = [];
+      for await (const v of iter) {
+        values.push(v);
+      }
+
+      expect(values).toEqual([1, 2, 3]);
+      const finished = exporter.getFinishedSpans();
+      expect(finished.length).toBe(1);
+      expect(finished[0]?.attributes["judgment.output"]).toBe("1,2,3");
+      expect(finished[0]?.attributes["judgment.input"]).toBeDefined();
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("async generator: records error when generator throws", async () => {
+    const { exporter, cleanup } = setupProxy();
+    try {
+      const gen = BaseTracer.observe(async function* asyncFailing() {
+        yield "ok";
+        await Promise.resolve();
+        throw new Error("async-gen-boom");
+      });
+
+      let caught: Error | undefined;
+      const values = [];
+      try {
+        for await (const v of gen()) {
+          values.push(v);
+        }
+      } catch (e) {
+        caught = e as Error;
+      }
+
+      expect(values).toEqual(["ok"]);
+      expect(caught?.message).toBe("async-gen-boom");
+      const finished = exporter.getFinishedSpans();
+      expect(finished.length).toBe(1);
+      expect(finished[0]?.status.code).toBe(SpanStatusCode.ERROR);
+      expect(finished[0]?.events.some((e) => e.name === "exception")).toBe(
+        true,
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("sync generator: span ends immediately when no values are yielded", () => {
+    const { exporter, cleanup } = setupProxy();
+    try {
+      const gen = BaseTracer.observe(function* empty() {
+        // yields nothing
+      });
+
+      const values = [...gen()];
+      expect(values).toEqual([]);
+      const finished = exporter.getFinishedSpans();
+      expect(finished.length).toBe(1);
+      expect(finished[0]?.attributes["judgment.output"]).toBe("");
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("sync generator: span ends when consumer breaks early", () => {
+    const { exporter, cleanup } = setupProxy();
+    try {
+      const gen = BaseTracer.observe(function* count() {
+        yield 1;
+        yield 2;
+        yield 3;
+      });
+
+      const values = [];
+      for (const v of gen()) {
+        values.push(v);
+        if (v === 2) break;
+      }
+
+      expect(values).toEqual([1, 2]);
+      const finished = exporter.getFinishedSpans();
+      expect(finished.length).toBe(1);
+      // Output records only the values that were yielded before break
+      expect(finished[0]?.attributes["judgment.output"]).toBe("1,2");
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("async generator: span ends when consumer breaks early", async () => {
+    const { exporter, cleanup } = setupProxy();
+    try {
+      const gen = BaseTracer.observe(async function* asyncCount() {
+        yield "a";
+        yield "b";
+        yield "c";
+      });
+
+      const values = [];
+      for await (const v of gen()) {
+        values.push(v);
+        if (v === "b") break;
+      }
+
+      expect(values).toEqual(["a", "b"]);
+      const finished = exporter.getFinishedSpans();
+      expect(finished.length).toBe(1);
+      expect(finished[0]?.attributes["judgment.output"]).toBe("a,b");
+    } finally {
+      cleanup();
+    }
+  });
+
+  test("async generator: recordOutput=false skips output attribute", async () => {
+    const { exporter, cleanup } = setupProxy();
+    try {
+      const gen = BaseTracer.observe(
+        async function* noOutput() {
+          yield 1;
+          yield 2;
+        },
+        { recordOutput: false },
+      );
+
+      const values = [];
+      for await (const v of gen()) values.push(v);
+
+      expect(values).toEqual([1, 2]);
+      const finished = exporter.getFinishedSpans();
+      expect(finished.length).toBe(1);
+      expect(finished[0]?.attributes["judgment.output"]).toBeUndefined();
+    } finally {
+      cleanup();
+    }
+  });
+});
+
 describe("BaseTracer.startActiveSpan span lifecycle", () => {
   test("ends the span on synchronous return", () => {
     const { exporter, cleanup } = setupProxy();
