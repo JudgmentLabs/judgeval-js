@@ -3,6 +3,7 @@ export {
   type AsyncEvaluateOptions,
   type LLMMetadata,
   type ObserveOptions,
+  type ScopedContextOptions,
   type TracerConfig,
 } from "./BaseTracer";
 export { JudgmentSpanExporter } from "./exporters/JudgmentSpanExporter";
