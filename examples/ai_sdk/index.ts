@@ -1,8 +1,6 @@
 import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
-import { JudgmentTracerProvider, Tracer } from "judgeval";
-
-JudgmentTracerProvider.installAsGlobalTracerProvider();
+import { Tracer } from "judgeval";
 
 const chatWithUser = Tracer.observe(async function chatWithUser(
   userMessage: string,
@@ -11,7 +9,7 @@ const chatWithUser = Tracer.observe(async function chatWithUser(
     model: openai("gpt-4o-mini"),
     system: "You are a helpful assistant.",
     prompt: userMessage,
-    experimental_telemetry: { isEnabled: true },
+    experimental_telemetry: { isEnabled: true, tracer: Tracer.getOTELTracer() },
   });
 
   console.log(`User: ${userMessage}`);
