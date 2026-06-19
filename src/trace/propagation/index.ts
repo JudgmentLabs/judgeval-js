@@ -12,7 +12,7 @@ import {
 } from "@opentelemetry/core";
 import { dontThrow } from "../../utils/dont-throw";
 import { JudgmentBaggagePropagator } from "../baggage/JudgmentBaggagePropagator";
-import { JudgmentTracerProvider } from "../JudgmentTracerProvider";
+import { getTraceRuntime } from "../runtime";
 
 /**
  * Inject and extract trace context and baggage across service
@@ -38,7 +38,7 @@ export function setGlobalTextmap(propagator: TextMapPropagator): void {
 
 function _resolveContext(context?: Context): Context {
   if (context !== undefined) return context;
-  return JudgmentTracerProvider.getInstance().getCurrentContext();
+  return getTraceRuntime().getCurrentContext();
 }
 
 /**

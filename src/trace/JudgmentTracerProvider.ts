@@ -21,6 +21,7 @@ import {
   installOtelContextBridge,
   runWithOtelBridgeGate,
 } from "./instrumentation/OtelContextBridge";
+import { setTraceRuntime } from "./runtime";
 
 const TRACER_NAME = "judgeval";
 
@@ -128,6 +129,7 @@ export class JudgmentTracerProvider implements TracerProvider {
   private constructor() {
     this._noOpTracer = new NoOpTracer();
     this._proxyTracer = new ProxyTracer(this);
+    setTraceRuntime(this);
     installOtelContextBridge(() => this.getCurrentContext());
   }
 

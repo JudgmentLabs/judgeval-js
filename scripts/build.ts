@@ -9,16 +9,32 @@ const minify = !process.argv.includes("--dev");
 const external = ["@opentelemetry/*"];
 
 const configs = [
-  { format: "esm", naming: "[dir]/[name].mjs" },
-  { format: "cjs", naming: "[dir]/[name].cjs" },
+  {
+    entrypoints: ["./src/node/index.ts"],
+    target: "node",
+    format: "esm",
+    naming: "node/[name].mjs",
+  },
+  {
+    entrypoints: ["./src/node/index.ts"],
+    target: "node",
+    format: "cjs",
+    naming: "node/[name].cjs",
+  },
+  {
+    entrypoints: ["./src/workers/index.ts"],
+    target: "browser",
+    format: "esm",
+    naming: "workers/[name].mjs",
+  },
 ] as const;
 
 await Promise.all(
   configs.map((config) =>
     build({
-      entrypoints: ["./src/index.ts"],
+      entrypoints: config.entrypoints,
       outdir: "./dist",
-      target: "node",
+      target: config.target,
       format: config.format,
       external,
       minify,

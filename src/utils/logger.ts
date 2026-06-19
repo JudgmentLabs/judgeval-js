@@ -1,4 +1,21 @@
-import { JUDGMENT_LOG_LEVEL } from "../env";
+type WritableStreamLike = {
+  isTTY?: boolean;
+  write?: (message: string) => void;
+};
+
+type ProcessLike = {
+  env?: Record<string, string | undefined>;
+  stderr?: WritableStreamLike;
+  stdout?: WritableStreamLike;
+};
+
+function getProcess(): ProcessLike | undefined {
+  return (globalThis as typeof globalThis & { process?: ProcessLike }).process;
+}
+
+function getEnvVar(name: string, defaultValue: string): string {
+  return getProcess()?.env?.[name] ?? defaultValue;
+}
 
 /**
  * SDK logger with configurable levels and color output.
@@ -35,11 +52,12 @@ export class Logger {
 
   private static initialize(): void {
     if (!Logger.initialized) {
-      const noColor = process.env.JUDGMENT_NO_COLOR;
-      Logger.useColor = !noColor && process.stdout.isTTY;
+      const proc = getProcess();
+      const noColor = proc?.env?.JUDGMENT_NO_COLOR;
+      Logger.useColor = !noColor && proc?.stdout?.isTTY === true;
 
       if (!Logger.levelSetManually) {
-        const logLevel = JUDGMENT_LOG_LEVEL.toLowerCase();
+        const logLevel = getEnvVar("JUDGMENT_LOG_LEVEL", "warn").toLowerCase();
         if (logLevel) {
           const levelMap: Record<string, number> = {
             debug: Logger.Level.DEBUG,
@@ -95,9 +113,18 @@ export class Logger {
       formattedMessage = `${color}${formattedMessage}${Logger.RESET}`;
     }
 
-    const output =
-      level >= Logger.Level.ERROR ? process.stderr : process.stdout;
-    output.write(formattedMessage + "\n");
+    const proc = getProcess();
+    const output = level >= Logger.Level.ERROR ? proc?.stderr : proc?.stdout;
+    if (output?.write) {
+      output.write(formattedMessage + "\n");
+      return;
+    }
+
+    if (level >= Logger.Level.ERROR) {
+      console.error(formattedMessage);
+    } else {
+      console.log(formattedMessage);
+    }
   }
 
   /** Log a debug message. */
