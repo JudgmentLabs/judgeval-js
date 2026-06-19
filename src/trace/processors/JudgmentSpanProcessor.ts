@@ -16,7 +16,7 @@ import {
 } from "../../JudgmentAttributeKeys";
 import { dontThrow } from "../../utils/dont-throw";
 import type { BaseTracer } from "../BaseTracer";
-import { JudgmentTracerProvider } from "../JudgmentTracerProvider";
+import { getTraceRuntime } from "../runtime";
 import { JudgmentBaggageSpanProcessor } from "./JudgmentBaggageSpanProcessor";
 
 type SpanKey = `${string}:${string}`;
@@ -155,8 +155,7 @@ export class JudgmentSpanProcessor extends BatchSpanProcessor {
   /** Export the current span's in-progress state for streaming updates. */
   emitPartial(): void {
     dontThrow("JudgmentSpanProcessor.emitPartial", () => {
-      const proxy = JudgmentTracerProvider.getInstance();
-      const span = proxy.getCurrentSpan();
+      const span = getTraceRuntime().getCurrentSpan();
       if (!span?.isRecording()) return;
       const ctx = span.spanContext();
       if (!ctx.traceId) return;

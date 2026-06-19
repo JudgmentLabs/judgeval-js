@@ -1,4 +1,5 @@
 import type { OpenAI } from "openai";
+import { setLLMWrapper } from "../trace/runtime";
 import { wrapOpenAI } from "./llm/openai";
 
 export { wrapOpenAI };
@@ -23,3 +24,5 @@ export { wrapOpenAI };
 export function wrap<T extends OpenAI>(client: T): T {
   return wrapOpenAI(client);
 }
+
+setLLMWrapper((client) => wrap(client as OpenAI));

@@ -13,15 +13,13 @@ import type {
   SpanLimits,
   SpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
-import { randomUUID } from "crypto";
-import type { OpenAI } from "openai";
 import { AttributeKeys, InternalAttributeKeys } from "../JudgmentAttributeKeys";
-import { wrap } from "../instrumentation";
 import { JudgmentApiClient } from "../internal/api";
 import type { PendingEvalPayload } from "../internal/api/models/PendingEvalPayload";
 import { parseFunctionArgs } from "../utils/annotate";
 import { dontThrow } from "../utils/dont-throw";
 import { Logger } from "../utils/logger";
+import { createRandomUUID } from "../utils/random-uuid";
 import {
   safeStringify,
   serializeAttribute,
@@ -29,10 +27,10 @@ import {
 } from "../utils/serializer";
 import { Maybe } from "../utils/type-helpers";
 import { createBaggage, getBaggage, setBaggage } from "./baggage";
-import { JudgmentTracerProvider } from "./JudgmentTracerProvider";
 import { extract } from "./propagation";
 import type { JudgmentSpanExporter } from "./exporters/JudgmentSpanExporter";
 import type { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
+import { getTraceRuntime, type TraceRuntime, wrapLLMClient } from "./runtime";
 
 const TRACER_NAME = "judgeval";
 
@@ -180,7 +178,7 @@ export abstract class BaseTracer {
    * @returns `true` if activation succeeded, `false` if a root span is active.
    */
   setActive(): boolean {
-    return JudgmentTracerProvider.getInstance().setActive(this);
+    return getTraceRuntime().setActive(this);
   }
 
   // ------------------------------------------------------------------ //
@@ -194,8 +192,8 @@ export abstract class BaseTracer {
   //  Internal Helpers                                                  //
   // ------------------------------------------------------------------ //
 
-  private static _getProxyProvider(): JudgmentTracerProvider {
-    return JudgmentTracerProvider.getInstance();
+  private static _getProxyProvider(): TraceRuntime {
+    return getTraceRuntime();
   }
 
   private static _getSerializer(): Serializer {
@@ -296,8 +294,8 @@ export abstract class BaseTracer {
    * const client = Tracer.wrap(new OpenAI());
    * ```
    */
-  static wrap<T extends OpenAI>(client: T): T {
-    return wrap(client);
+  static wrap<T>(client: T): T {
+    return wrapLLMClient(client);
   }
 
   // ------------------------------------------------------------------ //
@@ -1091,7 +1089,7 @@ export abstract class BaseTracer {
         examples: [
           {
             ...example,
-            example_id: randomUUID(),
+            example_id: createRandomUUID(),
             created_at: new Date().toISOString(),
             trace_id: ctx.traceId,
             span_id: ctx.spanId,

@@ -2,14 +2,18 @@
   "name": "judgeval",
   "version": "1.1.0",
   "description": "JavaScript/TypeScript client for Judgment evaluation platform",
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/node/index.cjs",
+  "module": "./dist/node/index.mjs",
+  "types": "./dist/node/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs"
+      "types": "./dist/node/index.d.ts",
+      "import": "./dist/node/index.mjs",
+      "require": "./dist/node/index.cjs"
+    },
+    "./workers": {
+      "types": "./dist/workers/index.d.ts",
+      "import": "./dist/workers/index.mjs"
     },
     "./package.json": "./package.json"
   },
@@ -26,7 +30,8 @@
     "lint:fix": "oxlint --fix src/",
     "format": "prettier --write \"src/**/*.ts\"",
     "generate-client": "bunx tsx scripts/generate-client.ts && bun run format",
-    "test": "bun test --coverage",
+    "test": "bun test --coverage && bun run test:workers",
+    "test:workers": "bun run build:dev && bun scripts/test-worker-build.ts",
     "clean": "rm -rf dist",
     "prepublishOnly": "bun run clean && bun run build",
     "example": "bun scripts/run-example.ts"
