@@ -3,10 +3,10 @@
 
 export interface SDKUpdateAgentJudgeRequest {
   judge_description?: string | null;
+  score_type?: string | null;
   description?: string | null;
   model?: string | null;
   prompt?: string | null;
-  score_type?: string | null;
   categories?: { name: string; description: string }[] | null;
   min_score?: number | null;
   max_score?: number | null;

@@ -73,7 +73,10 @@ export abstract class EvaluatorRunner<S extends string | Judge> {
         console.log(
           `${pc.green("\u2713")} Evals completed and saved in ${pc.bold(`${elapsed.toFixed(1)}s`)}`,
         );
-        return { results: resultsData, url };
+        // The experiments alias now returns a union (legacy experiment rows |
+        // offline test-run rows). This hosted runner only drives the legacy
+        // experiment path, so the rows are ExperimentRunItem at runtime.
+        return { results: resultsData as ExperimentRunItem[], url };
       }
 
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));

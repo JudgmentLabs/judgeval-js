@@ -8,4 +8,5 @@ export interface Example {
   trace_id?: string | null;
   span_id?: string | null;
   offline_trace_id?: string | null;
+  agent_offline_trace_id?: string | null;
 }

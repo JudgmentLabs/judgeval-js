@@ -54,7 +54,7 @@ export class Dataset {
 
     for (let i = 0; i < examples.length; i += batchSize) {
       const batch = examples.slice(i, i + batchSize);
-      await this._client.postV1projectsDatasetsByDatasetNameExamples(
+      await this._client.postV1projectsDatasetsByDatasetIdentifierExamples(
         this.projectId,
         this.name,
         { examples: batch.map((e) => e.toJSON()) },

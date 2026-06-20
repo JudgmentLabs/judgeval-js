@@ -5,6 +5,7 @@ import { Logger } from "./utils/logger";
 import { EvaluationFactory } from "./evaluation/EvaluationFactory";
 import { DatasetFactory } from "./datasets/DatasetFactory";
 import { AgentJudgeFactory } from "./agent-judges/AgentJudgeFactory";
+import { OfflineTestsFactory } from "./offline-tests/OfflineTestsFactory";
 import type { OfflineTracer, OfflineTracerConfig } from "./trace/OfflineTracer";
 
 /**
@@ -160,6 +161,15 @@ export class Judgeval {
   /** Manage Agent Judges (prompt-based scorers) on the platform. */
   get agentJudges(): AgentJudgeFactory {
     return new AgentJudgeFactory(
+      this._client,
+      this._projectId,
+      this._projectName,
+    );
+  }
+
+  /** Create test configs and run offline tests (dataset + judges). */
+  get offlineTests(): OfflineTestsFactory {
+    return new OfflineTestsFactory(
       this._client,
       this._projectId,
       this._projectName,

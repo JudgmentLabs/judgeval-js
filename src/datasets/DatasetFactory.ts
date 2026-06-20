@@ -1,8 +1,13 @@
 import type { JudgmentApiClient } from "../internal/api/client";
-import type { DatasetInfo } from "../internal/api/models/DatasetInfo";
+import type { PullAllOfflineDatasetsResponse } from "../internal/api/models";
 import { Example, type ExampleDict } from "../data/Example";
 import { Logger } from "../utils/logger";
 import { Dataset } from "./Dataset";
+import {
+  type DatasetSchema,
+  inferSchemaFromExamples,
+  validateDatasetSchema,
+} from "./schema";
 
 /**
  * Creates, retrieves, and lists datasets in your project.
@@ -40,10 +45,11 @@ export class DatasetFactory {
     const projectId = this._expectProjectId();
     if (!projectId) return null;
 
-    const response = await this._client.getV1projectsDatasetsByDatasetName(
-      projectId,
-      name,
-    );
+    const response =
+      await this._client.getV1projectsDatasetsByDatasetIdentifier(
+        projectId,
+        name,
+      );
 
     const datasetKind = response.dataset_kind ?? "example";
     // The API returns examples with arbitrary user properties beyond the
@@ -76,18 +82,38 @@ export class DatasetFactory {
       examples?: Example[];
       overwrite?: boolean;
       batchSize?: number;
+      schema?: DatasetSchema;
     } = {},
   ): Promise<Dataset | null> {
     const projectId = this._expectProjectId();
     if (!projectId) return null;
 
-    const { examples = [], overwrite = false, batchSize = 100 } = options;
+    const {
+      examples = [],
+      overwrite = false,
+      batchSize = 100,
+      schema,
+    } = options;
+
+    let resolvedSchema: DatasetSchema;
+    if (schema !== undefined) {
+      validateDatasetSchema(schema);
+      resolvedSchema = schema;
+    } else {
+      if (examples.length === 0) {
+        throw new Error(
+          "Datasets require a JSON Schema. Pass `schema` to create(), or provide `examples` to infer one.",
+        );
+      }
+      resolvedSchema = inferSchemaFromExamples(examples);
+    }
 
     await this._client.postV1projectsDatasets(projectId, {
       name,
       examples: [],
       dataset_kind: "example",
       overwrite,
+      schema: resolvedSchema as unknown as Record<string, unknown>,
     });
 
     const dataset = new Dataset({
@@ -110,7 +136,7 @@ export class DatasetFactory {
    *
    * @returns An array of dataset metadata, or `null` if the project is unresolved.
    */
-  list(): Promise<DatasetInfo[] | null> {
+  list(): Promise<PullAllOfflineDatasetsResponse | null> {
     const projectId = this._expectProjectId();
     if (!projectId) return Promise.resolve(null);
 
