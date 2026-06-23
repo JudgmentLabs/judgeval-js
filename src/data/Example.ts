@@ -61,6 +61,7 @@ export class Example {
     "trace_id",
     "span_id",
     "offline_trace_id",
+    "agent_offline_trace_id",
   ]);
 
   /**

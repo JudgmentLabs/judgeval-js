@@ -12,6 +12,7 @@ export interface TestRunsResponse {
     dataset_version_id: string;
     source: string;
     status: string;
+    name: string;
     error_message?: string | null;
     created_at?: string | null;
     updated_at?: string | null;

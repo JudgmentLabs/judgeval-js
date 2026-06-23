@@ -3,6 +3,7 @@
 
 export interface CreateTestRunRequest {
   test_config_id: string;
+  name?: string | null;
   dataset_version_id?: string | null;
   dataset_version_number?: number | null;
   judge_versions?: {

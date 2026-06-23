@@ -52,10 +52,18 @@ export class DatasetFactory {
       );
 
     const datasetKind = response.dataset_kind ?? "example";
-    // The API returns examples with arbitrary user properties beyond the
-    // typed Example interface — cast to ExampleDict to reflect the real shape.
-    const rawExamples = (response.examples ?? []) as ExampleDict[];
-    const examples = rawExamples.map((e) => Example.from(e));
+    // Offline datasets nest the user fields under `data` and carry server
+    // metadata (organization_id, project_id, user_id) at the top level. Unwrap
+    // `data` so user properties (input, etc.) become the Example's properties —
+    // otherwise `example.get("input")` is undefined and the metadata / the
+    // nested `data` object leak into properties.
+    const examples = (response.examples ?? []).map((e) =>
+      Example.from({
+        ...(e.data ?? {}),
+        example_id: e.example_id,
+        created_at: e.created_at ?? "",
+      } as ExampleDict),
+    );
 
     return new Dataset({
       name,

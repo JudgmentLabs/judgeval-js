@@ -128,6 +128,8 @@ export interface OfflineRunOptions {
   passConditionFn?: PassConditionFn;
   assertTest?: boolean;
   timeoutSeconds?: number;
+  /** Optional display name for the run; server auto-names it when omitted. */
+  runName?: string;
 }
 
 /**
@@ -256,12 +258,16 @@ export class OfflineTestRunner {
       judgeVersions?: JudgeVersionPin[];
       agentTraces?: Record<string, string>;
       source?: string;
+      name?: string;
     } = {},
   ): Promise<PreparedTestRunResponse> {
     const payload: CreateTestRunRequest = {
       test_config_id: testConfig.id,
       source: options.source ?? "sdk",
     };
+    if (options.name) {
+      payload.name = options.name;
+    }
     if (typeof options.datasetVersion === "number") {
       payload.dataset_version_number = options.datasetVersion;
     } else if (typeof options.datasetVersion === "string") {
@@ -535,6 +541,7 @@ export class OfflineTestRunner {
       passConditionFn,
       assertTest = false,
       timeoutSeconds = 600,
+      runName,
     } = options;
 
     if (assertTest && !passConditionFn) {
@@ -570,6 +577,7 @@ export class OfflineTestRunner {
       datasetVersion: pinnedVersion,
       judgeVersions,
       agentTraces,
+      name: runName,
     });
     const testRun = asRecord(prepared.test_run);
     const testRunId = asString(testRun.id);
