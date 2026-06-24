@@ -31,8 +31,8 @@ jobs:
 
       - name: Check build output
         run: |
-          test -f dist/index.mjs
-          test -f dist/index.cjs
-          test -f dist/index.d.ts
+          test -f dist/node/index.mjs
+          test -f dist/node/index.cjs
+          test -f dist/node/index.d.ts
           test -f dist/workers/index.mjs
           test -f dist/workers/index.d.ts

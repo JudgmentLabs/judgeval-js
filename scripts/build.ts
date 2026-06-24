@@ -2,6 +2,7 @@
 
 import { build } from "bun";
 import { exec } from "child_process";
+import { mkdir, writeFile } from "fs/promises";
 import { promisify } from "util";
 
 const execAsync = promisify(exec);
@@ -13,13 +14,13 @@ const configs = [
     entrypoints: ["./src/index.ts"],
     target: "node",
     format: "esm",
-    naming: "[dir]/[name].mjs",
+    naming: "node/[name].mjs",
   },
   {
     entrypoints: ["./src/index.ts"],
     target: "node",
     format: "cjs",
-    naming: "[dir]/[name].cjs",
+    naming: "node/[name].cjs",
   },
   {
     entrypoints: ["./src/workers/index.ts"],
@@ -45,4 +46,9 @@ await Promise.all(
 );
 
 await execAsync("bunx tsc -p tsconfig.build.json");
+await mkdir("./dist/node", { recursive: true });
+await writeFile(
+  "./dist/node/index.d.ts",
+  'export * from "../index";\n',
+);
 console.log("✓ Build complete");
