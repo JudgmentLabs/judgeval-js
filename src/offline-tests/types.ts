@@ -1,7 +1,6 @@
 /**
- * Types for the offline-tests SDK surface. Mirrors the Python
- * `judgeval.offline_tests` module (TestConfig, OfflineTestResult,
- * JudgeVersionPin, AgentFunction, PassConditionFn) in TypeScript idiom.
+ * Types for the offline-tests SDK surface: TestConfig, OfflineTestResult,
+ * JudgeVersionPin, AgentFunction, PassConditionFn.
  */
 
 /**
@@ -98,9 +97,9 @@ export interface OfflineTestResult {
 
 /**
  * An agent entrypoint. Called once per dataset example with the example's data
- * fields as a single object (the TypeScript analogue of the Python keyword
- * arguments). Each call is wrapped in an `OfflineTracer` and its offline trace
- * is attributed to the result row.
+ * fields as a single object — read the fields you need (e.g. `fields.input`).
+ * Each call is wrapped in an `OfflineTracer` and its offline trace is
+ * attributed to the result row.
  */
 export type AgentFunction = (
   fields: Record<string, unknown>,

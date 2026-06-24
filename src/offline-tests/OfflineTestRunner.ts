@@ -9,16 +9,26 @@ import { Example } from "../data/Example";
 import { Tracer } from "../trace/Tracer";
 import { OfflineTracer } from "../trace/OfflineTracer";
 import { JudgmentTracerProvider } from "../trace/JudgmentTracerProvider";
+import { sleep } from "../utils/sleep";
 import {
   type AgentFunction,
   type JudgeVersionPin,
   type OfflineExampleResult,
-  type OfflineScorerData,
   type OfflineTestResult,
   type PassConditionFn,
   type TestConfig,
   computePassed,
 } from "./types";
+import {
+  asArray,
+  asRecord,
+  asString,
+  assertAllPassed,
+  buildResults,
+  displayResults,
+  displayStart,
+  normalizeJudgeVersions,
+} from "./utils";
 
 const TERMINAL_STATUSES = new Set(["completed", "error", "cancelled"]);
 const EXAMPLES_PAGE_SIZE = 100;
@@ -31,93 +41,6 @@ interface ExampleRow {
   data: Record<string, unknown>;
   offlineTraceId: string | null;
   createdAt: string | null;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-function asArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-function asString(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-
-function binaryLabel(value: boolean): string {
-  return value ? "Yes" : "No";
-}
-
-/** Port of the Python `_scorer_value` helper. */
-function scorerValue(scorer: Record<string, unknown>): string | number | null {
-  const scoreType = scorer.score_type;
-  const bool = scorer.bool_value;
-  const str = scorer.str_value;
-  const num = scorer.num_value;
-  if (scoreType === "binary") {
-    return typeof bool === "boolean" ? binaryLabel(bool) : null;
-  }
-  if (scoreType === "categorical") {
-    return typeof str === "string" ? str : null;
-  }
-  if (scoreType === "numeric") {
-    return typeof num === "number" ? num : null;
-  }
-  if (typeof bool === "boolean") return binaryLabel(bool);
-  if (typeof str === "string") return str;
-  if (typeof num === "number") return num;
-  return null;
-}
-
-function reasonText(raw: unknown): string | null {
-  if (typeof raw === "object" && raw !== null) {
-    const text = (raw as Record<string, unknown>).text;
-    return typeof text === "string" && text ? text : null;
-  }
-  if (typeof raw === "string") {
-    try {
-      const parsed: unknown = JSON.parse(raw);
-      if (typeof parsed === "object" && parsed !== null) {
-        const text = (parsed as Record<string, unknown>).text;
-        if (typeof text === "string") return text || null;
-      }
-    } catch {
-      // not JSON; fall through to the raw string
-    }
-    return raw || null;
-  }
-  return null;
-}
-
-/** Validate `judgeVersions` and normalize each pin to the server's snake_case shape. */
-function normalizeJudgeVersions(
-  pins?: JudgeVersionPin[],
-): Record<string, unknown>[] | undefined {
-  if (!pins || pins.length === 0) return undefined;
-  const out: Record<string, unknown>[] = [];
-  for (const pin of pins) {
-    if (!pin.name && !pin.judgeId) {
-      throw new Error(
-        "judgeVersions entries require a 'name' (or 'judgeId') key",
-      );
-    }
-    const entry: Record<string, unknown> = {};
-    if (pin.judgeId !== undefined) entry.judge_id = pin.judgeId;
-    if (pin.name !== undefined) entry.name = pin.name;
-    if (pin.tag !== undefined) entry.tag = pin.tag;
-    if (pin.version !== undefined) entry.version = pin.version;
-    if (pin.majorVersion !== undefined) entry.major_version = pin.majorVersion;
-    if (pin.minorVersion !== undefined) entry.minor_version = pin.minorVersion;
-    out.push(entry);
-  }
-  return out;
 }
 
 /** Options accepted by {@link OfflineTestRunner.run}. */
@@ -133,10 +56,10 @@ export interface OfflineRunOptions {
 }
 
 /**
- * Executes the offline-test lifecycle for a test config (the TypeScript port of
- * the Python `OfflineTestRunner`): resolve the dataset version, optionally run
- * the agent to produce offline traces, create the test run, wait for terminal
- * status, fetch results, evaluate the pass condition, and report successes.
+ * Executes the offline-test lifecycle for a test config: resolve the dataset
+ * version, optionally run the agent to produce offline traces, create the test
+ * run, wait for terminal status, fetch results, evaluate the pass condition,
+ * and report successes.
  */
 export class OfflineTestRunner {
   private readonly _client: JudgmentApiClient;
@@ -403,52 +326,6 @@ export class OfflineTestRunner {
     return { items, uiResultsUrl };
   }
 
-  buildResults(
-    items: Record<string, unknown>[],
-    agentTraces: Record<string, string>,
-    passConditionFn?: PassConditionFn,
-  ): OfflineExampleResult[] {
-    const results: OfflineExampleResult[] = [];
-    for (const item of items) {
-      const exampleId = asString(item.example_id);
-      const data = asRecord(item.data);
-
-      const scorers: OfflineScorerData[] = [];
-      for (const raw of asArray(item.scorers)) {
-        const scorer = asRecord(raw);
-        const metadata: Record<string, unknown> = {
-          judge_id: scorer.judge_id,
-          judge_major_version: scorer.judge_major_version,
-          judge_minor_version: scorer.judge_minor_version,
-        };
-        const reason = reasonText(scorer.reason);
-        if (reason) metadata.reason = reason;
-        scorers.push({
-          name: asString(scorer.judge_name),
-          value: scorerValue(scorer),
-          scoreType:
-            typeof scorer.score_type === "string" ? scorer.score_type : null,
-          error: typeof scorer.error === "string" ? scorer.error : null,
-          success: typeof scorer.success === "boolean" ? scorer.success : null,
-          metadata,
-        });
-      }
-
-      if (passConditionFn) {
-        const passed = Boolean(passConditionFn({ ...data }, scorers));
-        for (const scorer of scorers) scorer.success = passed;
-      }
-
-      results.push({
-        exampleId,
-        data,
-        scorers,
-        agentOfflineTraceId: agentTraces[exampleId],
-      });
-    }
-    return results;
-  }
-
   async reportSuccess(
     testRunId: string,
     prepared: PreparedTestRunResponse,
@@ -550,16 +427,13 @@ export class OfflineTestRunner {
       );
     }
 
-    Logger.info(
-      `Starting offline test for config '${testConfig.name}' (project ${this._projectName})`,
-    );
-
     const version = await this.resolveDatasetVersion(
       testConfig,
       datasetVersion,
     );
     const versionNumber = Number(version.version_number ?? 0);
     const examples = await this.fetchExamples(testConfig, versionNumber);
+    displayStart(testConfig.name, this._projectName, examples.length);
     Logger.info(
       `Dataset version ${versionNumber}: ${examples.length} example(s)`,
     );
@@ -591,10 +465,12 @@ export class OfflineTestRunner {
     const { items, uiResultsUrl: itemsUrl } = await this.fetchItems(testRunId);
     if (itemsUrl) uiResultsUrl = itemsUrl;
 
-    const results = this.buildResults(items, agentTraces, passConditionFn);
+    const results = buildResults(items, agentTraces, passConditionFn);
     if (passConditionFn) {
       await this.reportSuccess(testRunId, prepared, items, results);
     }
+
+    displayResults(results, uiResultsUrl || undefined);
 
     const outcome: OfflineTestResult = {
       testRunId,
@@ -605,25 +481,7 @@ export class OfflineTestRunner {
       passed: computePassed(results),
     };
 
-    if (assertTest) this._assertAllPassed(outcome);
+    if (assertTest) assertAllPassed(outcome);
     return outcome;
-  }
-
-  private _assertAllPassed(outcome: OfflineTestResult): void {
-    if (outcome.status !== "completed") {
-      throw new Error(
-        `Test run ${outcome.testRunId} finished with status '${outcome.status}'`,
-      );
-    }
-    const failed = outcome.results
-      .filter((result) =>
-        result.scorers.some((scorer) => scorer.success === false),
-      )
-      .map((result) => result.exampleId);
-    if (failed.length > 0 || outcome.passed !== true) {
-      throw new Error(
-        `Test run ${outcome.testRunId} failed its pass condition for ${failed.length} example(s): ${JSON.stringify(failed)}`,
-      );
-    }
   }
 }

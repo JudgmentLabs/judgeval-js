@@ -1,3 +1,5 @@
+import { sleep } from "./sleep";
+
 export interface RetryConfig {
   /** Maximum number of attempts. Defaults to `3`. */
   maxRetries?: number;
@@ -39,7 +41,7 @@ export async function retry<T>(
       }
 
       onRetry?.(attempt, error);
-      await new Promise((resolve) => setTimeout(resolve, backoff(attempt)));
+      await sleep(backoff(attempt));
     }
   }
 
