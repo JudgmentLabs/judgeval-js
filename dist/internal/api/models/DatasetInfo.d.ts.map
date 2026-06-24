@@ -1,1 +1,0 @@
-{"version":3,"file":"DatasetInfo.d.ts","sourceRoot":"","sources":["../../../../src/internal/api/models/DatasetInfo.ts"],"names":[],"mappings":"AAGA,MAAM,WAAW,WAAW;IAC1B,UAAU,EAAE,MAAM,CAAC;IACnB,IAAI,EAAE,MAAM,CAAC;IACb,UAAU,EAAE,MAAM,CAAC;IACnB,IAAI,EAAE,MAAM,CAAC;IACb,OAAO,EAAE,MAAM,CAAC;IAChB,OAAO,EAAE,MAAM,CAAC;CACjB"}

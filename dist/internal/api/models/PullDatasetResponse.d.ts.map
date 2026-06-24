@@ -1,1 +1,0 @@
-{"version":3,"file":"PullDatasetResponse.d.ts","sourceRoot":"","sources":["../../../../src/internal/api/models/PullDatasetResponse.ts"],"names":[],"mappings":"AAGA,OAAO,KAAK,EAAE,OAAO,EAAE,MAAM,WAAW,CAAC;AAEzC,MAAM,WAAW,mBAAmB;IAClC,IAAI,EAAE,MAAM,CAAC;IACb,UAAU,EAAE,MAAM,CAAC;IACnB,YAAY,EAAE,MAAM,CAAC;IACrB,QAAQ,EAAE,OAAO,EAAE,CAAC;CACrB"}

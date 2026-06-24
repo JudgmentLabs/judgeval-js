@@ -1,1 +1,0 @@
-{"version":3,"file":"CreateDatasetRequest.d.ts","sourceRoot":"","sources":["../../../../src/internal/api/models/CreateDatasetRequest.ts"],"names":[],"mappings":"AAGA,OAAO,KAAK,EAAE,OAAO,EAAE,MAAM,WAAW,CAAC;AAEzC,MAAM,WAAW,oBAAoB;IACnC,IAAI,EAAE,MAAM,CAAC;IACb,YAAY,EAAE,MAAM,CAAC;IACrB,QAAQ,EAAE,OAAO,EAAE,CAAC;IACpB,SAAS,EAAE,OAAO,CAAC;CACpB"}
