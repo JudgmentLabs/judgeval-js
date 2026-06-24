@@ -1,0 +1,1 @@
+{"version":3,"file":"FetchPromptResponse.d.ts","sourceRoot":"","sources":["../../../../src/internal/api/models/FetchPromptResponse.ts"],"names":[],"mappings":"AAGA,OAAO,KAAK,EAAE,gBAAgB,EAAE,MAAM,oBAAoB,CAAC;AAE3D,MAAM,WAAW,mBAAmB;IAClC,MAAM,EAAE,gBAAgB,GAAG,IAAI,CAAC;CACjC"}

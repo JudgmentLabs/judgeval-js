@@ -1,0 +1,15 @@
+import type { Example } from "./Example";
+export interface LocalScorerResult {
+    scorers_data: {
+        scorer_name: string;
+        value: boolean | number | string;
+        reason: string;
+        citations?: {
+            span_id: string;
+            span_attribute: string;
+        }[] | null;
+        error?: string | null;
+    }[];
+    data_object: Example;
+}
+//# sourceMappingURL=LocalScorerResult.d.ts.map

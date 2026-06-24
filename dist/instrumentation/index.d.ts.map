@@ -1,0 +1,1 @@
+{"version":3,"file":"index.d.ts","sourceRoot":"","sources":["../../src/instrumentation/index.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,MAAM,EAAE,MAAM,QAAQ,CAAC;AAErC,OAAO,EAAE,UAAU,EAAE,MAAM,cAAc,CAAC;AAE1C,OAAO,EAAE,UAAU,EAAE,CAAC;AAEtB;;;;;;;;;;;;;;;;GAgBG;AACH,wBAAgB,IAAI,CAAC,CAAC,SAAS,MAAM,EAAE,MAAM,EAAE,CAAC,GAAG,CAAC,CAEnD"}
