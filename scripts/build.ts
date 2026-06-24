@@ -10,16 +10,16 @@ const external = ["@opentelemetry/*"];
 
 const configs = [
   {
-    entrypoints: ["./src/node/index.ts"],
+    entrypoints: ["./src/index.ts"],
     target: "node",
     format: "esm",
-    naming: "node/[name].mjs",
+    naming: "[dir]/[name].mjs",
   },
   {
-    entrypoints: ["./src/node/index.ts"],
+    entrypoints: ["./src/index.ts"],
     target: "node",
     format: "cjs",
-    naming: "node/[name].cjs",
+    naming: "[dir]/[name].cjs",
   },
   {
     entrypoints: ["./src/workers/index.ts"],
