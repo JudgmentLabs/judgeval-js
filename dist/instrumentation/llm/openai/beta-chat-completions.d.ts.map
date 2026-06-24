@@ -1,1 +1,0 @@
-{"version":3,"file":"beta-chat-completions.d.ts","sourceRoot":"","sources":["../../../../src/instrumentation/llm/openai/beta-chat-completions.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,MAAM,EAAE,MAAM,QAAQ,CAAC;AAMrC;;;GAGG;AACH,wBAAgB,wBAAwB,CAAC,MAAM,EAAE,MAAM,GAAG,IAAI,CA8B7D"}

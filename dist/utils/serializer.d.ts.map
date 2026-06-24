@@ -1,1 +1,0 @@
-{"version":3,"file":"serializer.d.ts","sourceRoot":"","sources":["../../src/utils/serializer.ts"],"names":[],"mappings":"AAEA,MAAM,MAAM,UAAU,GAAG,CAAC,GAAG,EAAE,OAAO,KAAK,MAAM,CAAC;AAkBlD,wBAAgB,aAAa,CAAC,GAAG,EAAE,OAAO,GAAG,MAAM,CAclD;AAED;;;;;;GAMG;AACH,wBAAgB,kBAAkB,CAChC,KAAK,EAAE,OAAO,EACd,UAAU,EAAE,UAAU,GACrB,MAAM,GAAG,MAAM,GAAG,OAAO,CAQ3B"}

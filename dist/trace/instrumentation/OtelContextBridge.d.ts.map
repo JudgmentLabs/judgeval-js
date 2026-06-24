@@ -1,1 +1,0 @@
-{"version":3,"file":"OtelContextBridge.d.ts","sourceRoot":"","sources":["../../../src/trace/instrumentation/OtelContextBridge.ts"],"names":[],"mappings":"AAAA,OAAO,EAGL,KAAK,OAAO,EACb,MAAM,oBAAoB,CAAC;AAmB5B,wBAAgB,wBAAwB,CACtC,yBAAyB,EAAE,MAAM,OAAO,GACvC,IAAI,CAyCN;AAED,wBAAgB,qBAAqB,CAAC,CAAC,EAAE,GAAG,EAAE,OAAO,EAAE,EAAE,EAAE,MAAM,CAAC,GAAG,CAAC,CAErE"}

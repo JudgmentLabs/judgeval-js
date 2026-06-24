@@ -1,1 +1,0 @@
-{"version":3,"file":"GetPromptVersionsResponse.d.ts","sourceRoot":"","sources":["../../../../src/internal/api/models/GetPromptVersionsResponse.ts"],"names":[],"mappings":"AAGA,OAAO,KAAK,EAAE,gBAAgB,EAAE,MAAM,oBAAoB,CAAC;AAE3D,MAAM,WAAW,yBAAyB;IACxC,QAAQ,EAAE,gBAAgB,EAAE,CAAC;CAC9B"}

@@ -33,10 +33,6 @@ import type {
   PullDatasetResponse,
   ResolveProjectRequest,
   ResolveProjectResponse,
-  SDKCreateAgentJudgeRequest,
-  SDKCreateAgentJudgeResponse,
-  SDKUpdateAgentJudgeRequest,
-  SDKUpdateAgentJudgeResponse,
   ScorerExistsResponse,
   TagPromptRequest,
   TagPromptResponse,
@@ -344,22 +340,5 @@ export class JudgmentApiClient {
   ): Promise<E2EFetchSpanScoreResponse> {
     const url = this.baseUrl + "/v1/e2e_fetch_span_score/";
     return this.request("POST", url, payload);
-  }
-
-  async postV1projectsJudges(
-    projectId: string,
-    payload: SDKCreateAgentJudgeRequest,
-  ): Promise<SDKCreateAgentJudgeResponse> {
-    const url = this.baseUrl + `/v1/projects/${projectId}/judges`;
-    return this.request("POST", url, payload);
-  }
-
-  async patchV1projectsJudgesByJudgeId(
-    projectId: string,
-    judgeId: string,
-    payload: SDKUpdateAgentJudgeRequest,
-  ): Promise<SDKUpdateAgentJudgeResponse> {
-    const url = this.baseUrl + `/v1/projects/${projectId}/judges/${judgeId}`;
-    return this.request("PATCH", url, payload);
   }
 }
