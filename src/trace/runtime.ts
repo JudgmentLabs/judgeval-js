@@ -181,7 +181,6 @@ const noOpRuntime: TraceRuntime = {
 };
 
 let runtime: TraceRuntime | null = null;
-let llmWrapper: ((client: unknown) => unknown) | null = null;
 
 export function setTraceRuntime(nextRuntime: TraceRuntime): void {
   runtime = nextRuntime;
@@ -189,18 +188,4 @@ export function setTraceRuntime(nextRuntime: TraceRuntime): void {
 
 export function getTraceRuntime(): TraceRuntime {
   return runtime ?? noOpRuntime;
-}
-
-export function setLLMWrapper(wrapper: (client: unknown) => unknown): void {
-  llmWrapper = wrapper;
-}
-
-export function wrapLLMClient<T>(client: T): T {
-  if (!llmWrapper) {
-    Logger.warning(
-      "LLM client instrumentation is not available from this entrypoint.",
-    );
-    return client;
-  }
-  return llmWrapper(client) as T;
 }

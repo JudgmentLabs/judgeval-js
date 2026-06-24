@@ -30,7 +30,7 @@ import { createBaggage, getBaggage, setBaggage } from "./baggage";
 import { extract } from "./propagation";
 import type { JudgmentSpanExporter } from "./exporters/JudgmentSpanExporter";
 import type { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
-import { getTraceRuntime, type TraceRuntime, wrapLLMClient } from "./runtime";
+import { getTraceRuntime, type TraceRuntime } from "./runtime";
 
 const TRACER_NAME = "judgeval";
 
@@ -276,26 +276,6 @@ export abstract class BaseTracer {
       const proxy = BaseTracer._getProxyProvider();
       proxy.addInstrumentation(instrumentor);
     });
-  }
-
-  /**
-   * Wrap a supported LLM client to add automatic tracing.
-   *
-   * Currently supports OpenAI clients. The client is instrumented
-   * in-place and returned.
-   *
-   * @param client - An LLM client instance (e.g. `new OpenAI()`).
-   * @returns The same client instance, instrumented.
-   *
-   * @example
-   * ```typescript
-   * import OpenAI from "openai";
-   *
-   * const client = Tracer.wrap(new OpenAI());
-   * ```
-   */
-  static wrap<T>(client: T): T {
-    return wrapLLMClient(client);
   }
 
   // ------------------------------------------------------------------ //
