@@ -18,6 +18,13 @@ const TRACER_NAME = "judgeval";
 
 let activeContext: Context = ROOT_CONTEXT;
 
+function takeExporterError(tracer: TraceRuntimeTracer): Error | undefined {
+  const exporter = tracer.getSpanExporter() as {
+    takeExportError?: () => Error | undefined;
+  };
+  return exporter.takeExportError?.();
+}
+
 class ProxyTracer implements Tracer {
   private _provider: WorkerTracerProvider;
 
@@ -278,10 +285,24 @@ export class WorkerTracerProvider implements TracerProvider {
     const results = await Promise.allSettled(
       Array.from(this._tracers).map((t) => t._tracerProvider.forceFlush()),
     );
+    const errors: unknown[] = [];
     for (const r of results) {
       if (r.status === "rejected") {
         Logger.error(`forceFlush failed: ${String(r.reason)}`);
+        errors.push(r.reason);
       }
+    }
+    if (errors.length === 0) {
+      for (const tracer of this._tracers) {
+        const error = takeExporterError(tracer);
+        if (error) {
+          Logger.error(`forceFlush export failed: ${String(error)}`);
+          errors.push(error);
+        }
+      }
+    }
+    if (errors.length > 0) {
+      throw errors[0];
     }
   }
 

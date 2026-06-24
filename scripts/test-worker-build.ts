@@ -37,13 +37,16 @@ await writeFile(
   `
 import { Tracer, propagation } from "judgeval/workers";
 
+export { Tracer };
+
 export default {
   async fetch(_request, env, ctx) {
     await Tracer.init({
       apiKey: env.JUDGMENT_API_KEY,
       organizationId: env.JUDGMENT_ORG_ID,
       apiUrl: env.JUDGMENT_API_URL,
-      projectName: env.JUDGMENT_PROJECT_NAME,
+      projectId: env.JUDGMENT_PROJECT_ID,
+      projectName: "worker-project",
       environment: env.ENVIRONMENT,
       resourceAttributes: { "worker.test": "true" },
     });
@@ -98,9 +101,10 @@ for (const token of forbidden) {
 
 const originalFetch = globalThis.fetch;
 const fetchCalls: string[] = [];
+let failNextTraceExport = false;
 const waitUntilPromises: Promise<unknown>[] = [];
 
-globalThis.fetch = (async (input: RequestInfo | URL) => {
+globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url =
     typeof input === "string"
       ? input
@@ -114,6 +118,23 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
   }
 
   if (url.endsWith("/otel/v1/traces")) {
+    if (init?.headers instanceof Headers) {
+      const contentType = init.headers.get("Content-Type");
+      if (contentType !== "application/x-protobuf") {
+        throw new Error(`Unexpected trace content type: ${contentType}`);
+      }
+    } else {
+      const headers = init?.headers as Record<string, string> | undefined;
+      if (headers?.["Content-Type"] !== "application/x-protobuf") {
+        throw new Error(
+          `Unexpected trace content type: ${headers?.["Content-Type"]}`,
+        );
+      }
+    }
+    if (failNextTraceExport) {
+      failNextTraceExport = false;
+      return new Response("bad trace", { status: 500 });
+    }
     return new Response("", { status: 200 });
   }
 
@@ -130,7 +151,7 @@ try {
       JUDGMENT_API_KEY: "test-api-key",
       JUDGMENT_ORG_ID: "test-org",
       JUDGMENT_API_URL: "https://api.worker.test",
-      JUDGMENT_PROJECT_NAME: "worker-project",
+      JUDGMENT_PROJECT_ID: "project_worker_test",
       ENVIRONMENT: "test",
     },
     {
@@ -149,12 +170,37 @@ try {
     throw new Error("Bundled Worker did not return the expected response");
   }
 
-  if (!fetchCalls.some((url) => url.endsWith("/v1/projects/resolve/"))) {
-    throw new Error("Bundled Worker did not resolve the project");
+  if (fetchCalls.some((url) => url.endsWith("/v1/projects/resolve/"))) {
+    throw new Error("Bundled Worker resolved the project despite projectId");
   }
 
   if (!fetchCalls.some((url) => url.endsWith("/otel/v1/traces"))) {
     throw new Error("Bundled Worker did not flush traces");
+  }
+
+  failNextTraceExport = true;
+  const { Tracer } = await import(
+    `${pathToFileURL(bundlePath).href}?t=${Date.now()}&mode=flush-failure`
+  );
+  await Tracer.init({
+    apiKey: "test-api-key",
+    organizationId: "test-org",
+    apiUrl: "https://api.worker.test",
+    projectId: "project_worker_test",
+    projectName: "worker-project",
+  });
+  const span = Tracer.startSpan("worker.failure");
+  span.end();
+  let sawFlushFailure = false;
+  try {
+    await Tracer.forceFlush();
+  } catch (error) {
+    sawFlushFailure = String(error).includes("OTLP export failed: 500");
+  } finally {
+    await Tracer.shutdown();
+  }
+  if (!sawFlushFailure) {
+    throw new Error("Bundled Worker did not surface OTLP export failure");
   }
 } finally {
   globalThis.fetch = originalFetch;

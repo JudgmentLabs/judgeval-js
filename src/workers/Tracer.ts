@@ -13,13 +13,16 @@ import { NoOpSpanExporter } from "../trace/exporters/NoOpSpanExporter";
 import { JudgmentSpanProcessor } from "../trace/processors/JudgmentSpanProcessor";
 import { NoOpSpanProcessor } from "../trace/processors/NoOpSpanProcessor";
 import { WorkerTracerProvider } from "./WorkerTracerProvider";
+import { WorkerSpanExporter } from "./WorkerSpanExporter";
 
 export interface WorkersTracerConfig extends Omit<
   TracerConfig,
   "apiKey" | "apiUrl" | "organizationId" | "projectName"
 > {
-  /** Your Judgment project name. Required; Workers do not read process.env. */
-  projectName: string;
+  /** Your Judgment project name. Required when projectId is not provided. */
+  projectName?: string;
+  /** Pre-resolved Judgment project ID. Prefer this in Workers to avoid an init-time API lookup. */
+  projectId?: string;
   /** Judgment API key. Required; Workers do not read process.env. */
   apiKey: string;
   /** Judgment organization ID. Required; Workers do not read process.env. */
@@ -40,7 +43,7 @@ export class Tracer extends BaseTracer {
   private _spanProcessor: JudgmentSpanProcessor | null = null;
 
   protected constructor(
-    projectName: string,
+    projectName: string | null,
     projectId: string,
     apiKey: string,
     organizationId: string,
@@ -71,23 +74,27 @@ export class Tracer extends BaseTracer {
       "organizationId",
     );
     const apiUrl = requireConfigValue(config.apiUrl, "apiUrl");
-    const projectName = requireConfigValue(config.projectName, "projectName");
     const serializer = config.serializer ?? safeStringify;
 
     const client = new JudgmentApiClient(apiUrl, apiKey, organizationId);
-    let projectId: string;
-    try {
-      projectId = await resolveProjectId(client, projectName);
-    } catch (err) {
-      throw new Error(
-        `Project '${projectName}' not found; cannot start judgeval/workers tracer: ${String(err)}`,
-      );
+    let projectId = config.projectId;
+    if (!projectId) {
+      const projectName = requireConfigValue(config.projectName, "projectName");
+      try {
+        projectId = await resolveProjectId(client, projectName);
+      } catch (err) {
+        throw new Error(
+          `Project '${projectName}' not found; cannot start judgeval/workers tracer: ${String(err)}`,
+        );
+      }
     }
 
+    const serviceName = config.projectName ?? projectId;
     const resourceAttrs: Record<string, string> = {
-      "service.name": projectName,
+      "service.name": serviceName,
       "telemetry.sdk.name": "judgeval",
       "telemetry.sdk.version": VERSION,
+      "judgment.project_id": projectId,
     };
     if (config.environment) {
       resourceAttrs["deployment.environment"] = config.environment;
@@ -101,7 +108,7 @@ export class Tracer extends BaseTracer {
     );
 
     const tracer = new Tracer(
-      projectName,
+      config.projectName ?? null,
       projectId,
       apiKey,
       organizationId,
@@ -152,7 +159,7 @@ export class Tracer extends BaseTracer {
       const endpoint = this.apiUrl.endsWith("/")
         ? this.apiUrl + "otel/v1/traces"
         : this.apiUrl + "/otel/v1/traces";
-      this._spanExporter = new JudgmentSpanExporter(
+      this._spanExporter = new WorkerSpanExporter(
         endpoint,
         this.apiKey,
         this.organizationId,
