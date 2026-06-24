@@ -14,6 +14,7 @@ import type { BasicTracerProvider } from "@opentelemetry/sdk-trace-base";
 import type { JudgmentApiClient } from "../internal/api";
 import { Logger } from "../utils/logger";
 import type { Serializer } from "../utils/serializer";
+import type { JudgmentSpanExporter } from "./exporters/JudgmentSpanExporter";
 import type { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
 
 export interface TraceRuntimeTracer {
@@ -28,6 +29,7 @@ export interface TraceRuntimeTracer {
   _client: JudgmentApiClient | null;
   _enableMonitoring: boolean;
   supportsLiveInstrumentation: boolean;
+  getSpanExporter(): JudgmentSpanExporter;
   getSpanProcessor(): JudgmentSpanProcessor;
 }
 

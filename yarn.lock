@@ -55,7 +55,7 @@
     "@opentelemetry/core" "2.7.1"
     "@opentelemetry/otlp-transformer" "0.218.0"
 
-"@opentelemetry/otlp-transformer@0.218.0":
+"@opentelemetry/otlp-transformer@0.218.0", "@opentelemetry/otlp-transformer@^0.218.0":
   version "0.218.0"
   resolved "https://registry.npmjs.org/@opentelemetry/otlp-transformer/-/otlp-transformer-0.218.0.tgz"
   integrity sha512-CFaKH87WAzjuJ4awowTTLzUvMfaRfiOFG5+qm5S5ncyalRtN4ecQ+YmuANJSCrVPuvZFEkUgKhBPBndxi3rHsQ==

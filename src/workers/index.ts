@@ -6,6 +6,7 @@ export {
   type TracerConfig,
 } from "../trace/BaseTracer";
 export { Tracer, type WorkersTracerConfig } from "./Tracer";
+export { WorkerSpanExporter } from "./WorkerSpanExporter";
 export { JudgmentSpanExporter } from "../trace/exporters/JudgmentSpanExporter";
 export { NoOpSpanExporter } from "../trace/exporters/NoOpSpanExporter";
 export { JudgmentSpanProcessor } from "../trace/processors/JudgmentSpanProcessor";
