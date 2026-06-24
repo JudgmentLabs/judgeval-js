@@ -1,0 +1,1 @@
+{"version":3,"file":"LogEvalResultsRequest.d.ts","sourceRoot":"","sources":["../../../../src/internal/api/models/LogEvalResultsRequest.ts"],"names":[],"mappings":"AAKA,OAAO,KAAK,EAAE,oBAAoB,EAAE,MAAM,wBAAwB,CAAC;AAGnE,OAAO,KAAK,EAAE,aAAa,EAAE,MAAM,iBAAiB,CAAC;AAIrD,MAAM,WAAW,qBAAqB;IACpC,OAAO,EAAE,aAAa,EAAE,CAAC;IACzB,GAAG,EAAE,oBAAoB,CAAC;CAC3B"}

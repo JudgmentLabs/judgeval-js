@@ -1,0 +1,11 @@
+import type { ExperimentScorer } from "./ExperimentScorer";
+export interface ExperimentRunItem {
+    organization_id: string;
+    experiment_run_id: string;
+    example_id: string;
+    data: Record<string, unknown>;
+    name: string | null;
+    created_at: string;
+    scorers: ExperimentScorer[];
+}
+//# sourceMappingURL=ExperimentRunItem.d.ts.map

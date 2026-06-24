@@ -1,0 +1,17 @@
+import type { BaseScorer } from "./BaseScorer";
+import type { ScorerConfig } from "./ScorerConfig";
+export interface TraceEvaluationRun {
+    id?: string | null;
+    project_id: string;
+    eval_name: string;
+    model?: string | null;
+    created_at?: string | null;
+    user_id?: string | null;
+    scorers?: Record<string, unknown>[] | null;
+    custom_scorers: BaseScorer[];
+    judgment_scorers: ScorerConfig[];
+    trace_and_span_ids: Record<string, unknown>[][];
+    is_offline: boolean;
+    is_behavior: boolean;
+}
+//# sourceMappingURL=TraceEvaluationRun.d.ts.map

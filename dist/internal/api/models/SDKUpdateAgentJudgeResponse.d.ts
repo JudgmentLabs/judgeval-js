@@ -1,0 +1,72 @@
+export interface SDKUpdateAgentJudgeResponse {
+    judge: {
+        id: string;
+        name: string;
+        judge_description: string | null;
+        method: string;
+        output: string;
+        last_updated: string;
+        score_type: string;
+        behaviors: string[];
+        model?: string | null;
+        prompt?: string | null;
+        description?: string | null;
+        categories?: {
+            name: string;
+            description: string;
+        }[] | null;
+        min_score?: number | null;
+        max_score?: number | null;
+        major_version?: number | null;
+        minor_version?: number | null;
+        prod_version?: {
+            major: number;
+            minor: number;
+        } | null;
+        code?: string | null;
+        dependencies?: string | null;
+        prompts?: {
+            name: string;
+            description: string | null;
+            prompt: string;
+            position: number;
+            updated_at: string;
+        }[];
+        custom_scorer_id?: string | null;
+        entrypoint_path?: string | null;
+        requirements_path?: string | null;
+        online_evaluation_mode?: string | null;
+        online_sampling_rate?: number | null;
+        online_span_triggers?: {
+            field: string;
+            operator: string;
+            value: string;
+            key?: string | null;
+        }[];
+        online_session_scoring?: boolean | null;
+        versions: {
+            major_version: number;
+            minor_version: number;
+            model: string | null;
+            prompt: string | null;
+            description: string | null;
+            categories?: {
+                name: string;
+                description: string;
+            }[] | null;
+            min_score: number;
+            max_score: number;
+            tags: string[];
+            created_at: string;
+            prompts?: {
+                name: string;
+                description: string | null;
+                prompt: string;
+                position: number;
+                updated_at: string;
+            }[];
+            custom_scorer_id?: string | null;
+        }[];
+    };
+}
+//# sourceMappingURL=SDKUpdateAgentJudgeResponse.d.ts.map
