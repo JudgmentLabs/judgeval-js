@@ -7,7 +7,7 @@ import { promisify } from "util";
 
 const execAsync = promisify(exec);
 const minify = !process.argv.includes("--dev");
-const external = ["@opentelemetry/*"];
+const external = ["@opentelemetry/*", "async_hooks"];
 
 const configs = [
   {
