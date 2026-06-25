@@ -3,9 +3,7 @@ import {
   resourceFromAttributes,
 } from "@opentelemetry/resources";
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
-import type { OpenAI } from "openai";
 import { JUDGMENT_API_KEY, JUDGMENT_API_URL, JUDGMENT_ORG_ID } from "../env";
-import { wrap } from "../instrumentation";
 import { JudgmentApiClient } from "../internal/api";
 import { Logger } from "../utils/logger";
 import { resolveProjectId } from "../utils/resolve-project-id";
@@ -68,16 +66,6 @@ export class Tracer extends BaseTracer {
       client,
       enableMonitoring,
     );
-  }
-
-  /**
-   * Wrap a supported LLM client to add automatic tracing.
-   *
-   * Currently supports OpenAI clients. The client is instrumented
-   * in-place and returned.
-   */
-  static wrap<T extends OpenAI>(client: T): T {
-    return wrap(client);
   }
 
   /**

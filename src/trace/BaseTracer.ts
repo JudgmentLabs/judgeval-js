@@ -19,7 +19,6 @@ import type { PendingEvalPayload } from "../internal/api/models/PendingEvalPaylo
 import { parseFunctionArgs } from "../utils/annotate";
 import { dontThrow } from "../utils/dont-throw";
 import { Logger } from "../utils/logger";
-import { createRandomUUID } from "../utils/random-uuid";
 import {
   safeStringify,
   serializeAttribute,
@@ -1069,7 +1068,7 @@ export abstract class BaseTracer {
         examples: [
           {
             ...example,
-            example_id: createRandomUUID(),
+            example_id: crypto.randomUUID(),
             created_at: new Date().toISOString(),
             trace_id: ctx.traceId,
             span_id: ctx.spanId,

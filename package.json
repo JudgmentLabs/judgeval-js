@@ -30,8 +30,7 @@
     "lint:fix": "oxlint --fix src/",
     "format": "prettier --write \"src/**/*.ts\"",
     "generate-client": "bunx tsx scripts/generate-client.ts && bun run format",
-    "test": "bun test --coverage && bun run test:workers",
-    "test:workers": "bun run build:dev && bun scripts/test-worker-build.ts",
+    "test": "bun test --coverage",
     "clean": "rm -rf dist",
     "prepublishOnly": "bun run clean && bun run build",
     "example": "bun scripts/run-example.ts"
