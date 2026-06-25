@@ -1,10 +1,9 @@
 import type { ExportResult } from "@opentelemetry/core";
 import { ExportResultCode } from "@opentelemetry/core";
 import { ProtobufTraceSerializer } from "@opentelemetry/otlp-transformer";
-import type { ReadableSpan } from "@opentelemetry/sdk-trace-base";
-import { JudgmentSpanExporter } from "../trace/exporters/JudgmentSpanExporter";
+import type { ReadableSpan, SpanExporter } from "@opentelemetry/sdk-trace-base";
 
-export class WorkerSpanExporter extends JudgmentSpanExporter {
+export class WorkerSpanExporter implements SpanExporter {
   private readonly _exportErrors: Error[] = [];
 
   constructor(
@@ -12,9 +11,7 @@ export class WorkerSpanExporter extends JudgmentSpanExporter {
     private readonly _apiKey: string,
     private readonly _organizationId: string,
     private readonly _projectId: string,
-  ) {
-    super("", "", "", "");
-  }
+  ) {}
 
   export(
     spans: ReadableSpan[],

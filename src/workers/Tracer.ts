@@ -8,10 +8,9 @@ import { resolveProjectId } from "../utils/resolve-project-id";
 import { safeStringify } from "../utils/serializer";
 import { VERSION } from "../version";
 import { BaseTracer, type TracerConfig } from "../trace/BaseTracer";
-import { JudgmentSpanExporter } from "../trace/exporters/JudgmentSpanExporter";
-import { NoOpSpanExporter } from "../trace/exporters/NoOpSpanExporter";
+import type { SpanExporter } from "@opentelemetry/sdk-trace-base";
+import type { JudgmentSpanExporter } from "../trace/exporters/JudgmentSpanExporter";
 import { JudgmentSpanProcessor } from "../trace/processors/JudgmentSpanProcessor";
-import { NoOpSpanProcessor } from "../trace/processors/NoOpSpanProcessor";
 import { WorkerTracerProvider } from "./WorkerTracerProvider";
 import { WorkerSpanExporter } from "./WorkerSpanExporter";
 
@@ -39,7 +38,7 @@ function requireConfigValue(value: string | undefined, key: string): string {
 }
 
 export class Tracer extends BaseTracer {
-  private _spanExporter: JudgmentSpanExporter | null = null;
+  private _spanExporter: SpanExporter | null = null;
   private _spanProcessor: JudgmentSpanProcessor | null = null;
 
   protected constructor(
@@ -145,41 +144,27 @@ export class Tracer extends BaseTracer {
   }
 
   getSpanExporter(): JudgmentSpanExporter {
-    if (this._spanExporter) return this._spanExporter;
+    if (this._spanExporter) return this._spanExporter as JudgmentSpanExporter;
 
-    if (
-      !this._enableMonitoring ||
-      !this.projectId ||
-      !this.apiKey ||
-      !this.organizationId ||
-      !this.apiUrl
-    ) {
-      this._spanExporter = new NoOpSpanExporter();
-    } else {
-      const endpoint = this.apiUrl.endsWith("/")
-        ? this.apiUrl + "otel/v1/traces"
-        : this.apiUrl + "/otel/v1/traces";
-      this._spanExporter = new WorkerSpanExporter(
-        endpoint,
-        this.apiKey,
-        this.organizationId,
-        this.projectId,
-      );
-    }
-    return this._spanExporter;
+    const endpoint = this.apiUrl!.endsWith("/")
+      ? this.apiUrl + "otel/v1/traces"
+      : this.apiUrl + "/otel/v1/traces";
+    this._spanExporter = new WorkerSpanExporter(
+      endpoint,
+      this.apiKey!,
+      this.organizationId!,
+      this.projectId!,
+    );
+    return this._spanExporter as JudgmentSpanExporter;
   }
 
   getSpanProcessor(): JudgmentSpanProcessor {
     if (this._spanProcessor) return this._spanProcessor;
 
-    if (!this._enableMonitoring) {
-      this._spanProcessor = new NoOpSpanProcessor();
-    } else {
-      this._spanProcessor = new JudgmentSpanProcessor(
-        this,
-        this.getSpanExporter(),
-      );
-    }
+    this._spanProcessor = new JudgmentSpanProcessor(
+      this,
+      this.getSpanExporter(),
+    );
     return this._spanProcessor;
   }
 }
