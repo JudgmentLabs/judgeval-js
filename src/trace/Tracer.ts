@@ -9,8 +9,10 @@ import { Logger } from "../utils/logger";
 import { resolveProjectId } from "../utils/resolve-project-id";
 import { safeStringify } from "../utils/serializer";
 import { VERSION } from "../version";
+import type { OpenAI } from "openai";
 import type { TracerConfig } from "./BaseTracer";
 import { BaseTracer } from "./BaseTracer";
+import { wrap } from "../instrumentation";
 import { JudgmentTracerProvider } from "./JudgmentTracerProvider";
 import { JudgmentSpanExporter } from "./exporters/JudgmentSpanExporter";
 import { NoOpSpanExporter } from "./exporters/NoOpSpanExporter";
@@ -39,6 +41,10 @@ import { NoOpSpanProcessor } from "./processors/NoOpSpanProcessor";
  * ```
  */
 export class Tracer extends BaseTracer {
+  static wrap<T extends OpenAI>(client: T): T {
+    return wrap(client);
+  }
+
   private _spanExporter: JudgmentSpanExporter | null = null;
   private _spanProcessor: JudgmentSpanProcessor | null = null;
 
