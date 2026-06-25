@@ -2,35 +2,43 @@
 // DO NOT EDIT MANUALLY
 
 import type {
+  AddDatasetItemsResponse,
   AddProjectRequest,
   AddProjectResponse,
   AddToRunEvalQueueExamplesResponse,
   AddToRunEvalQueueTracesResponse,
   AddTraceTagsRequest,
   AddTraceTagsResponse,
-  CreateDatasetRequest,
-  CreateDatasetResponse,
+  ApplyTestRunSuccessRequest,
+  ApplyTestRunSuccessResponse,
+  CreateOfflineDatasetRequest,
+  CreateOfflineDatasetResponse,
+  CreateTestConfigRequest,
+  CreateTestRunRequest,
   CustomScorerExistsResponse,
+  DeleteOfflineDatasetResponse,
   DeleteProjectResponse,
+  DeleteTestConfigResponse,
   E2EFetchSpanScoreRequest,
   E2EFetchSpanScoreResponse,
   E2EFetchTraceResponse,
-  E2ETracesPerProjectResponse,
   ExampleEvaluationRun,
-  FetchExperimentRunResponse,
   FetchPromptResponse,
   FetchPromptScorersResponse,
+  FetchTestRunViaExperimentAliasResponse,
   GetPromptVersionsResponse,
-  InsertExamplesRequest,
-  InsertExamplesResponse,
+  InsertOfflineDatasetExamplesRequest,
   InsertPromptRequest,
   InsertPromptResponse,
-  LogEvalResultsExamplesRequest,
-  LogEvalResultsExamplesResponse,
-  LogEvalResultsRequest,
-  LogEvalResultsResponse,
-  PullAllDatasetsResponse,
-  PullDatasetResponse,
+  OfflineDatasetPageResponse,
+  OfflineDatasetVersionsResponse,
+  OfflineTestsLogEvalResultsExamplesRequest,
+  OfflineTestsLogEvalResultsExamplesResponse,
+  OfflineTestsLogEvalResultsRequest,
+  OfflineTestsLogEvalResultsResponse,
+  PreparedTestRunResponse,
+  PullAllOfflineDatasetsResponse,
+  PullOfflineDatasetResponse,
   ResolveProjectRequest,
   ResolveProjectResponse,
   SDKCreateAgentJudgeRequest,
@@ -40,9 +48,17 @@ import type {
   ScorerExistsResponse,
   TagPromptRequest,
   TagPromptResponse,
+  TestConfigResponse,
+  TestConfigsResponse,
+  TestRunGraphResponse,
+  TestRunItemsResponse,
+  TestRunResponse,
+  TestRunsResponse,
   TraceEvaluationRun,
   UntagPromptRequest,
   UntagPromptResponse,
+  UpdateTestConfigRequest,
+  UpdateTestRunStatusRequest,
   UploadCustomScorerResponse,
 } from "./models";
 
@@ -119,37 +135,258 @@ export class JudgmentApiClient {
 
   async postV1projectsDatasets(
     projectId: string,
-    payload: CreateDatasetRequest,
-  ): Promise<CreateDatasetResponse> {
+    payload: CreateOfflineDatasetRequest,
+  ): Promise<CreateOfflineDatasetResponse> {
     const url = this.baseUrl + `/v1/projects/${projectId}/datasets`;
     return this.request("POST", url, payload);
   }
 
   async getV1projectsDatasets(
     projectId: string,
-  ): Promise<PullAllDatasetsResponse> {
+  ): Promise<PullAllOfflineDatasetsResponse> {
     const url = this.baseUrl + `/v1/projects/${projectId}/datasets`;
     return this.request("GET", url, undefined);
   }
 
-  async postV1projectsDatasetsByDatasetNameExamples(
+  async getV1projectsDatasetsByDatasetIdentifierVersions(
     projectId: string,
-    datasetName: string,
-    payload: InsertExamplesRequest,
-  ): Promise<InsertExamplesResponse> {
+    datasetIdentifier: string,
+  ): Promise<OfflineDatasetVersionsResponse> {
     const url =
       this.baseUrl +
-      `/v1/projects/${projectId}/datasets/${datasetName}/examples`;
+      `/v1/projects/${projectId}/datasets/${datasetIdentifier}/versions`;
+    return this.request("GET", url, undefined);
+  }
+
+  async getV1projectsDatasetsByDatasetIdentifierPage(
+    projectId: string,
+    datasetIdentifier: string,
+    version?: string,
+    limit?: string,
+    cursor_created_at?: string,
+    cursor_example_id?: string,
+  ): Promise<OfflineDatasetPageResponse> {
+    const params = new URLSearchParams();
+    if (version !== undefined) params.set("version", version);
+    if (limit !== undefined) params.set("limit", limit);
+    if (cursor_created_at !== undefined)
+      params.set("cursor_created_at", cursor_created_at);
+    if (cursor_example_id !== undefined)
+      params.set("cursor_example_id", cursor_example_id);
+    const url =
+      this.baseUrl +
+      `/v1/projects/${projectId}/datasets/${datasetIdentifier}/page` +
+      (params.toString() ? "?" + params.toString() : "");
+    return this.request("GET", url, undefined);
+  }
+
+  async postV1projectsDatasetsByDatasetIdentifierExamples(
+    projectId: string,
+    datasetIdentifier: string,
+    payload: InsertOfflineDatasetExamplesRequest,
+  ): Promise<AddDatasetItemsResponse> {
+    const url =
+      this.baseUrl +
+      `/v1/projects/${projectId}/datasets/${datasetIdentifier}/examples`;
     return this.request("POST", url, payload);
   }
 
-  async getV1projectsDatasetsByDatasetName(
+  async deleteV1projectsDatasetsByDatasetIdentifier(
     projectId: string,
-    datasetName: string,
-  ): Promise<PullDatasetResponse> {
+    datasetIdentifier: string,
+  ): Promise<DeleteOfflineDatasetResponse> {
     const url =
-      this.baseUrl + `/v1/projects/${projectId}/datasets/${datasetName}`;
+      this.baseUrl + `/v1/projects/${projectId}/datasets/${datasetIdentifier}`;
+    return this.request("DELETE", url, {});
+  }
+
+  async getV1projectsDatasetsByDatasetIdentifier(
+    projectId: string,
+    datasetIdentifier: string,
+  ): Promise<PullOfflineDatasetResponse> {
+    const url =
+      this.baseUrl + `/v1/projects/${projectId}/datasets/${datasetIdentifier}`;
     return this.request("GET", url, undefined);
+  }
+
+  async getV1projectsTestConfigs(
+    projectId: string,
+    dataset_id?: string,
+  ): Promise<TestConfigsResponse> {
+    const params = new URLSearchParams();
+    if (dataset_id !== undefined) params.set("dataset_id", dataset_id);
+    const url =
+      this.baseUrl +
+      `/v1/projects/${projectId}/test-configs` +
+      (params.toString() ? "?" + params.toString() : "");
+    return this.request("GET", url, undefined);
+  }
+
+  async postV1projectsTestConfigs(
+    projectId: string,
+    payload: CreateTestConfigRequest,
+  ): Promise<TestConfigResponse> {
+    const url = this.baseUrl + `/v1/projects/${projectId}/test-configs`;
+    return this.request("POST", url, payload);
+  }
+
+  async getV1projectsTestConfigsByTestConfigId(
+    projectId: string,
+    testConfigId: string,
+  ): Promise<TestConfigResponse> {
+    const url =
+      this.baseUrl + `/v1/projects/${projectId}/test-configs/${testConfigId}`;
+    return this.request("GET", url, undefined);
+  }
+
+  async patchV1projectsTestConfigsByTestConfigId(
+    projectId: string,
+    testConfigId: string,
+    payload: UpdateTestConfigRequest,
+  ): Promise<TestConfigResponse> {
+    const url =
+      this.baseUrl + `/v1/projects/${projectId}/test-configs/${testConfigId}`;
+    return this.request("PATCH", url, payload);
+  }
+
+  async deleteV1projectsTestConfigsByTestConfigId(
+    projectId: string,
+    testConfigId: string,
+  ): Promise<DeleteTestConfigResponse> {
+    const url =
+      this.baseUrl + `/v1/projects/${projectId}/test-configs/${testConfigId}`;
+    return this.request("DELETE", url, {});
+  }
+
+  async getV1projectsTestRuns(
+    projectId: string,
+    test_config_id?: string,
+    dataset_id?: string,
+    status?: string,
+    limit?: string,
+  ): Promise<TestRunsResponse> {
+    const params = new URLSearchParams();
+    if (test_config_id !== undefined)
+      params.set("test_config_id", test_config_id);
+    if (dataset_id !== undefined) params.set("dataset_id", dataset_id);
+    if (status !== undefined) params.set("status", status);
+    if (limit !== undefined) params.set("limit", limit);
+    const url =
+      this.baseUrl +
+      `/v1/projects/${projectId}/test-runs` +
+      (params.toString() ? "?" + params.toString() : "");
+    return this.request("GET", url, undefined);
+  }
+
+  async postV1projectsTestRuns(
+    projectId: string,
+    payload: CreateTestRunRequest,
+  ): Promise<PreparedTestRunResponse> {
+    const url = this.baseUrl + `/v1/projects/${projectId}/test-runs`;
+    return this.request("POST", url, payload);
+  }
+
+  async getV1projectsTestRunsByTestRunId(
+    projectId: string,
+    testRunId: string,
+  ): Promise<TestRunResponse> {
+    const url =
+      this.baseUrl + `/v1/projects/${projectId}/test-runs/${testRunId}`;
+    return this.request("GET", url, undefined);
+  }
+
+  async patchV1projectsTestRunsByTestRunIdStatus(
+    projectId: string,
+    testRunId: string,
+    payload: UpdateTestRunStatusRequest,
+  ): Promise<TestRunResponse> {
+    const url =
+      this.baseUrl + `/v1/projects/${projectId}/test-runs/${testRunId}/status`;
+    return this.request("PATCH", url, payload);
+  }
+
+  async patchV1projectsTestRunsByTestRunIdSuccess(
+    projectId: string,
+    testRunId: string,
+    payload: ApplyTestRunSuccessRequest,
+  ): Promise<ApplyTestRunSuccessResponse> {
+    const url =
+      this.baseUrl + `/v1/projects/${projectId}/test-runs/${testRunId}/success`;
+    return this.request("PATCH", url, payload);
+  }
+
+  async getV1projectsTestRunsByTestRunIdItems(
+    projectId: string,
+    testRunId: string,
+    limit?: string,
+    cursor?: string,
+  ): Promise<TestRunItemsResponse> {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.set("limit", limit);
+    if (cursor !== undefined) params.set("cursor", cursor);
+    const url =
+      this.baseUrl +
+      `/v1/projects/${projectId}/test-runs/${testRunId}/items` +
+      (params.toString() ? "?" + params.toString() : "");
+    return this.request("GET", url, undefined);
+  }
+
+  async getV1projectsTestRunsByTestRunIdResults(
+    projectId: string,
+    testRunId: string,
+    limit?: string,
+    cursor?: string,
+  ): Promise<TestRunItemsResponse> {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.set("limit", limit);
+    if (cursor !== undefined) params.set("cursor", cursor);
+    const url =
+      this.baseUrl +
+      `/v1/projects/${projectId}/test-runs/${testRunId}/results` +
+      (params.toString() ? "?" + params.toString() : "");
+    return this.request("GET", url, undefined);
+  }
+
+  async getV1projectsTestRunsByTestRunIdGraph(
+    projectId: string,
+    testRunId: string,
+  ): Promise<TestRunGraphResponse> {
+    const url =
+      this.baseUrl + `/v1/projects/${projectId}/test-runs/${testRunId}/graph`;
+    return this.request("GET", url, undefined);
+  }
+
+  async getV1projectsExperimentsByRunId(
+    projectId: string,
+    runId: string,
+    limit?: string,
+    cursor?: string,
+  ): Promise<FetchTestRunViaExperimentAliasResponse> {
+    const params = new URLSearchParams();
+    if (limit !== undefined) params.set("limit", limit);
+    if (cursor !== undefined) params.set("cursor", cursor);
+    const url =
+      this.baseUrl +
+      `/v1/projects/${projectId}/experiments/${runId}` +
+      (params.toString() ? "?" + params.toString() : "");
+    return this.request("GET", url, undefined);
+  }
+
+  async postV1projectsEvalResults(
+    projectId: string,
+    payload: OfflineTestsLogEvalResultsRequest,
+  ): Promise<OfflineTestsLogEvalResultsResponse> {
+    const url = this.baseUrl + `/v1/projects/${projectId}/eval-results`;
+    return this.request("POST", url, payload);
+  }
+
+  async postV1projectsEvalResultsExamples(
+    projectId: string,
+    payload: OfflineTestsLogEvalResultsExamplesRequest,
+  ): Promise<OfflineTestsLogEvalResultsExamplesResponse> {
+    const url =
+      this.baseUrl + `/v1/projects/${projectId}/eval-results/examples`;
+    return this.request("POST", url, payload);
   }
 
   async postV1projectsEvaluateExamples(
@@ -166,31 +403,6 @@ export class JudgmentApiClient {
   ): Promise<unknown> {
     const url = this.baseUrl + `/v1/projects/${projectId}/evaluate/traces`;
     return this.request("POST", url, payload);
-  }
-
-  async postV1projectsEvalResults(
-    projectId: string,
-    payload: LogEvalResultsRequest,
-  ): Promise<LogEvalResultsResponse> {
-    const url = this.baseUrl + `/v1/projects/${projectId}/eval-results`;
-    return this.request("POST", url, payload);
-  }
-
-  async postV1projectsEvalResultsExamples(
-    projectId: string,
-    payload: LogEvalResultsExamplesRequest,
-  ): Promise<LogEvalResultsExamplesResponse> {
-    const url =
-      this.baseUrl + `/v1/projects/${projectId}/eval-results/examples`;
-    return this.request("POST", url, payload);
-  }
-
-  async getV1projectsExperimentsByRunId(
-    projectId: string,
-    runId: string,
-  ): Promise<FetchExperimentRunResponse> {
-    const url = this.baseUrl + `/v1/projects/${projectId}/experiments/${runId}`;
-    return this.request("GET", url, undefined);
   }
 
   async postV1projectsEvalQueueExamples(
@@ -324,18 +536,8 @@ export class JudgmentApiClient {
     return this.request("GET", url, undefined);
   }
 
-  async getV1e2eTracesPerProject(
-    projectId: string,
-    limit?: string,
-    offset?: string,
-  ): Promise<E2ETracesPerProjectResponse> {
-    const params = new URLSearchParams();
-    if (limit !== undefined) params.set("limit", limit);
-    if (offset !== undefined) params.set("offset", offset);
-    const url =
-      this.baseUrl +
-      `/v1/e2e_traces_per_project/${projectId}` +
-      (params.toString() ? "?" + params.toString() : "");
+  async getV1e2eTracesPerProject(projectId: string): Promise<unknown> {
+    const url = this.baseUrl + `/v1/e2e_traces_per_project/${projectId}`;
     return this.request("GET", url, undefined);
   }
 

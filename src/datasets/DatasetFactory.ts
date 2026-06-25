@@ -1,8 +1,13 @@
 import type { JudgmentApiClient } from "../internal/api/client";
-import type { DatasetInfo } from "../internal/api/models/DatasetInfo";
+import type { PullAllOfflineDatasetsResponse } from "../internal/api/models";
 import { Example, type ExampleDict } from "../data/Example";
 import { Logger } from "../utils/logger";
 import { Dataset } from "./Dataset";
+import {
+  type DatasetSchema,
+  inferSchemaFromExamples,
+  validateDatasetSchema,
+} from "./schema";
 
 /**
  * Creates, retrieves, and lists datasets in your project.
@@ -40,16 +45,25 @@ export class DatasetFactory {
     const projectId = this._expectProjectId();
     if (!projectId) return null;
 
-    const response = await this._client.getV1projectsDatasetsByDatasetName(
-      projectId,
-      name,
-    );
+    const response =
+      await this._client.getV1projectsDatasetsByDatasetIdentifier(
+        projectId,
+        name,
+      );
 
     const datasetKind = response.dataset_kind ?? "example";
-    // The API returns examples with arbitrary user properties beyond the
-    // typed Example interface — cast to ExampleDict to reflect the real shape.
-    const rawExamples = (response.examples ?? []) as ExampleDict[];
-    const examples = rawExamples.map((e) => Example.from(e));
+    // Offline datasets nest the user fields under `data` and carry server
+    // metadata (organization_id, project_id, user_id) at the top level. Unwrap
+    // `data` so user properties (input, etc.) become the Example's properties —
+    // otherwise `example.get("input")` is undefined and the metadata / the
+    // nested `data` object leak into properties.
+    const examples = (response.examples ?? []).map((e) =>
+      Example.from({
+        ...(e.data ?? {}),
+        example_id: e.example_id,
+        created_at: e.created_at ?? "",
+      } as ExampleDict),
+    );
 
     return new Dataset({
       name,
@@ -76,18 +90,38 @@ export class DatasetFactory {
       examples?: Example[];
       overwrite?: boolean;
       batchSize?: number;
+      schema?: DatasetSchema;
     } = {},
   ): Promise<Dataset | null> {
     const projectId = this._expectProjectId();
     if (!projectId) return null;
 
-    const { examples = [], overwrite = false, batchSize = 100 } = options;
+    const {
+      examples = [],
+      overwrite = false,
+      batchSize = 100,
+      schema,
+    } = options;
+
+    let resolvedSchema: DatasetSchema;
+    if (schema !== undefined) {
+      validateDatasetSchema(schema);
+      resolvedSchema = schema;
+    } else {
+      if (examples.length === 0) {
+        throw new Error(
+          "Datasets require a JSON Schema. Pass `schema` to create(), or provide `examples` to infer one.",
+        );
+      }
+      resolvedSchema = inferSchemaFromExamples(examples);
+    }
 
     await this._client.postV1projectsDatasets(projectId, {
       name,
       examples: [],
       dataset_kind: "example",
       overwrite,
+      schema: resolvedSchema as unknown as Record<string, unknown>,
     });
 
     const dataset = new Dataset({
@@ -110,7 +144,7 @@ export class DatasetFactory {
    *
    * @returns An array of dataset metadata, or `null` if the project is unresolved.
    */
-  list(): Promise<DatasetInfo[] | null> {
+  list(): Promise<PullAllOfflineDatasetsResponse | null> {
     const projectId = this._expectProjectId();
     if (!projectId) return Promise.resolve(null);
 

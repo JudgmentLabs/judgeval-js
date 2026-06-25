@@ -39,6 +39,7 @@ export interface SDKUpdateAgentJudgeResponse {
       operator: string;
       value: string;
       key?: string | null;
+      values?: string[] | null;
     }[];
     online_session_scoring?: boolean | null;
     versions: {
