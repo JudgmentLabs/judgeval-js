@@ -17,7 +17,11 @@ import { setTraceRuntime, type TraceRuntimeTracer } from "../trace/runtime";
 
 const TRACER_NAME = "judgeval";
 
-const _contextStorage = new AsyncLocalStorage<Context>();
+interface ContextHolder {
+  ctx: Context;
+}
+
+const _contextStorage = new AsyncLocalStorage<ContextHolder>();
 
 function takeExporterError(tracer: TraceRuntimeTracer): Error | undefined {
   const exporter = tracer.getSpanExporter() as {
@@ -157,7 +161,7 @@ export class WorkerTracerProvider implements TracerProvider {
   }
 
   getCurrentContext(): Context {
-    return _contextStorage.getStore() ?? ROOT_CONTEXT;
+    return _contextStorage.getStore()?.ctx ?? ROOT_CONTEXT;
   }
 
   setSpan(ctx: Context, span: Span): Context {
@@ -210,7 +214,7 @@ export class WorkerTracerProvider implements TracerProvider {
   ): T {
     const prevCtx = this.getCurrentContext();
     const ctx = trace.setSpan(prevCtx, span);
-    return _contextStorage.run(ctx, () => {
+    return _contextStorage.run({ ctx }, () => {
       try {
         const result = fn();
         if (result instanceof Promise) {
@@ -252,11 +256,14 @@ export class WorkerTracerProvider implements TracerProvider {
   }
 
   attachContext(ctx: Context): void {
-    _contextStorage.enterWith(ctx);
+    const holder = _contextStorage.getStore();
+    if (holder) {
+      holder.ctx = ctx;
+    }
   }
 
   withContext<T>(ctx: Context, fn: () => T): T {
-    return _contextStorage.run(ctx, fn);
+    return _contextStorage.run({ ctx }, fn);
   }
 
   async forceFlush(): Promise<void> {
