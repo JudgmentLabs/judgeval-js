@@ -10,13 +10,14 @@ import {
   type Tracer,
   type TracerProvider,
 } from "@opentelemetry/api";
+import { AsyncLocalStorage } from "async_hooks";
 import type { Instrumentation } from "@opentelemetry/instrumentation";
 import { Logger } from "../utils/logger";
 import { setTraceRuntime, type TraceRuntimeTracer } from "../trace/runtime";
 
 const TRACER_NAME = "judgeval";
 
-let activeContext: Context = ROOT_CONTEXT;
+const _contextStorage = new AsyncLocalStorage<Context>();
 
 function takeExporterError(tracer: TraceRuntimeTracer): Error | undefined {
   const exporter = tracer.getSpanExporter() as {
@@ -156,7 +157,7 @@ export class WorkerTracerProvider implements TracerProvider {
   }
 
   getCurrentContext(): Context {
-    return activeContext;
+    return _contextStorage.getStore() ?? ROOT_CONTEXT;
   }
 
   setSpan(ctx: Context, span: Span): Context {
@@ -209,76 +210,53 @@ export class WorkerTracerProvider implements TracerProvider {
   ): T {
     const prevCtx = this.getCurrentContext();
     const ctx = trace.setSpan(prevCtx, span);
-    activeContext = ctx;
-
-    const restore = (): void => {
-      activeContext = prevCtx;
-    };
-
-    try {
-      const result = fn();
-      if (result instanceof Promise) {
-        return result
-          .catch((exc: unknown) => {
-            if (span.isRecording()) {
-              if (recordException) span.recordException(exc as Error);
-              if (setStatusOnException) {
-                const err = exc as Error;
-                span.setStatus({
-                  code: SpanStatusCode.ERROR,
-                  message: `${err.name}: ${err.message}`,
-                });
+    return _contextStorage.run(ctx, () => {
+      try {
+        const result = fn();
+        if (result instanceof Promise) {
+          return result
+            .catch((exc: unknown) => {
+              if (span.isRecording()) {
+                if (recordException) span.recordException(exc as Error);
+                if (setStatusOnException) {
+                  const err = exc as Error;
+                  span.setStatus({
+                    code: SpanStatusCode.ERROR,
+                    message: `${err.name}: ${err.message}`,
+                  });
+                }
               }
-            }
-            throw exc;
-          })
-          .finally(() => {
-            if (endOnExit) span.end();
-            restore();
-          }) as T;
-      }
-      if (endOnExit) span.end();
-      restore();
-      return result;
-    } catch (exc) {
-      if (span.isRecording()) {
-        if (recordException) span.recordException(exc as Error);
-        if (setStatusOnException) {
-          const err = exc as Error;
-          span.setStatus({
-            code: SpanStatusCode.ERROR,
-            message: `${err.name}: ${err.message}`,
-          });
+              throw exc;
+            })
+            .finally(() => {
+              if (endOnExit) span.end();
+            }) as T;
         }
+        if (endOnExit) span.end();
+        return result;
+      } catch (exc) {
+        if (span.isRecording()) {
+          if (recordException) span.recordException(exc as Error);
+          if (setStatusOnException) {
+            const err = exc as Error;
+            span.setStatus({
+              code: SpanStatusCode.ERROR,
+              message: `${err.name}: ${err.message}`,
+            });
+          }
+        }
+        if (endOnExit) span.end();
+        throw exc;
       }
-      if (endOnExit) span.end();
-      restore();
-      throw exc;
-    }
+    });
   }
 
   attachContext(ctx: Context): void {
-    activeContext = ctx;
+    _contextStorage.enterWith(ctx);
   }
 
   withContext<T>(ctx: Context, fn: () => T): T {
-    const prevCtx = this.getCurrentContext();
-    activeContext = ctx;
-    const restore = (): void => {
-      activeContext = prevCtx;
-    };
-
-    try {
-      const result = fn();
-      if (result instanceof Promise) {
-        return result.finally(restore) as T;
-      }
-      restore();
-      return result;
-    } catch (exc) {
-      restore();
-      throw exc;
-    }
+    return _contextStorage.run(ctx, fn);
   }
 
   async forceFlush(): Promise<void> {
@@ -317,6 +295,5 @@ export class WorkerTracerProvider implements TracerProvider {
     }
     this._activeTracer = null;
     this._tracers.clear();
-    activeContext = ROOT_CONTEXT;
   }
 }
