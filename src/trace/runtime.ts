@@ -1,12 +1,9 @@
 import {
-  INVALID_SPAN_CONTEXT,
   ROOT_CONTEXT,
-  SpanStatusCode,
   trace,
   type Context,
   type Span,
   type SpanContext,
-  type SpanOptions,
   type Tracer,
 } from "@opentelemetry/api";
 import type { Instrumentation } from "@opentelemetry/instrumentation";
@@ -15,6 +12,7 @@ import type { JudgmentApiClient } from "../internal/api";
 import { Logger } from "../utils/logger";
 import type { Serializer } from "../utils/serializer";
 import type { JudgmentSpanExporter } from "./exporters/JudgmentSpanExporter";
+import { NoOpTracer } from "./NoOpTracer";
 import type { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
 
 export interface TraceRuntimeTracer {
@@ -33,6 +31,19 @@ export interface TraceRuntimeTracer {
   getSpanProcessor(): JudgmentSpanProcessor;
 }
 
+/**
+ * Runtime indirection that decouples {@link BaseTracer} from the concrete
+ * tracer provider.
+ *
+ * `BaseTracer` is shared by both the Node and Workers entrypoints, so it must
+ * not import a specific provider: `JudgmentTracerProvider` pulls in Node-only
+ * `async_hooks`, which would break the Workers bundle. Instead `BaseTracer`
+ * talks to this `TraceRuntime` interface. Each provider installs itself via
+ * {@link setTraceRuntime} from its constructor (`JudgmentTracerProvider` on
+ * Node, `WorkerTracerProvider` on Workers). Until one does, {@link getTraceRuntime}
+ * returns {@link noOpRuntime} — a fallback that still runs user code but does
+ * not record, register instrumentation, or export spans.
+ */
 export interface TraceRuntime {
   register(tracer: TraceRuntimeTracer): void;
   deregister(tracer: TraceRuntimeTracer): void;
@@ -61,38 +72,10 @@ export interface TraceRuntime {
   shutdown(): Promise<void>;
 }
 
-class NoOpTracer implements Tracer {
-  startSpan(): Span {
-    return trace.wrapSpanContext(INVALID_SPAN_CONTEXT);
-  }
-
-  startActiveSpan<F extends (span: Span) => unknown>(
-    name: string,
-    fn: F,
-  ): ReturnType<F>;
-  startActiveSpan<F extends (span: Span) => unknown>(
-    name: string,
-    options: SpanOptions,
-    fn: F,
-  ): ReturnType<F>;
-  startActiveSpan<F extends (span: Span) => unknown>(
-    name: string,
-    options: SpanOptions,
-    context: Context,
-    fn: F,
-  ): ReturnType<F>;
-  startActiveSpan<F extends (span: Span) => unknown>(
-    _name: string,
-    ...args: [F] | [SpanOptions, F] | [SpanOptions, Context, F]
-  ): ReturnType<F> {
-    const fn =
-      args.length === 1 ? args[0] : args.length === 2 ? args[1] : args[2];
-    return fn(this.startSpan()) as ReturnType<F>;
-  }
-}
-
 const noOpTracer = new NoOpTracer();
 
+// Fallback runtime used before init; it preserves helper semantics without
+// recording, registering instrumentation, or exporting spans.
 const noOpRuntime: TraceRuntime = {
   register() {
     /* empty */
@@ -109,6 +92,9 @@ const noOpRuntime: TraceRuntime = {
   getCurrentContext() {
     return ROOT_CONTEXT;
   },
+  // setSpan/wrapSpanContext delegate to the stateless @opentelemetry/api
+  // helpers, which need no provider or ambient state. This lets the fallback
+  // still produce valid contexts and (non-recording) spans before init().
   setSpan(ctx, span) {
     return trace.setSpan(ctx, span);
   },
@@ -127,44 +113,11 @@ const noOpRuntime: TraceRuntime = {
       "No active tracer provider. Instrumentation was not registered.",
     );
   },
-  useSpan(span, endOnExit, recordException, setStatusOnException, fn) {
-    try {
-      const result = fn();
-      if (result instanceof Promise) {
-        return result
-          .catch((exc: unknown) => {
-            if (span.isRecording()) {
-              if (recordException) span.recordException(exc as Error);
-              if (setStatusOnException) {
-                const err = exc as Error;
-                span.setStatus({
-                  code: SpanStatusCode.ERROR,
-                  message: `${err.name}: ${err.message}`,
-                });
-              }
-            }
-            throw exc;
-          })
-          .finally(() => {
-            if (endOnExit) span.end();
-          }) as typeof result;
-      }
-      if (endOnExit) span.end();
-      return result;
-    } catch (exc) {
-      if (span.isRecording()) {
-        if (recordException) span.recordException(exc as Error);
-        if (setStatusOnException) {
-          const err = exc as Error;
-          span.setStatus({
-            code: SpanStatusCode.ERROR,
-            message: `${err.name}: ${err.message}`,
-          });
-        }
-      }
-      if (endOnExit) span.end();
-      throw exc;
-    }
+  // No active provider yet: there is no recording span and no context to
+  // isolate, so the endOnExit/record/setStatus flags are no-ops here. Just run
+  // the callback — real span lifecycle handling lives in the concrete providers.
+  useSpan(_span, _endOnExit, _recordException, _setStatusOnException, fn) {
+    return fn();
   },
   attachContext() {
     /* empty */

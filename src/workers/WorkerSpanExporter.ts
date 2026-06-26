@@ -3,7 +3,13 @@ import { ExportResultCode } from "@opentelemetry/core";
 import { ProtobufTraceSerializer } from "@opentelemetry/otlp-transformer";
 import type { ReadableSpan, SpanExporter } from "@opentelemetry/sdk-trace-base";
 
-export class WorkerSpanExporter implements SpanExporter {
+// Workers fetch exports complete asynchronously, so forceFlush reads and
+// surfaces any export failure recorded by the exporter.
+export interface ExportErrorSource {
+  takeExportError(): Error | undefined;
+}
+
+export class WorkerSpanExporter implements SpanExporter, ExportErrorSource {
   private readonly _exportErrors: Error[] = [];
 
   constructor(

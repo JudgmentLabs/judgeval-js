@@ -1,5 +1,4 @@
 import {
-  INVALID_SPAN_CONTEXT,
   ROOT_CONTEXT,
   SpanStatusCode,
   trace,
@@ -13,7 +12,9 @@ import {
 import { AsyncLocalStorage } from "async_hooks";
 import type { Instrumentation } from "@opentelemetry/instrumentation";
 import { Logger } from "../utils/logger";
+import { NoOpTracer } from "../trace/NoOpTracer";
 import { setTraceRuntime, type TraceRuntimeTracer } from "../trace/runtime";
+import type { ExportErrorSource } from "./WorkerSpanExporter";
 
 const TRACER_NAME = "judgeval";
 
@@ -24,9 +25,7 @@ interface ContextHolder {
 const _contextStorage = new AsyncLocalStorage<ContextHolder>();
 
 function takeExporterError(tracer: TraceRuntimeTracer): Error | undefined {
-  const exporter = tracer.getSpanExporter() as {
-    takeExportError?: () => Error | undefined;
-  };
+  const exporter = tracer.getSpanExporter() as Partial<ExportErrorSource>;
   return exporter.takeExportError?.();
 }
 
@@ -81,36 +80,6 @@ class ProxyTracer implements Tracer {
     return this._provider.useSpan(span, false, false, false, () =>
       fn(span),
     ) as ReturnType<F>;
-  }
-}
-
-class NoOpTracer implements Tracer {
-  startSpan(): Span {
-    return trace.wrapSpanContext(INVALID_SPAN_CONTEXT);
-  }
-
-  startActiveSpan<F extends (span: Span) => unknown>(
-    name: string,
-    fn: F,
-  ): ReturnType<F>;
-  startActiveSpan<F extends (span: Span) => unknown>(
-    name: string,
-    options: SpanOptions,
-    fn: F,
-  ): ReturnType<F>;
-  startActiveSpan<F extends (span: Span) => unknown>(
-    name: string,
-    options: SpanOptions,
-    context: Context,
-    fn: F,
-  ): ReturnType<F>;
-  startActiveSpan<F extends (span: Span) => unknown>(
-    _name: string,
-    ...args: [F] | [SpanOptions, F] | [SpanOptions, Context, F]
-  ): ReturnType<F> {
-    const fn =
-      args.length === 1 ? args[0] : args.length === 2 ? args[1] : args[2];
-    return fn(this.startSpan()) as ReturnType<F>;
   }
 }
 
@@ -174,12 +143,6 @@ export class WorkerTracerProvider implements TracerProvider {
 
   getCurrentSpan(): Span | undefined {
     return trace.getSpan(this.getCurrentContext());
-  }
-
-  hasActiveRootSpan(): boolean {
-    const currentSpan = this.getCurrentSpan();
-    if (!currentSpan?.isRecording()) return false;
-    return true;
   }
 
   _getDelegateTracer(): Tracer {
