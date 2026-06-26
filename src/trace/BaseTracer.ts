@@ -232,27 +232,19 @@ export abstract class BaseTracer {
   /**
    * Emit a span's in-progress state without ending it.
    *
-   * Sends a partial snapshot through the live span processor; the backend
-   * merges it with later emissions of the same span (by update id), so a span
-   * can be exported early and upgraded when it finally ends. Most code never
-   * needs this — spans created via {@link observe}, {@link with}, or
+   * Partial emission previously only ever snapshotted the *active* span, so a
+   * span opened with {@link startSpan} and held open without being active could
+   * not reach the backend until it ended. The Cloudflare agent harness needs
+   * exactly that: a "run" root span covers many durable steps across separate
+   * invocations, so it can't stay the active span, yet it must exist up front —
+   * otherwise a mid-run eviction leaves its child spans with no parent. This
+   * emits the held-open root immediately; the backend merges it with the final
+   * emission (by update id), upgrading it with output and duration when it ends.
+   *
+   * Most code never needs this — {@link observe}, {@link with}, and
    * {@link startActiveSpan} emit partials automatically.
    *
-   * Use it for a long-lived span opened with {@link startSpan} that is **not**
-   * the active span and must exist in the backend before it ends — e.g. a root
-   * span held across durable steps, so an eviction or early failure still
-   * leaves a parent for its children instead of orphaning them.
-   *
    * @param span - The span to snapshot. Defaults to the current active span.
-   *
-   * @example
-   * ```typescript
-   * const root = Tracer.startSpan("run");
-   * Tracer.emitPartial(root);   // present in the backend now
-   * // ... later, possibly in another invocation ...
-   * Tracer.setOutput(result, root);
-   * root.end();                 // upgrades the partial with output + duration
-   * ```
    */
   static emitPartial(span?: Span): void {
     dontThrow("BaseTracer.emitPartial", () => {
