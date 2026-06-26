@@ -20,7 +20,7 @@ import {
   installOtelContextBridge,
   runWithOtelBridgeGate,
 } from "./instrumentation/OtelContextBridge";
-import { NoOpTracer } from "./NoOpTracer";
+import { noOpTracer } from "./NoOpTracer";
 import { setTraceRuntime } from "./runtime";
 
 const TRACER_NAME = "judgeval";
@@ -92,12 +92,10 @@ export class JudgmentTracerProvider implements TracerProvider {
 
   private _activeTracer: BaseTracer | null = null;
   private _instrumentations: Instrumentation[] = [];
-  private _noOpTracer: NoOpTracer;
   private _proxyTracer: ProxyTracer;
   private _tracers = new Set<BaseTracer>();
 
   private constructor() {
-    this._noOpTracer = new NoOpTracer();
     this._proxyTracer = new ProxyTracer(this);
     setTraceRuntime(this);
     installOtelContextBridge(() => this.getCurrentContext());
@@ -222,7 +220,7 @@ export class JudgmentTracerProvider implements TracerProvider {
     const tracer = this._activeTracer;
     if (!tracer) {
       Logger.debug("No active tracer, returning NoOpTracer");
-      return this._noOpTracer;
+      return noOpTracer;
     }
     return tracer._tracerProvider.getTracer(TRACER_NAME);
   }

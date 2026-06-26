@@ -12,9 +12,8 @@ import {
 import { AsyncLocalStorage } from "async_hooks";
 import type { Instrumentation } from "@opentelemetry/instrumentation";
 import { Logger } from "../utils/logger";
-import { NoOpTracer } from "../trace/NoOpTracer";
+import { noOpTracer } from "../trace/NoOpTracer";
 import { setTraceRuntime, type TraceRuntimeTracer } from "../trace/runtime";
-import type { ExportErrorSource } from "./WorkerSpanExporter";
 
 const TRACER_NAME = "judgeval";
 
@@ -23,11 +22,6 @@ interface ContextHolder {
 }
 
 const _contextStorage = new AsyncLocalStorage<ContextHolder>();
-
-function takeExporterError(tracer: TraceRuntimeTracer): Error | undefined {
-  const exporter = tracer.getSpanExporter() as Partial<ExportErrorSource>;
-  return exporter.takeExportError?.();
-}
 
 class ProxyTracer implements Tracer {
   private _provider: WorkerTracerProvider;
@@ -87,12 +81,10 @@ export class WorkerTracerProvider implements TracerProvider {
   private static _instance: WorkerTracerProvider | null = null;
 
   private _activeTracer: TraceRuntimeTracer | null = null;
-  private _noOpTracer: NoOpTracer;
   private _proxyTracer: ProxyTracer;
   private _tracers = new Set<TraceRuntimeTracer>();
 
   private constructor() {
-    this._noOpTracer = new NoOpTracer();
     this._proxyTracer = new ProxyTracer(this);
     setTraceRuntime(this);
   }
@@ -149,7 +141,7 @@ export class WorkerTracerProvider implements TracerProvider {
     const tracer = this._activeTracer;
     if (!tracer) {
       Logger.debug("No active tracer, returning NoOpTracer");
-      return this._noOpTracer;
+      return noOpTracer;
     }
     return tracer._tracerProvider.getTracer(TRACER_NAME);
   }
@@ -233,24 +225,10 @@ export class WorkerTracerProvider implements TracerProvider {
     const results = await Promise.allSettled(
       Array.from(this._tracers).map((t) => t._tracerProvider.forceFlush()),
     );
-    const errors: unknown[] = [];
     for (const r of results) {
       if (r.status === "rejected") {
         Logger.error(`forceFlush failed: ${String(r.reason)}`);
-        errors.push(r.reason);
       }
-    }
-    if (errors.length === 0) {
-      for (const tracer of this._tracers) {
-        const error = takeExporterError(tracer);
-        if (error) {
-          Logger.error(`forceFlush export failed: ${String(error)}`);
-          errors.push(error);
-        }
-      }
-    }
-    if (errors.length > 0) {
-      throw errors[0];
     }
   }
 

@@ -36,3 +36,10 @@ export class NoOpTracer implements Tracer {
     return fn(this.startSpan()) as ReturnType<F>;
   }
 }
+
+/**
+ * Shared, stateless no-op tracer. Reused by the runtime fallback and by each
+ * provider's "no active tracer" path, so there is a single instance rather
+ * than one per provider.
+ */
+export const noOpTracer = new NoOpTracer();

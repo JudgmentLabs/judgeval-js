@@ -3,15 +3,14 @@ import { ExportResultCode } from "@opentelemetry/core";
 import { ProtobufTraceSerializer } from "@opentelemetry/otlp-transformer";
 import type { ReadableSpan, SpanExporter } from "@opentelemetry/sdk-trace-base";
 
-// Workers fetch exports complete asynchronously, so forceFlush reads and
-// surfaces any export failure recorded by the exporter.
-export interface ExportErrorSource {
-  takeExportError(): Error | undefined;
-}
-
-export class WorkerSpanExporter implements SpanExporter, ExportErrorSource {
-  private readonly _exportErrors: Error[] = [];
-
+/**
+ * Fetch-based OTLP/protobuf span exporter for Cloudflare Workers.
+ *
+ * Export outcomes (including failures) are reported through `resultCallback`,
+ * which the span processor consumes. The processor's `forceFlush` drives the
+ * actual flush — the exporter is stateless and keeps no error queue.
+ */
+export class WorkerSpanExporter implements SpanExporter {
   constructor(
     private readonly _endpoint: string,
     private readonly _apiKey: string,
@@ -44,37 +43,25 @@ export class WorkerSpanExporter implements SpanExporter, ExportErrorSource {
           resultCallback({ code: ExportResultCode.SUCCESS });
           return;
         }
-
         const detail = (await res.text().catch(() => "")).slice(0, 500);
-        const error = new Error(
-          detail
-            ? `OTLP export failed: ${res.status}: ${detail}`
-            : `OTLP export failed: ${res.status}`,
-        );
-        this._exportErrors.push(error);
-        resultCallback({ code: ExportResultCode.FAILED, error });
+        resultCallback({
+          code: ExportResultCode.FAILED,
+          error: new Error(
+            detail
+              ? `OTLP export failed: ${res.status}: ${detail}`
+              : `OTLP export failed: ${res.status}`,
+          ),
+        });
       })
       .catch((error: unknown) => {
-        const normalized =
-          error instanceof Error ? error : new Error(String(error));
-        this._exportErrors.push(normalized);
-        resultCallback({ code: ExportResultCode.FAILED, error: normalized });
+        resultCallback({
+          code: ExportResultCode.FAILED,
+          error: error instanceof Error ? error : new Error(String(error)),
+        });
       });
   }
 
-  takeExportError(): Error | undefined {
-    return this._exportErrors.shift();
-  }
-
   shutdown(): Promise<void> {
-    return Promise.resolve();
-  }
-
-  forceFlush(): Promise<void> {
-    const error = this.takeExportError();
-    if (error) {
-      return Promise.reject(error);
-    }
     return Promise.resolve();
   }
 }

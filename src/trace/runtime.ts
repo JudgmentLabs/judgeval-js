@@ -12,7 +12,7 @@ import type { JudgmentApiClient } from "../internal/api";
 import { Logger } from "../utils/logger";
 import type { Serializer } from "../utils/serializer";
 import type { JudgmentSpanExporter } from "./exporters/JudgmentSpanExporter";
-import { NoOpTracer } from "./NoOpTracer";
+import { noOpTracer } from "./NoOpTracer";
 import type { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
 
 export interface TraceRuntimeTracer {
@@ -71,8 +71,6 @@ export interface TraceRuntime {
   forceFlush(): Promise<void>;
   shutdown(): Promise<void>;
 }
-
-const noOpTracer = new NoOpTracer();
 
 // Fallback runtime used before init; it preserves helper semantics without
 // recording, registering instrumentation, or exporting spans.
