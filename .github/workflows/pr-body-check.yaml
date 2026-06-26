@@ -1,0 +1,70 @@
+name: PR body check
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+    branches:
+      - main
+      - production
+  merge_group:
+    types: [checks_requested]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-body-check-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  required-sections:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate Summary and Testing sections
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          python3 - <<'PY'
+          import os, re, sys
+
+          body = os.environ.get("PR_BODY", "") or ""
+          # Drop the template's HTML comment guidance before checking for content.
+          body = re.sub(r"<!--.*?-->", "", body, flags=re.DOTALL)
+          body = body.replace("\r\n", "\n")
+
+          def section(name):
+              pattern = re.compile(
+                  r"^#{1,6}[ \t]+" + re.escape(name) + r"[ \t]*$(.*?)(?=^##[ \t]|\Z)",
+                  re.IGNORECASE | re.MULTILINE | re.DOTALL,
+              )
+              m = pattern.search(body)
+              return m.group(1).strip() if m else None
+
+          errors = []
+          for name in ("Summary", "Testing"):
+              content = section(name)
+              if content is None:
+                  errors.append(
+                      f"Missing required '## {name}' section. Keep it from the PR template."
+                  )
+              elif not content:
+                  errors.append(
+                      f"The '## {name}' section is empty. Fill it out before merging."
+                  )
+
+          if errors:
+              for e in errors:
+                  print(f"::error::{e}")
+              print(
+                  "\nEvery PR must keep the template's Summary and Testing sections, "
+                  "each filled out."
+              )
+              sys.exit(1)
+
+          print("PR body has non-empty Summary and Testing sections.")
+          PY
+
+      - name: Skip on merge_group
+        if: ${{ github.event_name == 'merge_group' }}
+        run: echo "merge_group event; PR body was validated on the pull_request event."
