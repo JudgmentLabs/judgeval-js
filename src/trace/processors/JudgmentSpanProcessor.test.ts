@@ -1,10 +1,26 @@
 import { describe, expect, test } from "bun:test";
+import { SpanKind, SpanStatusCode } from "@opentelemetry/api";
 import {
   BasicTracerProvider,
   InMemorySpanExporter,
+  type ReadableSpan,
 } from "@opentelemetry/sdk-trace-base";
 import { AttributeKeys } from "../../JudgmentAttributeKeys";
 import { JudgmentSpanProcessor } from "./JudgmentSpanProcessor";
+
+// The deterministic content of an exported span — everything except the
+// inherently-random trace/span ids and wall-clock start time, which a
+// fixed-value assertion can't pin down.
+function spanContent(span: ReadableSpan) {
+  return {
+    name: span.name,
+    kind: span.kind,
+    status: span.status,
+    attributes: span.attributes,
+    events: span.events,
+    links: span.links,
+  };
+}
 
 describe("JudgmentSpanProcessor.emitPartial", () => {
   test("snapshots an explicit span that is not the active span", async () => {
@@ -19,11 +35,17 @@ describe("JudgmentSpanProcessor.emitPartial", () => {
 
     const finished = exporter.getFinishedSpans();
     expect(finished.length).toBe(1);
-    expect(finished[0]?.name).toBe("run");
-    // A partial snapshot stamps end time to the start time (zero duration)...
-    expect(finished[0]?.endTime).toEqual(finished[0]!.startTime);
-    // ...and carries the first update id so the backend can upgrade it later.
-    expect(finished[0]?.attributes[AttributeKeys.JUDGMENT_UPDATE_ID]).toBe(0);
+    expect(spanContent(finished[0]!)).toEqual({
+      name: "run",
+      kind: SpanKind.INTERNAL,
+      status: { code: SpanStatusCode.UNSET },
+      // A partial of a span with no attributes set carries only the update id.
+      attributes: { [AttributeKeys.JUDGMENT_UPDATE_ID]: 0 },
+      events: [],
+      links: [],
+    });
+    // A partial snapshot stamps end time to start time (zero duration).
+    expect(finished[0]!.endTime).toEqual(finished[0]!.startTime);
 
     span.end();
   });
@@ -41,9 +63,27 @@ describe("JudgmentSpanProcessor.emitPartial", () => {
 
     const finished = exporter.getFinishedSpans();
     expect(finished.length).toBe(2);
-    expect(finished[0]?.attributes[AttributeKeys.JUDGMENT_UPDATE_ID]).toBe(0);
-    expect(finished[0]?.attributes[AttributeKeys.JUDGMENT_OUTPUT]).toBeUndefined();
-    expect(finished[1]?.attributes[AttributeKeys.JUDGMENT_UPDATE_ID]).toBe(1);
-    expect(finished[1]?.attributes[AttributeKeys.JUDGMENT_OUTPUT]).toBe("done");
+    // The partial: no output, end stamped to start, update id 0.
+    expect(spanContent(finished[0]!)).toEqual({
+      name: "run",
+      kind: SpanKind.INTERNAL,
+      status: { code: SpanStatusCode.UNSET },
+      attributes: { [AttributeKeys.JUDGMENT_UPDATE_ID]: 0 },
+      events: [],
+      links: [],
+    });
+    expect(finished[0]!.endTime).toEqual(finished[0]!.startTime);
+    // The final: output added and the update id bumped.
+    expect(spanContent(finished[1]!)).toEqual({
+      name: "run",
+      kind: SpanKind.INTERNAL,
+      status: { code: SpanStatusCode.UNSET },
+      attributes: {
+        [AttributeKeys.JUDGMENT_OUTPUT]: "done",
+        [AttributeKeys.JUDGMENT_UPDATE_ID]: 1,
+      },
+      events: [],
+      links: [],
+    });
   });
 });
