@@ -6,6 +6,7 @@ export {
   type TracerConfig,
 } from "../trace/BaseTracer";
 export { Tracer, type WorkersTracerConfig } from "./Tracer";
+export { wrap, wrapOpenAI } from "../instrumentation";
 export { WorkerSpanExporter } from "./WorkerSpanExporter";
 export { JudgmentSpanProcessor } from "../trace/processors/JudgmentSpanProcessor";
 export {

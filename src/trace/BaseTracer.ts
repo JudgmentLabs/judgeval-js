@@ -13,7 +13,9 @@ import type {
   SpanLimits,
   SpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
+import type { OpenAI } from "openai";
 import { AttributeKeys, InternalAttributeKeys } from "../JudgmentAttributeKeys";
+import { wrap } from "../instrumentation";
 import { JudgmentApiClient } from "../internal/api";
 import type { PendingEvalPayload } from "../internal/api/models/PendingEvalPayload";
 import { parseFunctionArgs } from "../utils/annotate";
@@ -275,6 +277,31 @@ export abstract class BaseTracer {
       const proxy = BaseTracer._getProxyProvider();
       proxy.addInstrumentation(instrumentor);
     });
+  }
+
+  /**
+   * Wrap a supported LLM client to add automatic tracing.
+   *
+   * Currently supports OpenAI clients. The client is instrumented
+   * in-place and returned.
+   *
+   * Lives on `BaseTracer` (rather than a runtime-specific subclass) because
+   * the OpenAI wrapper relies only on fetch-based method interception — the
+   * `openai` import is types-only and it uses no Node built-ins — so it is
+   * safe in both the Node and Workers runtimes.
+   *
+   * @param client - An LLM client instance (e.g. `new OpenAI()`).
+   * @returns The same client instance, instrumented.
+   *
+   * @example
+   * ```typescript
+   * import OpenAI from "openai";
+   *
+   * const client = Tracer.wrap(new OpenAI());
+   * ```
+   */
+  static wrap<T extends OpenAI>(client: T): T {
+    return wrap(client);
   }
 
   // ------------------------------------------------------------------ //
