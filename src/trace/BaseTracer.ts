@@ -212,11 +212,7 @@ export abstract class BaseTracer {
   }
 
   private static _emitPartial(): void {
-    dontThrow("BaseTracer._emitPartial", () => {
-      const tracer = BaseTracer._getProxyProvider().getActiveTracer();
-      if (!tracer || !tracer.supportsLiveInstrumentation) return;
-      tracer.getSpanProcessor().emitPartial();
-    });
+    BaseTracer.emitPartial();
   }
 
   // ------------------------------------------------------------------ //
@@ -231,6 +227,39 @@ export abstract class BaseTracer {
   static getCurrentSpan(): Span | undefined {
     const proxy = BaseTracer._getProxyProvider();
     return proxy.getCurrentSpan();
+  }
+
+  /**
+   * Emit a span's in-progress state without ending it.
+   *
+   * Sends a partial snapshot through the live span processor; the backend
+   * merges it with later emissions of the same span (by update id), so a span
+   * can be exported early and upgraded when it finally ends. Most code never
+   * needs this — spans created via {@link observe}, {@link with}, or
+   * {@link startActiveSpan} emit partials automatically.
+   *
+   * Use it for a long-lived span opened with {@link startSpan} that is **not**
+   * the active span and must exist in the backend before it ends — e.g. a root
+   * span held across durable steps, so an eviction or early failure still
+   * leaves a parent for its children instead of orphaning them.
+   *
+   * @param span - The span to snapshot. Defaults to the current active span.
+   *
+   * @example
+   * ```typescript
+   * const root = Tracer.startSpan("run");
+   * Tracer.emitPartial(root);   // present in the backend now
+   * // ... later, possibly in another invocation ...
+   * Tracer.setOutput(result, root);
+   * root.end();                 // upgrades the partial with output + duration
+   * ```
+   */
+  static emitPartial(span?: Span): void {
+    dontThrow("BaseTracer.emitPartial", () => {
+      const tracer = BaseTracer._getProxyProvider().getActiveTracer();
+      if (!tracer || !tracer.supportsLiveInstrumentation) return;
+      tracer.getSpanProcessor().emitPartial(span);
+    });
   }
 
   /**

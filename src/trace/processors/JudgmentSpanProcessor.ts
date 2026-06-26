@@ -2,6 +2,7 @@ import type {
   Attributes,
   Context,
   HrTime,
+  Span as ApiSpan,
   SpanContext,
 } from "@opentelemetry/api";
 import {
@@ -152,12 +153,16 @@ export class JudgmentSpanProcessor extends BatchSpanProcessor {
     super.onEnd(emittedSpan);
   }
 
-  /** Export the current span's in-progress state for streaming updates. */
-  emitPartial(): void {
+  /**
+   * Export a span's in-progress state for streaming updates. Defaults to the
+   * current active span; pass an explicit span to snapshot one that is not
+   * active (e.g. a long-lived root opened with `startSpan`).
+   */
+  emitPartial(span?: ApiSpan): void {
     dontThrow("JudgmentSpanProcessor.emitPartial", () => {
-      const span = getTraceRuntime().getCurrentSpan();
-      if (!span?.isRecording()) return;
-      const ctx = span.spanContext();
+      const target = span ?? getTraceRuntime().getCurrentSpan();
+      if (!target?.isRecording()) return;
+      const ctx = target.spanContext();
       if (!ctx.traceId) return;
       if (
         this.stateGet<boolean>(
@@ -168,7 +173,7 @@ export class JudgmentSpanProcessor extends BatchSpanProcessor {
       ) {
         return;
       }
-      this._emitSpan(span as unknown as ReadableSpan, true);
+      this._emitSpan(target as unknown as ReadableSpan, true);
     });
   }
 

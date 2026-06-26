@@ -1,4 +1,4 @@
-import type { Context, SpanContext } from "@opentelemetry/api";
+import type { Context, Span as ApiSpan, SpanContext } from "@opentelemetry/api";
 import type { ReadableSpan, Span } from "@opentelemetry/sdk-trace-base";
 import { NoOpSpanExporter } from "../exporters/NoOpSpanExporter";
 import { JudgmentSpanProcessor } from "./JudgmentSpanProcessor";
@@ -29,7 +29,7 @@ export class NoOpSpanProcessor extends JudgmentSpanProcessor {
     return Promise.resolve();
   }
 
-  emitPartial(): void {
+  emitPartial(_span?: ApiSpan): void {
     /* empty */
   }
 
