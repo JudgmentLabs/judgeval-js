@@ -9,6 +9,7 @@
         "@opentelemetry/core": "^2.7.1",
         "@opentelemetry/exporter-trace-otlp-http": "^0.218.0",
         "@opentelemetry/instrumentation": "^0.218.0",
+        "@opentelemetry/otlp-transformer": "^0.218.0",
         "@opentelemetry/resources": "^2.7.1",
         "@opentelemetry/sdk-trace-base": "^2.7.1",
         "@opentelemetry/sdk-trace-node": "^2.7.1",
@@ -22,6 +23,12 @@
         "prettier": "^3.8.3",
         "typescript": "^6.0.3",
       },
+      "peerDependencies": {
+        "openai": "^6.38.0",
+      },
+      "optionalPeers": [
+        "openai",
+      ],
     },
   },
   "packages": {

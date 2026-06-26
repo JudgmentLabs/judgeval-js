@@ -1,5 +1,4 @@
 import {
-  INVALID_SPAN_CONTEXT,
   ROOT_CONTEXT,
   SpanStatusCode,
   trace,
@@ -21,6 +20,8 @@ import {
   installOtelContextBridge,
   runWithOtelBridgeGate,
 } from "./instrumentation/OtelContextBridge";
+import { noOpTracer } from "./NoOpTracer";
+import { setTraceRuntime } from "./runtime";
 
 const TRACER_NAME = "judgeval";
 
@@ -80,36 +81,6 @@ class ProxyTracer implements Tracer {
   }
 }
 
-class NoOpTracer implements Tracer {
-  startSpan(): Span {
-    return trace.wrapSpanContext(INVALID_SPAN_CONTEXT);
-  }
-
-  startActiveSpan<F extends (span: Span) => unknown>(
-    name: string,
-    fn: F,
-  ): ReturnType<F>;
-  startActiveSpan<F extends (span: Span) => unknown>(
-    name: string,
-    options: SpanOptions,
-    fn: F,
-  ): ReturnType<F>;
-  startActiveSpan<F extends (span: Span) => unknown>(
-    name: string,
-    options: SpanOptions,
-    context: Context,
-    fn: F,
-  ): ReturnType<F>;
-  startActiveSpan<F extends (span: Span) => unknown>(
-    _name: string,
-    ...args: [F] | [SpanOptions, F] | [SpanOptions, Context, F]
-  ): ReturnType<F> {
-    const fn =
-      args.length === 1 ? args[0] : args.length === 2 ? args[1] : args[2];
-    return fn(this.startSpan()) as ReturnType<F>;
-  }
-}
-
 /**
  * Global singleton that manages tracer registration and context propagation.
  *
@@ -121,13 +92,12 @@ export class JudgmentTracerProvider implements TracerProvider {
 
   private _activeTracer: BaseTracer | null = null;
   private _instrumentations: Instrumentation[] = [];
-  private _noOpTracer: NoOpTracer;
   private _proxyTracer: ProxyTracer;
   private _tracers = new Set<BaseTracer>();
 
   private constructor() {
-    this._noOpTracer = new NoOpTracer();
     this._proxyTracer = new ProxyTracer(this);
+    setTraceRuntime(this);
     installOtelContextBridge(() => this.getCurrentContext());
   }
 
@@ -250,7 +220,7 @@ export class JudgmentTracerProvider implements TracerProvider {
     const tracer = this._activeTracer;
     if (!tracer) {
       Logger.debug("No active tracer, returning NoOpTracer");
-      return this._noOpTracer;
+      return noOpTracer;
     }
     return tracer._tracerProvider.getTracer(TRACER_NAME);
   }

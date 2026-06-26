@@ -13,7 +13,6 @@ import type {
   SpanLimits,
   SpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
-import { randomUUID } from "crypto";
 import type { OpenAI } from "openai";
 import { AttributeKeys, InternalAttributeKeys } from "../JudgmentAttributeKeys";
 import { wrap } from "../instrumentation";
@@ -29,10 +28,10 @@ import {
 } from "../utils/serializer";
 import { Maybe } from "../utils/type-helpers";
 import { createBaggage, getBaggage, setBaggage } from "./baggage";
-import { JudgmentTracerProvider } from "./JudgmentTracerProvider";
 import { extract } from "./propagation";
 import type { JudgmentSpanExporter } from "./exporters/JudgmentSpanExporter";
 import type { JudgmentSpanProcessor } from "./processors/JudgmentSpanProcessor";
+import { getTraceRuntime, type TraceRuntime } from "./runtime";
 
 const TRACER_NAME = "judgeval";
 
@@ -180,7 +179,7 @@ export abstract class BaseTracer {
    * @returns `true` if activation succeeded, `false` if a root span is active.
    */
   setActive(): boolean {
-    return JudgmentTracerProvider.getInstance().setActive(this);
+    return getTraceRuntime().setActive(this);
   }
 
   // ------------------------------------------------------------------ //
@@ -194,8 +193,8 @@ export abstract class BaseTracer {
   //  Internal Helpers                                                  //
   // ------------------------------------------------------------------ //
 
-  private static _getProxyProvider(): JudgmentTracerProvider {
-    return JudgmentTracerProvider.getInstance();
+  private static _getProxyProvider(): TraceRuntime {
+    return getTraceRuntime();
   }
 
   private static _getSerializer(): Serializer {
@@ -285,6 +284,11 @@ export abstract class BaseTracer {
    *
    * Currently supports OpenAI clients. The client is instrumented
    * in-place and returned.
+   *
+   * Lives on `BaseTracer` (rather than a runtime-specific subclass) because
+   * the OpenAI wrapper relies only on fetch-based method interception — the
+   * `openai` import is types-only and it uses no Node built-ins — so it is
+   * safe in both the Node and Workers runtimes.
    *
    * @param client - An LLM client instance (e.g. `new OpenAI()`).
    * @returns The same client instance, instrumented.
@@ -1091,7 +1095,7 @@ export abstract class BaseTracer {
         examples: [
           {
             ...example,
-            example_id: randomUUID(),
+            example_id: crypto.randomUUID(),
             created_at: new Date().toISOString(),
             trace_id: ctx.traceId,
             span_id: ctx.spanId,

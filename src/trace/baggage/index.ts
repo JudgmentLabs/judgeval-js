@@ -4,7 +4,7 @@ import {
   createContextKey,
   propagation,
 } from "@opentelemetry/api";
-import { JudgmentTracerProvider } from "../JudgmentTracerProvider";
+import { getTraceRuntime } from "../runtime";
 
 /**
  * Judgment baggage store. Baggage is a set of key-value pairs attached
@@ -24,7 +24,7 @@ export function getBaggage(context: Context): Baggage | undefined {
 
 /** Retrieve the baggage attached to the active context. */
 export function getActiveBaggage(): Baggage | undefined {
-  return getBaggage(JudgmentTracerProvider.getInstance().getCurrentContext());
+  return getBaggage(getTraceRuntime().getCurrentContext());
 }
 
 /** Attach a baggage to the given context, returning a new context. */
