@@ -35,7 +35,7 @@ jobs:
 
           def section(name):
               pattern = re.compile(
-                  r"^#{1,6}[ \t]+" + re.escape(name) + r"[ \t]*$(.*?)(?=^##[ \t]|\Z)",
+                  r"^[ \t]*#{1,6}[ \t]+" + re.escape(name) + r"[ \t]*$(.*?)(?=^[ \t]*##[ \t]|\Z)",
                   re.IGNORECASE | re.MULTILINE | re.DOTALL,
               )
               m = pattern.search(body)
