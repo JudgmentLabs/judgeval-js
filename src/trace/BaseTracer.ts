@@ -98,8 +98,17 @@ export interface AsyncEvaluateOptions {
  * environment variables.
  */
 export interface TracerConfig {
-  /** Your Judgment project name. Required for span export. */
+  /**
+   * Your Judgment project name. Resolved to a `projectId` on `init` unless
+   * `projectId` is supplied. One of `projectName` / `projectId` is required
+   * for span export; with neither, the tracer is a no-op.
+   */
   projectName?: string;
+  /**
+   * Pre-resolved Judgment project ID. Pass this to skip the init-time API
+   * lookup that resolves `projectName` to its id.
+   */
+  projectId?: string;
   /** Judgment API key. Defaults to `JUDGMENT_API_KEY` env var. */
   apiKey?: string;
   /** Judgment organization ID. Defaults to `JUDGMENT_ORG_ID` env var. */

@@ -94,9 +94,9 @@ export class Tracer extends BaseTracer {
 
     let enableMonitoring = true;
 
-    if (!projectName) {
+    if (!projectName && !config.projectId) {
       Logger.warning(
-        "project_name not provided. Tracer will not export spans.",
+        "Neither projectName nor projectId provided. Tracer will not export spans.",
       );
       enableMonitoring = false;
     }
@@ -116,16 +116,21 @@ export class Tracer extends BaseTracer {
     }
 
     let client: JudgmentApiClient | null = null;
-    let projectId: string | null = null;
+    let projectId: string | null = config.projectId ?? null;
 
-    if (enableMonitoring && projectName && apiKey && organizationId && apiUrl) {
+    if (enableMonitoring && apiKey && organizationId && apiUrl) {
       client = new JudgmentApiClient(apiUrl, apiKey, organizationId);
-      projectId = await resolveProjectId(client, projectName).catch(() => null);
-      if (!projectId) {
-        Logger.warning(
-          `Project '${projectName}' not found. Tracer will not export spans.`,
+      // Resolve the id from the name only when a pre-resolved id wasn't given.
+      if (!projectId && projectName) {
+        projectId = await resolveProjectId(client, projectName).catch(
+          () => null,
         );
-        enableMonitoring = false;
+        if (!projectId) {
+          Logger.warning(
+            `Project '${projectName}' not found. Tracer will not export spans.`,
+          );
+          enableMonitoring = false;
+        }
       }
     }
 
