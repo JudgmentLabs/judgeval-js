@@ -1007,6 +1007,32 @@ export abstract class BaseTracer {
     );
   }
 
+  /**
+   * Set an arbitrary attribute on the current active span and propagate it
+   * to all child spans via baggage.
+   *
+   * Unlike {@link setAttribute}, which applies only to a single span, the
+   * value set here follows the whole trace — every descendant span receives
+   * it as an attribute. Use this to tag a trace with a dimension you want to
+   * filter on in Views (e.g. the surface an agent is running on).
+   *
+   * The `judgment.` namespace is reserved for SDK-managed keys (customer ID,
+   * session ID, etc.); use {@link setCustomerId} / {@link setSessionId} for
+   * those instead.
+   *
+   * @param key - The attribute key. Must not use the reserved `judgment.` prefix.
+   * @param value - The attribute value.
+   */
+  static setPropagatingAttribute(key: string, value: string): void {
+    if (key.startsWith("judgment.")) {
+      Logger.error(
+        `setPropagatingAttribute: key "${key}" uses the reserved "judgment." prefix; ignoring`,
+      );
+      return;
+    }
+    BaseTracer._setPropagatingBaggageKey(key, value);
+  }
+
   // ------------------------------------------------------------------ //
   //  Static: Tags                                                      //
   // ------------------------------------------------------------------ //
