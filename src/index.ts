@@ -13,6 +13,7 @@ export {
   Tracer,
   OfflineTracer,
   type OfflineTracerConfig,
+  type ScopedContextOptions,
   NoOpSpanExporter,
   NoOpSpanProcessor,
   OfflineJudgmentSpanProcessor,

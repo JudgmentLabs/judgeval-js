@@ -92,6 +92,20 @@ export interface AsyncEvaluateOptions {
 }
 
 /**
+ * Options for {@link BaseTracer.scopedContext}.
+ */
+export interface ScopedContextOptions {
+  /** Session identifier to attach. */
+  sessionId?: string;
+  /** Customer identifier to attach. */
+  customerId?: string;
+  /** Customer user identifier to attach. */
+  customerUserId?: string;
+  /** Arbitrary key-value attributes to attach. */
+  attributes?: Record<string, unknown>;
+}
+
+/**
  * Configuration options for initializing a Tracer.
  *
  * Credentials are resolved in order: explicit arguments first, then
@@ -200,6 +214,29 @@ export abstract class BaseTracer {
   private static _getSerializer(): Serializer {
     const tracer = BaseTracer._getProxyProvider().getActiveTracer();
     return tracer?.serializer ?? safeStringify;
+  }
+
+  private static _normalizeScopedContextAttributes(
+    options: ScopedContextOptions,
+  ): Record<string, string | number | boolean> {
+    const normalized: Record<string, string | number | boolean> = {};
+    const serializer = BaseTracer._getSerializer();
+
+    const add = (key: string | undefined | null, value: unknown): void => {
+      if (key == null || value == null) return;
+      if (!key) return;
+      normalized[key] = serializeAttribute(value, serializer);
+    };
+
+    if (options.attributes) {
+      for (const [key, value] of Object.entries(options.attributes)) {
+        add(key, value);
+      }
+    }
+    add(AttributeKeys.JUDGMENT_SESSION_ID, options.sessionId);
+    add(AttributeKeys.JUDGMENT_CUSTOMER_ID, options.customerId);
+    add(AttributeKeys.JUDGMENT_CUSTOMER_USER_ID, options.customerUserId);
+    return normalized;
   }
 
   private static _getCurrentTraceAndSpanId(): [string, string] | null {
@@ -1005,6 +1042,48 @@ export abstract class BaseTracer {
       AttributeKeys.JUDGMENT_SESSION_ID,
       sessionId,
     );
+  }
+
+  /**
+   * Temporarily apply Judgment context to spans created inside `fn`.
+   *
+   * This is useful before integration-created spans exist, such as around
+   * a wrapped LLM client call. Context is restored when `fn` completes.
+   *
+   * @param options - Scoped context options (sessionId, customerId, etc.).
+   * @param fn - Function to execute within the scoped context.
+   * @returns The return value of `fn`.
+   *
+   * @example
+   * ```typescript
+   * const result = await Tracer.scopedContext(
+   *   { sessionId: "sess-1", customerId: "cust-1" },
+   *   async () => {
+   *     return await tracedChat("Hello");
+   *   },
+   * );
+   * ```
+   */
+  static scopedContext<T>(options: ScopedContextOptions, fn: () => T): T {
+    const proxy = BaseTracer._getProxyProvider();
+    const scopedAttributes =
+      BaseTracer._normalizeScopedContextAttributes(options);
+
+    const currentSpan = proxy.getCurrentSpan();
+    if (currentSpan?.isRecording()) {
+      for (const [key, value] of Object.entries(scopedAttributes)) {
+        currentSpan.setAttribute(key, value);
+      }
+    }
+
+    let ctx = proxy.getCurrentContext();
+    let bag = getBaggage(ctx) ?? createBaggage();
+    for (const [key, value] of Object.entries(scopedAttributes)) {
+      bag = bag.setEntry(key, { value: String(value) });
+    }
+    ctx = setBaggage(ctx, bag);
+
+    return proxy.withContext(ctx, fn);
   }
 
   // ------------------------------------------------------------------ //
