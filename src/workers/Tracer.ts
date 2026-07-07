@@ -88,7 +88,7 @@ export class Tracer extends BaseTracer {
       }
     }
 
-    const serviceName = config.projectName ?? projectId;
+    const serviceName = config.projectName ?? "unknown";
     const resourceAttrs: Record<string, string> = {
       "service.name": serviceName,
       "telemetry.sdk.name": "judgeval",
