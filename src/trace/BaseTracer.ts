@@ -1007,6 +1007,22 @@ export abstract class BaseTracer {
     );
   }
 
+  /**
+   * Set an attribute and propagate it to all child spans via baggage.
+   *
+   * Unlike {@link setAttribute} (single span only). The `judgment.` prefix is
+   * reserved and ignored.
+   */
+  static setPropagatingAttribute(key: string, value: string): void {
+    if (key.startsWith("judgment.")) {
+      Logger.error(
+        `setPropagatingAttribute: key "${key}" uses the reserved "judgment." prefix; ignoring`,
+      );
+      return;
+    }
+    BaseTracer._setPropagatingBaggageKey(key, value);
+  }
+
   // ------------------------------------------------------------------ //
   //  Static: Tags                                                      //
   // ------------------------------------------------------------------ //
