@@ -36,7 +36,7 @@
     "lint:fix": "oxlint --fix src/",
     "format": "prettier --write \"src/**/*.ts\"",
     "generate-client": "bunx tsx scripts/generate-client.ts && bun run format",
-    "generate-jql": "bun scripts/generate-jql.ts",
+    "generate-jql": "bun scripts/generate-jql.ts && bun run format",
     "test": "bun test --coverage",
     "clean": "rm -rf dist",
     "prepublishOnly": "bun run clean && bun run build",

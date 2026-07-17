@@ -14,10 +14,7 @@ import {
   type JqlQueryResponse,
   type JqlRequestOptions,
 } from "./jql/client";
-import type {
-  DiscoveryKind,
-  DiscoveryOptions,
-} from "./jql/builder";
+import type { DiscoveryKind, DiscoveryOptions } from "./jql/builder";
 import type { PresentationQuery } from "./jql/wire";
 
 /**

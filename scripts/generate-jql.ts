@@ -103,14 +103,19 @@ const sourceBuilder = readFileSync(resolve(builderPath), "utf8");
 writeFileSync(
   resolve("src/jql/builder.ts"),
   sourceBuilder.replace(
-    /^\/\/ AUTO-GENERATED[^\n]*\n/,
-    "// AUTO-GENERATED from the DAL OpenAPI x-jql registry; do not edit.\n",
+    /^(\/\/[^\n]*\n){2}/,
+    "// AUTO-GENERATED from the DAL OpenAPI x-jql registry; do not edit.\n" +
+      "// Regenerate with `bun run generate-jql`.\n",
   ),
 );
 
 const sourceWirePath = resolve(dirname(resolve(builderPath)), "wire.ts");
 const sourceWire = readFileSync(sourceWirePath, "utf8")
-  .replace("./generated/api", "./generated/api")
+  .replace(
+    /^(\/\/[^\n]*\n)+/,
+    "// AUTO-GENERATED — do not edit; regenerate with `bun run generate-jql`.\n" +
+      "// Named aliases over the OpenAPI-generated components (./generated/api).\n",
+  )
   .split("\n")
   .filter((line) => !line.startsWith("export type Dal"))
   .join("\n");
