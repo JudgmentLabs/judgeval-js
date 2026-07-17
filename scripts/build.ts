@@ -28,6 +28,24 @@ const configs = [
     format: "esm",
     naming: "workers/[name].mjs",
   },
+  {
+    entrypoints: ["./src/jql/index.ts"],
+    target: "node",
+    format: "esm",
+    naming: "node/jql.mjs",
+  },
+  {
+    entrypoints: ["./src/jql/index.ts"],
+    target: "node",
+    format: "cjs",
+    naming: "node/jql.cjs",
+  },
+  {
+    entrypoints: ["./src/jql/index.ts"],
+    target: "browser",
+    format: "esm",
+    naming: "workers/jql.mjs",
+  },
 ] as const;
 
 await Promise.all(

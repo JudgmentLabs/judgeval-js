@@ -7,6 +7,18 @@ import { DatasetFactory } from "./datasets/DatasetFactory";
 import { AgentJudgeFactory } from "./agent-judges/AgentJudgeFactory";
 import { OfflineTestsFactory } from "./offline-tests/OfflineTestsFactory";
 import type { OfflineTracer, OfflineTracerConfig } from "./trace/OfflineTracer";
+import {
+  JudgevalJqlClient,
+  type JqlPresentationResponse,
+  type JqlQueryInput,
+  type JqlQueryResponse,
+  type JqlRequestOptions,
+} from "./jql/client";
+import type {
+  DiscoveryKind,
+  DiscoveryOptions,
+} from "./jql/builder";
+import type { PresentationQuery } from "./jql/wire";
 
 /**
  * Options for {@link Judgeval.offlineTracer}.
@@ -142,6 +154,44 @@ export class Judgeval {
       organizationId: this._client.getOrganizationId(),
       apiUrl: this._client.getBaseUrl(),
     });
+  }
+
+  /** Run a structured, tenant-scoped JQL query for this project. */
+  query(
+    query: JqlQueryInput,
+    options?: JqlRequestOptions,
+  ): Promise<JqlQueryResponse> {
+    return this.jqlClient().query(query, options);
+  }
+
+  /** Run a chart or table JQL query for this project. */
+  present(
+    query: PresentationQuery,
+    options?: JqlRequestOptions,
+  ): Promise<JqlPresentationResponse> {
+    return this.jqlClient().present(query, options);
+  }
+
+  /** Discover project-scoped JQL catalog values. */
+  discover(
+    kind: DiscoveryKind,
+    options?: DiscoveryOptions & JqlRequestOptions,
+  ): Promise<JqlQueryResponse> {
+    return this.jqlClient().discover(kind, options);
+  }
+
+  private jqlClient(): JudgevalJqlClient {
+    if (!this._projectId) {
+      throw new Error(
+        `Project '${this._projectName}' must resolve before running JQL.`,
+      );
+    }
+    return new JudgevalJqlClient(
+      this._client.getBaseUrl(),
+      this._client.getApiKey(),
+      this._client.getOrganizationId(),
+      this._projectId,
+    );
   }
 
   /** Access dataset management (create, get, list). */

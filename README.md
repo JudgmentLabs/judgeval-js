@@ -57,6 +57,22 @@ const tracedChat = Tracer.observe(async (userMessage: string) => {
 await tracedChat("What is the capital of France?");
 ```
 
+### JQL
+
+Build JQL with the `judgeval/jql` entry point and run it through the authenticated
+Judgeval client. Organization and project scope come from the client, never from
+the query payload.
+
+```typescript
+import { Judgeval } from "judgeval";
+import { eq, traces } from "judgeval/jql";
+
+const client = await Judgeval.create({ projectName: "my-llm-app" });
+const result = await client.query(
+  traces().where(eq("session", "session-123")).ids(),
+);
+```
+
 ## Documentation
 
 - [Full Documentation](https://docs.judgmentlabs.ai/)

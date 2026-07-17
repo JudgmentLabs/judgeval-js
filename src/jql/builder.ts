@@ -1,0 +1,625 @@
+// AUTO-GENERATED from the DAL OpenAPI x-jql registry; do not edit.
+// metadata — do not edit; regenerate with `bun run codegen:builder`.
+// Fluent builder over the DAL structured JQL vocabulary. Each constructor emits the
+// op-tagged wire object validated by the service's typed /v1/query endpoint. Generated
+// runtime guards keep plain-JavaScript and TypeScript callers on the same
+// canonical wire contract before a request reaches the service.
+import type {
+  AggExpr,
+  AggregateSelect,
+  AllFilter,
+  AnyFilter,
+  ArithExpr,
+  AtLeastFilter,
+  AttrFilter,
+  BucketExpr,
+  ChartQuery,
+  CitedByFilter,
+  ColExpr,
+  CompareFilter,
+  CostFilter,
+  DiscoveryQuery,
+  DurationFilter,
+  GrepFilter,
+  HierarchyFilter,
+  JudgeFilter,
+  JudgedFilter,
+  ModelFilter,
+  NameFilter,
+  NotFilter,
+  OverAgg,
+  OverRelFilter,
+  PickStage,
+  QuantifierFilter,
+  RankedSelect,
+  RgFilter,
+  SourceQuery,
+  StageAllFilter,
+  StageAnyFilter,
+  StageNotFilter,
+  StatusFilter,
+  SummarizeStage,
+  TableQuery,
+  TakeStage,
+  TokensFilter,
+  TrendSelect,
+  WhereStage,
+} from "./wire";
+
+export type Filter = NonNullable<SourceQuery["filter"]>;
+export type Select = NonNullable<SourceQuery["select"]>;
+export type Source = SourceQuery["source"];
+export type DiscoveryKind = DiscoveryQuery["kind"];
+export type Expr = ColExpr | AggExpr | ArithExpr;
+export type ExprInput = Expr | number;
+export type StageFilter = WhereStage["filter"];
+export type StageFilterInput = StageFilter;
+export type PipelineStage = NonNullable<SourceQuery["pipe"]>[number];
+export type AggregateOptions = Pick<AggregateSelect, "func" | "field"> & {
+  q?: number;
+};
+
+/** Anywhere a filter goes, a QueryBuilder is accepted as a nested cross-grain predicate. */
+export type FilterInput = Filter | QueryBuilder;
+
+function toFilter(input: FilterInput): Filter {
+  return input instanceof QueryBuilder ? input.toJSON() : input;
+}
+
+const AGG_SIGNATURES =
+  ".agg({ func: 'avg', field: 'cost' }) or .agg({ func: 'quantile', field: 'cost', q: 0.95 }); positional compatibility is .agg('avg', 'cost') or .agg('quantile', 'cost', 0.95). q is required only for quantile and must satisfy 0 < q < 1";
+const TREND_SIGNATURE = ".trend() or .trend({ metric: 'count', bucket: '1d' })";
+const AGG_FUNCS: readonly AggregateSelect["func"][] = [
+  "avg",
+  "sum",
+  "min",
+  "max",
+  "quantile",
+  "count_distinct",
+];
+const TREND_METRICS: readonly NonNullable<TrendSelect["metric"]>[] = [
+  "count",
+  "rate",
+];
+
+function invalidBuilderCall(signatures: string): never {
+  throw new TypeError(`Invalid JQL builder call. Expected ${signatures}.`);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function hasOnlyKeys(
+  value: Record<string, unknown>,
+  keys: readonly string[],
+): boolean {
+  return Object.keys(value).every((key) => keys.includes(key));
+}
+
+function isAggregateFunc(value: unknown): value is AggregateSelect["func"] {
+  return (
+    typeof value === "string" &&
+    AGG_FUNCS.includes(value as AggregateSelect["func"])
+  );
+}
+
+function hasOwn(value: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+function hasCoherentAggregateQ(
+  func: AggregateSelect["func"],
+  q: unknown,
+  present: boolean,
+): boolean {
+  if (func !== "quantile") return !present;
+  return (
+    present && typeof q === "number" && Number.isFinite(q) && q > 0 && q < 1
+  );
+}
+
+function isAggregateOptions(
+  value: Record<string, unknown>,
+): value is AggregateOptions {
+  if (
+    !hasOnlyKeys(value, ["func", "field", "q"]) ||
+    !isAggregateFunc(value.func) ||
+    typeof value.field !== "string"
+  )
+    return false;
+  return hasCoherentAggregateQ(value.func, value.q, hasOwn(value, "q"));
+}
+
+function isTrendOptions(
+  value: unknown,
+): value is Omit<TrendSelect, "op"> | undefined {
+  if (value === undefined) return true;
+  if (!isRecord(value) || !hasOnlyKeys(value, ["metric", "bucket"]))
+    return false;
+  return (
+    (value.metric === undefined ||
+      (typeof value.metric === "string" &&
+        TREND_METRICS.includes(
+          value.metric as NonNullable<TrendSelect["metric"]>,
+        ))) &&
+    (value.bucket === undefined || typeof value.bucket === "string")
+  );
+}
+
+// --- Leaf filters --------------------------------------------------------------
+
+export const status = (value: string): StatusFilter => ({
+  op: "status",
+  value,
+});
+
+export const name = (value: string): NameFilter => ({ op: "name", value });
+
+export const model = (value: string): ModelFilter => ({ op: "model", value });
+
+export interface Bounds {
+  gt?: number;
+  gte?: number;
+  lt?: number;
+  lte?: number;
+}
+
+export const cost = (bounds: Bounds): CostFilter => ({ op: "cost", ...bounds });
+
+export const duration = (bounds: Bounds): DurationFilter => ({
+  op: "duration",
+  ...bounds,
+});
+
+export function judge(judgeName: string, value?: unknown): JudgeFilter {
+  return value === undefined
+    ? { op: "judge", name: judgeName }
+    : { op: "judge", name: judgeName, value };
+}
+
+export const judged = (options: Omit<JudgedFilter, "op">): JudgedFilter => ({
+  op: "judged",
+  ...options,
+});
+
+export function attr(
+  key: string,
+  value?: unknown,
+  selector?: string,
+): AttrFilter {
+  const filter: AttrFilter = { op: "attr", key };
+  if (value !== undefined) filter.value = value;
+  if (selector !== undefined) filter.selector = selector;
+  return filter;
+}
+
+export const grep = (field: string, value: string): GrepFilter => ({
+  op: "grep",
+  field,
+  value,
+});
+
+export function rg(
+  field: string,
+  pattern: string,
+  options?: { ignoreCase?: boolean },
+): RgFilter {
+  const filter: RgFilter = { op: "rg", field, pattern };
+  if (options?.ignoreCase !== undefined)
+    filter.ignore_case = options.ignoreCase;
+  return filter;
+}
+
+export const tokens = (field: string, words: string): TokensFilter => ({
+  op: "tokens",
+  field,
+  words,
+});
+
+type CompareOp = CompareFilter["op"];
+
+const compare = (
+  op: CompareOp,
+  field: string,
+  value: unknown,
+): CompareFilter => ({ op, field, value });
+
+export const eq = (field: string, value: unknown): CompareFilter =>
+  compare("eq", field, value);
+
+export const ne = (field: string, value: unknown): CompareFilter =>
+  compare("ne", field, value);
+
+export const gt = (field: string, value: unknown): CompareFilter =>
+  compare("gt", field, value);
+
+export const gte = (field: string, value: unknown): CompareFilter =>
+  compare("gte", field, value);
+
+export const lt = (field: string, value: unknown): CompareFilter =>
+  compare("lt", field, value);
+
+export const lte = (field: string, value: unknown): CompareFilter =>
+  compare("lte", field, value);
+
+export function citedBy(judgeName: string, value?: unknown): CitedByFilter {
+  return value === undefined
+    ? { op: "cited_by", judge: judgeName }
+    : { op: "cited_by", judge: judgeName, value };
+}
+
+// --- Boolean combinators -------------------------------------------------------
+
+export function all(
+  first: StageFilterInput,
+  ...rest: StageFilterInput[]
+): StageAllFilter;
+export function all(first: FilterInput, ...rest: FilterInput[]): AllFilter;
+export function all(first: FilterInput, ...rest: FilterInput[]): AllFilter {
+  return { op: "all", filters: [toFilter(first), ...rest.map(toFilter)] };
+}
+
+export function any(
+  first: StageFilterInput,
+  ...rest: StageFilterInput[]
+): StageAnyFilter;
+export function any(first: FilterInput, ...rest: FilterInput[]): AnyFilter;
+export function any(first: FilterInput, ...rest: FilterInput[]): AnyFilter {
+  return { op: "any", filters: [toFilter(first), ...rest.map(toFilter)] };
+}
+
+export function not(filter: StageFilterInput): StageNotFilter;
+export function not(filter: FilterInput): NotFilter;
+export function not(filter: FilterInput): NotFilter {
+  return { op: "not", filter: toFilter(filter) };
+}
+
+type QuantifierOp = QuantifierFilter["op"];
+
+const quantify = (op: QuantifierOp, filter: FilterInput): QuantifierFilter => ({
+  op,
+  filter: toFilter(filter),
+});
+
+export const anySpan = (filter: FilterInput): QuantifierFilter =>
+  quantify("any_span", filter);
+
+export const everySpan = (filter: FilterInput): QuantifierFilter =>
+  quantify("every_span", filter);
+
+export const noSpan = (filter: FilterInput): QuantifierFilter =>
+  quantify("no_span", filter);
+
+export const anyTrace = (filter: FilterInput): QuantifierFilter =>
+  quantify("any_trace", filter);
+
+export const everyTrace = (filter: FilterInput): QuantifierFilter =>
+  quantify("every_trace", filter);
+
+export const noTrace = (filter: FilterInput): QuantifierFilter =>
+  quantify("no_trace", filter);
+
+type HierarchyOp = HierarchyFilter["op"];
+
+const hierarchy = (
+  op: HierarchyOp,
+  filter: FilterInput,
+  depth: 1 | null = 1,
+): HierarchyFilter => ({ op, filter: toFilter(filter), depth });
+
+export const descendantOf = (
+  filter: FilterInput,
+  depth: 1 | null = 1,
+): HierarchyFilter => hierarchy("descendant_of", filter, depth);
+
+export const ancestorOf = (
+  filter: FilterInput,
+  depth: 1 | null = 1,
+): HierarchyFilter => hierarchy("ancestor_of", filter, depth);
+
+// --- Aggregate predicates ------------------------------------------------------
+
+export function overSpans(
+  agg: OverAgg,
+  cmp: CompareOp,
+  value: number,
+  where?: FilterInput,
+): OverRelFilter {
+  const filter: OverRelFilter = { op: "over_spans", agg, cmp, value };
+  if (where !== undefined) filter.where = toFilter(where);
+  return filter;
+}
+
+export function overTraces(
+  agg: OverAgg,
+  cmp: CompareOp,
+  value: number,
+  where?: FilterInput,
+): OverRelFilter {
+  const filter: OverRelFilter = { op: "over_traces", agg, cmp, value };
+  if (where !== undefined) filter.where = toFilter(where);
+  return filter;
+}
+
+export function overScores(
+  agg: OverAgg,
+  cmp: CompareOp,
+  value: number,
+): OverRelFilter {
+  const filter: OverRelFilter = { op: "over_scores", agg, cmp, value };
+  return filter;
+}
+
+export function atLeast(
+  k: number,
+  of: "spans" | "traces",
+  where?: FilterInput,
+): AtLeastFilter {
+  const filter: AtLeastFilter = { op: "at_least", k, of };
+  if (where !== undefined) filter.where = toFilter(where);
+  return filter;
+}
+
+// --- Expressions ----------------------------------------------------------
+
+export const aggExpr = (options: Omit<AggExpr, "op">): AggExpr => ({
+  op: "agg_expr",
+  ...options,
+});
+
+export const arith = (
+  fn: "div" | "mul" | "add" | "sub",
+  left: ExprInput,
+  right: ExprInput,
+): ArithExpr => ({ op: "arith", fn, left, right });
+
+export const bucket = (field: string, every: string): BucketExpr => ({
+  op: "bucket",
+  field,
+  every,
+});
+
+export const col = (name: string): ColExpr => ({ op: "col", name });
+
+// --- Query roots ----------------------------------------------------------
+
+export interface QueryOptions {
+  filter?: FilterInput;
+}
+
+export const traces = (options?: QueryOptions): QueryBuilder =>
+  query("traces", options);
+
+export const spans = (options?: QueryOptions): QueryBuilder =>
+  query("spans", options);
+
+export const sessions = (options?: QueryOptions): QueryBuilder =>
+  query("sessions", options);
+
+function query(source: Source, options?: QueryOptions): QueryBuilder {
+  const spec: SourceQuery = { op: "query", source };
+  if (options?.filter !== undefined) spec.filter = toFilter(options.filter);
+  return new QueryBuilder(spec);
+}
+
+/**
+ * Immutable chainable wrapper around a `SourceQuery`. Every method returns a new
+ * builder; `.toJSON()` (or `JSON.stringify`) yields the wire object.
+ */
+export class QueryBuilder {
+  constructor(private readonly spec: SourceQuery) {}
+
+  /** Add a filter; if one is already set, both are combined with `all`. */
+  where(filter: FilterInput): QueryBuilder {
+    const incoming = toFilter(filter);
+    const combined = this.spec.filter
+      ? all(this.spec.filter, incoming)
+      : incoming;
+    return new QueryBuilder({ ...this.spec, filter: combined });
+  }
+
+  /** Bound to a trailing window, e.g. `.last("7d")`. */
+  last(window: string): QueryBuilder {
+    return new QueryBuilder({ ...this.spec, time: { last: window } });
+  }
+
+  since(since: string): QueryBuilder {
+    return new QueryBuilder({ ...this.spec, time: { since } });
+  }
+
+  between(start: string, end: string): QueryBuilder {
+    return new QueryBuilder({ ...this.spec, time: { between: [start, end] } });
+  }
+
+  /** Switch from terminal selection to the composable pipeline surface. */
+  pipe(): PipelineBuilder {
+    if (arguments.length !== 0) {
+      invalidBuilderCall(
+        ".pipe() followed by pipeline methods, for example .pipe().where(...)",
+      );
+    }
+    const { select: _select, pipe: _pipe, ...spec } = this.spec;
+    return new PipelineBuilder(spec, []);
+  }
+
+  rows(options?: { fields?: string[]; limit?: number }): QueryBuilder {
+    return this.select({ op: "rows", ...options });
+  }
+
+  ids(): QueryBuilder {
+    return this.select({ op: "ids" });
+  }
+
+  count(by?: string): QueryBuilder {
+    return this.select(
+      by === undefined ? { op: "count" } : { op: "count", by },
+    );
+  }
+
+  recent(n: number): QueryBuilder {
+    return this.select({ op: "recent", n });
+  }
+
+  top(n: number, by: string): QueryBuilder {
+    return this.select({ op: "top", n, by });
+  }
+
+  ranked(options?: Omit<RankedSelect, "op">): QueryBuilder {
+    return this.select({ op: "ranked", ...options });
+  }
+
+  agg(options: AggregateOptions): QueryBuilder;
+  agg(func: AggregateSelect["func"], field: string, q?: number): QueryBuilder;
+  agg(
+    funcOrOptions: AggregateSelect["func"] | AggregateOptions,
+    field?: string,
+    q?: number,
+  ): QueryBuilder {
+    let options: AggregateOptions;
+    if (isRecord(funcOrOptions)) {
+      if (arguments.length !== 1 || !isAggregateOptions(funcOrOptions)) {
+        invalidBuilderCall(AGG_SIGNATURES);
+      }
+      options = funcOrOptions;
+    } else {
+      if (
+        (arguments.length !== 2 && arguments.length !== 3) ||
+        !isAggregateFunc(funcOrOptions) ||
+        typeof field !== "string" ||
+        !hasCoherentAggregateQ(funcOrOptions, q, arguments.length === 3)
+      ) {
+        invalidBuilderCall(AGG_SIGNATURES);
+      }
+      options = { func: funcOrOptions, field };
+      if (funcOrOptions === "quantile" && typeof q === "number") options.q = q;
+    }
+    return this.select({ op: "agg", ...options });
+  }
+
+  trend(options?: Omit<TrendSelect, "op">): QueryBuilder {
+    if (arguments.length > 1 || !isTrendOptions(options)) {
+      invalidBuilderCall(TREND_SIGNATURE);
+    }
+    return this.select({ op: "trend", ...options });
+  }
+
+  chart(options: Omit<ChartQuery, "op" | "query">): ChartQuery {
+    return { ...options, op: "chart", query: this.toJSON() };
+  }
+
+  table(options: Omit<TableQuery, "op" | "query">): TableQuery {
+    return { ...options, op: "table", query: this.toJSON() };
+  }
+
+  private select(select: Select): QueryBuilder {
+    return new QueryBuilder({ ...this.spec, select });
+  }
+
+  toJSON(): SourceQuery {
+    return this.spec;
+  }
+}
+
+/** Immutable pipeline stage builder; execution order is the method-call order. */
+export class PipelineBuilder {
+  constructor(
+    private readonly spec: SourceQuery,
+    private readonly stages: PipelineStage[],
+  ) {}
+
+  where(filter: StageFilterInput): PipelineBuilder {
+    return this.append({ op: "where", filter });
+  }
+
+  pick(options?: Omit<PickStage, "op">): PipelineBuilder {
+    return this.append({ op: "pick", ...options });
+  }
+
+  derive(cols: Record<string, ExprInput>): PipelineBuilder {
+    return this.append({ op: "derive", cols });
+  }
+
+  summarize(aggs: Record<string, ExprInput>): PipelineBuilder;
+  summarize(
+    by: string | BucketExpr | (string | BucketExpr)[] | undefined,
+    aggs: Record<string, ExprInput>,
+  ): PipelineBuilder;
+  summarize(
+    byOrAggs:
+      | string
+      | BucketExpr
+      | (string | BucketExpr)[]
+      | undefined
+      | Record<string, ExprInput>,
+    maybeAggs?: Record<string, ExprInput>,
+  ): PipelineBuilder {
+    const stage: SummarizeStage =
+      maybeAggs === undefined
+        ? { op: "summarize", aggs: byOrAggs as Record<string, ExprInput> }
+        : {
+            op: "summarize",
+            by: byOrAggs as
+              | string
+              | BucketExpr
+              | (string | BucketExpr)[]
+              | undefined,
+            aggs: maybeAggs,
+          };
+    return this.append(stage);
+  }
+
+  sort(by: string): PipelineBuilder {
+    return this.append({ op: "sort", by });
+  }
+
+  take(n: number, offset?: number): PipelineBuilder {
+    const stage: TakeStage = { op: "take", n };
+    if (offset !== undefined) stage.offset = offset;
+    return this.append(stage);
+  }
+
+  chart(options: Omit<ChartQuery, "op" | "query">): ChartQuery {
+    return { ...options, op: "chart", query: this.toJSON() };
+  }
+
+  table(options: Omit<TableQuery, "op" | "query">): TableQuery {
+    return { ...options, op: "table", query: this.toJSON() };
+  }
+
+  private append(stage: PipelineStage): PipelineBuilder {
+    return new PipelineBuilder(this.spec, [...this.stages, stage]);
+  }
+
+  toJSON(): SourceQuery {
+    return { ...this.spec, pipe: this.stages };
+  }
+}
+
+// --- Discovery ------------------------------------------------------------
+
+export interface DiscoveryOptions {
+  history?: DiscoveryQuery["history"];
+  judge?: DiscoveryQuery["judge"];
+  limit?: DiscoveryQuery["limit"];
+  source?: DiscoveryQuery["source"];
+  time?: DiscoveryQuery["time"];
+  value?: DiscoveryQuery["value"];
+}
+
+export function discovery(
+  kind: DiscoveryKind,
+  options?: DiscoveryOptions,
+): DiscoveryQuery {
+  const spec: DiscoveryQuery = { op: "discovery", kind };
+  if (options?.history !== undefined) spec.history = options.history;
+  if (options?.judge !== undefined) spec.judge = options.judge;
+  if (options?.limit !== undefined) spec.limit = options.limit;
+  if (options?.source !== undefined) spec.source = options.source;
+  if (options?.time !== undefined) spec.time = options.time;
+  if (options?.value !== undefined) spec.value = options.value;
+  return spec;
+}
