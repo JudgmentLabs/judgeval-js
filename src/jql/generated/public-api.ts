@@ -37,10 +37,73 @@ export interface paths {
             "application/json": components["schemas"]["PublicJqlQueryResponse"];
           };
         };
+        /** @description Invalid request */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
+        /** @description Insufficient permissions */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
+        /** @description Project or public JQL endpoint not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
+        /** @description Query validation failed */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
         /** @description Organization rate limit exceeded */
         429: {
           headers: {
             "Retry-After"?: number;
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
+        /** @description JQL backend request failed */
+        502: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
+        /** @description Public JQL is temporarily unavailable */
+        503: {
+          headers: {
             [name: string]: unknown;
           };
           content: {
@@ -88,10 +151,73 @@ export interface paths {
             "application/json": components["schemas"]["PublicJqlPresentationResponse"];
           };
         };
+        /** @description Invalid request */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
+        /** @description Insufficient permissions */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
+        /** @description Project or public JQL endpoint not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
+        /** @description Query validation failed */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
         /** @description Organization rate limit exceeded */
         429: {
           headers: {
             "Retry-After"?: number;
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
+        /** @description JQL backend request failed */
+        502: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
+        /** @description Public JQL is temporarily unavailable */
+        503: {
+          headers: {
             [name: string]: unknown;
           };
           content: {
