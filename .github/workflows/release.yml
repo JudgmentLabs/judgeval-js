@@ -19,13 +19,31 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Checkout canonical JQL sources
+        uses: actions/checkout@v4
+        with:
+          repository: JudgmentLabs/judgment-mono
+          ref: main
+          token: ${{ secrets.RELEASE_BOT_GITHUB_PAT }}
+          persist-credentials: false
+          path: .jql-source/judgment-mono
+
       - uses: oven-sh/setup-bun@v1
         with:
           bun-version: "1.3.2"
 
       - run: bun install --frozen-lockfile
+      - name: Check canonical JQL parity
+        run: |
+          bun run generate-jql \
+            .jql-source/judgment-mono/services/data-access-service/openapi.json \
+            .jql-source/judgment-mono/packages/dal-client/src/builder.ts \
+            .jql-source/judgment-mono/services/judgeval-server/openapi.public-jql.json
+          git diff --exit-code -- src/jql
       - run: bun run check
       - run: bun run build
+      - name: Check generated JQL output is current
+        run: git diff --exit-code -- src/jql
 
       - name: Get version from package.json
         id: pkg
