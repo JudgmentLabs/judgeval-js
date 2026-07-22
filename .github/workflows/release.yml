@@ -44,6 +44,8 @@ jobs:
       - run: bun run build
       - name: Check generated JQL output is current
         run: git diff --exit-code -- src/jql
+      - name: Check package contents with canonical checkout present
+        run: bun run check-package
 
       - name: Get version from package.json
         id: pkg
@@ -92,6 +94,9 @@ jobs:
       - run: bun install
       - run: bun run check
       - run: bun run build
+
+      - name: Check package contents
+        run: bun run check-package
 
       - name: Publish to npm
         run: npm publish --provenance --access public
