@@ -26,6 +26,9 @@ jobs:
       - name: Build package
         run: bun run build
 
+      - name: Check generated JQL output is current
+        run: git diff --exit-code -- src/jql
+
       - name: Dry run publish
         run: npm publish --dry-run --access public
 
@@ -36,3 +39,39 @@ jobs:
           test -f dist/node/index.d.ts
           test -f dist/workers/index.mjs
           test -f dist/workers/index.d.ts
+
+  jql-parity:
+    name: JQL parity with judgment-mono
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout SDK
+        uses: actions/checkout@v4
+
+      - name: Checkout canonical JQL sources
+        uses: actions/checkout@v4
+        with:
+          repository: JudgmentLabs/judgment-mono
+          ref: main
+          token: ${{ secrets.RELEASE_BOT_GITHUB_PAT }}
+          persist-credentials: false
+          path: .jql-source/judgment-mono
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: "1.2.23"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Regenerate from judgment-mono
+        run: |
+          bun run generate-jql \
+            .jql-source/judgment-mono/services/data-access-service/openapi.json \
+            .jql-source/judgment-mono/packages/dal-client/src/builder.ts \
+            .jql-source/judgment-mono/services/judgeval-server/openapi.public-jql.json
+
+      - name: Check canonical JQL parity
+        run: git diff --exit-code -- src/jql

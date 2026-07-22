@@ -65,3 +65,11 @@ export {
   type AgentFunction,
   type PassConditionFn,
 } from "./offline-tests";
+
+export { JudgevalAPIError } from "./jql/client";
+export type {
+  JqlPresentationResponse,
+  JqlQueryInput,
+  JqlQueryResponse,
+  JqlRequestOptions,
+} from "./jql/client";
