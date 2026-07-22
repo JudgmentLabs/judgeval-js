@@ -31,8 +31,7 @@ jobs:
 
       - name: Check package contents
         run: |
-          mkdir -p .jql-source/judgment-mono
-          echo "PRIVATE MONOREPO CONTENT" > .jql-source/judgment-mono/PRIVATE_SOURCE_MARKER
+          bun run check-package --plant
           bun run check-package
 
       - name: Check build output

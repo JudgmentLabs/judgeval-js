@@ -1,11 +1,11 @@
 #!/usr/bin/env bun
 
-import { unlink } from "fs/promises";
+import { mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 
-export const PRIVATE_SOURCE_MARKER = "PRIVATE MONOREPO CONTENT";
-export const MAX_ARCHIVE_FILES = 1_000;
-export const MAX_ARCHIVE_BYTES = 5 * 1024 * 1024;
-export const MAX_UNPACKED_BYTES = 10 * 1024 * 1024;
+const PRIVATE_SOURCE_MARKER = "PRIVATE MONOREPO CONTENT";
+const MAX_ARCHIVE_FILES = 1_000;
+const MAX_ARCHIVE_BYTES = 5 * 1024 * 1024;
+const MAX_UNPACKED_BYTES = 10 * 1024 * 1024;
 
 const BUNDLE_FILES = new Set([
   "dist/node/index.cjs",
@@ -23,29 +23,22 @@ const BUNDLE_FILES = new Set([
   "dist/workers/jql.mjs.map",
 ]);
 
-export interface PackFile {
-  path: string;
-  size: number;
-  mode: number;
-}
-
 export interface PackResult {
   filename: string;
   size: number;
   unpackedSize: number;
   entryCount: number;
-  files: PackFile[];
+  files: { path: string }[];
 }
 
 export function expectedPackageFiles(trackedPaths: string[]): Set<string> {
   const expected = new Set(["package.json", ...BUNDLE_FILES]);
   for (const path of trackedPaths) {
-    if (["README.md", "LICENSE", "LICENSE.md"].includes(path)) {
+    if (!path.startsWith("src/")) {
       expected.add(path);
       continue;
     }
     if (
-      !path.startsWith("src/") ||
       !path.endsWith(".ts") ||
       path.endsWith(".d.ts") ||
       path.endsWith(".test.ts")
@@ -113,47 +106,41 @@ function trackedPaths(): string[] {
   return result.stdout.toString().split("\0").filter(Boolean);
 }
 
-async function packPackage(): Promise<PackResult> {
-  const process = Bun.spawn(["npm", "pack", "--json", "--ignore-scripts"], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(process.stdout).text(),
-    new Response(process.stderr).text(),
-    process.exited,
-  ]);
-  if (exitCode !== 0) {
-    throw new Error(`npm pack failed: ${stderr}`);
+function packPackage(): PackResult {
+  const result = Bun.spawnSync(["npm", "pack", "--json", "--ignore-scripts"]);
+  if (result.exitCode !== 0) {
+    throw new Error(`npm pack failed: ${result.stderr.toString()}`);
   }
-  const results = JSON.parse(stdout) as PackResult[];
+  const results = JSON.parse(result.stdout.toString()) as PackResult[];
   if (results.length !== 1) {
     throw new Error(`expected one packed artifact, found ${results.length}`);
   }
   return results[0];
 }
 
-async function archiveContainsMarker(filename: string): Promise<boolean> {
-  const process = Bun.spawn(["tar", "-xOzf", filename], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const [contents, stderr, exitCode] = await Promise.all([
-    new Response(process.stdout).text(),
-    new Response(process.stderr).text(),
-    process.exited,
-  ]);
-  if (exitCode !== 0) {
-    throw new Error(`could not inspect ${filename}: ${stderr}`);
+function archiveContainsMarker(filename: string): boolean {
+  const result = Bun.spawnSync(["tar", "-xOzf", filename]);
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `could not inspect ${filename}: ${result.stderr.toString()}`,
+    );
   }
-  return contents.includes(PRIVATE_SOURCE_MARKER);
+  return result.stdout.toString().includes(PRIVATE_SOURCE_MARKER);
 }
 
-async function main(): Promise<void> {
-  const pack = await packPackage();
+function plantMarker(): void {
+  mkdirSync(".jql-source/judgment-mono", { recursive: true });
+  writeFileSync(
+    ".jql-source/judgment-mono/PRIVATE_SOURCE_MARKER",
+    PRIVATE_SOURCE_MARKER,
+  );
+}
+
+function main(): void {
+  const pack = packPackage();
   try {
     const errors = manifestErrors(pack, expectedPackageFiles(trackedPaths()));
-    if (await archiveContainsMarker(pack.filename)) {
+    if (archiveContainsMarker(pack.filename)) {
       errors.push("private-source marker found in packed file contents");
     }
     if (errors.length > 0) {
@@ -163,10 +150,14 @@ async function main(): Promise<void> {
       `Validated ${pack.filename}: ${pack.entryCount} files, ${pack.unpackedSize} unpacked bytes.`,
     );
   } finally {
-    await unlink(pack.filename);
+    unlinkSync(pack.filename);
   }
 }
 
 if (import.meta.main) {
-  await main();
+  if (process.argv.includes("--plant")) {
+    plantMarker();
+  } else {
+    main();
+  }
 }

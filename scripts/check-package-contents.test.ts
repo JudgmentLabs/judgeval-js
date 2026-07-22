@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import {
   expectedPackageFiles,
   manifestErrors,
-  type PackFile,
   type PackResult,
 } from "./check-package-contents";
 
@@ -10,11 +9,7 @@ const tracked = ["README.md", "src/index.ts", "src/example.test.ts"];
 const expected = expectedPackageFiles(tracked);
 
 function pack(paths: string[]): PackResult {
-  const files: PackFile[] = paths.map((path) => ({
-    path,
-    size: 1,
-    mode: 0o644,
-  }));
+  const files = paths.map((path) => ({ path }));
   return {
     filename: "judgeval-1.0.0.tgz",
     size: files.length,
@@ -25,10 +20,28 @@ function pack(paths: string[]): PackResult {
 }
 
 describe("package manifest validation", () => {
-  test("derives declarations from tracked runtime sources", () => {
-    expect(expected.has("dist/index.d.ts")).toBe(true);
-    expect(expected.has("dist/index.d.ts.map")).toBe(true);
-    expect(expected.has("dist/example.test.d.ts")).toBe(false);
+  test("derives the full manifest from tracked paths", () => {
+    expect(expected).toEqual(
+      new Set([
+        "package.json",
+        "README.md",
+        "dist/index.d.ts",
+        "dist/index.d.ts.map",
+        "dist/node/index.cjs",
+        "dist/node/index.cjs.map",
+        "dist/node/index.d.ts",
+        "dist/node/index.mjs",
+        "dist/node/index.mjs.map",
+        "dist/node/jql.cjs",
+        "dist/node/jql.cjs.map",
+        "dist/node/jql.mjs",
+        "dist/node/jql.mjs.map",
+        "dist/workers/index.mjs",
+        "dist/workers/index.mjs.map",
+        "dist/workers/jql.mjs",
+        "dist/workers/jql.mjs.map",
+      ]),
+    );
   });
 
   test("rejects extra files even under dist", () => {
@@ -40,10 +53,16 @@ describe("package manifest validation", () => {
   });
 
   test("rejects missing expected files", () => {
-    const [missing, ...paths] = [...expected];
+    const paths = [...expected].filter((path) => path !== "package.json");
 
     expect(manifestErrors(pack(paths), expected)).toEqual([
-      `missing files: ${missing}`,
+      "missing files: package.json",
     ]);
+  });
+
+  test("rejects duplicate pack entries", () => {
+    expect(
+      manifestErrors(pack([...expected, "package.json"]), expected),
+    ).toEqual(["pack manifest contains duplicate or inconsistent entries"]);
   });
 });
