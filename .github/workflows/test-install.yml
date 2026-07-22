@@ -29,8 +29,10 @@ jobs:
       - name: Check generated JQL output is current
         run: git diff --exit-code -- src/jql
 
-      - name: Dry run publish
-        run: npm publish --dry-run --access public
+      - name: Check package contents
+        run: |
+          bun run check-package --plant
+          bun run check-package
 
       - name: Check build output
         run: |
@@ -75,3 +77,9 @@ jobs:
 
       - name: Check canonical JQL parity
         run: git diff --exit-code -- src/jql
+
+      - name: Build package
+        run: bun run build
+
+      - name: Check package contents with canonical checkout present
+        run: bun run check-package
