@@ -8,7 +8,7 @@ export type {
   TableQuery,
   TimeSpec,
 } from "./wire";
-export { JudgevalAPIError } from "./client";
+export { JudgevalAPIError, JudgevalJqlUnavailableError } from "./client";
 export type {
   JqlPresentationResponse,
   JqlQueryInput,

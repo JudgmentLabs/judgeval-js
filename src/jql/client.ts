@@ -31,6 +31,34 @@ export class JudgevalAPIError extends Error {
   }
 }
 
+/**
+ * Thrown when a JQL request is answered with HTTP 404.
+ *
+ * The public JQL API returns the same opaque 404 whether JQL is not enabled
+ * for the organization or the project does not exist, so this error covers
+ * both causes and its message names them. Distinct from a 503, which means
+ * JQL is enabled but temporarily unavailable.
+ */
+export class JudgevalJqlUnavailableError extends JudgevalAPIError {
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    hint = "",
+    retryAfterSeconds?: number,
+  ) {
+    super(status, code, message, hint, retryAfterSeconds);
+    this.name = "JudgevalJqlUnavailableError";
+  }
+}
+
+/**
+ * Message the API sends when a JQL-enabled organization asks for a project it
+ * cannot see. Used only to sharpen the 404 message; an unrecognized message
+ * falls back to naming both possible causes.
+ */
+const JQL_PROJECT_NOT_FOUND_MESSAGE = "Project not found";
+
 export type JqlQueryInput = Query | QueryBuilder | PipelineBuilder;
 
 function toQuery(input: JqlQueryInput): Query {
@@ -43,6 +71,7 @@ export class JudgevalJqlClient {
     private readonly apiKey: string,
     private readonly organizationId: string,
     private readonly projectId: string,
+    private readonly projectName?: string,
   ) {}
 
   query(
@@ -98,14 +127,41 @@ export class JudgevalJqlClient {
         // Preserve the response body below when the server did not return JSON.
       }
       const retryAfter = response.headers.get("Retry-After");
-      throw new JudgevalAPIError(
+      const ErrorType =
+        response.status === 404
+          ? JudgevalJqlUnavailableError
+          : JudgevalAPIError;
+      throw new ErrorType(
         response.status,
         payload.error ?? `HTTP_${response.status}`,
-        payload.message ?? text,
+        response.status === 404
+          ? this.unavailableMessage(payload.message)
+          : (payload.message ?? text),
         payload.hint ?? "",
         retryAfter === null ? undefined : Number(retryAfter),
       );
     }
     return JSON.parse(text) as T;
+  }
+
+  /**
+   * Explain the opaque 404 the public JQL API returns.
+   *
+   * The organization-level feature gate runs before the project lookup
+   * server-side, so a disabled organization never reaches the project check.
+   * That makes the two 404 messages disjoint: only a JQL-enabled organization
+   * can be told the project is missing. When the message is anything else,
+   * either cause is possible and both are named.
+   */
+  private unavailableMessage(serverMessage?: string): string {
+    const project = this.projectName ?? this.projectId;
+    if (serverMessage === JQL_PROJECT_NOT_FOUND_MESSAGE) {
+      return `Project '${project}' was not found for this organization.`;
+    }
+    return (
+      `JQL is not enabled for this organization, or project '${project}' was ` +
+      "not found — the API returns the same 404 for both. Contact Judgment to " +
+      "enable JQL for your organization."
+    );
   }
 }
