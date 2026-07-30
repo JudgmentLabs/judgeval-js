@@ -164,15 +164,19 @@ export class Tracer extends BaseTracer {
       enableMonitoring,
     );
 
-    if (enableMonitoring) {
+    // User-supplied span processors are attached unconditionally (parity
+    // with the Python SDK): disabled Judgment monitoring must not silently
+    // sever the user's own telemetry pipeline.
+    const spanProcessors = [
+      ...(enableMonitoring ? [tracer.getSpanProcessor()] : []),
+      ...(config.spanProcessors ?? []),
+    ];
+    if (spanProcessors.length > 0) {
       const providerWithProcessor = new NodeTracerProvider({
         resource,
         sampler: config.sampler,
         spanLimits: config.spanLimits,
-        spanProcessors: [
-          tracer.getSpanProcessor(),
-          ...(config.spanProcessors ?? []),
-        ],
+        spanProcessors,
       });
       tracer._tracerProvider = providerWithProcessor;
     }
