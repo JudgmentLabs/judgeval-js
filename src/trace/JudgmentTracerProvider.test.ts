@@ -204,3 +204,44 @@ describe("BaseTracer.startActiveSpan span lifecycle", () => {
     }
   });
 });
+
+describe("JudgmentTracerProvider.setActive root-span guard", () => {
+  test("blocks activation while a root span is recording", () => {
+    const { proxy, cleanup } = setupProxy();
+    const other = new FakeTracer(new BasicTracerProvider());
+    try {
+      const otelTracer = proxy.getTracer("test");
+      let result: boolean | undefined;
+      otelTracer.startActiveSpan("root-span", (span) => {
+        result = proxy.setActive(other);
+        span.end();
+      });
+      expect(result).toBe(false);
+    } finally {
+      proxy.deregister(other);
+      cleanup();
+    }
+  });
+
+  test("allows activation while only a child span is recording", () => {
+    const { proxy, cleanup } = setupProxy();
+    const previous = proxy.getActiveTracer();
+    const other = new FakeTracer(new BasicTracerProvider());
+    try {
+      const otelTracer = proxy.getTracer("test");
+      let result: boolean | undefined;
+      otelTracer.startActiveSpan("root-span", (root) => {
+        otelTracer.startActiveSpan("child-span", (child) => {
+          result = proxy.setActive(other);
+          child.end();
+        });
+        root.end();
+      });
+      expect(result).toBe(true);
+    } finally {
+      proxy.deregister(other);
+      if (previous) proxy.setActive(previous);
+      cleanup();
+    }
+  });
+});
