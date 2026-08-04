@@ -400,6 +400,12 @@ export const spans = (options?: QueryOptions): QueryBuilder =>
 export const sessions = (options?: QueryOptions): QueryBuilder =>
   query("sessions", options);
 
+export const offline_traces = (options?: QueryOptions): QueryBuilder =>
+  query("offline_traces", options);
+
+export const offline_spans = (options?: QueryOptions): QueryBuilder =>
+  query("offline_spans", options);
+
 function query(source: Source, options?: QueryOptions): QueryBuilder {
   const spec: SourceQuery = { op: "query", source };
   if (options?.filter !== undefined) spec.filter = toFilter(options.filter);

@@ -270,7 +270,9 @@
         "additionalProperties": false,
         "$id": "PublicJqlRequest",
         "type": "object",
-        "required": ["query"],
+        "required": [
+          "query"
+        ],
         "properties": {
           "query": {},
           "limit": {
@@ -307,7 +309,12 @@
       "PublicJqlQueryResponse": {
         "$id": "PublicJqlQueryResponse",
         "type": "object",
-        "required": ["query_id", "rows", "row_count", "elapsed_ms"],
+        "required": [
+          "query_id",
+          "rows",
+          "row_count",
+          "elapsed_ms"
+        ],
         "properties": {
           "query_id": {
             "type": "string"
@@ -348,7 +355,12 @@
       "PublicJqlPresentationResponse": {
         "$id": "PublicJqlPresentationResponse",
         "type": "object",
-        "required": ["query_id", "presentation", "frame", "elapsed_ms"],
+        "required": [
+          "query_id",
+          "presentation",
+          "frame",
+          "elapsed_ms"
+        ],
         "properties": {
           "query_id": {
             "type": "string"
@@ -371,7 +383,10 @@
       "PublicJqlErrorResponse": {
         "$id": "PublicJqlErrorResponse",
         "type": "object",
-        "required": ["error", "message"],
+        "required": [
+          "error",
+          "message"
+        ],
         "properties": {
           "error": {
             "type": "string"

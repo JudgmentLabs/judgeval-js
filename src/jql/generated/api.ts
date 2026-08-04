@@ -68,7 +68,12 @@ export interface components {
        * Source
        * @enum {string}
        */
-      source: "traces" | "spans" | "sessions";
+      source:
+        | "traces"
+        | "spans"
+        | "sessions"
+        | "offline_traces"
+        | "offline_spans";
       time?: components["schemas"]["TimeSpec"] | null;
     };
     /** AllFilter */
@@ -896,7 +901,9 @@ export interface components {
        */
       op: "discovery";
       /** Source */
-      source?: ("traces" | "spans") | null;
+      source?:
+        | ("traces" | "spans" | "sessions" | "offline_traces" | "offline_spans")
+        | null;
       time?: components["schemas"]["TimeSpec"] | null;
       /** Value */
       value?: unknown;

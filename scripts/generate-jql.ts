@@ -91,7 +91,10 @@ const sourceWirePath = resolve(dirname(builderPath), "wire.ts");
 const sourceWire = readFileSync(sourceWirePath, "utf8");
 const publicSourceWire = sourceWire
   .split("\n")
-  .filter((line) => !line.startsWith("export type Dal"))
+  .filter(
+    (line) =>
+      !line.startsWith("export type Dal") && !line.includes("DalFrameColumn"),
+  )
   .join("\n");
 
 if (sync) {
