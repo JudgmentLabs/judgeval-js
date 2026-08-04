@@ -10,6 +10,8 @@ import type { components as PublicComponents } from "./generated/public-api";
 
 export interface JqlRequestOptions {
   limit?: number;
+  /** Narrow the query to traces resolved from these sessions. */
+  sessionIds?: string[];
   signal?: AbortSignal;
 }
 
@@ -63,9 +65,12 @@ export class JudgevalJqlClient {
     kind: DiscoveryKind,
     options: DiscoveryOptions & JqlRequestOptions = {},
   ): Promise<JqlQueryResponse> {
-    const { signal, ...discoveryOptions } = options;
-    const { limit } = options;
-    return this.query(discovery(kind, discoveryOptions), { limit, signal });
+    const { signal, limit, sessionIds, ...discoveryOptions } = options;
+    return this.query(discovery(kind, discoveryOptions), {
+      limit,
+      sessionIds,
+      signal,
+    });
   }
 
   private async post<T>(
@@ -85,6 +90,9 @@ export class JudgevalJqlClient {
         body: JSON.stringify({
           query,
           ...(options.limit === undefined ? {} : { limit: options.limit }),
+          ...(options.sessionIds === undefined
+            ? {}
+            : { session_ids: options.sessionIds }),
         }),
         signal: options.signal,
       },

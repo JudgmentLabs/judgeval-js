@@ -16,7 +16,7 @@ test("emits the canonical session-to-trace-ids JSON", () => {
   });
 });
 
-test("sends only public query fields and tenant headers", async () => {
+test("sends session scope with the public query fields and tenant headers", async () => {
   let request: Request | undefined;
   globalThis.fetch = ((input, init) => {
     request =
@@ -42,26 +42,41 @@ test("sends only public query fields and tenant headers", async () => {
     "project-1",
   );
 
-  const response = await client.query(
-    traces().where(eq("session", "session-1")).ids(),
-    { limit: 25 },
-  );
-
-  expect(request?.url).toBe(
-    "https://api.example.com/v1/projects/project-1/query",
-  );
-  expect(request?.headers.get("Authorization")).toBe("Bearer api-key");
-  expect(request?.headers.get("X-Organization-Id")).toBe("org-1");
-  expect(await request?.json()).toEqual({
-    query: {
-      op: "query",
-      source: "traces",
-      filter: { op: "eq", field: "session", value: "session-1" },
-      select: { op: "ids" },
-    },
+  const response = await client.query(traces().ids(), {
     limit: 25,
+    sessionIds: ["session-1"],
   });
-  expect(response.rows).toEqual([{ trace_id: "trace-1" }]);
+
+  expect({
+    request: {
+      url: request?.url,
+      authorization: request?.headers.get("Authorization"),
+      organizationId: request?.headers.get("X-Organization-Id"),
+      body: await request?.json(),
+    },
+    response,
+  }).toEqual({
+    request: {
+      url: "https://api.example.com/v1/projects/project-1/query",
+      authorization: "Bearer api-key",
+      organizationId: "org-1",
+      body: {
+        query: {
+          op: "query",
+          source: "traces",
+          select: { op: "ids" },
+        },
+        limit: 25,
+        session_ids: ["session-1"],
+      },
+    },
+    response: {
+      query_id: "q-1",
+      rows: [{ trace_id: "trace-1" }],
+      row_count: 1,
+      elapsed_ms: 4,
+    },
+  });
 });
 
 describe("public JQL errors", () => {
@@ -84,17 +99,32 @@ describe("public JQL errors", () => {
       "project-1",
     );
 
-    try {
-      await client.query(traces().ids());
-      throw new Error("expected query to fail");
-    } catch (error) {
-      expect(error).toBeInstanceOf(JudgevalAPIError);
-      expect(error).toMatchObject({
-        status: 429,
-        code: "JQL_RATE_LIMITED",
-        hint: "Slow down.",
-        retryAfterSeconds: 2,
-      });
-    }
+    const caught = await (async () => {
+      try {
+        await client.query(traces().ids());
+        throw new Error("expected query to fail");
+      } catch (error) {
+        return error;
+      }
+    })();
+    expect(
+      caught instanceof JudgevalAPIError
+        ? {
+            name: caught.name,
+            message: caught.message,
+            status: caught.status,
+            code: caught.code,
+            hint: caught.hint,
+            retryAfterSeconds: caught.retryAfterSeconds,
+          }
+        : caught,
+    ).toEqual({
+      name: "JudgevalAPIError",
+      message: "Retry later.",
+      status: 429,
+      code: "JQL_RATE_LIMITED",
+      hint: "Slow down.",
+      retryAfterSeconds: 2,
+    });
   });
 });

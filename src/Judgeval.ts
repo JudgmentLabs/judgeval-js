@@ -153,7 +153,7 @@ export class Judgeval {
     });
   }
 
-  /** Run a structured, tenant-scoped JQL query for this project. */
+  /** Run JQL for this project, optionally narrowed by `options.sessionIds`. */
   query(
     query: JqlQueryInput,
     options?: JqlRequestOptions,
@@ -161,7 +161,7 @@ export class Judgeval {
     return this.jqlClient().query(query, options);
   }
 
-  /** Run a chart or table JQL query for this project. */
+  /** Run a chart or table JQL query, optionally narrowed by session. */
   present(
     query: PresentationQuery,
     options?: JqlRequestOptions,
@@ -169,7 +169,7 @@ export class Judgeval {
     return this.jqlClient().present(query, options);
   }
 
-  /** Discover project-scoped JQL catalog values. */
+  /** Discover JQL catalog values, optionally narrowed by session. */
   discover(
     kind: DiscoveryKind,
     options?: DiscoveryOptions & JqlRequestOptions,

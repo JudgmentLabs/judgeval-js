@@ -65,13 +65,19 @@ the query payload.
 
 ```typescript
 import { Judgeval } from "judgeval";
-import { eq, traces } from "judgeval/jql";
+import { spans } from "judgeval/jql";
 
 const client = await Judgeval.create({ projectName: "my-llm-app" });
-const result = await client.query(
-  traces().where(eq("session", "session-123")).ids(),
-);
+const result = await client.query(spans().rows(), {
+  sessionIds: ["session-123"],
+});
 ```
+
+`sessionIds` is outside the JQL query object. Judgment resolves the sessions
+within the authenticated organization and project, then narrows every part of
+the query to their traces. If none resolve, the request fails instead of
+falling back to the whole project. The same option works with `present` and
+`discover`.
 
 ## Documentation
 
