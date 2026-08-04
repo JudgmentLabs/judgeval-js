@@ -69,15 +69,15 @@ import { spans } from "judgeval/jql";
 
 const client = await Judgeval.create({ projectName: "my-llm-app" });
 const result = await client.query(spans().rows(), {
-  sessionIds: ["session-123"],
+  traceIds: ["trace-123"],
 });
 ```
 
-`sessionIds` is outside the JQL query object. Judgment resolves the sessions
-within the authenticated organization and project, then narrows every part of
-the query to their traces. If none resolve, the request fails instead of
-falling back to the whole project. The same option works with `present` and
-`discover`.
+`traceIds` and `sessionIds` are mutually exclusive options outside the JQL query
+object. Trace IDs narrow the query directly. Judgment resolves session IDs within
+the authenticated organization and project, then narrows every part of the query
+to their traces. If no session resolves, the request fails instead of falling back
+to the whole project. Both options work with `present` and `discover`.
 
 ## Documentation
 

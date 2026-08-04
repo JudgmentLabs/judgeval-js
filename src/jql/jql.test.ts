@@ -16,7 +16,7 @@ test("emits the canonical session-to-trace-ids JSON", () => {
   });
 });
 
-test("sends session scope with the public query fields and tenant headers", async () => {
+test("sends trace scope with the public query fields and tenant headers", async () => {
   let request: Request | undefined;
   globalThis.fetch = ((input, init) => {
     request =
@@ -44,7 +44,7 @@ test("sends session scope with the public query fields and tenant headers", asyn
 
   const response = await client.query(traces().ids(), {
     limit: 25,
-    sessionIds: ["session-1"],
+    traceIds: ["trace-1"],
   });
 
   expect({
@@ -67,7 +67,7 @@ test("sends session scope with the public query fields and tenant headers", asyn
           select: { op: "ids" },
         },
         limit: 25,
-        session_ids: ["session-1"],
+        trace_ids: ["trace-1"],
       },
     },
     response: {
@@ -76,6 +76,62 @@ test("sends session scope with the public query fields and tenant headers", asyn
       row_count: 1,
       elapsed_ms: 4,
     },
+  });
+});
+
+test("sends session scope outside the JQL query object", async () => {
+  let request: Request | undefined;
+  globalThis.fetch = ((input, init) => {
+    request =
+      input instanceof Request
+        ? input
+        : new Request(input instanceof URL ? input.toString() : input, init);
+    return Promise.resolve(
+      Response.json({ query_id: "q-1", rows: [], row_count: 0, elapsed_ms: 1 }),
+    );
+  }) as typeof fetch;
+  const client = new JudgevalJqlClient(
+    "https://api.example.com/",
+    "api-key",
+    "org-1",
+    "project-1",
+  );
+
+  await client.query(traces().ids(), { sessionIds: ["session-1"] });
+
+  expect(await request?.json()).toEqual({
+    query: {
+      op: "query",
+      source: "traces",
+      select: { op: "ids" },
+    },
+    session_ids: ["session-1"],
+  });
+});
+
+test("rejects trace and session scope together before fetch", async () => {
+  let fetchCalls = 0;
+  globalThis.fetch = (() => {
+    fetchCalls += 1;
+    return Promise.reject(new Error("must not run"));
+  }) as unknown as typeof fetch;
+  const client = new JudgevalJqlClient(
+    "https://api.example.com/",
+    "api-key",
+    "org-1",
+    "project-1",
+  );
+
+  const error = await client
+    .query(traces().ids(), {
+      traceIds: ["trace-1"],
+      sessionIds: ["session-1"],
+    })
+    .catch((caught) => caught);
+
+  expect({ error, fetchCalls }).toEqual({
+    error: new TypeError("traceIds and sessionIds are mutually exclusive"),
+    fetchCalls: 0,
   });
 });
 

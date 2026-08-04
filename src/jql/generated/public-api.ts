@@ -239,6 +239,8 @@ export interface components {
     PublicJqlRequest: {
       query: unknown;
       limit?: number;
+      /** @description Traces to bind directly to the query within the authenticated organization and project. */
+      trace_ids?: string[];
       /** @description Sessions to resolve to a trace-scoped query within the authenticated organization and project. */
       session_ids?: string[];
     };
