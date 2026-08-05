@@ -228,7 +228,9 @@
             "enum": [
               "traces",
               "spans",
-              "sessions"
+              "sessions",
+              "offline_traces",
+              "offline_spans"
             ],
             "title": "Source",
             "type": "string"
@@ -257,7 +259,9 @@
             "dsl": [
               "traces",
               "spans",
-              "sessions"
+              "sessions",
+              "offline_traces",
+              "offline_spans"
             ],
             "example": "traces({ filter: status('error') }).last('7d').ids()",
             "lang": "proj.traces(pred)",
@@ -1410,7 +1414,7 @@
         "x-jql": [
           {
             "category": "filter",
-            "doc": "span cost — span grain",
+            "doc": "cost in USD — per span, summed at traces/sessions",
             "example": "cost({ gt: 0.01 })",
             "lang": "cost(gt=0.01)",
             "model": "CostFilter",
@@ -1501,9 +1505,9 @@
         "x-jql": [
           {
             "category": "filter",
-            "doc": "duration in ms",
-            "example": "duration({ gte: 1000 })",
-            "lang": "duration(gte=1000)",
+            "doc": "duration in nanoseconds",
+            "example": "duration({ gte: 1_000_000_000 })",
+            "lang": "duration(gte=1_000_000_000)",
             "model": "DurationFilter",
             "op": "duration",
             "ts": {
@@ -2013,7 +2017,7 @@
         "x-jql": [
           {
             "category": "filter",
-            "doc": "span name — span grain",
+            "doc": "span name — the root's at traces/sessions",
             "example": "name('agent.run')",
             "lang": "name(\"agent.run\")",
             "model": "NameFilter",
@@ -3231,7 +3235,7 @@
         "x-jql": [
           {
             "category": "stage",
-            "doc": "order the rows",
+            "doc": "order rows; append ` desc` for descending",
             "dsl": [
               "sort"
             ],
@@ -3346,6 +3350,7 @@
               "params": [
                 {
                   "name": "by",
+                  "optional": true,
                   "ts_type": "string | BucketExpr | (string | BucketExpr)[] | undefined",
                   "wire": "by"
                 },
@@ -4122,7 +4127,10 @@
               {
                 "enum": [
                   "traces",
-                  "spans"
+                  "spans",
+                  "sessions",
+                  "offline_traces",
+                  "offline_spans"
                 ],
                 "type": "string"
               },
@@ -4202,7 +4210,7 @@
               ],
               [
                 "fields",
-                "standard fields usable for filters, groups, and aggregates",
+                "standard fields, each carrying the operations it supports at that source",
                 "`source` (required), `limit`"
               ],
               [
