@@ -55,7 +55,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: JudgmentLabs/judgment-mono
-          ref: refs/pull/3539/head
+          ref: main
           token: ${{ secrets.RELEASE_BOT_GITHUB_PAT }}
           persist-credentials: false
           path: .jql-source/judgment-mono
