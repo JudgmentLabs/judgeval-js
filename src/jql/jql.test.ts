@@ -109,6 +109,42 @@ test("sends session scope outside the JQL query object", async () => {
   });
 });
 
+test("keeps discovery limit in the query and request envelope", async () => {
+  let request: Request | undefined;
+  globalThis.fetch = ((input, init) => {
+    request =
+      input instanceof Request
+        ? input
+        : new Request(input instanceof URL ? input.toString() : input, init);
+    return Promise.resolve(
+      Response.json({ query_id: "q-1", rows: [], row_count: 0, elapsed_ms: 1 }),
+    );
+  }) as typeof fetch;
+  const client = new JudgevalJqlClient(
+    "https://api.example.com/",
+    "api-key",
+    "org-1",
+    "project-1",
+  );
+
+  await client.discover("fields", {
+    source: "traces",
+    limit: 5,
+    traceIds: ["trace-1"],
+  });
+
+  expect(await request?.json()).toEqual({
+    query: {
+      op: "discovery",
+      kind: "fields",
+      limit: 5,
+      source: "traces",
+    },
+    limit: 5,
+    trace_ids: ["trace-1"],
+  });
+});
+
 test("rejects trace and session scope together before fetch", async () => {
   let fetchCalls = 0;
   globalThis.fetch = (() => {

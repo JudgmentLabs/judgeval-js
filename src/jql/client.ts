@@ -67,10 +67,9 @@ export class JudgevalJqlClient {
     kind: DiscoveryKind,
     options: DiscoveryOptions & JqlRequestOptions = {},
   ): Promise<JqlQueryResponse> {
-    const { signal, limit, traceIds, sessionIds, ...discoveryOptions } =
-      options;
+    const { signal, traceIds, sessionIds, ...discoveryOptions } = options;
     return this.query(discovery(kind, discoveryOptions), {
-      limit,
+      limit: options.limit,
       traceIds,
       sessionIds,
       signal,
