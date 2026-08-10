@@ -65,13 +65,19 @@ the query payload.
 
 ```typescript
 import { Judgeval } from "judgeval";
-import { eq, traces } from "judgeval/jql";
+import { spans } from "judgeval/jql";
 
 const client = await Judgeval.create({ projectName: "my-llm-app" });
-const result = await client.query(
-  traces().where(eq("session", "session-123")).ids(),
-);
+const result = await client.query(spans().rows(), {
+  traceIds: ["trace-123"],
+});
 ```
+
+`traceIds` and `sessionIds` are mutually exclusive options outside the JQL query
+object. Trace IDs narrow the query directly. Judgment resolves session IDs within
+the authenticated organization and project, then narrows every part of the query
+to their traces. If no session resolves, the request fails instead of falling back
+to the whole project. Both options work with `present` and `discover`.
 
 ## Documentation
 

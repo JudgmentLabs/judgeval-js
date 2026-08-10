@@ -239,6 +239,10 @@ export interface components {
     PublicJqlRequest: {
       query: unknown;
       limit?: number;
+      /** @description Traces to bind directly to the query within the authenticated organization and project. Use offline trace IDs for offline query sources. */
+      trace_ids?: string[];
+      /** @description Live sessions to resolve to a trace-scoped query within the authenticated organization and project. Unavailable for offline query sources. */
+      session_ids?: string[];
     };
     PublicJqlQueryResponse: {
       query_id: string;

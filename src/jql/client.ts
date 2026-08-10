@@ -10,6 +10,10 @@ import type { components as PublicComponents } from "./generated/public-api";
 
 export interface JqlRequestOptions {
   limit?: number;
+  /** Narrow the query directly to these traces. Mutually exclusive with sessionIds. */
+  traceIds?: string[];
+  /** Narrow the query to traces resolved from these sessions. */
+  sessionIds?: string[];
   signal?: AbortSignal;
 }
 
@@ -63,9 +67,13 @@ export class JudgevalJqlClient {
     kind: DiscoveryKind,
     options: DiscoveryOptions & JqlRequestOptions = {},
   ): Promise<JqlQueryResponse> {
-    const { signal, ...discoveryOptions } = options;
-    const { limit } = options;
-    return this.query(discovery(kind, discoveryOptions), { limit, signal });
+    const { signal, traceIds, sessionIds, ...discoveryOptions } = options;
+    return this.query(discovery(kind, discoveryOptions), {
+      limit: options.limit,
+      traceIds,
+      sessionIds,
+      signal,
+    });
   }
 
   private async post<T>(
@@ -73,6 +81,9 @@ export class JudgevalJqlClient {
     query: Query | PresentationQuery,
     options: JqlRequestOptions,
   ): Promise<T> {
+    if (options.traceIds !== undefined && options.sessionIds !== undefined) {
+      throw new TypeError("traceIds and sessionIds are mutually exclusive");
+    }
     const response = await fetch(
       `${this.baseUrl.replace(/\/+$/, "")}/v1/projects/${encodeURIComponent(this.projectId)}/${path}`,
       {
@@ -85,6 +96,12 @@ export class JudgevalJqlClient {
         body: JSON.stringify({
           query,
           ...(options.limit === undefined ? {} : { limit: options.limit }),
+          ...(options.traceIds === undefined
+            ? {}
+            : { trace_ids: options.traceIds }),
+          ...(options.sessionIds === undefined
+            ? {}
+            : { session_ids: options.sessionIds }),
         }),
         signal: options.signal,
       },
