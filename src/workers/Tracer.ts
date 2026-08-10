@@ -96,7 +96,7 @@ export class Tracer extends BaseTracer {
       "judgment.project_id": projectId,
     };
     if (config.environment) {
-      resourceAttrs["deployment.environment"] = config.environment;
+      resourceAttrs["deployment.environment.name"] = config.environment;
     }
     if (config.resourceAttributes) {
       Object.assign(resourceAttrs, config.resourceAttributes);

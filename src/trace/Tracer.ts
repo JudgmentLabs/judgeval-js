@@ -135,7 +135,7 @@ export class Tracer extends BaseTracer {
       "telemetry.sdk.version": VERSION,
     };
     if (config.environment) {
-      resourceAttrs["deployment.environment"] = config.environment;
+      resourceAttrs["deployment.environment.name"] = config.environment;
     }
     if (config.resourceAttributes) {
       Object.assign(resourceAttrs, config.resourceAttributes);
