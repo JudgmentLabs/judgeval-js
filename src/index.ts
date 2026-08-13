@@ -66,7 +66,7 @@ export {
   type PassConditionFn,
 } from "./offline-tests";
 
-export { JudgevalAPIError } from "./jql/client";
+export { JudgevalAPIError, JudgevalJqlUnavailableError } from "./jql/client";
 export type {
   JqlPresentationResponse,
   JqlQueryInput,
