@@ -165,7 +165,7 @@ export class OfflineTestsFactory {
    *
    * @param testConfig - Test config name, id, or `TestConfig` object.
    * @param options - Run options (agent function, judge versions, dataset
-   *   version, pass condition, assert, timeout).
+   *   version, pass condition, assert, timeout, concurrency).
    */
   async run(
     testConfig: string | TestConfig,
