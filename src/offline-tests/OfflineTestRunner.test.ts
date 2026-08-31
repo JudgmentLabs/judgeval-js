@@ -139,12 +139,36 @@ describe("OfflineTestRunner.runAgent concurrency", () => {
     });
   });
 
-  test("records no trace ids when the offline tracer failed to activate", async () => {
+  test("throws when the offline tracer failed to activate", async () => {
     await withStubbedOfflineTracer(false, async () => {
-      const agent = (fields: Record<string, unknown>): unknown => fields.input;
+      let calls = 0;
+      const agent = (fields: Record<string, unknown>): unknown => {
+        calls += 1;
+        return fields.input;
+      };
 
-      const traces = await makeRunner().runAgent(agent, makeExamples(2), 2);
-      expect(traces).toEqual({});
+      await expect(
+        makeRunner().runAgent(agent, makeExamples(2), 2),
+      ).rejects.toThrow("could not be activated");
+      expect(calls).toBe(0);
+    });
+  });
+
+  test("records judgment.input under the agent function's parameter name", async () => {
+    await withStubbedOfflineTracer(true, async (exporter) => {
+      await makeRunner().runAgent(
+        (myFields: Record<string, unknown>) => myFields.input,
+        makeExamples(1),
+        1,
+      );
+
+      const rootSpan = exporter
+        .getFinishedSpans()
+        .find((span) => span.parentSpanContext === undefined);
+      expect(rootSpan).toBeDefined();
+      expect(JSON.parse(String(rootSpan?.attributes["judgment.input"]))).toEqual(
+        { myFields: { input: "q0" } },
+      );
     });
   });
 

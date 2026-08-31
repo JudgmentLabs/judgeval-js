@@ -10,6 +10,7 @@ import { Tracer } from "../trace/Tracer";
 import { OfflineTracer } from "../trace/OfflineTracer";
 import { JudgmentTracerProvider } from "../trace/JudgmentTracerProvider";
 import { sleep } from "../utils/sleep";
+import { parseFunctionArgs } from "../utils/annotate";
 import {
   type AgentFunction,
   type JudgeVersionPin,
@@ -229,8 +230,8 @@ export class OfflineTestRunner {
    * id is captured from inside its own observed call, so attribution stays
    * correct regardless of completion order. Ids are recorded only while this
    * runner's offline tracer is the active tracer — if activation was refused
-   * (e.g. a live root span was recording), no ids are attached and judges
-   * fall back to each example's existing trace.
+   * (e.g. a live root span was recording), activation refusal throws before
+   * any agent call runs.
    *
    * NOTE: the offline-tracer lifecycle here (active-tracer swap, async
    * `observe`, per-example trace attribution) still needs validation against a
@@ -261,6 +262,13 @@ export class OfflineTestRunner {
       dataset: [] as Example[],
       setActive: true,
     });
+    if (provider.getActiveTracer() !== offlineTracer) {
+      throw new Error(
+        "Offline tracer could not be activated because another tracer has a recording root span; " +
+          "agent traces cannot be attributed to this test run. " +
+          "Run offline tests outside of any active observed span.",
+      );
+    }
 
     // Trace id of the observed call in progress, or null when the offline
     // tracer is not the active tracer (activation refused under a live root
@@ -275,17 +283,32 @@ export class OfflineTestRunner {
     };
 
     const agentTraces: Record<string, string> = {};
+    // judgment.input keys come from the observed function's parameter names,
+    // so derive them from the agent function rather than the probe wrapper.
+    let agentParamName: string | null = null;
+    try {
+      const [first] = parseFunctionArgs(agentFunction)
+        .map((param) =>
+          param.replace(/^\.\.\./, "").split("=")[0]?.trim() ?? "",
+        )
+        .filter((param) => param.length > 0);
+      agentParamName = first ?? null;
+    } catch {
+      agentParamName = null;
+    }
     const invoke = async (example: ExampleRow): Promise<void> => {
       let traceId: string | null = null;
       // Capture the offline trace id from inside the observed call:
       // correlation by example, safe under concurrency.
       const probe = (fields: Record<string, unknown>): unknown => {
         traceId = currentOfflineTraceId();
+        Tracer.setInput(agentParamName ? { [agentParamName]: fields } : {});
         return agentFunction(fields);
       };
       const wrapped = Tracer.observe(probe, {
         spanType: "agent",
         spanName: agentFunction.name,
+        recordInput: false,
       });
       try {
         await wrapped(example.data);
