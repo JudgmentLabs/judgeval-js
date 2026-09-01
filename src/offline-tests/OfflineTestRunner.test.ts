@@ -180,4 +180,41 @@ describe("OfflineTestRunner.runAgent concurrency", () => {
       "concurrency",
     );
   });
+
+  test("restores the previously active tracer and keeps its traces isolated", async () => {
+    const liveExporter = new InMemorySpanExporter();
+    const liveTracer = await Tracer.init({
+      spanProcessors: [new SimpleSpanProcessor(liveExporter)],
+      setActive: true,
+    });
+    const provider = JudgmentTracerProvider.getInstance();
+    try {
+      await withStubbedOfflineTracer(true, async (offlineExporter) => {
+        const traces = await makeRunner().runAgent(
+          (fields: Record<string, unknown>) => fields.input,
+          makeExamples(2),
+          2,
+        );
+
+        expect(provider.getActiveTracer()).toBe(liveTracer);
+        // Agent spans went to the offline tracer only.
+        expect(liveExporter.getFinishedSpans()).toHaveLength(0);
+        expect(offlineExporter.getFinishedSpans()).toHaveLength(2);
+
+        await Tracer.observe((x: string) => x, { spanName: "live-after" })(
+          "hi",
+        );
+
+        const liveSpans = liveExporter.getFinishedSpans();
+        expect(liveSpans.map((s) => s.name)).toEqual(["live-after"]);
+        expect(Object.values(traces)).not.toContain(
+          liveSpans[0]!.spanContext().traceId,
+        );
+      });
+    } finally {
+      provider.deregister(liveTracer);
+      (provider as unknown as { _activeTracer: unknown })._activeTracer = null;
+      await liveTracer._tracerProvider.shutdown();
+    }
+  });
 });

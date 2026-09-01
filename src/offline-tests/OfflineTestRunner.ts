@@ -11,6 +11,7 @@ import { OfflineTracer } from "../trace/OfflineTracer";
 import { JudgmentTracerProvider } from "../trace/JudgmentTracerProvider";
 import { sleep } from "../utils/sleep";
 import { parseFunctionArgs } from "../utils/annotate";
+import { pLimit } from "../utils/p-limit";
 import {
   type AgentFunction,
   type JudgeVersionPin,
@@ -225,13 +226,9 @@ export class OfflineTestRunner {
   /**
    * Run the agent once per dataset example, producing one offline trace each.
    *
-   * Up to `concurrency` examples run at a time; at the default of 1 the
-   * agent runs sequentially in dataset order. Each example's offline trace
-   * id is captured from inside its own observed call, so attribution stays
-   * correct regardless of completion order. Ids are recorded only while this
-   * runner's offline tracer is the active tracer — if activation was refused
-   * (e.g. a live root span was recording), activation refusal throws before
-   * any agent call runs.
+   * Up to `concurrency` examples run at a time; the default of 1 runs them
+   * sequentially in dataset order. Each trace id is captured from inside its
+   * own observed call so attribution holds regardless of completion order.
    *
    * NOTE: the offline-tracer lifecycle here (active-tracer swap, async
    * `observe`, per-example trace attribution) still needs validation against a
@@ -257,8 +254,7 @@ export class OfflineTestRunner {
       apiKey: this._client.getApiKey(),
       organizationId: this._client.getOrganizationId(),
       apiUrl: this._client.getBaseUrl(),
-      // Required by OfflineTracer but unused here: example→trace correlation
-      // happens inside each observed call below.
+      // Required by OfflineTracer; correlation happens per observed call below.
       dataset: [] as Example[],
       setActive: true,
     });
@@ -270,9 +266,7 @@ export class OfflineTestRunner {
       );
     }
 
-    // Trace id of the observed call in progress, or null when the offline
-    // tracer is not the active tracer (activation refused under a live root
-    // span) — never attach a foreign trace id.
+    // Never attach a trace id from a foreign tracer's span.
     const currentOfflineTraceId = (): string | null => {
       if (provider.getActiveTracer() !== offlineTracer) return null;
       const span = provider.getCurrentSpan();
@@ -283,23 +277,12 @@ export class OfflineTestRunner {
     };
 
     const agentTraces: Record<string, string> = {};
-    // judgment.input keys come from the observed function's parameter names,
-    // so derive them from the agent function rather than the probe wrapper.
-    let agentParamName: string | null = null;
-    try {
-      const [first] = parseFunctionArgs(agentFunction)
-        .map((param) =>
-          param.replace(/^\.\.\./, "").split("=")[0]?.trim() ?? "",
-        )
-        .filter((param) => param.length > 0);
-      agentParamName = first ?? null;
-    } catch {
-      agentParamName = null;
-    }
+    // observe() keys judgment.input by the wrapped function's param names; record
+    // under the agent's own first param name, not the probe's.
+    const agentParamName = firstParamName(agentFunction);
     const invoke = async (example: ExampleRow): Promise<void> => {
       let traceId: string | null = null;
-      // Capture the offline trace id from inside the observed call:
-      // correlation by example, safe under concurrency.
+      // Captured from inside the observed call so it is this example's trace.
       const probe = (fields: Record<string, unknown>): unknown => {
         traceId = currentOfflineTraceId();
         Tracer.setInput(agentParamName ? { [agentParamName]: fields } : {});
@@ -323,23 +306,10 @@ export class OfflineTestRunner {
     };
 
     try {
-      // Bounded worker pool over a shared index. Single-threaded JS: the
-      // index bump is atomic between awaits, and concurrency = 1 degenerates
-      // to the previous strictly-in-order loop.
-      let nextIndex = 0;
-      const workers = Array.from(
-        { length: Math.min(concurrency, examples.length) },
-        async () => {
-          for (;;) {
-            const index = nextIndex;
-            nextIndex += 1;
-            const example = examples[index];
-            if (!example) return;
-            await invoke(example);
-          }
-        },
+      const limit = pLimit(concurrency);
+      await Promise.all(
+        examples.map((example) => limit(() => invoke(example))),
       );
-      await Promise.all(workers);
     } finally {
       await Tracer.forceFlush();
       if (previousTracer) previousTracer.setActive();
@@ -569,5 +539,22 @@ export class OfflineTestRunner {
 
     if (assertTest) assertAllPassed(outcome);
     return outcome;
+  }
+}
+
+function firstParamName(fn: AgentFunction): string | null {
+  try {
+    const [first] = parseFunctionArgs(fn)
+      .map(
+        (param) =>
+          param
+            .replace(/^\.\.\./, "")
+            .split("=")[0]
+            ?.trim() ?? "",
+      )
+      .filter((param) => param.length > 0);
+    return first ?? null;
+  } catch {
+    return null;
   }
 }
