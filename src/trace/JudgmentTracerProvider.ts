@@ -164,6 +164,16 @@ export class JudgmentTracerProvider implements TracerProvider {
   }
 
   /**
+   * Counterpart to {@link setActive} for temporary swaps: put back the tracer
+   * captured via `getActiveTracer()` beforehand, or `null` to deactivate.
+   * Unlike `setActive` this neither registers the tracer nor refuses under
+   * a recording root span.
+   */
+  restoreActive(tracer: BaseTracer | null): void {
+    this._activeTracer = tracer;
+  }
+
+  /**
    * Get the currently active tracer.
    *
    * @returns The active tracer, or `null` if none.

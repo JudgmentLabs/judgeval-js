@@ -133,6 +133,66 @@ describe("ProxyTracer.startActiveSpan", () => {
   });
 });
 
+describe("restoreActive", () => {
+  test("puts back a previous tracer or clears the active one", () => {
+    const { proxy, cleanup } = setupProxy();
+    try {
+      const previous = proxy.getActiveTracer();
+      proxy.restoreActive(null);
+      expect(proxy.getActiveTracer()).toBeNull();
+      proxy.restoreActive(previous);
+      expect(proxy.getActiveTracer()).toBe(previous);
+    } finally {
+      cleanup();
+    }
+  });
+});
+
+describe("concurrent observed traces", () => {
+  test("concurrent observed calls emit isolated, independent traces", async () => {
+    const { proxy, exporter, cleanup } = setupProxy();
+    try {
+      const currentTraceId = (): string =>
+        trace.getSpan(proxy.getCurrentContext())!.spanContext().traceId;
+      const runOne = BaseTracer.observe(
+        async (label: string) => {
+          const traceId = currentTraceId();
+          // Randomize completion order to force interleaving.
+          await new Promise((r) => setTimeout(r, Math.random() * 20));
+          BaseTracer.observe(() => currentTraceId(), {
+            spanName: `child-${label}`,
+          })();
+          // The await must not leak a sibling call's context.
+          expect(currentTraceId()).toBe(traceId);
+          return { label, traceId };
+        },
+        { spanName: "root" },
+      );
+
+      const results = await Promise.all(
+        ["a", "b", "c", "d"].map((label) => runOne(label)),
+      );
+      expect(new Set(results.map((r) => r.traceId)).size).toBe(4);
+
+      const finished = exporter.getFinishedSpans();
+      const roots = finished.filter((s) => s.parentSpanContext === undefined);
+      const children = finished.filter((s) => s.name.startsWith("child-"));
+      expect(roots.length).toBe(4);
+      expect(children.length).toBe(4);
+      for (const child of children) {
+        const label = child.name.slice("child-".length);
+        const traceId = results.find((r) => r.label === label)!.traceId;
+        const root = roots.find((s) => s.spanContext().traceId === traceId)!;
+        expect(root).toBeDefined();
+        expect(child.spanContext().traceId).toBe(traceId);
+        expect(child.parentSpanContext?.spanId).toBe(root.spanContext().spanId);
+      }
+    } finally {
+      cleanup();
+    }
+  });
+});
+
 describe("BaseTracer.startActiveSpan span lifecycle", () => {
   test("ends the span on synchronous return", () => {
     const { exporter, cleanup } = setupProxy();
