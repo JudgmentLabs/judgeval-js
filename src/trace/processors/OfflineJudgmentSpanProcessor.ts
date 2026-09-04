@@ -1,7 +1,21 @@
-import type { ReadableSpan, SpanExporter } from "@opentelemetry/sdk-trace-base";
+import { createContextKey, type Context } from "@opentelemetry/api";
+import type {
+  ReadableSpan,
+  Span,
+  SpanExporter,
+} from "@opentelemetry/sdk-trace-base";
 import { Example } from "../../data/Example";
 import type { BaseTracer } from "../BaseTracer";
 import { JudgmentSpanProcessor } from "./JudgmentSpanProcessor";
+
+/**
+ * Context key naming the dataset example a root span belongs to. Set it on
+ * the context before starting the span and the processor records the
+ * `exampleId -> traceId` pairing in {@link OfflineJudgmentSpanProcessor.exampleTraceIds}.
+ */
+export const OFFLINE_EXAMPLE_ID_KEY = createContextKey(
+  "judgment.offline_example_id",
+);
 
 /**
  * Span processor used by `OfflineTracer`.
@@ -16,6 +30,8 @@ export class OfflineJudgmentSpanProcessor extends JudgmentSpanProcessor {
   private readonly _dataset: Example[];
   private readonly _exampleFields: Record<string, unknown>;
   private readonly _seenTraceIds = new Set<string>();
+  /** `exampleId -> traceId` of the first root span started under that example's context. */
+  readonly exampleTraceIds = new Map<string, string>();
 
   constructor(
     tracer: BaseTracer,
@@ -43,6 +59,19 @@ export class OfflineJudgmentSpanProcessor extends JudgmentSpanProcessor {
       offline_trace_id: ctx.traceId,
     });
     this._dataset.push(example);
+  }
+
+  onStart(span: Span, parentContext: Context): void {
+    const exampleId = parentContext.getValue(OFFLINE_EXAMPLE_ID_KEY);
+    if (
+      typeof exampleId === "string" &&
+      exampleId &&
+      !span.parentSpanContext &&
+      !this.exampleTraceIds.has(exampleId)
+    ) {
+      this.exampleTraceIds.set(exampleId, span.spanContext().traceId);
+    }
+    super.onStart(span, parentContext);
   }
 
   onEnd(span: ReadableSpan): void {

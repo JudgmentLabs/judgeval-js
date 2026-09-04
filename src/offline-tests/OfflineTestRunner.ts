@@ -9,8 +9,8 @@ import { Example } from "../data/Example";
 import { Tracer } from "../trace/Tracer";
 import { OfflineTracer } from "../trace/OfflineTracer";
 import { JudgmentTracerProvider } from "../trace/JudgmentTracerProvider";
+import { OFFLINE_EXAMPLE_ID_KEY } from "../trace/processors/OfflineJudgmentSpanProcessor";
 import { sleep } from "../utils/sleep";
-import { parseFunctionArgs } from "../utils/annotate";
 import { pLimit } from "../utils/p-limit";
 import {
   type AgentFunction,
@@ -227,12 +227,9 @@ export class OfflineTestRunner {
    * Run the agent once per dataset example, producing one offline trace each.
    *
    * Up to `concurrency` examples run at a time; the default of 1 runs them
-   * sequentially in dataset order. Each trace id is captured from inside its
-   * own observed call so attribution holds regardless of completion order.
-   *
-   * NOTE: the offline-tracer lifecycle here (active-tracer swap, async
-   * `observe`, per-example trace attribution) still needs validation against a
-   * live run.
+   * sequentially in dataset order. Each example id rides on the OTel context,
+   * so the offline span processor can pair it with the root span it starts
+   * regardless of completion order.
    */
   async runAgent(
     agentFunction: AgentFunction,
@@ -254,68 +251,48 @@ export class OfflineTestRunner {
       apiKey: this._client.getApiKey(),
       organizationId: this._client.getOrganizationId(),
       apiUrl: this._client.getBaseUrl(),
-      // Required by OfflineTracer; correlation happens per observed call below.
       dataset: [] as Example[],
       setActive: true,
     });
-    if (provider.getActiveTracer() !== offlineTracer) {
-      throw new Error(
-        "Offline tracer could not be activated because another tracer has a recording root span; " +
-          "agent traces cannot be attributed to this test run. " +
-          "Run offline tests outside of any active observed span.",
-      );
-    }
-
-    // Never attach a trace id from a foreign tracer's span.
-    const currentOfflineTraceId = (): string | null => {
-      if (provider.getActiveTracer() !== offlineTracer) return null;
-      const span = provider.getCurrentSpan();
-      if (!span?.isRecording()) return null;
-      const ctx = span.spanContext();
-      if (!ctx.traceId || !(ctx.traceFlags & 0x01)) return null;
-      return ctx.traceId;
-    };
-
-    const agentTraces: Record<string, string> = {};
-    // observe() keys judgment.input by the wrapped function's param names; record
-    // under the agent's own first param name, not the probe's.
-    const agentParamName = firstParamName(agentFunction);
-    const invoke = async (example: ExampleRow): Promise<void> => {
-      let traceId: string | null = null;
-      // Captured from inside the observed call so it is this example's trace.
-      const probe = (fields: Record<string, unknown>): unknown => {
-        traceId = currentOfflineTraceId();
-        Tracer.setInput(agentParamName ? { [agentParamName]: fields } : {});
-        return agentFunction(fields);
-      };
-      const wrapped = Tracer.observe(probe, {
-        spanType: "agent",
-        spanName: agentFunction.name,
-        recordInput: false,
-      });
-      try {
-        await wrapped(example.data);
-      } catch (error) {
-        Logger.error(
-          `Agent entrypoint raised for example ${example.exampleId}: ${String(error)}`,
-        );
-      }
-      if (example.exampleId && traceId) {
-        agentTraces[example.exampleId] = traceId;
-      }
-    };
+    const processor = offlineTracer.getSpanProcessor();
 
     try {
+      if (provider.getActiveTracer() !== offlineTracer) {
+        throw new Error(
+          "Offline tracer could not be activated because another tracer has a recording root span; " +
+            "agent traces cannot be attributed to this test run. " +
+            "Run offline tests outside of any active observed span.",
+        );
+      }
+
+      const wrapped = Tracer.observe(agentFunction, { spanType: "agent" });
       const limit = pLimit(concurrency);
       await Promise.all(
-        examples.map((example) => limit(() => invoke(example))),
+        examples.map((example) =>
+          limit(async () => {
+            // The processor pairs the root span it starts under this context
+            // with the example id.
+            const ctx = provider
+              .getCurrentContext()
+              .setValue(OFFLINE_EXAMPLE_ID_KEY, example.exampleId);
+            try {
+              await provider.withContext(ctx, () => wrapped(example.data));
+            } catch (error) {
+              Logger.error(
+                `Agent entrypoint raised for example ${example.exampleId}: ${String(error)}`,
+              );
+            }
+          }),
+        ),
       );
     } finally {
-      await Tracer.forceFlush();
-      if (previousTracer) previousTracer.setActive();
+      provider.restoreActive(previousTracer);
+      provider.deregister(offlineTracer);
+      // shutdown() flushes pending spans before tearing down the exporter.
+      await offlineTracer._tracerProvider.shutdown();
     }
 
-    return agentTraces;
+    return Object.fromEntries(processor.exampleTraceIds);
   }
 
   async waitForCompletion(
@@ -539,22 +516,5 @@ export class OfflineTestRunner {
 
     if (assertTest) assertAllPassed(outcome);
     return outcome;
-  }
-}
-
-function firstParamName(fn: AgentFunction): string | null {
-  try {
-    const [first] = parseFunctionArgs(fn)
-      .map(
-        (param) =>
-          param
-            .replace(/^\.\.\./, "")
-            .split("=")[0]
-            ?.trim() ?? "",
-      )
-      .filter((param) => param.length > 0);
-    return first ?? null;
-  } catch {
-    return null;
   }
 }

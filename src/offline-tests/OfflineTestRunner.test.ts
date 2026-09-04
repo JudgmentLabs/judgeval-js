@@ -1,11 +1,13 @@
 import { describe, expect, spyOn, test } from "bun:test";
+import { ExportResultCode } from "@opentelemetry/core";
 import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
+  type ReadableSpan,
 } from "@opentelemetry/sdk-trace-base";
-import type { JudgmentApiClient } from "../internal/api/client";
+import { JudgmentApiClient } from "../internal/api/client";
+import { JudgmentSpanExporter } from "../trace/exporters/JudgmentSpanExporter";
 import { JudgmentTracerProvider } from "../trace/JudgmentTracerProvider";
-import { OfflineTracer } from "../trace/OfflineTracer";
 import { Tracer } from "../trace/Tracer";
 import { OfflineTestRunner } from "./OfflineTestRunner";
 
@@ -26,39 +28,40 @@ const makeExamples = (count: number) =>
     createdAt: null,
   }));
 
+const provider = JudgmentTracerProvider.getInstance();
+const registeredCount = (): number =>
+  (provider as unknown as { _tracers: Set<unknown> })._tracers.size;
+
 /**
- * Stub `OfflineTracer.create` with a real (network-free) tracer exporting to
- * an in-memory exporter, so `runAgent` exercises the real observe/context
- * machinery. `activate: false` simulates a refused active-tracer swap.
+ * Run `fn` with the real `OfflineTracer` made network-free: project lookup
+ * and OTLP export are stubbed, and exported spans land in `spans`.
  */
-async function withStubbedOfflineTracer(
-  activate: boolean,
-  fn: (exporter: InMemorySpanExporter) => Promise<void>,
+async function withOfflineSpans(
+  fn: (spans: ReadableSpan[]) => Promise<void>,
 ): Promise<void> {
-  const exporter = new InMemorySpanExporter();
-  // No projectName: monitoring is disabled and no network call is made.
-  const tracer = await Tracer.init({
-    spanProcessors: [new SimpleSpanProcessor(exporter)],
-    setActive: false,
-  });
-  const provider = JudgmentTracerProvider.getInstance();
-  const createSpy = spyOn(OfflineTracer, "create").mockImplementation(() => {
-    if (activate) provider.setActive(tracer);
-    return Promise.resolve(tracer as unknown as OfflineTracer);
+  const spans: ReadableSpan[] = [];
+  const resolveSpy = spyOn(
+    JudgmentApiClient.prototype,
+    "postV1projectsResolve",
+  ).mockResolvedValue({ project_id: "proj-id" } as never);
+  const exportSpy = spyOn(
+    JudgmentSpanExporter.prototype,
+    "export",
+  ).mockImplementation((batch, cb) => {
+    spans.push(...batch);
+    cb({ code: ExportResultCode.SUCCESS });
   });
   try {
-    await fn(exporter);
+    await fn(spans);
   } finally {
-    createSpy.mockRestore();
-    provider.deregister(tracer);
-    (provider as unknown as { _activeTracer: unknown })._activeTracer = null;
-    await tracer._tracerProvider.shutdown();
+    resolveSpy.mockRestore();
+    exportSpy.mockRestore();
   }
 }
 
 describe("OfflineTestRunner.runAgent concurrency", () => {
   test("maps each example to the trace of its own call under concurrency", async () => {
-    await withStubbedOfflineTracer(true, async () => {
+    await withOfflineSpans(async () => {
       const seen = new Map<string, string>();
       const agent = async (
         fields: Record<string, unknown>,
@@ -83,7 +86,7 @@ describe("OfflineTestRunner.runAgent concurrency", () => {
   });
 
   test("runs examples concurrently", async () => {
-    await withStubbedOfflineTracer(true, async () => {
+    await withOfflineSpans(async () => {
       // The gate only opens once all 4 calls are in flight, so this test
       // deadlocks (and times out) if execution regresses to sequential.
       let entered = 0;
@@ -103,7 +106,7 @@ describe("OfflineTestRunner.runAgent concurrency", () => {
   });
 
   test("default concurrency stays sequential and in dataset order", async () => {
-    await withStubbedOfflineTracer(true, async () => {
+    await withOfflineSpans(async () => {
       const calls: string[] = [];
       let inFlight = 0;
       let maxInFlight = 0;
@@ -124,7 +127,7 @@ describe("OfflineTestRunner.runAgent concurrency", () => {
   });
 
   test("an agent error does not abort the remaining examples", async () => {
-    await withStubbedOfflineTracer(true, async () => {
+    await withOfflineSpans(async () => {
       // Sync agent: also covers the non-promise entrypoint path.
       const agent = (fields: Record<string, unknown>): unknown => {
         if (fields.input === "q1") throw new Error("boom");
@@ -139,36 +142,112 @@ describe("OfflineTestRunner.runAgent concurrency", () => {
     });
   });
 
-  test("throws when the offline tracer failed to activate", async () => {
-    await withStubbedOfflineTracer(false, async () => {
-      let calls = 0;
-      const agent = (fields: Record<string, unknown>): unknown => {
-        calls += 1;
-        return fields.input;
-      };
+  test("throws and cleans up when a live root span blocks activation", async () => {
+    const liveTracer = await Tracer.init({
+      spanProcessors: [new SimpleSpanProcessor(new InMemorySpanExporter())],
+      setActive: true,
+    });
+    try {
+      await withOfflineSpans(async () => {
+        let calls = 0;
+        const agent = (fields: Record<string, unknown>): unknown => {
+          calls += 1;
+          return fields.input;
+        };
+        const before = registeredCount();
 
-      await expect(
-        makeRunner().runAgent(agent, makeExamples(2), 2),
-      ).rejects.toThrow("could not be activated");
-      expect(calls).toBe(0);
+        await Tracer.observe(async () => {
+          await expect(
+            makeRunner().runAgent(agent, makeExamples(2), 2),
+          ).rejects.toThrow("could not be activated");
+        })();
+
+        expect(calls).toBe(0);
+        expect(provider.getActiveTracer()).toBe(liveTracer);
+        expect(registeredCount()).toBe(before);
+      });
+    } finally {
+      provider.deregister(liveTracer);
+      provider.restoreActive(null);
+      await liveTracer._tracerProvider.shutdown();
+    }
+  });
+
+  test("releases the offline tracer after a run", async () => {
+    await withOfflineSpans(async () => {
+      const before = registeredCount();
+      const traces = await makeRunner().runAgent(
+        // Nested observed call: only the root span maps to the example.
+        (fields: Record<string, unknown>) =>
+          Tracer.observe(() => fields.input, { spanName: "inner" })(),
+        makeExamples(2),
+        2,
+      );
+      expect(Object.keys(traces)).toHaveLength(2);
+      expect(registeredCount()).toBe(before);
+      expect(provider.getActiveTracer()).toBeNull();
     });
   });
 
   test("records judgment.input under the agent function's parameter name", async () => {
-    await withStubbedOfflineTracer(true, async (exporter) => {
+    await withOfflineSpans(async (spans) => {
       await makeRunner().runAgent(
         (myFields: Record<string, unknown>) => myFields.input,
         makeExamples(1),
         1,
       );
 
-      const rootSpan = exporter
-        .getFinishedSpans()
-        .find((span) => span.parentSpanContext === undefined);
-      expect(rootSpan).toBeDefined();
-      expect(JSON.parse(String(rootSpan?.attributes["judgment.input"]))).toEqual(
-        { myFields: { input: "q0" } },
+      const rootSpan = spans.find(
+        (span) => span.parentSpanContext === undefined,
       );
+      expect(rootSpan).toBeDefined();
+      expect(
+        JSON.parse(String(rootSpan?.attributes["judgment.input"])),
+      ).toEqual({ myFields: { input: "q0" } });
+    });
+  });
+
+  test("each concurrent trace records its own example's input under the agent's param name", async () => {
+    await withOfflineSpans(async (spans) => {
+      const traces = await makeRunner().runAgent(
+        async (myFields: Record<string, unknown>) => {
+          await new Promise((r) => setTimeout(r, Math.random() * 20));
+          return myFields.input;
+        },
+        makeExamples(4),
+        4,
+      );
+
+      const roots = spans.filter(
+        (span) => span.parentSpanContext === undefined,
+      );
+      expect(roots).toHaveLength(4);
+      for (let i = 0; i < 4; i += 1) {
+        const root = roots.find(
+          (span) => span.spanContext().traceId === traces[`ex-${i}`],
+        );
+        expect(JSON.parse(String(root?.attributes["judgment.input"]))).toEqual({
+          myFields: { input: `q${i}` },
+        });
+      }
+    });
+  });
+
+  test("skips examples without an id", async () => {
+    await withOfflineSpans(async () => {
+      const traces = await makeRunner().runAgent(
+        (fields: Record<string, unknown>) => fields.input,
+        [
+          {
+            exampleId: "",
+            data: { input: "q" },
+            offlineTraceId: null,
+            createdAt: null,
+          },
+        ],
+        1,
+      );
+      expect(traces).toEqual({});
     });
   });
 
@@ -187,9 +266,8 @@ describe("OfflineTestRunner.runAgent concurrency", () => {
       spanProcessors: [new SimpleSpanProcessor(liveExporter)],
       setActive: true,
     });
-    const provider = JudgmentTracerProvider.getInstance();
     try {
-      await withStubbedOfflineTracer(true, async (offlineExporter) => {
+      await withOfflineSpans(async (offlineSpans) => {
         const traces = await makeRunner().runAgent(
           (fields: Record<string, unknown>) => fields.input,
           makeExamples(2),
@@ -199,7 +277,7 @@ describe("OfflineTestRunner.runAgent concurrency", () => {
         expect(provider.getActiveTracer()).toBe(liveTracer);
         // Agent spans went to the offline tracer only.
         expect(liveExporter.getFinishedSpans()).toHaveLength(0);
-        expect(offlineExporter.getFinishedSpans()).toHaveLength(2);
+        expect(offlineSpans).toHaveLength(2);
 
         await Tracer.observe((x: string) => x, { spanName: "live-after" })(
           "hi",
@@ -213,7 +291,7 @@ describe("OfflineTestRunner.runAgent concurrency", () => {
       });
     } finally {
       provider.deregister(liveTracer);
-      (provider as unknown as { _activeTracer: unknown })._activeTracer = null;
+      provider.restoreActive(null);
       await liveTracer._tracerProvider.shutdown();
     }
   });

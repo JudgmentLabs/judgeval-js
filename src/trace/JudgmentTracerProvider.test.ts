@@ -133,6 +133,21 @@ describe("ProxyTracer.startActiveSpan", () => {
   });
 });
 
+describe("restoreActive", () => {
+  test("puts back a previous tracer or clears the active one", () => {
+    const { proxy, cleanup } = setupProxy();
+    try {
+      const previous = proxy.getActiveTracer();
+      proxy.restoreActive(null);
+      expect(proxy.getActiveTracer()).toBeNull();
+      proxy.restoreActive(previous);
+      expect(proxy.getActiveTracer()).toBe(previous);
+    } finally {
+      cleanup();
+    }
+  });
+});
+
 describe("concurrent observed traces", () => {
   test("concurrent observed calls emit isolated, independent traces", async () => {
     const { proxy, exporter, cleanup } = setupProxy();
