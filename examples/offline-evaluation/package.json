@@ -8,7 +8,9 @@
   },
   "dependencies": {
     "judgeval": "file:../..",
-    "openai": "^6.34.0",
+    "openai": "^6.38.0"
+  },
+  "devDependencies": {
     "tsx": "^4.19.2"
   }
 }
