@@ -21,6 +21,17 @@ import { JudgmentBaggageSpanProcessor } from "./JudgmentBaggageSpanProcessor";
 
 type SpanKey = `${string}:${string}`;
 
+export interface JudgmentSpanProcessorConfig {
+  /** Maximum number of spans exported in one batch. Defaults to 512. */
+  maxExportBatchSize?: number;
+  /** Delay between scheduled exports in milliseconds. Defaults to 5000. */
+  scheduledDelayMillis?: number;
+  /** Maximum export duration in milliseconds. Defaults to 30000. */
+  exportTimeoutMillis?: number;
+  /** Maximum number of queued spans before new spans are dropped. Defaults to 2048. */
+  maxQueueSize?: number;
+}
+
 function makeSpanKey(ctx: SpanContext): SpanKey {
   return `${ctx.traceId}:${ctx.spanId}`;
 }
@@ -47,12 +58,7 @@ export class JudgmentSpanProcessor extends BatchSpanProcessor {
   constructor(
     tracer: BaseTracer | null,
     exporter: SpanExporter,
-    config?: {
-      maxQueueSize?: number;
-      scheduledDelayMillis?: number;
-      maxExportBatchSize?: number;
-      exportTimeoutMillis?: number;
-    },
+    config?: JudgmentSpanProcessorConfig,
   ) {
     super(exporter, config);
     this.tracer = tracer;
