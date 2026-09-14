@@ -188,6 +188,7 @@ export class Judgeval {
       this._client.getApiKey(),
       this._client.getOrganizationId(),
       this._projectId,
+      this._projectName,
     );
   }
 
