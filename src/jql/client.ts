@@ -21,6 +21,8 @@ type PublicSchemas = PublicComponents["schemas"];
 export type JqlQueryResponse = PublicSchemas["PublicJqlQueryResponse"];
 export type JqlPresentationResponse =
   PublicSchemas["PublicJqlPresentationResponse"];
+/** SQL columns and rows, with unsafe integers represented as decimal strings. */
+export type SqlResponse = PublicSchemas["PublicSqlResponse"];
 
 export class JudgevalAPIError extends Error {
   constructor(
@@ -41,13 +43,44 @@ function toQuery(input: JqlQueryInput): Query {
   return "toJSON" in input ? input.toJSON() : input;
 }
 
-export class JudgevalJqlClient {
+/** Authenticated transport shared by SQL and legacy JQL queries. */
+export class JudgevalQueryClient {
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string,
     private readonly organizationId: string,
-    private readonly projectId: string,
+    private readonly projectId: string | null,
   ) {}
+
+  /** Fetches the generated Markdown reference shared with MCP discover_schema. */
+  async discoverSchema(
+    options: { signal?: AbortSignal } = {},
+  ): Promise<string> {
+    const response = await this.request<
+      PublicSchemas["PublicSqlSchemaResponse"]
+    >("GET", "/v1/sql/schema", undefined, options.signal);
+    return response.schema;
+  }
+
+  /** Executes one read-only SELECT against the project's virtual SQL catalog. */
+  sql(
+    sql: string,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<SqlResponse> {
+    return this.request(
+      "POST",
+      this.projectPath("sql"),
+      { sql },
+      options.signal,
+    );
+  }
+
+  private projectPath(path: string): string {
+    if (!this.projectId) {
+      throw new Error("Project must resolve before running queries.");
+    }
+    return `/v1/projects/${encodeURIComponent(this.projectId)}/${path}`;
+  }
 
   query(
     query: JqlQueryInput,
@@ -84,28 +117,39 @@ export class JudgevalJqlClient {
     if (options.traceIds !== undefined && options.sessionIds !== undefined) {
       throw new TypeError("traceIds and sessionIds are mutually exclusive");
     }
-    const response = await fetch(
-      `${this.baseUrl.replace(/\/+$/, "")}/v1/projects/${encodeURIComponent(this.projectId)}/${path}`,
+    return await this.request(
+      "POST",
+      this.projectPath(path),
       {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.apiKey}`,
-          "X-Organization-Id": this.organizationId,
-        },
-        body: JSON.stringify({
-          query,
-          ...(options.limit === undefined ? {} : { limit: options.limit }),
-          ...(options.traceIds === undefined
-            ? {}
-            : { trace_ids: options.traceIds }),
-          ...(options.sessionIds === undefined
-            ? {}
-            : { session_ids: options.sessionIds }),
-        }),
-        signal: options.signal,
+        query,
+        ...(options.limit === undefined ? {} : { limit: options.limit }),
+        ...(options.traceIds === undefined
+          ? {}
+          : { trace_ids: options.traceIds }),
+        ...(options.sessionIds === undefined
+          ? {}
+          : { session_ids: options.sessionIds }),
       },
+      options.signal,
     );
+  }
+
+  private async request<T>(
+    method: "GET" | "POST",
+    path: string,
+    body?: unknown,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    const response = await fetch(`${this.baseUrl.replace(/\/+$/, "")}${path}`, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.apiKey}`,
+        "X-Organization-Id": this.organizationId,
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal,
+    });
     const text = await response.text();
     if (!response.ok) {
       let payload: { error?: string; message?: string; hint?: string } = {};

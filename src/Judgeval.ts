@@ -8,11 +8,12 @@ import { AgentJudgeFactory } from "./agent-judges/AgentJudgeFactory";
 import { OfflineTestsFactory } from "./offline-tests/OfflineTestsFactory";
 import type { OfflineTracer, OfflineTracerConfig } from "./trace/OfflineTracer";
 import {
-  JudgevalJqlClient,
+  JudgevalQueryClient,
   type JqlPresentationResponse,
   type JqlQueryInput,
   type JqlQueryResponse,
   type JqlRequestOptions,
+  type SqlResponse,
 } from "./jql/client";
 import type { DiscoveryKind, DiscoveryOptions } from "./jql/builder";
 import type { PresentationQuery } from "./jql/wire";
@@ -153,37 +154,50 @@ export class Judgeval {
     });
   }
 
-  /** Run JQL for this project, optionally narrowed by trace or session IDs. */
+  /**
+   * Returns the server's virtual SQL reference as Markdown, matching MCP
+   * discover_schema: tables, columns, descriptions, examples, and limits.
+   * Requires organization viewer access, but no resolved project or query opt-in.
+   */
+  discoverSchema(options?: { signal?: AbortSignal }): Promise<string> {
+    return this.queryClient().discoverSchema(options);
+  }
+
+  /**
+   * Runs one read-only SELECT for this project. See discoverSchema for the catalog.
+   * Results are capped at 1,000 rows and 5 MiB. Integers outside JavaScript's safe
+   * range arrive as exact decimal strings. Use SQL predicates for result scope.
+   */
+  sql(sql: string, options?: { signal?: AbortSignal }): Promise<SqlResponse> {
+    return this.queryClient().sql(sql, options);
+  }
+
+  /** Runs legacy JQL. Prefer sql() for new integrations. */
   query(
     query: JqlQueryInput,
     options?: JqlRequestOptions,
   ): Promise<JqlQueryResponse> {
-    return this.jqlClient().query(query, options);
+    return this.queryClient().query(query, options);
   }
 
-  /** Run a chart or table JQL query, optionally narrowed by trace or session IDs. */
+  /** Runs a legacy JQL presentation. For new integrations, render sql() rows. */
   present(
     query: PresentationQuery,
     options?: JqlRequestOptions,
   ): Promise<JqlPresentationResponse> {
-    return this.jqlClient().present(query, options);
+    return this.queryClient().present(query, options);
   }
 
-  /** Discover JQL catalog values, optionally narrowed by trace or session IDs. */
+  /** Finds legacy JQL project values. Use discoverSchema() for the SQL reference. */
   discover(
     kind: DiscoveryKind,
     options?: DiscoveryOptions & JqlRequestOptions,
   ): Promise<JqlQueryResponse> {
-    return this.jqlClient().discover(kind, options);
+    return this.queryClient().discover(kind, options);
   }
 
-  private jqlClient(): JudgevalJqlClient {
-    if (!this._projectId) {
-      throw new Error(
-        `Project '${this._projectName}' must resolve before running JQL.`,
-      );
-    }
-    return new JudgevalJqlClient(
+  private queryClient(): JudgevalQueryClient {
+    return new JudgevalQueryClient(
       this._client.getBaseUrl(),
       this._client.getApiKey(),
       this._client.getOrganizationId(),

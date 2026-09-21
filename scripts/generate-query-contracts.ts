@@ -17,7 +17,7 @@ const generatedPaths = [
   resolve(generatedDir, "public-api.ts"),
 ];
 const usage =
-  "usage: bun run generate-jql [--sync] [<dal-openapi.json> <generated-dal-builder.ts> <judgeval-public-jql-openapi.json>]";
+  "usage: bun run generate-query-contracts [--sync] [<dal-openapi.json> <generated-dal-builder.ts> <judgeval-public-jql-openapi.json>]";
 
 const args = process.argv.slice(2);
 const sync = args[0] === "--sync";
@@ -76,16 +76,6 @@ function run(command: string[]): void {
 roots.forEach(includeSchema);
 mkdirSync(generatedDir, { recursive: true });
 
-const publicJqlContract = {
-  openapi: "3.1.0",
-  info: { title: "Public JQL IR", version: "1" },
-  paths: {},
-  components: {
-    schemas: Object.fromEntries(
-      [...included].map((name) => [name, dalOpenapi.components.schemas[name]]),
-    ),
-  },
-};
 const sourceBuilder = readFileSync(builderPath, "utf8");
 const sourceWirePath = resolve(dirname(builderPath), "wire.ts");
 const sourceWire = readFileSync(sourceWirePath, "utf8");
@@ -96,6 +86,22 @@ const publicSourceWire = sourceWire
       !line.startsWith("export type Dal") && !line.includes("DalFrameColumn"),
   )
   .join("\n");
+
+// Include every schema named by the public wire aliases as the DAL evolves.
+for (const match of publicSourceWire.matchAll(/Schemas\[['"]([^'"]+)['"]\]/g)) {
+  includeSchema(match[1]!);
+}
+
+const publicJqlContract = {
+  openapi: "3.1.0",
+  info: { title: "Public JQL IR", version: "1" },
+  paths: {},
+  components: {
+    schemas: Object.fromEntries(
+      [...included].map((name) => [name, dalOpenapi.components.schemas[name]]),
+    ),
+  },
+};
 
 if (sync) {
   mkdirSync(contractDir, { recursive: true });
@@ -140,14 +146,14 @@ try {
     sourceBuilder.replace(
       /^(\/\/[^\n]*\n){2}/,
       "// AUTO-GENERATED from the DAL OpenAPI x-jql registry; do not edit.\n" +
-        "// Regenerate with `bun run generate-jql`.\n",
+        "// Regenerate with `bun run generate-query-contracts`.\n",
     ),
   );
   writeFileSync(
     resolve("src/jql/wire.ts"),
     publicSourceWire.replace(
       /^(\/\/[^\n]*\n)+/,
-      "// AUTO-GENERATED — do not edit; regenerate with `bun run generate-jql`.\n" +
+      "// AUTO-GENERATED — do not edit; regenerate with `bun run generate-query-contracts`.\n" +
         "// Named aliases over the OpenAPI-generated components (./generated/api).\n",
     ),
   );
@@ -156,4 +162,4 @@ try {
   rmSync(tempDir, { recursive: true, force: true });
 }
 
-console.log("Generated public JQL TypeScript builder and wire types.");
+console.log("Generated public query contracts and legacy JQL builder types.");

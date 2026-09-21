@@ -1,4 +1,4 @@
-// AUTO-GENERATED — do not edit; regenerate with `bun run generate-jql`.
+// AUTO-GENERATED — do not edit; regenerate with `bun run generate-query-contracts`.
 // Named aliases over the OpenAPI-generated components (./generated/api).
 import type { components } from "./generated/api";
 
@@ -56,4 +56,7 @@ export type StageNotFilter = Schemas["StageNotFilter"];
 export type PresentationField = Schemas["PresentationField"];
 export type OverAgg = Schemas["OverAgg"];
 
+export type UIPresentation =
+  | Schemas["ChartPresentation"]
+  | Schemas["TablePresentation"];
 export type FieldFormat = NonNullable<PresentationField["format"]>;

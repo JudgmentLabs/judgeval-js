@@ -35,7 +35,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Check canonical JQL parity
         run: |
-          bun run generate-jql \
+          bun run generate-query-contracts \
             .jql-source/judgment-mono/services/data-access-service/openapi.json \
             .jql-source/judgment-mono/packages/dal-client/src/builder.ts \
             .jql-source/judgment-mono/services/judgeval-server/openapi.public-jql.json
