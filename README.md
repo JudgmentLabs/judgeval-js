@@ -57,9 +57,11 @@ const tracedChat = Tracer.observe(async (userMessage: string) => {
 await tracedChat("What is the capital of France?");
 ```
 
-### Virtual SQL
+### SQL
 
-Use `sql()` for read-only queries against Judgment's virtual SQL catalog. Call
+Use `sql()` for read-only queries against Judgment's virtual schema, which
+abstracts the underlying storage. The server validates incoming queries,
+rejects writes, and enforces organization and project scope. Call
 `discoverSchema()` for the same Markdown reference as MCP `discover_schema`:
 tables, column types and descriptions, examples, and query limits.
 
@@ -83,7 +85,7 @@ Schema discovery uses `GET /v1/sql/schema` and returns no project data. It needs
 no resolved project or public query opt-in. Query execution uses
 `POST /v1/projects/{projectId}/sql` with `{ "sql": "..." }`; the server enforces
 tenant scope. Use SQL predicates and `LIMIT` instead of JQL scope options.
-See the [Virtual SQL guide](https://docs.judgmentlabs.ai/documentation/mcp-and-agent-tools/virtual-sql)
+See the [SQL guide](https://docs.judgmentlabs.ai/documentation/mcp-and-agent-tools/sql)
 for query and migration examples.
 
 ### Legacy JQL

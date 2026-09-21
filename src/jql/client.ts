@@ -62,7 +62,7 @@ export class JudgevalQueryClient {
     return response.schema;
   }
 
-  /** Executes one read-only SELECT against the project's virtual SQL catalog. */
+  /** Executes one read-only SELECT against the project's SQL catalog. */
   sql(
     sql: string,
     options: { signal?: AbortSignal } = {},

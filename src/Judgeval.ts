@@ -155,7 +155,7 @@ export class Judgeval {
   }
 
   /**
-   * Returns the server's virtual SQL reference as Markdown, matching MCP
+   * Returns the server's SQL reference as Markdown, matching MCP
    * discover_schema: tables, columns, descriptions, examples, and limits.
    * Requires organization viewer access, but no resolved project or query opt-in.
    */
