@@ -79,18 +79,15 @@ mkdirSync(generatedDir, { recursive: true });
 const sourceBuilder = readFileSync(builderPath, "utf8");
 const sourceWirePath = resolve(dirname(builderPath), "wire.ts");
 const sourceWire = readFileSync(sourceWirePath, "utf8");
+// Filter whole declarations so multiline internal aliases are removed too.
 const publicSourceWire = sourceWire
-  .split("\n")
+  .split(/(?=^export type )/m)
   .filter(
-    (line) =>
-      !line.startsWith("export type Dal") && !line.includes("DalFrameColumn"),
+    (declaration) =>
+      !/^export type (?:Dal\w*|UIPresentation)\b/.test(declaration) &&
+      !declaration.includes("DalFrameColumn"),
   )
-  .join("\n");
-
-// Include every schema named by the public wire aliases as the DAL evolves.
-for (const match of publicSourceWire.matchAll(/Schemas\[['"]([^'"]+)['"]\]/g)) {
-  includeSchema(match[1]!);
-}
+  .join("");
 
 const publicJqlContract = {
   openapi: "3.1.0",

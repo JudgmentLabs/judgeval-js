@@ -964,40 +964,6 @@ export interface components {
       /** Title */
       title: string;
     };
-    /** ChartPresentation */
-    ChartPresentation: {
-      /**
-       * Chart Type
-       * @enum {string}
-       */
-      chart_type: "bar" | "line" | "area" | "pie";
-      /** Description */
-      description?: string | null;
-      /**
-       * Op
-       * @constant
-       */
-      op: "chart";
-      series_by?: components["schemas"]["PresentationField"] | null;
-      /** Title */
-      title: string;
-      x_axis: components["schemas"]["PresentationField"];
-      y_axis: components["schemas"]["PresentationField"];
-    };
-    /** TablePresentation */
-    TablePresentation: {
-      /** Columns */
-      columns: components["schemas"]["PresentationField"][];
-      /** Description */
-      description?: string | null;
-      /**
-       * Op
-       * @constant
-       */
-      op: "table";
-      /** Title */
-      title: string;
-    };
   };
   responses: never;
   parameters: never;

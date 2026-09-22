@@ -57,7 +57,4 @@ export type StageNotFilter = Schemas['StageNotFilter']
 export type PresentationField = Schemas['PresentationField']
 export type OverAgg = Schemas['OverAgg']
 
-export type UIPresentation =
-  | Schemas['ChartPresentation']
-  | Schemas['TablePresentation']
 export type FieldFormat = NonNullable<PresentationField['format']>

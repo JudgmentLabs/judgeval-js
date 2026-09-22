@@ -6,7 +6,9 @@ These files are public-safe snapshots of the canonical JQL and SQL contracts in
 - `jql-ir.openapi.json` contains only the public JQL IR schema-reference closure.
 - `public-openapi.json` is judgeval-server's public query transport contract, including SQL and schema discovery.
 - `builder.ts` and `wire.ts` are the generated public builder sources. Private
-  `Dal*` transport aliases are removed from `wire.ts` during synchronization.
+  `Dal*` transport aliases and the internal `UIPresentation` alias are removed
+  from `wire.ts` during synchronization. Standalone chart/table presentation
+  schemas are excluded; legacy JQL `ChartQuery` and `TableQuery` remain supported.
 
 `bun run build` regenerates the checked-in files under `src/jql` from these
 snapshots. Pull-request CI separately regenerates from `judgment-mono/main` and
