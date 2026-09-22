@@ -197,7 +197,12 @@ export class Judgeval {
     return this.queryClient().sql(sql, options);
   }
 
-  /** Runs legacy JQL. Prefer sql() for new integrations. */
+  /**
+   * Runs a legacy JQL query.
+   *
+   * **Deprecated.** Use [`sql()`](#sql) for new integrations, with SQL
+   * predicates to narrow results. Existing JQL calls remain supported.
+   */
   query(
     query: JqlQueryInput,
     options?: JqlRequestOptions,
@@ -205,7 +210,14 @@ export class Judgeval {
     return this.queryClient().query(query, options);
   }
 
-  /** Runs a legacy JQL presentation. For new integrations, render sql() rows. */
+  /**
+   * Runs a legacy JQL chart or table query.
+   *
+   * **Deprecated.** Use [`sql()`](#sql) for new queries and render its
+   * rows as charts or tables in your application. SQL does not return a
+   * JQL presentation frame. Existing presentation calls and their frame
+   * responses remain supported.
+   */
   present(
     query: PresentationQuery,
     options?: JqlRequestOptions,
@@ -213,7 +225,14 @@ export class Judgeval {
     return this.queryClient().present(query, options);
   }
 
-  /** Finds legacy JQL project values. Use discoverSchema() for the SQL reference. */
+  /**
+   * Discovers project-scoped judges, fields, models, and related values.
+   *
+   * **Deprecated.** Use [`discoverSchema()`](#discoverschema) to inspect
+   * the SQL tables and columns, then [`sql()`](#sql) to query project values.
+   * Schema discovery returns documentation, not project data. Existing
+   * JQL discovery calls remain supported; SQL returns a different row schema.
+   */
   discover(
     kind: DiscoveryKind,
     options?: DiscoveryOptions & JqlRequestOptions,
