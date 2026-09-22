@@ -84,7 +84,7 @@ including nested values; use `BigInt(value)` when needed. Both methods accept
 Schema discovery uses `GET /v1/sql/schema` and returns no project data. It needs
 no resolved project or public query opt-in. Query execution uses
 `POST /v1/projects/{projectId}/sql` with `{ "sql": "..." }`; the server enforces
-tenant scope. Use SQL predicates and `LIMIT` instead of JQL scope options.
+tenant scope. Use SQL predicates and `LIMIT` to narrow results.
 See the [SQL guide](https://docs.judgmentlabs.ai/documentation/mcp-and-agent-tools/sql)
 for query and migration examples.
 
