@@ -86,34 +86,7 @@ no resolved project or public query opt-in. Query execution uses
 `POST /v1/projects/{projectId}/sql` with `{ "sql": "..." }`; the server enforces
 tenant scope. Use SQL predicates and `LIMIT` to narrow results.
 See the [SQL guide](https://docs.judgmentlabs.ai/documentation/mcp-and-agent-tools/sql)
-for query and migration examples.
-
-### Legacy JQL
-
-JQL guidance is deprecated for new integrations. Existing `query()`, `present()`,
-and `discover(kind)` calls remain supported. Use `sql()` for new queries and render
-its rows in your application; `discoverSchema()` returns the SQL reference,
-while legacy `discover(kind)` queries project-specific values.
-
-Build JQL with the `judgeval/jql` entry point and run it through the authenticated
-Judgeval client. Organization and project scope come from the client, never from
-the query payload.
-
-```typescript
-import { Judgeval } from "judgeval";
-import { spans } from "judgeval/jql";
-
-const client = await Judgeval.create({ projectName: "my-llm-app" });
-const result = await client.query(spans().rows(), {
-  traceIds: ["trace-123"],
-});
-```
-
-`traceIds` and `sessionIds` are mutually exclusive options outside the JQL query
-object. Trace IDs narrow the query directly. Judgment resolves session IDs within
-the authenticated organization and project, then narrows every part of the query
-to their traces. If no session resolves, the request fails instead of falling back
-to the whole project. Both options work with `present` and `discover`.
+for query examples.
 
 ## Documentation
 
