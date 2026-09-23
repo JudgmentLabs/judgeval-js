@@ -1,5 +1,5 @@
 // AUTO-GENERATED from the DAL OpenAPI x-jql registry; do not edit.
-// Regenerate with `bun run generate-jql`.
+// Regenerate with `bun run generate-query-contracts`.
 // Fluent builder over the DAL structured JQL vocabulary. Each constructor emits the
 // op-tagged wire object validated by the service's typed /v1/query endpoint. Generated
 // runtime guards keep plain-JavaScript and TypeScript callers on the same

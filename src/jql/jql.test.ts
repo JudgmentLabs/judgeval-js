@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { JudgevalAPIError, JudgevalJqlClient } from "./client";
+import { JudgevalAPIError, JudgevalQueryClient } from "./client";
 import { eq, traces } from "./index";
 
 const originalFetch = globalThis.fetch;
@@ -35,7 +35,7 @@ test("sends trace scope with the public query fields and tenant headers", async 
       ),
     );
   }) as typeof fetch;
-  const client = new JudgevalJqlClient(
+  const client = new JudgevalQueryClient(
     "https://api.example.com/",
     "api-key",
     "org-1",
@@ -90,7 +90,7 @@ test("sends session scope outside the JQL query object", async () => {
       Response.json({ query_id: "q-1", rows: [], row_count: 0, elapsed_ms: 1 }),
     );
   }) as typeof fetch;
-  const client = new JudgevalJqlClient(
+  const client = new JudgevalQueryClient(
     "https://api.example.com/",
     "api-key",
     "org-1",
@@ -120,7 +120,7 @@ test("keeps discovery limit in the query and request envelope", async () => {
       Response.json({ query_id: "q-1", rows: [], row_count: 0, elapsed_ms: 1 }),
     );
   }) as typeof fetch;
-  const client = new JudgevalJqlClient(
+  const client = new JudgevalQueryClient(
     "https://api.example.com/",
     "api-key",
     "org-1",
@@ -151,7 +151,7 @@ test("rejects trace and session scope together before fetch", async () => {
     fetchCalls += 1;
     return Promise.reject(new Error("must not run"));
   }) as unknown as typeof fetch;
-  const client = new JudgevalJqlClient(
+  const client = new JudgevalQueryClient(
     "https://api.example.com/",
     "api-key",
     "org-1",
@@ -184,7 +184,7 @@ describe("public JQL errors", () => {
           { status: 429, headers: { "Retry-After": "2" } },
         ),
       )) as unknown as typeof fetch;
-    const client = new JudgevalJqlClient(
+    const client = new JudgevalQueryClient(
       "https://api.example.com",
       "api-key",
       "org-1",

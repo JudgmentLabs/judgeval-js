@@ -1,4 +1,4 @@
-// AUTO-GENERATED — do not edit; regenerate with `bun run generate-jql`.
+// AUTO-GENERATED — do not edit; regenerate with `bun run generate-query-contracts`.
 // Named aliases over the OpenAPI-generated components (./generated/api).
 import type { components } from "./generated/api";
 

@@ -8,11 +8,12 @@ import { AgentJudgeFactory } from "./agent-judges/AgentJudgeFactory";
 import { OfflineTestsFactory } from "./offline-tests/OfflineTestsFactory";
 import type { OfflineTracer, OfflineTracerConfig } from "./trace/OfflineTracer";
 import {
-  JudgevalJqlClient,
+  JudgevalQueryClient,
   type JqlPresentationResponse,
   type JqlQueryInput,
   type JqlQueryResponse,
   type JqlRequestOptions,
+  type SqlResponse,
 } from "./jql/client";
 import type { DiscoveryKind, DiscoveryOptions } from "./jql/builder";
 import type { PresentationQuery } from "./jql/wire";
@@ -48,7 +49,7 @@ export interface JudgevalConfig {
  * The main entry point for interacting with the Judgment platform.
  *
  * `Judgeval` connects to your Judgment project and gives you access to
- * evaluation, datasets, and monitoring through the Judgment platform.
+ * SQL queries, evaluations, datasets, and monitoring.
  *
  * @example
  * ```typescript
@@ -153,37 +154,94 @@ export class Judgeval {
     });
   }
 
-  /** Run JQL for this project, optionally narrowed by trace or session IDs. */
+  /**
+   * Returns the server's SQL reference as Markdown, matching MCP
+   * discover_schema: tables, columns, descriptions, examples, and limits.
+   * Requires organization viewer access, but no resolved project or query opt-in.
+   *
+   * @param options - Pass `signal` to cancel the request with an AbortSignal.
+   * @returns The virtual schema reference as a Markdown string; no project data.
+   *
+   * @example
+   * ```typescript
+   * console.log(await client.discoverSchema());
+   * ```
+   */
+  discoverSchema(options?: { signal?: AbortSignal }): Promise<string> {
+    return this.queryClient().discoverSchema(options);
+  }
+
+  /**
+   * Runs one read-only SQL SELECT for this organization and project.
+   *
+   * The server derives scope from the client's credentials and resolved project.
+   * Call `discoverSchema()` for supported tables and columns. Requires viewer
+   * access and public SDK/API queries enabled for the organization.
+   *
+   * Results are capped at 1,000 rows and 5 MiB; exceeding either cap returns an
+   * error. Use SQL predicates and LIMIT to narrow results. Integers outside
+   * JavaScript's safe range arrive as exact decimal strings.
+   *
+   * @param sql - One SELECT against the virtual schema, at most 50,000 characters.
+   * @param options - Pass `signal` to cancel the request with an AbortSignal.
+   * @returns An object with `catalog_version`, `columns` (name, type, nullable),
+   * `rows` (objects keyed by column name), `row_count`, and `elapsed_ms`.
+   *
+   * @example
+   * ```typescript
+   * const result = await client.sql("SELECT count() AS run_count FROM telemetry.traces");
+   * console.log(result.rows);
+   * ```
+   */
+  sql(sql: string, options?: { signal?: AbortSignal }): Promise<SqlResponse> {
+    return this.queryClient().sql(sql, options);
+  }
+
+  /**
+   * Runs a legacy JQL query.
+   *
+   * **Deprecated.** Use [`sql()`](#sql) for new integrations, with SQL
+   * predicates to narrow results. Existing JQL calls remain supported.
+   */
   query(
     query: JqlQueryInput,
     options?: JqlRequestOptions,
   ): Promise<JqlQueryResponse> {
-    return this.jqlClient().query(query, options);
+    return this.queryClient().query(query, options);
   }
 
-  /** Run a chart or table JQL query, optionally narrowed by trace or session IDs. */
+  /**
+   * Runs a legacy JQL chart or table query.
+   *
+   * **Deprecated.** Use [`sql()`](#sql) for new queries and render its
+   * rows as charts or tables in your application. SQL does not return a
+   * JQL presentation frame. Existing presentation calls and their frame
+   * responses remain supported.
+   */
   present(
     query: PresentationQuery,
     options?: JqlRequestOptions,
   ): Promise<JqlPresentationResponse> {
-    return this.jqlClient().present(query, options);
+    return this.queryClient().present(query, options);
   }
 
-  /** Discover JQL catalog values, optionally narrowed by trace or session IDs. */
+  /**
+   * Discovers project-scoped judges, fields, models, and related values.
+   *
+   * **Deprecated.** Use [`discoverSchema()`](#discoverschema) to inspect
+   * the SQL tables and columns, then [`sql()`](#sql) to query project values.
+   * Schema discovery returns documentation, not project data. Existing
+   * JQL discovery calls remain supported; SQL returns a different row schema.
+   */
   discover(
     kind: DiscoveryKind,
     options?: DiscoveryOptions & JqlRequestOptions,
   ): Promise<JqlQueryResponse> {
-    return this.jqlClient().discover(kind, options);
+    return this.queryClient().discover(kind, options);
   }
 
-  private jqlClient(): JudgevalJqlClient {
-    if (!this._projectId) {
-      throw new Error(
-        `Project '${this._projectName}' must resolve before running JQL.`,
-      );
-    }
-    return new JudgevalJqlClient(
+  private queryClient(): JudgevalQueryClient {
+    return new JudgevalQueryClient(
       this._client.getBaseUrl(),
       this._client.getApiKey(),
       this._client.getOrganizationId(),
