@@ -11,6 +11,8 @@ import type {
   AddTraceTagsResponse,
   ApplyTestRunSuccessRequest,
   ApplyTestRunSuccessResponse,
+  CreateExternalJudgeInput,
+  CreateJudgeResult,
   CreateOfflineDatasetRequest,
   CreateOfflineDatasetResponse,
   CreateTestConfigRequest,
@@ -41,11 +43,9 @@ import type {
   PullOfflineDatasetResponse,
   ResolveProjectRequest,
   ResolveProjectResponse,
-  SDKCreateAgentJudgeRequest,
-  SDKCreateAgentJudgeResponse,
-  SDKUpdateAgentJudgeRequest,
-  SDKUpdateAgentJudgeResponse,
   ScorerExistsResponse,
+  SubmitExternalJudgeResult,
+  SubmitExternalJudgeResultResponse,
   TagPromptRequest,
   TagPromptResponse,
   TestConfigResponse,
@@ -550,18 +550,17 @@ export class JudgmentApiClient {
 
   async postV1projectsJudges(
     projectId: string,
-    payload: SDKCreateAgentJudgeRequest,
-  ): Promise<SDKCreateAgentJudgeResponse> {
+    payload: CreateExternalJudgeInput,
+  ): Promise<CreateJudgeResult> {
     const url = this.baseUrl + `/v1/projects/${projectId}/judges`;
     return this.request("POST", url, payload);
   }
 
-  async patchV1projectsJudgesByJudgeId(
+  async postV1projectsJudgeResults(
     projectId: string,
-    judgeId: string,
-    payload: SDKUpdateAgentJudgeRequest,
-  ): Promise<SDKUpdateAgentJudgeResponse> {
-    const url = this.baseUrl + `/v1/projects/${projectId}/judges/${judgeId}`;
-    return this.request("PATCH", url, payload);
+    payload: SubmitExternalJudgeResult,
+  ): Promise<SubmitExternalJudgeResultResponse> {
+    const url = this.baseUrl + `/v1/projects/${projectId}/judge-results`;
+    return this.request("POST", url, payload);
   }
 }
