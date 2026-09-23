@@ -57,6 +57,7 @@ export {
   OfflineTestRunner,
   type JudgeRef,
   type OfflineRunOptions,
+  type OfflineAttachOptions,
   type TestConfig,
   type JudgeVersionPin,
   type OfflineScorerData,
@@ -64,6 +65,7 @@ export {
   type OfflineTestResult,
   type AgentFunction,
   type PassConditionFn,
+  type WaitingAgentRun,
 } from "./offline-tests";
 
 export { JudgevalAPIError } from "./jql/client";

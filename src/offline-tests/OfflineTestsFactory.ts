@@ -1,7 +1,10 @@
 import type { JudgmentApiClient } from "../internal/api/client";
 import type { CreateTestConfigRequest } from "../internal/api/models";
 import { Logger } from "../utils/logger";
-import { OfflineTestRunner, type OfflineRunOptions } from "./OfflineTestRunner";
+import { OfflineTestRunner, type OfflineRunOptions,
+  type OfflineAttachOptions,
+  type WaitingAgentRun,
+} from "./OfflineTestRunner";
 import {
   type OfflineTestResult,
   type TestConfig,
@@ -186,6 +189,47 @@ export class OfflineTestsFactory {
       this._projectName,
     );
     return runner.run(config, options);
+  }
+
+  /**
+   * Run your agent for a test run that was started from the platform.
+   *
+   * When a run is started in Judgment with *Run your agent* on a local
+   * target, the platform creates the run and waits for traces. `attach`
+   * fetches the examples still waiting, runs `agentFunction` once per
+   * example under an offline tracer, streams each trace back as it
+   * completes, and finalizes the run so the judges start scoring.
+   *
+   * @param testRunId - The run id shown in the platform's *Connect your agent* panel.
+   * @param options - The agent function plus optional pass condition, timeout, wait, concurrency.
+   */
+  attach(
+    testRunId: string,
+    options: OfflineAttachOptions,
+  ): Promise<OfflineTestResult | null> {
+    const projectId = this._expectProjectId();
+    if (!projectId) return Promise.resolve(null);
+    const runner = new OfflineTestRunner(
+      this._client,
+      projectId,
+      this._projectName,
+    );
+    return runner.attach(testRunId, options);
+  }
+
+  /**
+   * Runs started from the platform that are still waiting for an agent,
+   * newest first. Lets a local script attach without copying a run id.
+   */
+  waitingRuns(): Promise<WaitingAgentRun[]> {
+    const projectId = this._expectProjectId();
+    if (!projectId) return Promise.resolve([]);
+    const runner = new OfflineTestRunner(
+      this._client,
+      projectId,
+      this._projectName,
+    );
+    return runner.waitingRuns();
   }
 
   private _expectProjectId(): string | null {

@@ -315,6 +315,33 @@ export class JudgmentApiClient {
     return this.request("PATCH", url, payload);
   }
 
+  async getV1projectsTestRunsByTestRunIdAgentRun(
+    projectId: string,
+    testRunId: string,
+  ): Promise<Record<string, unknown>> {
+    const url =
+      this.baseUrl + `/v1/projects/${projectId}/test-runs/${testRunId}/agent-run`;
+    return this.request("GET", url);
+  }
+
+  async postV1projectsTestRunsByTestRunIdAgentTraces(
+    projectId: string,
+    testRunId: string,
+    payload: {
+      traces: {
+        example_id: string;
+        agent_offline_trace_id?: string | null;
+        error?: string | null;
+      }[];
+      finalize?: boolean;
+    },
+  ): Promise<Record<string, unknown>> {
+    const url =
+      this.baseUrl +
+      `/v1/projects/${projectId}/test-runs/${testRunId}/agent-traces`;
+    return this.request("POST", url, payload);
+  }
+
   async getV1projectsTestRunsByTestRunIdItems(
     projectId: string,
     testRunId: string,

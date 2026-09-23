@@ -2,7 +2,7 @@
 
 import { build } from "bun";
 import { exec } from "child_process";
-import { mkdir, writeFile } from "fs/promises";
+import { chmod, mkdir, readFile, writeFile } from "fs/promises";
 import { promisify } from "util";
 
 const execAsync = promisify(exec);
@@ -27,6 +27,12 @@ const configs = [
     target: "browser",
     format: "esm",
     naming: "workers/[name].mjs",
+  },
+  {
+    entrypoints: ["./src/cli/index.ts"],
+    target: "node",
+    format: "esm",
+    naming: "node/cli.mjs",
   },
   {
     entrypoints: ["./src/jql/index.ts"],
@@ -64,6 +70,12 @@ await Promise.all(
 );
 
 await execAsync("bunx tsc -p tsconfig.build.json");
+const cliPath = "./dist/node/cli.mjs";
+const cli = await readFile(cliPath, "utf8");
+if (!cli.startsWith("#!")) {
+  await writeFile(cliPath, `#!/usr/bin/env node\n${cli}`);
+}
+await chmod(cliPath, 0o755);
 await mkdir("./dist/node", { recursive: true });
 await writeFile(
   "./dist/node/index.d.ts",

@@ -13,6 +13,8 @@ const BUNDLE_FILES = new Set([
   "dist/node/index.d.ts",
   "dist/node/index.mjs",
   "dist/node/index.mjs.map",
+  "dist/node/cli.mjs",
+  "dist/node/cli.mjs.map",
   "dist/node/jql.cjs",
   "dist/node/jql.cjs.map",
   "dist/node/jql.mjs",

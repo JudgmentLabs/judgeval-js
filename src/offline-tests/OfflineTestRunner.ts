@@ -36,6 +36,7 @@ const TERMINAL_STATUSES = new Set(["completed", "error", "cancelled"]);
 const EXAMPLES_PAGE_SIZE = 100;
 const ITEMS_PAGE_SIZE = 200;
 const POLL_INTERVAL_MS = 2000;
+const MAX_POLL_FAILURES = 5;
 const MAX_PAGES = 10_000;
 
 interface ExampleRow {
@@ -62,6 +63,33 @@ export interface OfflineRunOptions {
    */
   concurrency?: number;
 }
+
+/** Options accepted by {@link OfflineTestRunner.attach}. */
+export interface OfflineAttachOptions {
+  /** Agent entrypoint, called once per example still waiting for a trace. */
+  agentFunction: AgentFunction;
+  passConditionFn?: PassConditionFn;
+  timeoutSeconds?: number;
+  /** When `false`, return as soon as the traces are attached, before judging. */
+  wait?: boolean;
+  concurrency?: number;
+}
+
+/** A platform-started run whose agent traces have not all arrived yet. */
+export interface WaitingAgentRun {
+  testRunId: string;
+  name: string;
+  /** Examples still waiting for a trace. */
+  waiting: number;
+  expected: number;
+}
+
+/** Called after each example finishes: `(exampleId, traceId | null, error | null)`. */
+export type ExampleDoneCallback = (
+  exampleId: string,
+  traceId: string | null,
+  error: string | null,
+) => Promise<void> | void;
 
 /**
  * Executes the offline-test lifecycle for a test config: resolve the dataset
@@ -235,6 +263,7 @@ export class OfflineTestRunner {
     agentFunction: AgentFunction,
     examples: ExampleRow[],
     concurrency = 1,
+    onExampleDone?: ExampleDoneCallback,
   ): Promise<Record<string, string>> {
     if (!Number.isInteger(concurrency) || concurrency < 1) {
       throw new Error(
@@ -275,11 +304,22 @@ export class OfflineTestRunner {
             const ctx = provider
               .getCurrentContext()
               .setValue(OFFLINE_EXAMPLE_ID_KEY, example.exampleId);
+            let failure: string | null = null;
             try {
               await provider.withContext(ctx, () => wrapped(example.data));
             } catch (error) {
+              failure = String(error);
               Logger.error(
-                `Agent entrypoint raised for example ${example.exampleId}: ${String(error)}`,
+                `Agent entrypoint raised for example ${example.exampleId}: ${failure}`,
+              );
+            }
+            if (onExampleDone) {
+              // Flush first so the trace is exported before it is reported.
+              await offlineTracer._tracerProvider.forceFlush();
+              await onExampleDone(
+                example.exampleId,
+                processor.exampleTraceIds.get(example.exampleId) ?? null,
+                failure,
               );
             }
           }),
@@ -300,18 +340,30 @@ export class OfflineTestRunner {
     timeoutSeconds: number,
   ): Promise<string> {
     const start = Date.now();
+    let consecutiveFailures = 0;
     for (;;) {
       if ((Date.now() - start) / 1000 > timeoutSeconds) {
         throw new Error(
           `Test run ${testRunId} did not complete within ${timeoutSeconds}s`,
         );
       }
-      const response = await this._client.getV1projectsTestRunsByTestRunId(
-        this._projectId,
-        testRunId,
-      );
-      const status = asString(asRecord(response.test_run).status);
-      if (TERMINAL_STATUSES.has(status)) return status;
+      try {
+        const response = await this._client.getV1projectsTestRunsByTestRunId(
+          this._projectId,
+          testRunId,
+        );
+        consecutiveFailures = 0;
+        const status = asString(asRecord(response.test_run).status);
+        if (TERMINAL_STATUSES.has(status)) return status;
+      } catch (error) {
+        // A long poll rides over dropped keep-alive sockets and brief
+        // restarts; give up only when the API stays unreachable.
+        consecutiveFailures += 1;
+        if (consecutiveFailures >= MAX_POLL_FAILURES) throw error;
+        Logger.warn(
+          `Polling test run ${testRunId} failed (${consecutiveFailures}/${MAX_POLL_FAILURES}), retrying: ${String(error)}`,
+        );
+      }
       await sleep(POLL_INTERVAL_MS);
     }
   }
@@ -432,6 +484,187 @@ export class OfflineTestRunner {
       testRunId,
       { successes },
     );
+  }
+
+  /** The work a platform-started agent run is waiting on. */
+  /**
+   * Pending runs in this project that were started from the platform with
+   * "Run your agent" and are still waiting for traces, newest first.
+   */
+  async waitingRuns(): Promise<WaitingAgentRun[]> {
+    const response = await this._client.getV1projectsTestRuns(
+      this._projectId,
+      undefined,
+      undefined,
+      "pending",
+      "20",
+    );
+    const results: WaitingAgentRun[] = [];
+    for (const run of response.test_runs) {
+      let work: Record<string, unknown>;
+      try {
+        work = await this.fetchAgentRun(run.id);
+      } catch {
+        continue;
+      }
+      const agentRun = asRecord(work.agent_run);
+      const progress = asRecord(agentRun.progress);
+      const waiting = Number(progress.waiting ?? 0);
+      if (agentRun.finalized_at || waiting === 0) continue;
+      results.push({
+        testRunId: run.id,
+        name: run.name,
+        waiting,
+        expected: Number(progress.expected ?? 0),
+      });
+    }
+    return results;
+  }
+
+  fetchAgentRun(testRunId: string): Promise<Record<string, unknown>> {
+    return this._client.getV1projectsTestRunsByTestRunIdAgentRun(
+      this._projectId,
+      testRunId,
+    );
+  }
+
+  /**
+   * Attach offline trace ids (or failures) to a platform-started run. Judges
+   * are queued server-side once every example has reported, or immediately
+   * when `finalize` is set.
+   */
+  reportAgentTraces(
+    testRunId: string,
+    traces: {
+      example_id: string;
+      agent_offline_trace_id?: string | null;
+      error?: string | null;
+    }[],
+    finalize = false,
+  ): Promise<Record<string, unknown>> {
+    return this._client.postV1projectsTestRunsByTestRunIdAgentTraces(
+      this._projectId,
+      testRunId,
+      finalize ? { traces, finalize: true } : { traces },
+    );
+  }
+
+  /**
+   * Produce the agent traces for a run that was started from the platform.
+   *
+   * The platform creates the run and its evaluation rows up front. This
+   * fetches the examples still waiting for a trace, runs the agent over them
+   * under an `OfflineTracer`, streams each trace id back as it completes, and
+   * finalizes the run so the judges start scoring.
+   */
+  async attach(
+    testRunId: string,
+    options: OfflineAttachOptions,
+  ): Promise<OfflineTestResult> {
+    const {
+      agentFunction,
+      passConditionFn,
+      timeoutSeconds = 600,
+      wait = true,
+      concurrency = 1,
+    } = options;
+
+    const work = await this.fetchAgentRun(testRunId);
+    const agentRun = asRecord(work.agent_run);
+    const states = new Map<string, string>();
+    for (const raw of asArray(agentRun.examples)) {
+      const state = asRecord(raw);
+      states.set(asString(state.example_id), asString(state.status));
+    }
+    const examples: ExampleRow[] = asArray(work.examples)
+      .map((raw) => asRecord(raw))
+      .filter((row) => states.get(asString(row.example_id)) === "waiting")
+      .map((row) => ({
+        exampleId: asString(row.example_id),
+        data: asRecord(row.data),
+        offlineTraceId: null,
+        createdAt: null,
+      }));
+    let uiResultsUrl = asString(work.ui_results_url);
+    Logger.info(
+      `Attaching agent to test run ${testRunId}: ${examples.length} of ${states.size} example(s) waiting for a trace`,
+    );
+
+    const agentTraces: Record<string, string> = {};
+    const report: ExampleDoneCallback = async (exampleId, traceId, error) => {
+      if (traceId) agentTraces[exampleId] = traceId;
+      try {
+        await this.reportAgentTraces(testRunId, [
+          { example_id: exampleId, agent_offline_trace_id: traceId, error },
+        ]);
+      } catch (reportError) {
+        Logger.error(
+          `Could not report trace for example ${exampleId}: ${String(reportError)}`,
+        );
+      }
+    };
+
+    if (examples.length > 0) {
+      await this.runAgent(agentFunction, examples, concurrency, report);
+      // Every example reported as it finished, so the server has normally
+      // finalized already; only close out stragglers.
+      const current = await this.fetchAgentRun(testRunId);
+      const stillWaiting = asArray(asRecord(current.agent_run).examples)
+        .map((raw) => asRecord(raw))
+        .filter((state) => state.status === "waiting")
+        .map((state) => asString(state.example_id));
+      if (stillWaiting.length > 0) {
+        await this.reportAgentTraces(
+          testRunId,
+          stillWaiting.map((exampleId) => ({
+            example_id: exampleId,
+            agent_offline_trace_id: agentTraces[exampleId] ?? null,
+            error: agentTraces[exampleId]
+              ? null
+              : "The agent produced no trace",
+          })),
+          true,
+        );
+      }
+      Logger.info(
+        `Traces attached: ${Object.keys(agentTraces).length}; judges queued`,
+      );
+    } else {
+      Logger.info("No examples are waiting for a trace.");
+    }
+
+    if (!wait) {
+      return {
+        testRunId,
+        status: asString(asRecord(work.test_run).status),
+        uiResultsUrl: uiResultsUrl || undefined,
+        results: [],
+        agentOfflineTraceIds: agentTraces,
+        passed: null,
+      };
+    }
+
+    const status = await this.waitForCompletion(testRunId, timeoutSeconds);
+    const { items, uiResultsUrl: itemsUrl } = await this.fetchItems(testRunId);
+    if (itemsUrl) uiResultsUrl = itemsUrl;
+    const results = buildResults(items, agentTraces, passConditionFn);
+    if (passConditionFn) {
+      await this.reportSuccess(
+        testRunId,
+        { evaluation_runs: work.evaluation_runs } as PreparedTestRunResponse,
+        items,
+        results,
+      );
+    }
+    displayResults(results, uiResultsUrl || undefined);
+    return {
+      testRunId,
+      status,
+      uiResultsUrl: uiResultsUrl || undefined,
+      results,
+      agentOfflineTraceIds: agentTraces,
+      passed: computePassed(results),
+    };
   }
 
   async run(

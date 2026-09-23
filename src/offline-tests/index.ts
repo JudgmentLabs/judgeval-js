@@ -1,5 +1,10 @@
 export { OfflineTestsFactory, type JudgeRef } from "./OfflineTestsFactory";
-export { OfflineTestRunner, type OfflineRunOptions } from "./OfflineTestRunner";
+export {
+  OfflineTestRunner,
+  type OfflineRunOptions,
+  type OfflineAttachOptions,
+  type WaitingAgentRun,
+} from "./OfflineTestRunner";
 export type {
   TestConfig,
   JudgeVersionPin,
