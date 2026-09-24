@@ -4,7 +4,7 @@ import { resolveProjectId } from "./utils/resolve-project-id";
 import { Logger } from "./utils/logger";
 import { EvaluationFactory } from "./evaluation/EvaluationFactory";
 import { DatasetFactory } from "./datasets/DatasetFactory";
-import { AgentJudgeFactory } from "./agent-judges/AgentJudgeFactory";
+import { ExternalJudgeFactory } from "./external-judges/ExternalJudgeFactory";
 import { OfflineTestsFactory } from "./offline-tests/OfflineTestsFactory";
 import type { OfflineTracer, OfflineTracerConfig } from "./trace/OfflineTracer";
 import {
@@ -205,9 +205,9 @@ export class Judgeval {
     );
   }
 
-  /** Manage Agent Judges (prompt-based scorers) on the platform. */
-  get agentJudges(): AgentJudgeFactory {
-    return new AgentJudgeFactory(
+  /** Create external judges and submit their results on the platform. */
+  get externalJudges(): ExternalJudgeFactory {
+    return new ExternalJudgeFactory(
       this._client,
       this._projectId,
       this._projectName,

@@ -49,8 +49,8 @@ export {
   type DatasetColumnType,
 } from "./datasets/schema";
 
-export { AgentJudgeFactory } from "./agent-judges";
-export type { AgentJudge, ScoreType } from "./agent-judges";
+export { ExternalJudgeFactory } from "./external-judges";
+export type { ExternalJudge, ScoreType } from "./external-judges";
 
 export {
   OfflineTestsFactory,

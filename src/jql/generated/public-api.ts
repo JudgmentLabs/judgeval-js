@@ -4,6 +4,174 @@
  */
 
 export interface paths {
+  "/v1/sql/schema": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Discover the virtual SQL schema */
+    get: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description The generated Markdown reference shared with MCP discover_schema */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicSqlSchemaResponse"];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
+        /** @description Insufficient permissions */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/projects/{projectId}/sql": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          projectId: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": components["schemas"]["PublicSqlRequest"];
+        };
+      };
+      responses: {
+        /** @description Success */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicSqlResponse"];
+          };
+        };
+        /** @description Invalid request */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
+        /** @description Authentication required */
+        401: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
+        /** @description Insufficient permissions */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
+        /** @description Project or public query endpoint not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
+        /** @description Query validation failed */
+        422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
+        /** @description Organization rate limit exceeded */
+        429: {
+          headers: {
+            "Retry-After"?: number;
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
+        /** @description Query backend request failed */
+        502: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
+        /** @description Public queries are temporarily unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": components["schemas"]["PublicJqlErrorResponse"];
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/projects/{projectId}/query": {
     parameters: {
       query?: never;
@@ -64,7 +232,7 @@ export interface paths {
             "application/json": components["schemas"]["PublicJqlErrorResponse"];
           };
         };
-        /** @description Project or public JQL endpoint not found */
+        /** @description Project or public query endpoint not found */
         404: {
           headers: {
             [name: string]: unknown;
@@ -92,7 +260,7 @@ export interface paths {
             "application/json": components["schemas"]["PublicJqlErrorResponse"];
           };
         };
-        /** @description JQL backend request failed */
+        /** @description Query backend request failed */
         502: {
           headers: {
             [name: string]: unknown;
@@ -101,7 +269,7 @@ export interface paths {
             "application/json": components["schemas"]["PublicJqlErrorResponse"];
           };
         };
-        /** @description Public JQL is temporarily unavailable */
+        /** @description Public queries are temporarily unavailable */
         503: {
           headers: {
             [name: string]: unknown;
@@ -178,7 +346,7 @@ export interface paths {
             "application/json": components["schemas"]["PublicJqlErrorResponse"];
           };
         };
-        /** @description Project or public JQL endpoint not found */
+        /** @description Project or public query endpoint not found */
         404: {
           headers: {
             [name: string]: unknown;
@@ -206,7 +374,7 @@ export interface paths {
             "application/json": components["schemas"]["PublicJqlErrorResponse"];
           };
         };
-        /** @description JQL backend request failed */
+        /** @description Query backend request failed */
         502: {
           headers: {
             [name: string]: unknown;
@@ -215,7 +383,7 @@ export interface paths {
             "application/json": components["schemas"]["PublicJqlErrorResponse"];
           };
         };
-        /** @description Public JQL is temporarily unavailable */
+        /** @description Public queries are temporarily unavailable */
         503: {
           headers: {
             [name: string]: unknown;
@@ -236,6 +404,27 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    PublicSqlRequest: {
+      sql: string;
+    };
+    PublicSqlResponse: {
+      catalog_version: string;
+      columns: {
+        name: string;
+        type: string;
+        nullable: boolean;
+      }[];
+      /** @description SQL integers outside the JavaScript safe range (-(2^53 - 1) to 2^53 - 1) are returned as exact decimal strings, including in nested values. Column types retain the original SQL types. */
+      rows: {
+        [key: string]: unknown;
+      }[];
+      row_count: number;
+      elapsed_ms: number;
+    };
+    PublicSqlSchemaResponse: {
+      /** @description The virtual SQL catalog in Markdown. */
+      schema: string;
+    };
     PublicJqlRequest: {
       query: unknown;
       limit?: number;
