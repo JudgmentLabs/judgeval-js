@@ -48,6 +48,8 @@ const roots = [
   "DiscoveryQuery",
   "ChartQuery",
   "TableQuery",
+  "ChartPresentation",
+  "TablePresentation",
   "TimeSpec",
 ];
 
