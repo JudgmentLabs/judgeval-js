@@ -12,6 +12,10 @@ import {
 import { AsyncLocalStorage } from "async_hooks";
 import type { Instrumentation } from "@opentelemetry/instrumentation";
 import { Logger } from "../utils/logger";
+import {
+  installOtelContextBridge,
+  runWithOtelBridgeGate,
+} from "../trace/instrumentation/OtelContextBridge";
 import { noOpTracer } from "../trace/NoOpTracer";
 import { setTraceRuntime, type TraceRuntimeTracer } from "../trace/runtime";
 
@@ -87,6 +91,7 @@ export class WorkerTracerProvider implements TracerProvider {
   private constructor() {
     this._proxyTracer = new ProxyTracer(this);
     setTraceRuntime(this);
+    installOtelContextBridge();
   }
 
   static getInstance(): WorkerTracerProvider {
@@ -169,45 +174,47 @@ export class WorkerTracerProvider implements TracerProvider {
   ): T {
     const prevCtx = this.getCurrentContext();
     const ctx = trace.setSpan(prevCtx, span);
-    return _contextStorage.run({ ctx }, () => {
-      try {
-        const result = fn();
-        if (result instanceof Promise) {
-          return result
-            .catch((exc: unknown) => {
-              if (span.isRecording()) {
-                if (recordException) span.recordException(exc as Error);
-                if (setStatusOnException) {
-                  const err = exc as Error;
-                  span.setStatus({
-                    code: SpanStatusCode.ERROR,
-                    message: `${err.name}: ${err.message}`,
-                  });
+    return _contextStorage.run({ ctx }, () =>
+      runWithOtelBridgeGate(() => {
+        try {
+          const result = fn();
+          if (result instanceof Promise) {
+            return result
+              .catch((exc: unknown) => {
+                if (span.isRecording()) {
+                  if (recordException) span.recordException(exc as Error);
+                  if (setStatusOnException) {
+                    const err = exc as Error;
+                    span.setStatus({
+                      code: SpanStatusCode.ERROR,
+                      message: `${err.name}: ${err.message}`,
+                    });
+                  }
                 }
-              }
-              throw exc;
-            })
-            .finally(() => {
-              if (endOnExit) span.end();
-            }) as T;
-        }
-        if (endOnExit) span.end();
-        return result;
-      } catch (exc) {
-        if (span.isRecording()) {
-          if (recordException) span.recordException(exc as Error);
-          if (setStatusOnException) {
-            const err = exc as Error;
-            span.setStatus({
-              code: SpanStatusCode.ERROR,
-              message: `${err.name}: ${err.message}`,
-            });
+                throw exc;
+              })
+              .finally(() => {
+                if (endOnExit) span.end();
+              }) as T;
           }
+          if (endOnExit) span.end();
+          return result;
+        } catch (exc) {
+          if (span.isRecording()) {
+            if (recordException) span.recordException(exc as Error);
+            if (setStatusOnException) {
+              const err = exc as Error;
+              span.setStatus({
+                code: SpanStatusCode.ERROR,
+                message: `${err.name}: ${err.message}`,
+              });
+            }
+          }
+          if (endOnExit) span.end();
+          throw exc;
         }
-        if (endOnExit) span.end();
-        throw exc;
-      }
-    });
+      }),
+    );
   }
 
   attachContext(ctx: Context): void {
@@ -218,7 +225,7 @@ export class WorkerTracerProvider implements TracerProvider {
   }
 
   withContext<T>(ctx: Context, fn: () => T): T {
-    return _contextStorage.run({ ctx }, fn);
+    return _contextStorage.run({ ctx }, () => runWithOtelBridgeGate(fn));
   }
 
   async forceFlush(): Promise<void> {
