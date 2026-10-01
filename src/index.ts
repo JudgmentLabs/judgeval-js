@@ -72,4 +72,5 @@ export type {
   JqlQueryInput,
   JqlQueryResponse,
   JqlRequestOptions,
+  SqlResponse,
 } from "./jql/client";

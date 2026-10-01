@@ -29,7 +29,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "bun run generate-jql && bun run check && bun scripts/build.ts",
+    "build": "bun run generate-query-contracts && bun run check && bun scripts/build.ts",
     "build:dev": "bun scripts/build.ts --dev",
     "check": "tsc --noEmit && oxlint src/",
     "check-package": "bun scripts/check-package-contents.ts",
@@ -37,7 +37,7 @@
     "lint:fix": "oxlint --fix src/",
     "format": "prettier --write \"src/**/*.ts\"",
     "generate-client": "bunx tsx scripts/generate-client.ts && bun run format",
-    "generate-jql": "bun scripts/generate-jql.ts",
+    "generate-query-contracts": "bun scripts/generate-query-contracts.ts",
     "test": "bun test --coverage",
     "clean": "rm -rf dist",
     "prepublishOnly": "bun run clean && bun run build",
