@@ -1,17 +1,12 @@
-import {
-  ROOT_CONTEXT,
-  context as otelContext,
-  type Context,
-} from "@opentelemetry/api";
+import { context as otelContext, type Context } from "@opentelemetry/api";
 import { AsyncLocalStorage } from "async_hooks";
+import { getTraceRuntime } from "../runtime";
 
 type OTelContextApi = typeof otelContext;
 
 let installed = false;
-let getJudgmentContext: (() => Context) | null = null;
 
 const gateStorage = new AsyncLocalStorage<boolean>();
-const bridgeContextStorage = new AsyncLocalStorage<Context>();
 
 const originalActive = otelContext.active.bind(otelContext);
 const originalWith = otelContext.with.bind(otelContext);
@@ -21,10 +16,7 @@ function isGateEnabled(): boolean {
   return gateStorage.getStore() === true;
 }
 
-export function installOtelContextBridge(
-  getCurrentJudgmentContext: () => Context,
-): void {
-  getJudgmentContext = getCurrentJudgmentContext;
+export function installOtelContextBridge(): void {
   if (installed) return;
 
   const api = otelContext as OTelContextApi & {
@@ -40,15 +32,13 @@ export function installOtelContextBridge(
 
   api.active = (): Context => {
     if (!isGateEnabled()) return originalActive();
-    const bridged = bridgeContextStorage.getStore();
-    if (bridged) return bridged;
-    return getJudgmentContext ? getJudgmentContext() : ROOT_CONTEXT;
+    return getTraceRuntime().getCurrentContext();
   };
 
   api.with = (contextValue, fn, thisArg, ...args) => {
     if (!isGateEnabled())
       return originalWith(contextValue, fn, thisArg, ...args);
-    return bridgeContextStorage.run(contextValue, () =>
+    return getTraceRuntime().withContext(contextValue, () =>
       fn.apply(thisArg, args),
     );
   };
@@ -58,7 +48,7 @@ export function installOtelContextBridge(
     if (typeof target !== "function") return target;
     const fn = target as unknown as (...args: unknown[]) => unknown;
     return ((...args: unknown[]) =>
-      bridgeContextStorage.run(contextValue, () =>
+      getTraceRuntime().withContext(contextValue, () =>
         fn(...args),
       )) as typeof target;
   };
@@ -66,6 +56,6 @@ export function installOtelContextBridge(
   installed = true;
 }
 
-export function runWithOtelBridgeGate<T>(ctx: Context, fn: () => T): T {
-  return gateStorage.run(true, () => bridgeContextStorage.run(ctx, fn));
+export function runWithOtelBridgeGate<T>(fn: () => T): T {
+  return gateStorage.run(true, fn);
 }

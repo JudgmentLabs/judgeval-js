@@ -98,7 +98,7 @@ export class JudgmentTracerProvider implements TracerProvider {
   private constructor() {
     this._proxyTracer = new ProxyTracer(this);
     setTraceRuntime(this);
-    installOtelContextBridge(() => this.getCurrentContext());
+    installOtelContextBridge();
   }
 
   /**
@@ -270,7 +270,7 @@ export class JudgmentTracerProvider implements TracerProvider {
     const prevCtx = this.getCurrentContext();
     const ctx = trace.setSpan(prevCtx, span);
     return _contextStorage.run(ctx, () =>
-      runWithOtelBridgeGate(ctx, () => {
+      runWithOtelBridgeGate(() => {
         try {
           const result = fn();
           if (result instanceof Promise) {
@@ -321,7 +321,7 @@ export class JudgmentTracerProvider implements TracerProvider {
    * duration of the callback. Sync or async.
    */
   withContext<T>(ctx: Context, fn: () => T): T {
-    return _contextStorage.run(ctx, () => runWithOtelBridgeGate(ctx, fn));
+    return _contextStorage.run(ctx, () => runWithOtelBridgeGate(fn));
   }
 
   /**
