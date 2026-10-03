@@ -10,7 +10,10 @@ import { VERSION } from "../version";
 import { BaseTracer, type TracerConfig } from "../trace/BaseTracer";
 import type { SpanExporter } from "@opentelemetry/sdk-trace-base";
 import type { JudgmentSpanExporter } from "../trace/exporters/JudgmentSpanExporter";
-import { JudgmentSpanProcessor } from "../trace/processors/JudgmentSpanProcessor";
+import {
+  JudgmentSpanProcessor,
+  type JudgmentSpanProcessorConfig,
+} from "../trace/processors/JudgmentSpanProcessor";
 import { WorkerTracerProvider } from "./WorkerTracerProvider";
 import { WorkerSpanExporter } from "./WorkerSpanExporter";
 
@@ -28,6 +31,8 @@ export interface WorkersTracerConfig extends Omit<
   organizationId: string;
   /** Judgment API URL. Required; Workers do not read process.env. */
   apiUrl: string;
+  /** Configuration for Judgment's built-in batch span processor. */
+  spanProcessorConfig?: JudgmentSpanProcessorConfig;
 }
 
 function requireConfigValue(value: string | undefined, key: string): string {
@@ -40,6 +45,9 @@ function requireConfigValue(value: string | undefined, key: string): string {
 export class Tracer extends BaseTracer {
   private _spanExporter: SpanExporter | null = null;
   private _spanProcessor: JudgmentSpanProcessor | null = null;
+  private readonly _spanProcessorConfig:
+    | JudgmentSpanProcessorConfig
+    | undefined;
 
   protected constructor(
     projectName: string | null,
@@ -51,6 +59,7 @@ export class Tracer extends BaseTracer {
     serializer: (v: unknown) => string,
     tracerProvider: WebTracerProvider,
     client: JudgmentApiClient,
+    spanProcessorConfig: JudgmentSpanProcessorConfig | undefined,
   ) {
     super(
       projectName,
@@ -64,6 +73,7 @@ export class Tracer extends BaseTracer {
       client,
       true,
     );
+    this._spanProcessorConfig = spanProcessorConfig;
   }
 
   static async init(config: WorkersTracerConfig): Promise<Tracer> {
@@ -120,6 +130,7 @@ export class Tracer extends BaseTracer {
         spanLimits: config.spanLimits,
       }),
       client,
+      config.spanProcessorConfig,
     );
 
     const providerWithProcessor = new WebTracerProvider({
@@ -164,6 +175,7 @@ export class Tracer extends BaseTracer {
     this._spanProcessor = new JudgmentSpanProcessor(
       this,
       this.getSpanExporter(),
+      this._spanProcessorConfig,
     );
     return this._spanProcessor;
   }
