@@ -57,6 +57,33 @@ const tracedChat = Tracer.observe(async (userMessage: string) => {
 await tracedChat("What is the capital of France?");
 ```
 
+### Claude Managed Agents
+
+Claude Managed Agents run the agent loop on Anthropic's infrastructure, so there
+is no model call in your process to instrument. Wrap the Anthropic client and
+read the session event stream as usual; each turn is exported as one trace
+(model calls, tool calls, sub-agent threads) when the turn ends.
+
+```typescript
+import Anthropic from "@anthropic-ai/sdk";
+import { Tracer, wrapAnthropicManagedAgents } from "judgeval";
+
+await Tracer.init({ projectName: "my-llm-app" });
+const client = wrapAnthropicManagedAgents(new Anthropic());
+
+const stream = await client.beta.sessions.events.stream(session.id);
+await client.beta.sessions.events.send(session.id, { events: [userMessage] });
+for await (const event of stream) {
+  // handle events; the trace is exported before the turn-ending event is yielded
+}
+```
+
+Only Managed Agents session streams are traced (`beta.sessions.events.stream`),
+not `messages.create`. `Tracer.wrap(client)` also accepts the Anthropic client.
+Calling `Tracer.setSessionId(...)` before the turn groups the trace under your
+own session; otherwise the Managed Agents session id is used. See
+[`examples/anthropic-managed-agents`](examples/anthropic-managed-agents).
+
 ### SQL
 
 Use `sql()` for read-only queries against Judgment's virtual schema, which

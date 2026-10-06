@@ -1,15 +1,29 @@
 import type { OpenAI } from "openai";
+import {
+  wrapAnthropicManagedAgents,
+  type ManagedAgentsClientLike,
+} from "./llm/anthropic-managed-agents";
 import { wrapOpenAI } from "./llm/openai";
 
-export { wrapOpenAI };
+export { wrapAnthropicManagedAgents, wrapOpenAI };
+
+function isManagedAgentsClient(
+  client: unknown,
+): client is ManagedAgentsClientLike {
+  const stream = (client as Partial<ManagedAgentsClientLike> | undefined)?.beta
+    ?.sessions?.events?.stream;
+  return typeof stream === "function";
+}
 
 /**
- * Wrap a supported LLM client to add automatic tracing.
+ * Wrap a supported client to add automatic tracing.
  *
- * Currently supports OpenAI clients. Detects the client type
- * automatically and applies the appropriate instrumentation.
+ * Supports OpenAI clients and Anthropic clients used for Claude Managed
+ * Agents. Detects the client type automatically and applies the appropriate
+ * instrumentation. For an Anthropic client only Managed Agents session streams
+ * are traced; see {@link wrapAnthropicManagedAgents}.
  *
- * @param client - An OpenAI client instance.
+ * @param client - An OpenAI or Anthropic client instance.
  * @returns The same client instance, instrumented in-place.
  *
  * @example
@@ -20,6 +34,10 @@ export { wrapOpenAI };
  * const client = wrap(new OpenAI());
  * ```
  */
-export function wrap<T extends OpenAI>(client: T): T {
-  return wrapOpenAI(client);
+export function wrap<T extends OpenAI>(client: T): T;
+export function wrap<T extends ManagedAgentsClientLike>(client: T): T;
+export function wrap(client: OpenAI | ManagedAgentsClientLike): unknown {
+  return isManagedAgentsClient(client)
+    ? wrapAnthropicManagedAgents(client)
+    : wrapOpenAI(client);
 }
