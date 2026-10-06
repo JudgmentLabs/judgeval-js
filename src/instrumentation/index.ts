@@ -18,6 +18,10 @@ function isManagedAgentsClient(
 /**
  * Wrap a supported LLM client to add automatic tracing.
  *
+ * Currently supports OpenAI clients and Anthropic clients (for Claude Managed
+ * Agents sessions). Detects the client type automatically and applies the
+ * appropriate instrumentation.
+ *
  * @param client - An OpenAI or Anthropic client instance.
  * @returns The same client instance, instrumented in-place.
  *
@@ -29,10 +33,8 @@ function isManagedAgentsClient(
  * const client = wrap(new OpenAI());
  * ```
  */
-export function wrap<T extends OpenAI>(client: T): T;
-export function wrap<T extends ManagedAgentsClientLike>(client: T): T;
-export function wrap(client: OpenAI | ManagedAgentsClientLike): unknown {
-  return isManagedAgentsClient(client)
-    ? wrapAnthropicManagedAgents(client)
-    : wrapOpenAI(client);
+export function wrap<T extends OpenAI | ManagedAgentsClientLike>(client: T): T {
+  if (isManagedAgentsClient(client)) wrapAnthropicManagedAgents(client);
+  else wrapOpenAI(client);
+  return client;
 }

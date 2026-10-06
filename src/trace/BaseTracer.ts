@@ -283,6 +283,15 @@ export abstract class BaseTracer {
   /**
    * Wrap a supported LLM client to add automatic tracing.
    *
+   * Currently supports OpenAI clients and Anthropic clients (for Claude
+   * Managed Agents sessions). The client is instrumented in-place and
+   * returned.
+   *
+   * Lives on `BaseTracer` (rather than a runtime-specific subclass) because
+   * the wrappers rely only on method interception — the `openai` import is
+   * types-only, the Managed Agents wrapper imports no SDK, and neither uses
+   * Node built-ins — so it is safe in both the Node and Workers runtimes.
+   *
    * @param client - An LLM client instance (e.g. `new OpenAI()`, `new Anthropic()`).
    * @returns The same client instance, instrumented.
    *
@@ -293,10 +302,8 @@ export abstract class BaseTracer {
    * const client = Tracer.wrap(new OpenAI());
    * ```
    */
-  static wrap<T extends OpenAI>(client: T): T;
-  static wrap<T extends ManagedAgentsClientLike>(client: T): T;
-  static wrap(client: OpenAI | ManagedAgentsClientLike): unknown {
-    return wrap(client as OpenAI);
+  static wrap<T extends OpenAI | ManagedAgentsClientLike>(client: T): T {
+    return wrap(client);
   }
 
   // ------------------------------------------------------------------ //

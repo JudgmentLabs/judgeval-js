@@ -80,6 +80,7 @@ for await (const event of stream) {
 
 Only Managed Agents session streams are traced (`beta.sessions.events.stream`),
 not `messages.create`. `Tracer.wrap(client)` also accepts the Anthropic client.
+Wrap a client once; wrapping it twice exports each turn twice.
 Calling `Tracer.setSessionId(...)` before the turn groups the trace under your
 own session; otherwise the Managed Agents session id is used. See
 [`examples/anthropic-managed-agents`](examples/anthropic-managed-agents).

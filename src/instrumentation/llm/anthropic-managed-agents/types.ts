@@ -1,7 +1,7 @@
 /**
  * Structural types for the parts of the Anthropic SDK (`@anthropic-ai/sdk`)
- * the Managed Agents instrumentation touches. Declared structurally so
- * `judgeval` does not need `@anthropic-ai/sdk` as a dependency.
+ * read by the Managed Agents instrumentation. They are declared here so that
+ * `judgeval` does not depend on the SDK.
  */
 
 export interface ContentBlock {
@@ -9,63 +9,90 @@ export interface ContentBlock {
   text?: string;
 }
 
-/** A Managed Agents session event (`client.beta.sessions.events.*`). */
-export interface ManagedAgentEvent {
+/** An event from `sessions.events.stream()` or `sessions.threads.events.list()`. */
+export interface SessionEvent {
   type: string;
-  id?: string;
+  id: string;
   processed_at?: string | null;
   session_thread_id?: string | null;
   content?: ContentBlock[] | string;
+  // Tool calls and their results
   name?: string;
   input?: unknown;
   is_error?: boolean | null;
-  // tool results
+  mcp_server_name?: string;
   tool_use_id?: string;
   mcp_tool_use_id?: string;
   custom_tool_use_id?: string;
-  mcp_server_name?: string;
-  // permission / confirmation
-  evaluated_permission?: string;
+  // Tool confirmations
   result?: string;
   deny_message?: string | null;
-  // model requests
+  // Model requests
   model_request_start_id?: string;
   model_usage?: {
-    input_tokens?: number;
-    output_tokens?: number;
-    cache_read_input_tokens?: number;
-    cache_creation_input_tokens?: number;
+    input_tokens: number;
+    output_tokens: number;
+    cache_read_input_tokens: number;
+    cache_creation_input_tokens: number;
   };
-  // idle / error / usage
-  stop_reason?: { type: string; event_ids?: string[] };
-  error?: {
-    type?: string;
-    message?: string;
-    mcp_server_name?: string;
-    retry_status?: { type?: string };
-  };
-  usage?: { list_cost?: { amount?: string } | null };
-  // multi-agent threads
-  agent_name?: string;
+  // Session status and errors
+  stop_reason?: { type: string };
+  error?: { type: string; message: string; retry_status?: { type: string } };
+  // Messages between agent threads
   to_agent_name?: string;
   to_session_thread_id?: string;
   from_agent_name?: string;
   from_session_thread_id?: string;
 }
 
-export interface ManagedAgentConfig {
+export interface AgentConfig {
   name?: string;
   system?: string | null;
   model?: { id?: string } | string | null;
 }
 
-export interface ManagedAgentThread {
+export interface SessionThread {
   id: string;
-  agent?: ManagedAgentConfig;
+  parent_thread_id: string | null;
+  agent?: AgentConfig;
 }
 
-export interface ManagedAgentSession {
-  agent?: ManagedAgentConfig;
+export interface RequestOptions {
+  timeout: number;
+  maxRetries: number;
+}
+
+/** The parts of the Anthropic client the instrumentation calls. */
+export interface ManagedAgentsApi {
+  beta: {
+    sessions: {
+      retrieve(
+        sessionId: string,
+        params: null,
+        options: RequestOptions,
+      ): PromiseLike<{ agent?: AgentConfig }>;
+      events: {
+        stream(
+          sessionId: string,
+          ...rest: unknown[]
+        ): Promise<AsyncIterable<SessionEvent>>;
+      };
+      threads: {
+        list(
+          sessionId: string,
+          params: null,
+          options: RequestOptions,
+        ): AsyncIterable<SessionThread>;
+        events: {
+          list(
+            threadId: string,
+            params: { session_id: string },
+            options: RequestOptions,
+          ): AsyncIterable<SessionEvent>;
+        };
+      };
+    };
+  };
 }
 
 /** What `wrap()` accepts: any client exposing `beta.sessions.events.stream`. */
@@ -73,30 +100,6 @@ export interface ManagedAgentsClientLike {
   beta: {
     sessions: {
       events: { stream: (...args: never[]) => unknown };
-    };
-  };
-}
-
-/** The subset of the Anthropic client used internally once a client is wrapped. */
-export interface ManagedAgentsApi {
-  beta: {
-    sessions: {
-      retrieve(sessionId: string): PromiseLike<ManagedAgentSession>;
-      events: {
-        stream: (
-          sessionId: string,
-          ...rest: unknown[]
-        ) => PromiseLike<AsyncIterable<ManagedAgentEvent>>;
-      };
-      threads: {
-        list(sessionId: string): AsyncIterable<ManagedAgentThread>;
-        events: {
-          list(
-            threadId: string,
-            params: { session_id: string },
-          ): AsyncIterable<ManagedAgentEvent>;
-        };
-      };
     };
   };
 }

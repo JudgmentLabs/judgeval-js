@@ -15,8 +15,8 @@ import type { JudgmentSpanExporter } from "../../../trace/exporters/JudgmentSpan
 import type { JudgmentSpanProcessor } from "../../../trace/processors/JudgmentSpanProcessor";
 import { Logger } from "../../../utils/logger";
 import { wrap } from "../../index";
-import { managedAgentsTestHooks, wrapAnthropicManagedAgents } from "./index";
-import type { ManagedAgentEvent as Ev } from "./types";
+import { wrapAnthropicManagedAgents } from "./index";
+import type { RequestOptions, SessionEvent } from "./types";
 
 const SESSION = "sesn_1";
 const SESSION_ID = "judgment.session_id";
@@ -30,7 +30,7 @@ class FakeTracer extends BaseTracer {
       "test-org",
       "https://example.com",
       null,
-      (v) => String(v),
+      JSON.stringify,
       provider,
       null,
       false,
@@ -78,13 +78,20 @@ afterEach(() => {
 
 const T0 = Date.parse("2026-10-05T17:55:00Z");
 let seq = 0;
-const ev = (type: string, secs: number, extra: Partial<Ev> = {}): Ev => ({
+const ev = (
+  type: string,
+  secs: number,
+  extra: Partial<SessionEvent> = {},
+): SessionEvent => ({
   id: `sevt_${++seq}`,
   type,
   processed_at: new Date(T0 + secs * 1000).toISOString(),
   ...extra,
 });
 const words = (text: string) => [{ type: "text", text }];
+const idle = (secs: number, type = "end_turn") =>
+  ev("session.status_idle", secs, { stop_reason: { type } });
+const requiresAction = (secs: number) => idle(secs, "requires_action");
 
 const AGENT = {
   name: "concierge",
@@ -92,20 +99,24 @@ const AGENT = {
   system: "Be brief.",
 };
 const CHILD = "sthr_child";
-const idle = (secs: number, type = "end_turn", ids?: string[]) =>
-  ev("session.status_idle", secs, {
-    stop_reason: { type, ...(ids ? { event_ids: ids } : {}) },
-  });
 
-/** Coordinator delegates to `specialist`, which runs a custom tool; the app answers it. */
-function delegationTurn(): { primary: Ev[]; child: Ev[] } {
+/**
+ * The coordinator delegates to `specialist`, which calls a custom tool that
+ * the app answers. `at` shifts the turn in time so a session can have several.
+ */
+function delegationTurn(at = 0): {
+  primary: SessionEvent[];
+  child: SessionEvent[];
+} {
+  const e = (type: string, secs: number, extra: Partial<SessionEvent> = {}) =>
+    ev(type, at + secs, { ...extra });
+  const id = (name: string) => `${name}_${at}`;
   const primary = [
-    ev("session.status_running", 0),
-    ev("user.message", 0.1, { content: words("Find retirement events") }),
-    ev("span.model_request_start", 0.1, { id: "ms1" }),
-    ev("span.model_request_end", 1.5, {
-      model_request_start_id: "ms1",
-      is_error: false,
+    e("session.status_running", 0),
+    e("user.message", 0.1, { content: words("Find retirement events") }),
+    e("span.model_request_start", 0.1, { id: id("ms1") }),
+    e("span.model_request_end", 1.5, {
+      model_request_start_id: id("ms1"),
       model_usage: {
         input_tokens: 3051,
         output_tokens: 294,
@@ -113,71 +124,80 @@ function delegationTurn(): { primary: Ev[]; child: Ev[] } {
         cache_creation_input_tokens: 20,
       },
     }),
-    ev("session.thread_created", 1.6, {
-      session_thread_id: CHILD,
-      agent_name: "specialist",
-    }),
-    ev("agent.thread_message_sent", 1.6, {
+    e("session.thread_created", 1.6, { session_thread_id: CHILD }),
+    e("agent.thread_message_sent", 1.6, {
       to_session_thread_id: CHILD,
       to_agent_name: "specialist",
       content: words("Search events"),
     }),
-    ev("agent.custom_tool_use", 3, {
-      id: "tu1",
+    e("agent.custom_tool_use", 3, {
+      id: id("tu1"),
       name: "search_events",
       input: { query: "retirement" },
       session_thread_id: CHILD,
     }),
-    idle(3.5, "requires_action", ["tu1"]),
-    ev("user.custom_tool_result", 4.5, {
-      custom_tool_use_id: "tu1",
+    requiresAction(at + 3.5),
+    e("user.custom_tool_result", 4.5, {
+      custom_tool_use_id: id("tu1"),
       session_thread_id: CHILD,
       content: words("Summit"),
     }),
-    ev("agent.thread_message_received", 6, {
+    e("agent.thread_message_received", 6, {
       from_session_thread_id: CHILD,
       from_agent_name: "specialist",
       content: words("Found Summit"),
     }),
-    ev("span.model_request_start", 6.1, { id: "ms2" }),
-    ev("agent.message", 7, { content: words("There is one event: Summit.") }),
-    ev("span.model_request_end", 7.1, {
-      model_request_start_id: "ms2",
-      is_error: false,
-      model_usage: { input_tokens: 4000, output_tokens: 100 },
+    e("span.model_request_start", 6.1, { id: id("ms2") }),
+    e("agent.message", 7, { content: words("There is one event: Summit.") }),
+    e("span.model_request_end", 7.1, {
+      model_request_start_id: id("ms2"),
+      model_usage: {
+        input_tokens: 4000,
+        output_tokens: 100,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+      },
     }),
-    idle(7.2),
+    idle(at + 7.2),
   ];
   const child = [
-    ev("session.thread_status_running", 2),
-    ev("agent.thread_message_received", 2.1, {
+    e("session.thread_status_running", 2),
+    e("agent.thread_message_received", 2.1, {
       from_session_thread_id: "sthr_primary",
       from_agent_name: "concierge",
       content: words("Search events"),
     }),
-    ev("span.model_request_start", 2.1, { id: "cs1" }),
-    ev("agent.custom_tool_use", 3, {
-      id: "tu1",
+    e("span.model_request_start", 2.1, { id: id("cs1") }),
+    e("agent.custom_tool_use", 3, {
+      id: id("tu1"),
       name: "search_events",
       input: { query: "retirement" },
     }),
-    ev("span.model_request_end", 3, {
-      model_request_start_id: "cs1",
-      is_error: false,
-      model_usage: { input_tokens: 1697, output_tokens: 128 },
+    e("span.model_request_end", 3, {
+      model_request_start_id: id("cs1"),
+      model_usage: {
+        input_tokens: 1697,
+        output_tokens: 128,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+      },
     }),
-    ev("user.custom_tool_result", 4.5, {
-      custom_tool_use_id: "tu1",
+    e("user.custom_tool_result", 4.5, {
+      custom_tool_use_id: id("tu1"),
       content: words("Summit"),
     }),
-    ev("span.model_request_start", 4.6, { id: "cs2" }),
-    ev("agent.message", 5.5, { content: words("Found Summit") }),
-    ev("span.model_request_end", 5.6, {
-      model_request_start_id: "cs2",
-      is_error: false,
-      model_usage: { input_tokens: 1900, output_tokens: 30 },
+    e("span.model_request_start", 4.6, { id: id("cs2") }),
+    e("agent.message", 5.5, { content: words("Found Summit") }),
+    e("span.model_request_end", 5.6, {
+      model_request_start_id: id("cs2"),
+      model_usage: {
+        input_tokens: 1900,
+        output_tokens: 30,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+      },
     }),
-    ev("agent.thread_message_sent", 5.7, {
+    e("agent.thread_message_sent", 5.7, {
       to_session_thread_id: "sthr_primary",
       to_agent_name: "concierge",
       content: words("Found Summit"),
@@ -187,7 +207,7 @@ function delegationTurn(): { primary: Ev[]; child: Ev[] } {
 }
 
 /** A single agent calls a tool that needs the app's confirmation. */
-function confirmationTurn(result: "allow" | "deny"): Ev[] {
+function confirmationTurn(result: "allow" | "deny"): SessionEvent[] {
   const denied = result === "deny";
   return [
     ev("user.message", 0.1, { content: words("Delete the leads file") }),
@@ -196,14 +216,17 @@ function confirmationTurn(result: "allow" | "deny"): Ev[] {
       id: "tu1",
       name: "bash",
       input: { command: "rm leads.jsonl" },
-      evaluated_permission: "ask",
     }),
     ev("span.model_request_end", 1, {
       model_request_start_id: "ms1",
-      is_error: false,
-      model_usage: { input_tokens: 500, output_tokens: 40 },
+      model_usage: {
+        input_tokens: 500,
+        output_tokens: 40,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+      },
     }),
-    idle(1.2, "requires_action", ["tu1"]),
+    requiresAction(1.2),
     ev("user.tool_confirmation", 3, {
       tool_use_id: "tu1",
       result,
@@ -221,8 +244,12 @@ function confirmationTurn(result: "allow" | "deny"): Ev[] {
     ev("agent.message", 4, { content: words("Done.") }),
     ev("span.model_request_end", 4.1, {
       model_request_start_id: "ms2",
-      is_error: false,
-      model_usage: { input_tokens: 600, output_tokens: 10 },
+      model_usage: {
+        input_tokens: 600,
+        output_tokens: 10,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+      },
     }),
     idle(4.2),
   ];
@@ -231,53 +258,63 @@ function confirmationTurn(result: "allow" | "deny"): Ev[] {
 // --- fake Anthropic client -------------------------------------------------
 
 class FakeStream {
-  constructor(private readonly events: Ev[]) {}
+  constructor(private readonly events: SessionEvent[]) {}
   [Symbol.asyncIterator]() {
     return this.iterator();
   }
   private async *iterator() {
-    for (const e of this.events) yield e;
+    for (const event of this.events) yield event;
   }
 }
 
 async function* items<I>(list: I[]): AsyncGenerator<I> {
-  for (const i of list) yield i;
+  for (const item of list) yield item;
 }
 
-function fakeClient(opts: {
-  streams: Ev[][];
-  children?: Record<string, Ev[]>;
+function fakeClient(options: {
+  streams: SessionEvent[][];
+  children?: Record<string, SessionEvent[]>;
   retrieveFails?: boolean;
-  retrieveHangs?: boolean;
 }) {
-  const calls = { retrieve: 0 };
-  let next = 0;
-  const children = opts.children ?? {};
+  const calls = {
+    retrieve: 0,
+    retrieveOptions: undefined as RequestOptions | undefined,
+  };
+  let nextStream = 0;
+  const children = options.children ?? {};
   const client = {
     beta: {
       sessions: {
-        retrieve: () => {
+        retrieve: (
+          _sessionId: string,
+          _params: null,
+          requestOptions: RequestOptions,
+        ) => {
           calls.retrieve++;
-          if (opts.retrieveHangs) return new Promise(() => undefined);
-          return opts.retrieveFails
+          calls.retrieveOptions = requestOptions;
+          return options.retrieveFails
             ? Promise.reject(new Error("retrieve failed"))
             : Promise.resolve({ agent: AGENT });
         },
         events: {
           stream: (_sessionId: string) =>
-            Promise.resolve(new FakeStream(opts.streams[next++] ?? [])),
+            Promise.resolve(
+              new FakeStream(options.streams[nextStream++] ?? []),
+            ),
         },
         threads: {
           list: () =>
-            items(
-              Object.keys(children).map((id) => ({
+            items([
+              { id: "sthr_primary", parent_thread_id: null, agent: AGENT },
+              ...Object.keys(children).map((id) => ({
                 id,
+                parent_thread_id: "sthr_primary",
                 agent: {
                   name: "specialist",
                   model: { id: "claude-haiku-4-5" },
                 },
               })),
-            ),
+            ]),
           events: {
             list: (threadId: string) => items(children[threadId] ?? []),
           },
@@ -288,18 +325,18 @@ function fakeClient(opts: {
   return { client, calls };
 }
 
-/** Read one stream until the turn ends; returns what the app saw. */
+/** Read one stream until `stopAt` (by default, the end of a turn); returns what the app saw. */
 async function consume(
   client: ReturnType<typeof fakeClient>["client"],
-  stopAt: (e: Ev) => boolean = (e) =>
-    e.type === "session.status_idle" &&
-    e.stop_reason?.type !== "requires_action",
-): Promise<Ev[]> {
+  stopAt: (event: SessionEvent) => boolean = (event) =>
+    event.type === "session.status_idle" &&
+    event.stop_reason?.type !== "requires_action",
+): Promise<SessionEvent[]> {
   const stream = await client.beta.sessions.events.stream(SESSION);
-  const seen: Ev[] = [];
-  for await (const e of stream) {
-    seen.push(e);
-    if (stopAt(e)) break;
+  const seen: SessionEvent[] = [];
+  for await (const event of stream) {
+    seen.push(event);
+    if (stopAt(event)) break;
   }
   return seen;
 }
@@ -308,7 +345,7 @@ async function consume(
 
 const finished = (): ReadableSpan[] => exporter.getFinishedSpans();
 const named = (name: string): ReadableSpan[] =>
-  finished().filter((s) => s.name === name);
+  finished().filter((span) => span.name === name);
 const only = (name: string): ReadableSpan => {
   const [span] = named(name);
   if (!span) throw new Error(`no span named ${name}`);
@@ -316,7 +353,9 @@ const only = (name: string): ReadableSpan => {
 };
 const childrenOf = (parent: ReadableSpan): ReadableSpan[] =>
   finished()
-    .filter((s) => s.parentSpanContext?.spanId === parent.spanContext().spanId)
+    .filter(
+      (span) => span.parentSpanContext?.spanId === parent.spanContext().spanId,
+    )
     .sort(
       (a, b) =>
         a.startTime[0] - b.startTime[0] ||
@@ -325,8 +364,22 @@ const childrenOf = (parent: ReadableSpan): ReadableSpan[] =>
     );
 const tree = (span: ReadableSpan, depth = 0): string[] => [
   `${"  ".repeat(depth)}${span.name}`,
-  ...childrenOf(span).flatMap((c) => tree(c, depth + 1)),
+  ...childrenOf(span).flatMap((child) => tree(child, depth + 1)),
 ];
+const inputOf = (span: ReadableSpan): { role: string; content?: string }[] =>
+  JSON.parse(String(span.attributes["judgment.input"]));
+
+/** Wrap a fake client whose single stream is a delegation turn, and read it. */
+async function traceDelegation() {
+  const { primary, child } = delegationTurn();
+  const { client } = fakeClient({
+    streams: [primary],
+    children: { [CHILD]: child },
+  });
+  wrapAnthropicManagedAgents(client);
+  await consume(client);
+  return { primary, client };
+}
 
 // --- tests -----------------------------------------------------------------
 
@@ -340,30 +393,18 @@ describe("wrapAnthropicManagedAgents", () => {
     wrapAnthropicManagedAgents(client);
     const seen = await consume(
       client,
-      (e) => e === primary[primary.length - 1],
+      (event) => event === primary[primary.length - 1],
     );
     expect(seen).toEqual(primary);
   });
 
   test("builds one invocation per turn, continuing across requires_action", async () => {
-    const { primary, child } = delegationTurn();
-    const { client } = fakeClient({
-      streams: [primary],
-      children: { [CHILD]: child },
-    });
-    wrapAnthropicManagedAgents(client);
-    await consume(client);
+    await traceDelegation();
     expect(named("invocation")).toHaveLength(1);
   });
 
   test("shapes spans as invocation > invoke_agent > model and tool calls", async () => {
-    const { primary, child } = delegationTurn();
-    const { client } = fakeClient({
-      streams: [primary],
-      children: { [CHILD]: child },
-    });
-    wrapAnthropicManagedAgents(client);
-    await consume(client);
+    await traceDelegation();
     expect(tree(only("invocation"))).toEqual([
       "invocation",
       "  invoke_agent concierge",
@@ -378,16 +419,10 @@ describe("wrapAnthropicManagedAgents", () => {
   });
 
   test("puts the same judgment.session_id on every span", async () => {
-    const { primary, child } = delegationTurn();
-    const { client } = fakeClient({
-      streams: [primary],
-      children: { [CHILD]: child },
-    });
-    wrapAnthropicManagedAgents(client);
-    await consume(client);
-    expect(new Set(finished().map((s) => s.attributes[SESSION_ID]))).toEqual(
-      new Set([SESSION]),
-    );
+    await traceDelegation();
+    expect(
+      new Set(finished().map((span) => span.attributes[SESSION_ID])),
+    ).toEqual(new Set([SESSION]));
   });
 
   test("puts judgment.session_id on the confirmation wait span too", async () => {
@@ -411,28 +446,20 @@ describe("wrapAnthropicManagedAgents", () => {
       await consume(client);
     });
     expect({
-      sessionIds: [...new Set(finished().map((s) => s.attributes[SESSION_ID]))],
+      sessionIds: [
+        ...new Set(finished().map((span) => span.attributes[SESSION_ID])),
+      ],
       invocationParent: only("invocation").parentSpanContext?.spanId,
-      handler: only("handle_chat").spanContext().spanId,
     }).toEqual({
       sessionIds: ["chat-42"],
       invocationParent: only("handle_chat").spanContext().spanId,
-      handler: only("handle_chat").spanContext().spanId,
     });
   });
 
   test("records model, token usage and provider on generate_content spans", async () => {
-    const { primary, child } = delegationTurn();
-    const { client } = fakeClient({
-      streams: [primary],
-      children: { [CHILD]: child },
-    });
-    wrapAnthropicManagedAgents(client);
-    await consume(client);
+    await traceDelegation();
     const llm = finished().find(
-      (s) =>
-        s.name.startsWith("generate_content") &&
-        s.attributes["judgment.usage.output_tokens"] === 294,
+      (span) => span.attributes["judgment.usage.output_tokens"] === 294,
     );
     expect(llm?.attributes).toMatchObject({
       "judgment.span_kind": "llm",
@@ -444,21 +471,37 @@ describe("wrapAnthropicManagedAgents", () => {
     });
   });
 
-  test("spans are exported before the terminal event reaches the app", async () => {
+  test("gives a model request the system prompt and the turn's messages so far as input", async () => {
+    const { client } = fakeClient({ streams: [confirmationTurn("allow")] });
+    wrapAnthropicManagedAgents(client);
+    await consume(client);
+    const [, second] = named("generate_content claude-haiku-4-5");
+    expect(inputOf(second).map(({ role, content }) => [role, content])).toEqual(
+      [
+        ["system", "Be brief."],
+        ["user", "Delete the leads file"],
+        ["assistant", undefined],
+        ["tool", "ok"],
+      ],
+    );
+  });
+
+  test("exports spans before the terminal event reaches the app", async () => {
     const { primary, child } = delegationTurn();
     const { client } = fakeClient({
       streams: [primary],
       children: { [CHILD]: child },
     });
     wrapAnthropicManagedAgents(client);
-    let atIdle = -1;
-    await consume(client, (e) => {
-      const end =
-        e.type === "session.status_idle" && e.stop_reason?.type === "end_turn";
-      if (end) atIdle = named("invocation").length;
-      return end;
+    let exportedAtIdle = -1;
+    await consume(client, (event) => {
+      const isEnd =
+        event.type === "session.status_idle" &&
+        event.stop_reason?.type === "end_turn";
+      if (isEnd) exportedAtIdle = named("invocation").length;
+      return isEnd;
     });
-    expect(atIdle).toBe(1);
+    expect(exportedAtIdle).toBe(1);
   });
 
   test("records an allowed confirmation without an error", async () => {
@@ -479,37 +522,29 @@ describe("wrapAnthropicManagedAgents", () => {
     await consume(client);
     const tool = only("execute_tool bash");
     expect({
-      status: tool.status,
+      status: tool.status.code,
+      message: tool.status.message,
       waitParent: only("await_user_confirmation").parentSpanContext?.spanId,
-      tool: tool.spanContext().spanId,
     }).toEqual({
-      status: {
-        code: SpanStatusCode.ERROR,
-        message: "denied by user: Not permitted",
-      },
+      status: SpanStatusCode.ERROR,
+      message: "Error: denied by user: Not permitted",
       waitParent: tool.spanContext().spanId,
-      tool: tool.spanContext().spanId,
     });
   });
 
   test("fails the invocation when the session stops at its budget", async () => {
-    const events = [
-      ev("user.message", 0.1, { content: words("hi") }),
-      ev("span.model_request_start", 0.1, { id: "ms1" }),
-      ev("agent.message", 1, { content: words("partial") }),
-      ev("span.model_request_end", 1.1, {
-        model_request_start_id: "ms1",
-        is_error: false,
-      }),
-      idle(1.2, "budget_reached"),
-    ];
-    const { client } = fakeClient({ streams: [events] });
+    const { client } = fakeClient({
+      streams: [
+        [
+          ev("user.message", 0.1, { content: words("hi") }),
+          ev("agent.message", 1, { content: words("partial") }),
+          idle(1.2, "budget_reached"),
+        ],
+      ],
+    });
     wrapAnthropicManagedAgents(client);
     await consume(client);
-    expect(only("invocation").status).toEqual({
-      code: SpanStatusCode.ERROR,
-      message: "budget_reached",
-    });
+    expect(only("invocation").status.message).toBe("Error: budget_reached");
   });
 
   test("surfaces a sub-agent session.error that is only in the thread's events", async () => {
@@ -518,7 +553,6 @@ describe("wrapAnthropicManagedAgents", () => {
       error: {
         type: "mcp_authentication_failed_error",
         message: "no credential",
-        mcp_server_name: "crm",
         retry_status: { type: "terminal" },
       },
     });
@@ -533,7 +567,7 @@ describe("wrapAnthropicManagedAgents", () => {
       invocation: only("invocation").status.message,
     }).toEqual({
       agent: SpanStatusCode.ERROR,
-      invocation: "mcp_authentication_failed_error: no credential",
+      invocation: "Error: mcp_authentication_failed_error: no credential",
     });
   });
 
@@ -544,48 +578,26 @@ describe("wrapAnthropicManagedAgents", () => {
       children: { [CHILD]: child },
     });
     wrapAnthropicManagedAgents(client);
-    await consume(client, (e) => e.stop_reason?.type === "requires_action");
+    await consume(
+      client,
+      (event) => event.stop_reason?.type === "requires_action",
+    );
     expect(
       only("invocation").attributes["anthropic.managed_agents.incomplete"],
     ).toBe(true);
   });
 
-  test("shows earlier turns of the session as input to later model requests", async () => {
-    const first = [
-      ev("user.message", 0.1, { content: words("first question") }),
-      ev("span.model_request_start", 0.1, { id: "ms1" }),
-      ev("agent.message", 1, { content: words("first answer") }),
-      ev("span.model_request_end", 1.1, {
-        model_request_start_id: "ms1",
-        is_error: false,
-      }),
-      idle(1.2),
-    ];
-    const second = [
-      ev("user.message", 10, { content: words("second question") }),
-      ev("span.model_request_start", 10.1, { id: "ms2" }),
-      ev("agent.message", 11, { content: words("second answer") }),
-      ev("span.model_request_end", 11.1, {
-        model_request_start_id: "ms2",
-        is_error: false,
-      }),
-      idle(11.2),
-    ];
-    const { client } = fakeClient({ streams: [first, second] });
+  test("gives each turn only the events of a sub-agent thread that happened during it", async () => {
+    const first = delegationTurn(0);
+    const second = delegationTurn(100);
+    const { client } = fakeClient({
+      streams: [first.primary, second.primary],
+      children: { [CHILD]: [...first.child, ...second.child] },
+    });
     wrapAnthropicManagedAgents(client);
     await consume(client);
     await consume(client);
-    const lastLlm = named("generate_content claude-haiku-4-5")[1];
-    expect(
-      JSON.parse(String(lastLlm?.attributes["judgment.input"])).map(
-        (m: { role: string; content: string }) => `${m.role}: ${m.content}`,
-      ),
-    ).toEqual([
-      "system: Be brief.",
-      "user: first question",
-      "assistant: first answer",
-      "user: second question",
-    ]);
+    expect(named("execute_tool search_events")).toHaveLength(2);
   });
 
   test("still traces the turn when sessions.retrieve fails", async () => {
@@ -603,107 +615,40 @@ describe("wrapAnthropicManagedAgents", () => {
     }
   });
 
-  test("builds spans before releasing the terminal event when an API lookup hangs", async () => {
-    const errorLog = spyOn(Logger, "error").mockImplementation(() => undefined);
-    const previous = managedAgentsTestHooks.enrichmentDeadlineMs;
-    managedAgentsTestHooks.enrichmentDeadlineMs = 30;
-    try {
-      const { client } = fakeClient({
-        streams: [confirmationTurn("allow")],
-        retrieveHangs: true,
-      });
-      wrapAnthropicManagedAgents(client);
-      let atIdle = -1;
-      await consume(client, (e) => {
-        const end = e.type === "session.status_idle";
-        if (end) atIdle = named("invoke_agent agent").length;
-        return end && e.stop_reason?.type !== "requires_action";
-      });
-      expect(atIdle).toBeGreaterThan(0);
-    } finally {
-      managedAgentsTestHooks.enrichmentDeadlineMs = previous;
-      errorLog.mockRestore();
-    }
-  });
-
-  test("keeps attributing a sub-agent thread reused in a later turn", async () => {
-    const { primary, child } = delegationTurn();
-    const second = [
-      ev("user.message", 100, { content: words("Anything else?") }),
-      ev("agent.custom_tool_use", 101, {
-        id: "tu2",
-        name: "search_events",
-        input: {},
-        session_thread_id: CHILD,
-      }),
-      idle(102, "requires_action", ["tu2"]),
-      ev("user.custom_tool_result", 103, {
-        custom_tool_use_id: "tu2",
-        session_thread_id: CHILD,
-        content: words("none"),
-      }),
-      ev("agent.message", 104, { content: words("No.") }),
-      idle(105),
-    ];
-    const childLater = [
-      ...child,
-      ev("agent.custom_tool_use", 101, {
-        id: "tu2",
-        name: "search_events",
-        input: {},
-      }),
-    ];
-    const { client } = fakeClient({
-      streams: [primary, second],
-      children: { [CHILD]: childLater },
+  test("bounds the lookups made at the end of a turn with a timeout", async () => {
+    const { client, calls } = fakeClient({
+      streams: [confirmationTurn("allow")],
     });
     wrapAnthropicManagedAgents(client);
     await consume(client);
-    await consume(client);
-    const lastConcierge = named("invoke_agent concierge")[1];
-    expect(
-      lastConcierge && childrenOf(lastConcierge).map((s) => s.name),
-    ).toEqual([]);
-    expect(named("invoke_agent specialist")).toHaveLength(2);
+    expect(calls.retrieveOptions?.timeout).toBeGreaterThan(0);
   });
 
   test("does not export a trace for an idle notification that precedes any activity", async () => {
-    const stream = [
-      idle(0),
-      ev("user.message", 1, { content: words("hello") }),
-      ev("agent.message", 2, { content: words("hi") }),
-      idle(3),
-    ];
-    const { client } = fakeClient({ streams: [stream] });
+    const { client } = fakeClient({
+      streams: [
+        [
+          idle(0),
+          ev("user.message", 1, { content: words("hello") }),
+          ev("agent.message", 2, { content: words("hi") }),
+          idle(3),
+        ],
+      ],
+    });
     wrapAnthropicManagedAgents(client);
     let idles = 0;
     await consume(
       client,
-      (e) => e.type === "session.status_idle" && ++idles === 2,
+      (event) => event.type === "session.status_idle" && ++idles === 2,
     );
     expect(named("invocation")).toHaveLength(1);
   });
 
   test("takes the agent input from the first message, not a leading status event", async () => {
-    const { primary, child } = delegationTurn();
-    const { client } = fakeClient({
-      streams: [primary],
-      children: { [CHILD]: child },
-    });
-    wrapAnthropicManagedAgents(client);
-    await consume(client);
-    expect(
-      JSON.parse(
-        String(only("invoke_agent concierge").attributes["judgment.input"]),
-      ),
-    ).toEqual([{ role: "user", content: "Find retirement events" }]);
-  });
-
-  test("wrapping a client twice does not duplicate traces", async () => {
-    const { client } = fakeClient({ streams: [confirmationTurn("allow")] });
-    wrapAnthropicManagedAgents(wrapAnthropicManagedAgents(client));
-    await consume(client);
-    expect(named("invocation")).toHaveLength(1);
+    await traceDelegation();
+    expect(inputOf(only("invoke_agent concierge"))).toEqual([
+      { role: "user", content: "Find retirement events" },
+    ]);
   });
 
   test("does not call the Anthropic API when no tracer is active", async () => {
