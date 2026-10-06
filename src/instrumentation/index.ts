@@ -16,12 +16,7 @@ function isManagedAgentsClient(
 }
 
 /**
- * Wrap a supported client to add automatic tracing.
- *
- * Supports OpenAI clients and Anthropic clients used for Claude Managed
- * Agents. Detects the client type automatically and applies the appropriate
- * instrumentation. For an Anthropic client only Managed Agents session streams
- * are traced; see {@link wrapAnthropicManagedAgents}.
+ * Wrap a supported LLM client to add automatic tracing.
  *
  * @param client - An OpenAI or Anthropic client instance.
  * @returns The same client instance, instrumented in-place.
