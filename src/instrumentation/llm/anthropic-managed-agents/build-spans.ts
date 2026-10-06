@@ -122,6 +122,15 @@ function toMessages(events: Ev[], isChild: boolean): Message[] {
   return out;
 }
 
+/** The first message in the turn (status and model-request markers carry none). */
+function agentInput(mine: Ev[], isChild: boolean): Message[] {
+  for (const e of mine) {
+    const messages = toMessages([e], isChild);
+    if (messages.length) return messages;
+  }
+  return [];
+}
+
 export interface TurnInfo {
   sessionId: string;
   /** The id written to `judgment.session_id` on every span. */
@@ -244,9 +253,7 @@ function emitAgent(
         ...common,
         [AttributeKeys.JUDGMENT_SPAN_KIND]: "agent",
         "gen_ai.operation.name": "invoke_agent",
-        [AttributeKeys.JUDGMENT_INPUT]: json(
-          toMessages([firstMine], a.isChild),
-        ),
+        [AttributeKeys.JUDGMENT_INPUT]: json(agentInput(mine, a.isChild)),
         [AttributeKeys.JUDGMENT_OUTPUT]: text(
           [...mine]
             .reverse()

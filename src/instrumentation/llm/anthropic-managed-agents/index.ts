@@ -16,8 +16,13 @@ import type {
 
 export type { ManagedAgentEvent, ManagedAgentsClientLike } from "./types";
 
-/** Longest the stream waits for a turn to be exported before moving on. */
-const EXPORT_TIMEOUT_MS = 10_000;
+/** Longest a turn's optional API lookups may take before spans are built without them. */
+const ENRICHMENT_DEADLINE_MS = 10_000;
+
+/** Test hook: lets tests shorten the enrichment deadline. */
+export const managedAgentsTestHooks = {
+  enrichmentDeadlineMs: ENRICHMENT_DEADLINE_MS,
+};
 /** Primary-thread events remembered per session (for LLM span inputs). */
 const MAX_HISTORY_EVENTS = 1000;
 /** Sessions remembered per client; the oldest is dropped beyond this. */
@@ -25,7 +30,15 @@ const MAX_SESSIONS = 100;
 
 const wrappedResources = new WeakSet<object>();
 const patchedStreams = new WeakSet<object>();
-const histories = new WeakMap<object, Map<string, Ev[]>>();
+const histories = new WeakMap<object, Map<string, SessionState>>();
+
+/** What is remembered between turns of one session. */
+interface SessionState {
+  /** Primary-thread events, for LLM span inputs. */
+  events: Ev[];
+  /** Sub-agent threads seen so far (thread id -> agent name). */
+  threads: Map<string, string>;
+}
 
 type StreamFn = ManagedAgentsApi["beta"]["sessions"]["events"]["stream"];
 
@@ -148,17 +161,24 @@ async function* tapEvents(
       if (isTurnEnd(event)) {
         const finished = turn;
         turn = [];
-        await onTurn(finished, false);
+        // A status event with no turn activity (e.g. an idle notification
+        // before the first message) is not a turn.
+        if (hasTurnActivity(finished)) await onTurn(finished, false);
       }
       yield event;
     }
   } finally {
-    if (
-      turn.some((e) => e.type === "user.message" || e.type.startsWith("agent."))
-    ) {
-      await onTurn(turn, true);
-    }
+    if (hasTurnActivity(turn)) await onTurn(turn, true);
   }
+}
+
+function hasTurnActivity(turn: Ev[]): boolean {
+  return turn.some(
+    (e) =>
+      e.type.startsWith("user.") ||
+      e.type.startsWith("agent.") ||
+      e.type === "session.error",
+  );
 }
 
 async function exportWithTimeout(
@@ -169,22 +189,12 @@ async function exportWithTimeout(
   parent: Context,
 ): Promise<void> {
   if (!getTraceRuntime().getActiveTracer()) return;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<void>((resolve) => {
-    timer = setTimeout(resolve, EXPORT_TIMEOUT_MS);
-    timer.unref?.();
-  });
-  const exported = exportTurn(client, sessionId, turn, partial, parent).catch(
-    (err: unknown) => {
-      Logger.error(
-        `[Caught] An exception was raised in wrapAnthropicManagedAgents.exportTurn: ${String(err)}`,
-      );
-    },
-  );
   try {
-    await Promise.race([exported, timeout]);
-  } finally {
-    clearTimeout(timer);
+    await exportTurn(client, sessionId, turn, partial, parent);
+  } catch (err) {
+    Logger.error(
+      `[Caught] An exception was raised in wrapAnthropicManagedAgents.exportTurn: ${String(err)}`,
+    );
   }
 }
 
@@ -198,31 +208,50 @@ async function exportTurn(
   const api = client as unknown as ManagedAgentsApi;
   const start = ms(turn[0]) ?? Date.now();
 
-  // Sub-agent threads touched this turn: created now, or reused from an
-  // earlier turn.
-  const childThreads = new Map<string, string>();
+  const state = sessionState(client, sessionId);
+  // Sub-agent threads touched this turn: named by a delegation event, or
+  // created in an earlier turn and active again now.
+  const named = new Map<string, string>();
   for (const e of turn) {
     if (e.type === "session.thread_created" && e.session_thread_id) {
-      childThreads.set(e.session_thread_id, e.agent_name ?? "agent");
+      named.set(e.session_thread_id, e.agent_name ?? "agent");
     } else if (
       e.type === "agent.thread_message_sent" &&
       e.to_session_thread_id
     ) {
-      childThreads.set(e.to_session_thread_id, e.to_agent_name ?? "agent");
+      named.set(e.to_session_thread_id, e.to_agent_name ?? "agent");
     } else if (
       e.type === "agent.thread_message_received" &&
       e.from_session_thread_id
     ) {
-      childThreads.set(e.from_session_thread_id, e.from_agent_name ?? "agent");
+      named.set(e.from_session_thread_id, e.from_agent_name ?? "agent");
     }
+  }
+  for (const [id, name] of named) state.threads.set(id, name);
+  const childThreads = new Map(named);
+  for (const e of turn) {
+    const id = e.session_thread_id;
+    const known = id ? state.threads.get(id) : undefined;
+    if (id && known !== undefined) childThreads.set(id, known);
   }
   const primaryTurn = turn.filter(
     (e) => !(e.session_thread_id && childThreads.has(e.session_thread_id)),
   );
-  const prior = rememberPrimaryEvents(client, sessionId, primaryTurn, turn);
+  const prior = rememberPrimaryEvents(
+    client,
+    sessionId,
+    state,
+    primaryTurn,
+    turn,
+  );
+
+  // Enrichment calls share one deadline; spans are always built afterwards
+  // (with whatever was fetched) so the turn-ending event is never released
+  // before they exist.
+  const deadline = Date.now() + managedAgentsTestHooks.enrichmentDeadlineMs;
 
   const session = (
-    await attempt("sessions.retrieve", () =>
+    await attempt("sessions.retrieve", deadline, () =>
       Promise.resolve(api.beta.sessions.retrieve(sessionId)),
     )
   )?.value;
@@ -239,20 +268,27 @@ async function exportTurn(
 
   if (childThreads.size) {
     const threads = new Map<string, ManagedAgentThread>();
-    await attempt("sessions.threads.list", async () => {
+    await attempt("sessions.threads.list", deadline, async () => {
       for await (const t of api.beta.sessions.threads.list(sessionId)) {
         threads.set(t.id, t);
       }
     });
     for (const [threadId, agentName] of childThreads) {
       const events: Ev[] = [];
-      const read = await attempt("sessions.threads.events.list", async () => {
-        for await (const e of api.beta.sessions.threads.events.list(threadId, {
-          session_id: sessionId,
-        })) {
-          events.push(e);
-        }
-      });
+      const read = await attempt(
+        "sessions.threads.events.list",
+        deadline,
+        async () => {
+          for await (const e of api.beta.sessions.threads.events.list(
+            threadId,
+            {
+              session_id: sessionId,
+            },
+          )) {
+            events.push(e);
+          }
+        },
+      );
       if (!read) continue;
       const thread = threads.get(threadId);
       const first = events.findIndex((e) => (ms(e) ?? 0) >= start);
@@ -280,6 +316,15 @@ async function exportTurn(
   });
 }
 
+function sessionState(client: object, sessionId: string): SessionState {
+  let perClient = histories.get(client);
+  if (!perClient) {
+    perClient = new Map();
+    histories.set(client, perClient);
+  }
+  return perClient.get(sessionId) ?? { events: [], threads: new Map() };
+}
+
 /**
  * Append this turn's primary-thread events to the session history and return
  * the history as it was before the turn. The history is only used to show the
@@ -288,25 +333,23 @@ async function exportTurn(
 function rememberPrimaryEvents(
   client: object,
   sessionId: string,
+  state: SessionState,
   primaryTurn: Ev[],
   turn: Ev[],
 ): Ev[] {
-  let perClient = histories.get(client);
-  if (!perClient) {
-    perClient = new Map();
-    histories.set(client, perClient);
-  }
-  const prior = perClient.get(sessionId) ?? [];
+  const perClient = histories.get(client) ?? new Map<string, SessionState>();
+  histories.set(client, perClient);
+  const prior = state.events;
   perClient.delete(sessionId);
   const ended = turn.some(
     (e) =>
       e.type === "session.status_terminated" || e.type === "session.deleted",
   );
   if (!ended) {
-    perClient.set(
-      sessionId,
-      [...prior, ...primaryTurn].slice(-MAX_HISTORY_EVENTS),
-    );
+    perClient.set(sessionId, {
+      events: [...prior, ...primaryTurn].slice(-MAX_HISTORY_EVENTS),
+      threads: state.threads,
+    });
     const oldest = perClient.keys().next().value;
     if (perClient.size > MAX_SESSIONS && oldest !== undefined) {
       perClient.delete(oldest);
@@ -320,17 +363,33 @@ function modelId(agent: ManagedAgentConfig | undefined): string | undefined {
   return typeof model === "string" ? model : model?.id;
 }
 
-/** Run an Anthropic API call used only for enrichment; failures are logged, never thrown. */
+/**
+ * Run an Anthropic API call used only for enrichment. Failures and calls still
+ * pending at `deadline` are logged and skipped, never thrown; a late result is
+ * ignored.
+ */
 async function attempt<R>(
   label: string,
+  deadline: number,
   fn: () => Promise<R>,
 ): Promise<{ value: R } | undefined> {
+  const remaining = deadline - Date.now();
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    return { value: await fn() };
+    if (remaining <= 0) throw new Error("deadline exceeded");
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("timed out")), remaining);
+      timer.unref?.();
+    });
+    const call = fn();
+    call.catch(() => undefined);
+    return { value: await Promise.race([call, timeout]) };
   } catch (err) {
     Logger.error(
       `[Caught] Managed Agents ${label} failed; the trace will be missing detail: ${String(err)}`,
     );
     return undefined;
+  } finally {
+    clearTimeout(timer);
   }
 }

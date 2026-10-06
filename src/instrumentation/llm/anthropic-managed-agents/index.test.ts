@@ -15,7 +15,7 @@ import type { JudgmentSpanExporter } from "../../../trace/exporters/JudgmentSpan
 import type { JudgmentSpanProcessor } from "../../../trace/processors/JudgmentSpanProcessor";
 import { Logger } from "../../../utils/logger";
 import { wrap } from "../../index";
-import { wrapAnthropicManagedAgents } from "./index";
+import { managedAgentsTestHooks, wrapAnthropicManagedAgents } from "./index";
 import type { ManagedAgentEvent as Ev } from "./types";
 
 const SESSION = "sesn_1";
@@ -248,6 +248,7 @@ function fakeClient(opts: {
   streams: Ev[][];
   children?: Record<string, Ev[]>;
   retrieveFails?: boolean;
+  retrieveHangs?: boolean;
 }) {
   const calls = { retrieve: 0 };
   let next = 0;
@@ -257,6 +258,7 @@ function fakeClient(opts: {
       sessions: {
         retrieve: () => {
           calls.retrieve++;
+          if (opts.retrieveHangs) return new Promise(() => undefined);
           return opts.retrieveFails
             ? Promise.reject(new Error("retrieve failed"))
             : Promise.resolve({ agent: AGENT });
@@ -599,6 +601,102 @@ describe("wrapAnthropicManagedAgents", () => {
     } finally {
       errorLog.mockRestore();
     }
+  });
+
+  test("builds spans before releasing the terminal event when an API lookup hangs", async () => {
+    const errorLog = spyOn(Logger, "error").mockImplementation(() => undefined);
+    const previous = managedAgentsTestHooks.enrichmentDeadlineMs;
+    managedAgentsTestHooks.enrichmentDeadlineMs = 30;
+    try {
+      const { client } = fakeClient({
+        streams: [confirmationTurn("allow")],
+        retrieveHangs: true,
+      });
+      wrapAnthropicManagedAgents(client);
+      let atIdle = -1;
+      await consume(client, (e) => {
+        const end = e.type === "session.status_idle";
+        if (end) atIdle = named("invoke_agent agent").length;
+        return end && e.stop_reason?.type !== "requires_action";
+      });
+      expect(atIdle).toBeGreaterThan(0);
+    } finally {
+      managedAgentsTestHooks.enrichmentDeadlineMs = previous;
+      errorLog.mockRestore();
+    }
+  });
+
+  test("keeps attributing a sub-agent thread reused in a later turn", async () => {
+    const { primary, child } = delegationTurn();
+    const second = [
+      ev("user.message", 100, { content: words("Anything else?") }),
+      ev("agent.custom_tool_use", 101, {
+        id: "tu2",
+        name: "search_events",
+        input: {},
+        session_thread_id: CHILD,
+      }),
+      idle(102, "requires_action", ["tu2"]),
+      ev("user.custom_tool_result", 103, {
+        custom_tool_use_id: "tu2",
+        session_thread_id: CHILD,
+        content: words("none"),
+      }),
+      ev("agent.message", 104, { content: words("No.") }),
+      idle(105),
+    ];
+    const childLater = [
+      ...child,
+      ev("agent.custom_tool_use", 101, {
+        id: "tu2",
+        name: "search_events",
+        input: {},
+      }),
+    ];
+    const { client } = fakeClient({
+      streams: [primary, second],
+      children: { [CHILD]: childLater },
+    });
+    wrapAnthropicManagedAgents(client);
+    await consume(client);
+    await consume(client);
+    const lastConcierge = named("invoke_agent concierge")[1];
+    expect(
+      lastConcierge && childrenOf(lastConcierge).map((s) => s.name),
+    ).toEqual([]);
+    expect(named("invoke_agent specialist")).toHaveLength(2);
+  });
+
+  test("does not export a trace for an idle notification that precedes any activity", async () => {
+    const stream = [
+      idle(0),
+      ev("user.message", 1, { content: words("hello") }),
+      ev("agent.message", 2, { content: words("hi") }),
+      idle(3),
+    ];
+    const { client } = fakeClient({ streams: [stream] });
+    wrapAnthropicManagedAgents(client);
+    let idles = 0;
+    await consume(
+      client,
+      (e) => e.type === "session.status_idle" && ++idles === 2,
+    );
+    expect(named("invocation")).toHaveLength(1);
+  });
+
+  test("takes the agent input from the first message, not a leading status event", async () => {
+    const { primary, child } = delegationTurn();
+    const { client } = fakeClient({
+      streams: [primary],
+      children: { [CHILD]: child },
+    });
+    wrapAnthropicManagedAgents(client);
+    await consume(client);
+    expect(
+      JSON.parse(
+        String(only("invoke_agent concierge").attributes["judgment.input"]),
+      ),
+    ).toEqual([{ role: "user", content: "Find retirement events" }]);
   });
 
   test("wrapping a client twice does not duplicate traces", async () => {

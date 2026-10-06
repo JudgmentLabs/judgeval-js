@@ -14,7 +14,7 @@ async function main() {
   });
   const environment = await client.beta.environments.create({
     name: `judgeval-example-${Date.now()}`,
-    config: { type: "cloud", networking: { type: "unrestricted" } },
+    config: { type: "cloud", networking: { type: "limited" } },
   });
   const session = await client.beta.sessions.create({
     agent: agent.id,
