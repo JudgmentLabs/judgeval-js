@@ -1,4 +1,5 @@
 import type { BetaManagedAgentsStreamSessionEvents } from "@anthropic-ai/sdk/resources/beta/sessions/events";
+import { AttributeKeys } from "../../../JudgmentAttributeKeys";
 import { BaseTracer } from "../../../trace/BaseTracer";
 import { getTraceRuntime } from "../../../trace/runtime";
 
@@ -23,8 +24,8 @@ function timeOf(event: SessionEvent): Date {
     : new Date();
 }
 
-/** Export a turn as one span: the user's events as input, the rest as output. */
-export function exportTurn(turn: SessionEvent[]): void {
+/** Export a turn as one span of the session: user events as input, the rest as output. */
+export function exportTurn(turn: SessionEvent[], sessionId: string): void {
   if (!turn.some((event) => event.type.startsWith("agent."))) return;
 
   const span = BaseTracer.getOTELTracer().startSpan(
@@ -33,6 +34,7 @@ export function exportTurn(turn: SessionEvent[]): void {
     getTraceRuntime().getCurrentContext(),
   );
   BaseTracer.setSpanKind("agent", span);
+  BaseTracer.setAttribute(AttributeKeys.JUDGMENT_SESSION_ID, sessionId, span);
   BaseTracer.setInput(
     turn.filter((event) => event.type.startsWith("user.")),
     span,

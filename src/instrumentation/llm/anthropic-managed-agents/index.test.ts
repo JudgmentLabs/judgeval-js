@@ -214,6 +214,13 @@ describe("wrapAnthropicManagedAgents", () => {
     expect(spans[0].duration).toEqual([4, 100000000]);
   });
 
+  test("sets the Managed Agents session ID as the session ID", async () => {
+    const { spans } = await runSession(toolTurn());
+    expect(spans[0].attributes[AttributeKeys.JUDGMENT_SESSION_ID]).toBe(
+      SESSION_ID,
+    );
+  });
+
   test("nests the span under the active span", async () => {
     const spans = await BaseTracer.with("app", async () => {
       return (await runSession(toolTurn())).spans;

@@ -12,20 +12,20 @@ import { endsTurn, exportTurn, type SessionEvent } from "./turn";
 export function wrapEventsStream(client: Anthropic): void {
   const { events } = client.beta.sessions;
   events.stream = immutableWrapAsync(events.stream.bind(events), {
-    post: (_ctx, stream) => {
+    post: (_ctx, stream, [sessionId]) => {
       let turn: SessionEvent[] = [];
       proxyAsyncIterable(stream, {
         onYield(event) {
           turn.push(event);
           if (endsTurn(event)) {
-            exportTurn(turn);
+            exportTurn(turn, sessionId);
             turn = [];
           }
         },
         onDone() {},
         onError() {},
         onFinally() {
-          exportTurn(turn);
+          exportTurn(turn, sessionId);
         },
       });
     },
