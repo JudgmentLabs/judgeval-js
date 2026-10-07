@@ -55,6 +55,7 @@ export function exportTurn(
   );
   if (!events.some(isConversation)) return;
 
+  const failure = failureOf(events);
   const parent = withSessionId(
     getTraceRuntime().getCurrentContext(),
     sessionId,
@@ -72,11 +73,11 @@ export function exportTurn(
       output: textOf(
         events.filter((e) => e.type === "agent.message").pop()?.content,
       ),
-      error: failureOf(events),
+      error: failure,
     },
     (context) => {
       writeModelRequests(events, agent, context);
-      writeToolCalls(events, context);
+      writeToolCalls(events, failure, context);
     },
   );
 }
@@ -165,8 +166,15 @@ function writeModelRequests(
   });
 }
 
-/** One span per tool call. A call without a result lasts until the turn ends. */
-function writeToolCalls(events: SessionEvent[], context: Context): void {
+/**
+ * One span per tool call. A call without a result lasts until the turn ends,
+ * and fails with the turn.
+ */
+function writeToolCalls(
+  events: SessionEvent[],
+  failure: string | undefined,
+  context: Context,
+): void {
   const turnEnd = timeOf(events[events.length - 1]);
   events.forEach((event, index) => {
     const call = toCall(event);
@@ -183,9 +191,11 @@ function writeToolCalls(events: SessionEvent[], context: Context): void {
       end: resultEvent ? timeOf(resultEvent) : turnEnd,
       input: call.input,
       output: result?.output,
-      error: result?.isError
-        ? result.output || "Tool execution failed"
-        : undefined,
+      error: result
+        ? result.isError
+          ? result.output || "Tool execution failed"
+          : undefined
+        : failure,
     });
   });
 }

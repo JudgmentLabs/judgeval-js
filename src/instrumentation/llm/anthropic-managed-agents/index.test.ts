@@ -354,6 +354,21 @@ describe("wrapAnthropicManagedAgents", () => {
     );
   });
 
+  test("marks a tool call without a result failed when the turn fails", async () => {
+    const { spans } = await runSession([
+      event("user.message", 0, { content: text("Ask the specialist") }),
+      event("agent.thread_message_sent", 1, {
+        to_session_thread_id: "sthr_1",
+        to_agent_name: "specialist",
+        content: text("Search"),
+      }),
+      idle(2, "budget_reached"),
+    ]);
+    expect(spanNamed(spans, "execute_tool transfer_to_agent").status.code).toBe(
+      SpanStatusCode.ERROR,
+    );
+  });
+
   test("traces a turn that the stream ends before it finishes", async () => {
     const { spans } = await runSession(toolTurn(), 4);
     expect(spanNamed(spans, "invoke_agent concierge").name).toBe(
