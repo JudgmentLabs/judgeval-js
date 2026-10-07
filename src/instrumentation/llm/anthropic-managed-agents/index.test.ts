@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Anthropic } from "@anthropic-ai/sdk";
-import { SpanStatusCode } from "@opentelemetry/api";
 import {
   BasicTracerProvider,
   InMemorySpanExporter,
@@ -20,12 +19,6 @@ interface WireEvent {
 }
 
 const SESSION_ID = "sesn_1";
-const AGENT = {
-  name: "concierge",
-  model: { id: "claude-haiku-4-5" },
-  system: "Be brief.",
-};
-
 class FakeTracer extends BaseTracer {
   constructor(
     provider: BasicTracerProvider,
@@ -145,36 +138,17 @@ function toSse(events: WireEvent[]): string {
     .join("");
 }
 
-/**
- * A client backed by the real SDK that serves `events` as the session's
- * stream. The stream starts once the session has been retrieved.
- */
+/** A client backed by the real SDK that serves `events` as the session's stream. */
 function clientServing(events: WireEvent[]): Anthropic {
-  let retrieved = () => {};
-  const retrievedPromise = new Promise<void>((resolve) => {
-    retrieved = resolve;
-  });
   return new Anthropic({
     apiKey: "test",
     maxRetries: 0,
-    fetch: (input) => {
-      if (!String(input).includes("/events/stream")) {
-        setTimeout(retrieved, 0);
-        return Promise.resolve(Response.json({ id: SESSION_ID, agent: AGENT }));
-      }
-      const body = new ReadableStream<string>({
-        async start(controller) {
-          await retrievedPromise;
-          controller.enqueue(toSse(events));
-          controller.close();
-        },
-      }).pipeThrough(new TextEncoderStream());
-      return Promise.resolve(
-        new Response(body, {
+    fetch: () =>
+      Promise.resolve(
+        new Response(toSse(events), {
           headers: { "content-type": "text/event-stream" },
         }),
-      );
-    },
+      ),
   });
 }
 
@@ -200,15 +174,12 @@ function spanNamed(spans: ReadableSpan[], name: string): ReadableSpan {
   return span;
 }
 
-interface RecordedMessage {
-  role: string;
-  content?: string;
+function recorded(span: ReadableSpan, key: string): unknown {
+  return JSON.parse(String(span.attributes[key]));
 }
 
-function messages(span: ReadableSpan, key: string): RecordedMessage[] {
-  const recorded: RecordedMessage[] = JSON.parse(String(span.attributes[key]));
-  return recorded;
-}
+const isUser = (item: unknown) =>
+  String((item as WireEvent).type).startsWith("user.");
 
 describe("wrapAnthropicManagedAgents", () => {
   test("passes the stream's events through", async () => {
@@ -217,71 +188,40 @@ describe("wrapAnthropicManagedAgents", () => {
     expect(received).toEqual(events);
   });
 
-  test("traces a turn as an agent run with its model requests and tool calls", async () => {
+  test("exports a turn as one span", async () => {
     const { spans } = await runSession(toolTurn());
-    expect(spans.map((span) => span.name).sort()).toEqual([
-      "execute_tool bash",
-      "generate_content claude-haiku-4-5",
-      "generate_content claude-haiku-4-5",
-      "invoke_agent concierge",
+    expect(spans.map((span) => span.name)).toEqual([
+      "ANTHROPIC_MANAGED_AGENTS_TURN",
     ]);
   });
 
-  test("records the user message and the final reply on the agent run", async () => {
-    const { spans } = await runSession(toolTurn());
-    const root = spanNamed(spans, "invoke_agent concierge");
-    expect([
-      messages(root, AttributeKeys.JUDGMENT_INPUT),
-      root.attributes[AttributeKeys.JUDGMENT_OUTPUT],
-    ]).toEqual([[{ role: "user", content: "What is 2+2?" }], "It is 4."]);
+  test("records the user's events as the span input", async () => {
+    const { received, spans } = await runSession(toolTurn());
+    expect(recorded(spans[0], AttributeKeys.JUDGMENT_INPUT)).toEqual(
+      received.filter(isUser),
+    );
   });
 
-  test("records model, usage and the conversation so far on a model request", async () => {
-    const { spans } = await runSession(toolTurn());
-    const second = spans.filter((span) => span.name.startsWith("generate"))[1];
-    expect([
-      second.attributes[AttributeKeys.JUDGMENT_LLM_MODEL_NAME],
-      second.attributes[AttributeKeys.JUDGMENT_USAGE_OUTPUT_TOKENS],
-      messages(second, AttributeKeys.JUDGMENT_INPUT).map((m) => m.role),
-    ]).toEqual([
-      "claude-haiku-4-5",
-      10,
-      ["system", "user", "assistant", "assistant", "tool"],
-    ]);
+  test("records the other events as the span output", async () => {
+    const { received, spans } = await runSession(toolTurn());
+    expect(recorded(spans[0], AttributeKeys.JUDGMENT_OUTPUT)).toEqual(
+      received.filter((item) => !isUser(item)),
+    );
   });
 
-  test("times a tool call from the call to its result", async () => {
+  test("spans from the first to the last event", async () => {
     const { spans } = await runSession(toolTurn());
-    const tool = spanNamed(spans, "execute_tool bash");
-    expect([tool.startTime[0], tool.endTime[0] - tool.startTime[0]]).toEqual([
-      Math.floor(T0 / 1000) + 1,
-      2,
-    ]);
+    expect(spans[0].duration).toEqual([4, 100000000]);
   });
 
-  test("groups spans by the Managed Agents session", async () => {
-    const { spans } = await runSession(toolTurn());
-    expect(
-      spans.every(
-        (span) =>
-          span.attributes[AttributeKeys.JUDGMENT_SESSION_ID] === SESSION_ID,
-      ),
-    ).toBe(true);
-  });
-
-  test("nests the agent run under the active span and keeps the app's session ID", async () => {
+  test("nests the span under the active span", async () => {
     const spans = await BaseTracer.with("app", async () => {
-      BaseTracer.setSessionId("app-session");
       return (await runSession(toolTurn())).spans;
     });
-    const root = spanNamed(spans, "invoke_agent concierge");
-    expect([
-      root.parentSpanContext?.spanId,
-      root.attributes[AttributeKeys.JUDGMENT_SESSION_ID],
-    ]).toEqual([
-      spanNamed(exporter.getFinishedSpans(), "app").spanContext().spanId,
-      "app-session",
-    ]);
+    expect(
+      spanNamed(spans, "ANTHROPIC_MANAGED_AGENTS_TURN").parentSpanContext
+        ?.spanId,
+    ).toBe(spanNamed(exporter.getFinishedSpans(), "app").spanContext().spanId);
   });
 
   test("keeps a turn open while the session waits for a tool result", async () => {
@@ -300,83 +240,38 @@ describe("wrapAnthropicManagedAgents", () => {
       event("agent.message", 3, { content: text("Done") }),
       idle(3.1),
     ]);
-    expect(spans.map((span) => span.name).sort()).toEqual([
-      "execute_tool search",
-      "invoke_agent concierge",
-    ]);
+    expect(spans).toHaveLength(1);
   });
 
-  test("traces each turn of a session as its own trace", async () => {
+  test("exports each turn of a session as its own trace", async () => {
     const { spans } = await runSession([...toolTurn(0), ...toolTurn(10)]);
     expect(new Set(spans.map((span) => span.spanContext().traceId)).size).toBe(
       2,
     );
   });
 
-  test("shows a sub-agent as a transfer_to_agent call and skips its cross-posted events", async () => {
-    const { spans } = await runSession([
+  test("keeps events from sub-agent threads as they are", async () => {
+    const { received, spans } = await runSession([
       event("user.message", 0, { content: text("Ask the specialist") }),
-      event("agent.thread_message_sent", 1, {
-        to_session_thread_id: "sthr_1",
-        to_agent_name: "specialist",
-        content: text("Search"),
-      }),
       event("agent.custom_tool_use", 2, {
         id: "tool_1",
         name: "search",
         input: {},
         session_thread_id: "sthr_1",
       }),
-      event("agent.thread_message_received", 5, {
-        from_session_thread_id: "sthr_1",
-        content: text("Found it"),
-      }),
       idle(5.1),
     ]);
-    expect(
-      spans.map((span) => [
-        span.name,
-        span.attributes[AttributeKeys.JUDGMENT_OUTPUT],
-      ]),
-    ).toEqual([
-      ["execute_tool transfer_to_agent", "Found it"],
-      ["invoke_agent concierge", ""],
-    ]);
-  });
-
-  test("marks the agent run failed when retries are exhausted", async () => {
-    const { spans } = await runSession([
-      event("user.message", 0, { content: text("Hi") }),
-      idle(1, "retries_exhausted"),
-    ]);
-    expect(spanNamed(spans, "invoke_agent concierge").status.code).toBe(
-      SpanStatusCode.ERROR,
+    expect(recorded(spans[0], AttributeKeys.JUDGMENT_OUTPUT)).toEqual(
+      received.filter((item) => !isUser(item)),
     );
   });
 
-  test("marks a tool call without a result failed when the turn fails", async () => {
-    const { spans } = await runSession([
-      event("user.message", 0, { content: text("Ask the specialist") }),
-      event("agent.thread_message_sent", 1, {
-        to_session_thread_id: "sthr_1",
-        to_agent_name: "specialist",
-        content: text("Search"),
-      }),
-      idle(2, "budget_reached"),
-    ]);
-    expect(spanNamed(spans, "execute_tool transfer_to_agent").status.code).toBe(
-      SpanStatusCode.ERROR,
-    );
-  });
-
-  test("traces a turn that the stream ends before it finishes", async () => {
+  test("exports a turn that the stream ends before it finishes", async () => {
     const { spans } = await runSession(toolTurn(), 4);
-    expect(spanNamed(spans, "invoke_agent concierge").name).toBe(
-      "invoke_agent concierge",
-    );
+    expect(spans).toHaveLength(1);
   });
 
-  test("traces nothing when a session only changes status", async () => {
+  test("exports nothing when a session only changes status", async () => {
     const { spans } = await runSession([idle(0)]);
     expect(spans).toEqual([]);
   });
