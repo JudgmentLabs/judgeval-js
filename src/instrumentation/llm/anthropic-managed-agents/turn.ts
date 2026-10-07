@@ -5,7 +5,7 @@ import type {
 } from "@anthropic-ai/sdk/resources/beta/sessions/events";
 import type { BetaManagedAgentsSessionAgent } from "@anthropic-ai/sdk/resources/beta/sessions/sessions";
 import { AttributeKeys } from "../../../JudgmentAttributeKeys";
-import { BaseTracer, type LLMMetadata } from "../../../trace/BaseTracer";
+import { BaseTracer } from "../../../trace/BaseTracer";
 import { createBaggage, getBaggage, setBaggage } from "../../../trace/baggage";
 import { getTraceRuntime } from "../../../trace/runtime";
 import {
@@ -18,17 +18,6 @@ import {
 } from "./messages";
 
 export type SessionEvent = BetaManagedAgentsStreamSessionEvents;
-
-interface SpanData {
-  name: string;
-  kind: string;
-  start: Date;
-  end: Date;
-  input?: unknown;
-  output?: unknown;
-  llm?: LLMMetadata;
-  error?: string;
-}
 
 /** A turn ends when the session goes idle, unless it waits for a tool result. */
 export function endsTurn(event: SessionEvent): boolean {
@@ -60,26 +49,26 @@ export function exportTurn(
     getTraceRuntime().getCurrentContext(),
     sessionId,
   );
-  writeSpan(
+  const run = BaseTracer.getOTELTracer().startSpan(
+    agent ? `invoke_agent ${agent.name}` : "invoke_agent",
+    { startTime: timeOf(events[0]) },
     parent,
-    {
-      name: agent ? `invoke_agent ${agent.name}` : "invoke_agent",
-      kind: "agent",
-      start: timeOf(events[0]),
-      end: timeOf(events[events.length - 1]),
-      input: toMessages(
-        events.filter((event) => event.type === "user.message"),
-      ),
-      output: textOf(
-        events.filter((e) => e.type === "agent.message").pop()?.content,
-      ),
-      error: failure,
-    },
-    (context) => {
-      writeModelRequests(events, agent, context);
-      writeToolCalls(events, failure, context);
-    },
   );
+  BaseTracer.setSpanKind("agent", run);
+  BaseTracer.setInput(
+    toMessages(events.filter((event) => event.type === "user.message")),
+    run,
+  );
+  BaseTracer.setOutput(
+    textOf(events.filter((e) => e.type === "agent.message").pop()?.content),
+    run,
+  );
+  if (failure) BaseTracer.setError(new Error(failure), run);
+
+  const context = trace.setSpan(parent, run);
+  exportModelRequests(events, agent, context);
+  exportToolCalls(events, failure, context);
+  run.end(timeOf(events[events.length - 1]));
 }
 
 function isConversation(event: SessionEvent): boolean {
@@ -96,30 +85,11 @@ function withSessionId(context: Context, sessionId: string): Context {
   );
 }
 
-function writeSpan(
-  parent: Context,
-  data: SpanData,
-  writeChildren?: (context: Context) => void,
-): void {
-  const span = BaseTracer.getOTELTracer().startSpan(
-    data.name,
-    { startTime: data.start },
-    parent,
-  );
-  BaseTracer.setSpanKind(data.kind, span);
-  BaseTracer.setInput(data.input, span);
-  BaseTracer.setOutput(data.output, span);
-  if (data.llm) BaseTracer.recordLLMMetadata(data.llm, span);
-  if (data.error) BaseTracer.setError(new Error(data.error), span);
-  writeChildren?.(trace.setSpan(parent, span));
-  span.end(data.end);
-}
-
 /**
  * One span per model request. A request owns the messages and tool calls
  * the model produced before the next request starts.
  */
-function writeModelRequests(
+function exportModelRequests(
   events: SessionEvent[],
   agent: BetaManagedAgentsSessionAgent | undefined,
   context: Context,
@@ -142,17 +112,23 @@ function writeModelRequests(
       (e) => e.type === "span.model_request_start",
     );
     const produced = later.slice(0, nextStart < 0 ? undefined : nextStart);
-    writeSpan(context, {
-      name: model ? `generate_content ${model}` : "generate_content",
-      kind: "llm",
-      start: timeOf(start),
-      end: timeOf(end),
-      input: [
+
+    const span = BaseTracer.getOTELTracer().startSpan(
+      model ? `generate_content ${model}` : "generate_content",
+      { startTime: timeOf(start) },
+      context,
+    );
+    BaseTracer.setSpanKind("llm", span);
+    BaseTracer.setInput(
+      [
         ...(agent?.system ? [{ role: "system", content: agent.system }] : []),
         ...toMessages(events.slice(0, index)),
       ],
-      output: toMessages(produced.filter(isModelOutput)),
-      llm: {
+      span,
+    );
+    BaseTracer.setOutput(toMessages(produced.filter(isModelOutput)), span);
+    BaseTracer.recordLLMMetadata(
+      {
         model,
         provider: "anthropic",
         non_cached_input_tokens: end.model_usage.input_tokens,
@@ -161,8 +137,11 @@ function writeModelRequests(
         cache_creation_input_tokens:
           end.model_usage.cache_creation_input_tokens,
       },
-      error: end.is_error ? "Model request failed" : undefined,
-    });
+      span,
+    );
+    if (end.is_error)
+      BaseTracer.setError(new Error("Model request failed"), span);
+    span.end(timeOf(end));
   });
 }
 
@@ -170,7 +149,7 @@ function writeModelRequests(
  * One span per tool call. A call without a result lasts until the turn ends,
  * and fails with the turn.
  */
-function writeToolCalls(
+function exportToolCalls(
   events: SessionEvent[],
   failure: string | undefined,
   context: Context,
@@ -184,19 +163,23 @@ function writeToolCalls(
       .slice(index + 1)
       .find((later) => toResult(later)?.callId === call.id);
     const result = resultEvent && toResult(resultEvent);
-    writeSpan(context, {
-      name: `execute_tool ${call.name}`,
-      kind: "tool",
-      start: timeOf(event),
-      end: resultEvent ? timeOf(resultEvent) : turnEnd,
-      input: call.input,
-      output: result?.output,
-      error: result
-        ? result.isError
-          ? result.output || "Tool execution failed"
-          : undefined
-        : failure,
-    });
+
+    const span = BaseTracer.getOTELTracer().startSpan(
+      `execute_tool ${call.name}`,
+      { startTime: timeOf(event) },
+      context,
+    );
+    BaseTracer.setSpanKind("tool", span);
+    BaseTracer.setInput(call.input, span);
+    BaseTracer.setOutput(result?.output, span);
+    if (!result && failure) BaseTracer.setError(new Error(failure), span);
+    if (result?.isError) {
+      BaseTracer.setError(
+        new Error(result.output || "Tool execution failed"),
+        span,
+      );
+    }
+    span.end(resultEvent ? timeOf(resultEvent) : turnEnd);
   });
 }
 
