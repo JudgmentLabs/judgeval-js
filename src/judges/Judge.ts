@@ -2,7 +2,7 @@ import type { Example } from "../data/Example";
 import type { BaseResponse } from "./responses";
 
 /**
- * Base class for building custom evaluation scorers.
+ * Base class for building Code judges.
  *
  * Subclass `Judge` and implement the `score` method to create your own
  * evaluation logic.

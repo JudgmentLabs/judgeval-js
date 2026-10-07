@@ -263,7 +263,7 @@ export class Judgeval {
     );
   }
 
-  /** Manage Agent Judges (prompt-based scorers) on the platform. */
+  /** Manage Agent judges (prompt-based scorers) on the platform. */
   get agentJudges(): AgentJudgeFactory {
     return new AgentJudgeFactory(
       this._client,
