@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { Anthropic } from "@anthropic-ai/sdk";
 import { SpanStatusCode } from "@opentelemetry/api";
 import {
@@ -543,6 +543,27 @@ describe("wrapAnthropicManagedAgents", () => {
       "generate_content",
       "generate_content",
       "invoke_agent",
+    ]);
+  });
+
+  test("bounds each of its background reads with a timeout", async () => {
+    const client = wrapAnthropicManagedAgents(
+      clientServing(delegationTurn(), specialistThread()),
+    );
+    const { sessions } = client.beta;
+    const reads = [
+      spyOn(sessions, "retrieve"),
+      spyOn(sessions.threads, "retrieve"),
+      spyOn(sessions.threads.events, "list"),
+    ];
+    for await (const _event of await sessions.events.stream(SESSION_ID)) {
+      // drain the stream
+    }
+    await settle();
+    expect(reads.map((read) => read.mock.calls[0]?.[2])).toEqual([
+      { timeout: 30_000 },
+      { timeout: 30_000 },
+      { timeout: 30_000 },
     ]);
   });
 

@@ -16,6 +16,12 @@ import {
   proxyAsyncIterable,
 } from "../../../utils/wrappers";
 
+/**
+ * Options for our own background reads: they must never hold the app's
+ * process open for long, so a stuck read is abandoned and its spans dropped.
+ */
+const READ_OPTIONS = { timeout: 30_000 };
+
 interface Message {
   role: "system" | "user" | "assistant" | "tool";
   content?: string;
@@ -256,13 +262,17 @@ class SessionRecorder {
     const since = this.delegatedAt.get(threadId) ?? repliedAt;
     const { threads } = this.client.beta.sessions;
     const params = { session_id: this.sessionId };
-    const { agent } = await threads.retrieve(threadId, params);
+    const { agent } = await threads.retrieve(threadId, params, READ_OPTIONS);
     const sub = new SessionRecorder(this.client, this.sessionId, {
       agent: () => (agent.type === "agent" ? agent : undefined),
       parent: () => parent,
       delegated: true,
     });
-    for await (const event of threads.events.list(threadId, params)) {
+    for await (const event of threads.events.list(
+      threadId,
+      params,
+      READ_OPTIONS,
+    )) {
       if (new Date(event.processed_at ?? 0) < since) continue;
       sub.record(event);
       if (
@@ -359,7 +369,7 @@ export function wrapEventsStream(client: Anthropic): void {
     post: (_ctx, stream, [sessionId]) => {
       // The stream carries neither the model nor the system prompt.
       let agent: BetaManagedAgentsSessionAgent | undefined;
-      void client.beta.sessions.retrieve(sessionId).then(
+      void client.beta.sessions.retrieve(sessionId, null, READ_OPTIONS).then(
         (session) => {
           agent = session.agent;
         },
