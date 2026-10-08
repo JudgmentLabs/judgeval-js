@@ -22,7 +22,11 @@ export {
   propagation,
 } from "./trace";
 
-export { wrap, wrapOpenAI } from "./instrumentation";
+export {
+  wrap,
+  wrapAnthropicManagedAgents,
+  wrapOpenAI,
+} from "./instrumentation";
 
 export { Example } from "./data";
 export type { ScoringResult } from "./data";
