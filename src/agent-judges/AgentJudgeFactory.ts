@@ -6,7 +6,7 @@ import { Logger } from "../utils/logger";
 import type { AgentJudge, ScoreType } from "./AgentJudge";
 
 /**
- * Create and update prompt-based Agent Judges on the Judgment platform.
+ * Create and update prompt-based Agent judges on the Judgment platform.
  *
  * Access via `client.agentJudges`.
  *
@@ -41,10 +41,10 @@ export class AgentJudgeFactory {
   }
 
   /**
-   * Create a new Agent Judge (prompt-based scorer).
+   * Create a new Agent judge (prompt-based scorer).
    *
    * @param options.name - Unique judge name within the project.
-   * @param options.prompt - Rubric prompt template used by the agent judge harness.
+   * @param options.prompt - Rubric prompt template used by the Agent judge harness.
    * @param options.model - LiteLLM model id (e.g. `"gpt-5.2"`).
    * @param options.scoreType - One of `"numeric"`, `"binary"`, or `"categorical"`.
    * @param options.description - Description stored on the underlying scorer version.
@@ -105,7 +105,7 @@ export class AgentJudgeFactory {
   }
 
   /**
-   * Update an existing Agent Judge.
+   * Update an existing Agent judge.
    *
    * Passing any of `prompt`, `model`, `categories`, `minScore`, or
    * `maxScore` writes a new version of the underlying prompt scorer.
