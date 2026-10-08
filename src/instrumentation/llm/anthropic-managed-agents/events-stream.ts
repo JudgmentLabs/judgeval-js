@@ -3,6 +3,7 @@ import type {
   BetaManagedAgentsSpanModelRequestEndEvent,
   BetaManagedAgentsStreamSessionEvents as SessionEvent,
 } from "@anthropic-ai/sdk/resources/beta/sessions/events";
+import type { BetaManagedAgentsSessionThreadAgent } from "@anthropic-ai/sdk/resources/beta/agents/agents";
 import type { BetaManagedAgentsSessionAgent } from "@anthropic-ai/sdk/resources/beta/sessions/sessions";
 import { trace, type Context, type Span } from "@opentelemetry/api";
 import { AttributeKeys } from "../../../JudgmentAttributeKeys";
@@ -25,8 +26,15 @@ function textOf(content: { type: string; text?: string }[] = []): string {
   return content.map((block) => block.text ?? "").join("");
 }
 
-/** The conversation message carried by an event, if any. */
-function toMessage(event: SessionEvent): Message | undefined {
+/**
+ * The conversation message carried by an event, if any. For the coordinator, a
+ * message to a sub-agent is a tool call and its reply the tool result. In the
+ * sub-agent's own thread, they are the user's message and the agent's answer.
+ */
+function toMessage(
+  event: SessionEvent,
+  delegated: boolean,
+): Message | undefined {
   switch (event.type) {
     case "user.message":
       return { role: "user", content: textOf(event.content) };
@@ -57,6 +65,29 @@ function toMessage(event: SessionEvent): Message | undefined {
         tool_call_id: event.custom_tool_use_id,
         content: textOf(event.content),
       };
+    case "agent.thread_message_sent":
+      if (delegated)
+        return { role: "assistant", content: textOf(event.content) };
+      return {
+        role: "assistant",
+        tool_calls: [
+          {
+            id: event.to_session_thread_id,
+            name: "transfer_to_agent",
+            input: {
+              agent_name: event.to_agent_name,
+              message: textOf(event.content),
+            },
+          },
+        ],
+      };
+    case "agent.thread_message_received":
+      if (delegated) return { role: "user", content: textOf(event.content) };
+      return {
+        role: "tool",
+        tool_call_id: event.from_session_thread_id,
+        content: textOf(event.content),
+      };
     default:
       return undefined;
   }
@@ -72,6 +103,7 @@ class SessionRecorder {
 
   private history: Message[] = [];
   private tools = new Map<string, Span>();
+  private delegatedAt = new Map<string, Date>();
   private turn?: {
     span: Span;
     context: Context;
@@ -86,22 +118,27 @@ class SessionRecorder {
   };
 
   constructor(
+    private client: Anthropic,
     private sessionId: string,
-    private agent: () => BetaManagedAgentsSessionAgent | undefined,
+    private source: {
+      agent: () =>
+        | BetaManagedAgentsSessionAgent
+        | BetaManagedAgentsSessionThreadAgent
+        | undefined;
+      parent: () => Context;
+      delegated?: boolean;
+    },
   ) {}
 
   record(event: SessionEvent): void {
-    // Events cross-posted from a sub-agent's thread belong to that thread.
-    if ("session_thread_id" in event && event.session_thread_id) return;
-
     const time =
       "processed_at" in event && event.processed_at
         ? new Date(event.processed_at)
         : new Date();
-    const message = toMessage(event);
+    const message = toMessage(event, this.source.delegated ?? false);
 
     if (message && !this.turn) {
-      const parent = getTraceRuntime().getCurrentContext();
+      const parent = this.source.parent();
       const span = this.startSpan("invoke_agent", "agent", time, parent);
       this.turn = {
         span,
@@ -136,6 +173,7 @@ class SessionRecorder {
         }
         break;
       case "session.status_idle":
+      case "session.thread_status_idle":
         if (
           ["retries_exhausted", "budget_reached"].includes(
             event.stop_reason.type,
@@ -158,8 +196,9 @@ class SessionRecorder {
     this.history.push(message);
     if (message.role === "user") this.turn.input.push(message);
     if (message.role === "assistant") this.request?.output.push(message);
-    if (event.type === "agent.message")
-      this.turn.output = message.content ?? "";
+    if (message.role === "assistant" && message.content) {
+      this.turn.output = message.content;
+    }
 
     const call = message.tool_calls?.[0];
     if (call) {
@@ -171,6 +210,9 @@ class SessionRecorder {
       );
       BaseTracer.setInput(call.input, span);
       this.tools.set(call.id, span);
+      if (event.type === "agent.thread_message_sent") {
+        this.delegatedAt.set(call.id, time);
+      }
     }
 
     const toolSpan = this.tools.get(message.tool_call_id ?? "");
@@ -184,7 +226,47 @@ class SessionRecorder {
       }
       toolSpan.end(time);
       this.tools.delete(message.tool_call_id ?? "");
+
+      if (event.type === "agent.thread_message_received") {
+        const parent = trace.setSpan(this.turn.context, toolSpan);
+        this.recordThread(event.from_session_thread_id, parent, time).catch(
+          (err: unknown) => {
+            Logger.error(`Failed to trace sub-agent thread: ${String(err)}`);
+          },
+        );
+      }
     }
+  }
+
+  /**
+   * The sub-agent's events are not in the session stream, so read them from
+   * its thread once it has replied and record them under the transfer span.
+   */
+  private async recordThread(
+    threadId: string,
+    parent: Context,
+    repliedAt: Date,
+  ): Promise<void> {
+    const since = this.delegatedAt.get(threadId) ?? repliedAt;
+    const { threads } = this.client.beta.sessions;
+    const params = { session_id: this.sessionId };
+    const { agent } = await threads.retrieve(threadId, params);
+    const sub = new SessionRecorder(this.client, this.sessionId, {
+      agent: () => (agent.type === "agent" ? agent : undefined),
+      parent: () => parent,
+      delegated: true,
+    });
+    for await (const event of threads.events.list(threadId, params)) {
+      if (new Date(event.processed_at ?? 0) < since) continue;
+      sub.record(event);
+      if (
+        event.type === "session.thread_status_idle" &&
+        event.stop_reason.type !== "requires_action"
+      ) {
+        return;
+      }
+    }
+    sub.endTurn(repliedAt);
   }
 
   /** Ends the open turn, and fails the tool calls that never got a result. */
@@ -210,7 +292,7 @@ class SessionRecorder {
   private endRequest(): void {
     if (!this.request) return;
     const { span, input, output, end } = this.request;
-    const agent = this.agent();
+    const agent = this.source.agent();
 
     BaseTracer.setInput(
       agent?.system
@@ -282,9 +364,14 @@ export function wrapEventsStream(client: Anthropic): void {
         },
       );
 
-      const recorder = new SessionRecorder(sessionId, () => agent);
+      const recorder = new SessionRecorder(client, sessionId, {
+        agent: () => agent,
+        parent: () => getTraceRuntime().getCurrentContext(),
+      });
       proxyAsyncIterable(stream, {
         onYield(event) {
+          // Events cross-posted from a sub-agent's thread are recorded from the thread.
+          if ("session_thread_id" in event && event.session_thread_id) return;
           recorder.record(event);
         },
         onDone() {},

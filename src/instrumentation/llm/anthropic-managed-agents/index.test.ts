@@ -20,6 +20,7 @@ interface WireEvent {
 }
 
 const SESSION_ID = "sesn_1";
+const THREAD_ID = "sthr_2";
 const AGENT = {
   name: "concierge",
   model: { id: "claude-haiku-4-5" },
@@ -139,6 +140,87 @@ function toolTurn(at = 0): WireEvent[] {
   ];
 }
 
+/** The coordinator hands a task to a sub-agent and answers with its reply. */
+function delegationTurn(): WireEvent[] {
+  return [
+    event("session.status_running", 0),
+    event("user.message", 0.1, { content: text("Any policies for Jane?") }),
+    event("span.model_request_start", 0.1, { id: "req1" }),
+    event("agent.thread_message_sent", 1, {
+      to_session_thread_id: THREAD_ID,
+      to_agent_name: "specialist",
+      content: text("Find Jane's policies"),
+    }),
+    event("span.model_request_end", 1, {
+      model_request_start_id: "req1",
+      model_usage: usage(100, 20),
+    }),
+    event("session.thread_status_idle", 3.3, {
+      session_thread_id: THREAD_ID,
+      stop_reason: { type: "end_turn" },
+    }),
+    event("agent.thread_message_received", 4, {
+      from_session_thread_id: THREAD_ID,
+      from_agent_name: "specialist",
+      content: text("One policy: P-1001"),
+    }),
+    event("span.model_request_start", 4.1, { id: "req2" }),
+    event("agent.message", 5, { content: text("Jane has one policy.") }),
+    event("span.model_request_end", 5, {
+      model_request_start_id: "req2",
+      model_usage: usage(150, 10),
+    }),
+    idle(5.1),
+  ];
+}
+
+/** The sub-agent's thread: it searches, then replies to the coordinator. */
+function specialistThread(at = 0): WireEvent[] {
+  return [
+    event("session.thread_status_running", at + 1.2, {
+      session_thread_id: THREAD_ID,
+    }),
+    event("agent.thread_message_received", at + 1.3, {
+      from_session_thread_id: "sthr_1",
+      from_agent_name: "concierge",
+      content: text("Find Jane's policies"),
+    }),
+    event("span.model_request_start", at + 1.3, { id: "sub1" }),
+    event("agent.custom_tool_use", at + 2, {
+      id: "tool_sub",
+      name: "search_policies",
+      input: { client: "Jane" },
+    }),
+    event("span.model_request_end", at + 2, {
+      model_request_start_id: "sub1",
+      model_usage: usage(200, 30),
+    }),
+    event("session.thread_status_idle", at + 2.1, {
+      session_thread_id: THREAD_ID,
+      stop_reason: { type: "requires_action" },
+    }),
+    event("user.custom_tool_result", at + 2.5, {
+      custom_tool_use_id: "tool_sub",
+      content: text("P-1001"),
+    }),
+    event("span.model_request_start", at + 2.6, { id: "sub2" }),
+    event("agent.message", at + 3, { content: text("Found P-1001") }),
+    event("agent.thread_message_sent", at + 3.1, {
+      to_session_thread_id: "sthr_1",
+      to_agent_name: "concierge",
+      content: text("One policy: P-1001"),
+    }),
+    event("span.model_request_end", at + 3.2, {
+      model_request_start_id: "sub2",
+      model_usage: usage(300, 2),
+    }),
+    event("session.thread_status_idle", at + 3.3, {
+      session_thread_id: THREAD_ID,
+      stop_reason: { type: "end_turn" },
+    }),
+  ];
+}
+
 function toSse(events: WireEvent[]): string {
   return events
     .map((e) => `event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`)
@@ -147,9 +229,13 @@ function toSse(events: WireEvent[]): string {
 
 /**
  * A client backed by the real SDK that serves `events` as the session's
- * stream. The stream starts once the session has been retrieved.
+ * stream, and `threadEvents` as the events of the sub-agent thread. The stream
+ * starts once the session has been retrieved.
  */
-function clientServing(events: WireEvent[]): Anthropic {
+function clientServing(
+  events: WireEvent[],
+  threadEvents?: WireEvent[],
+): Anthropic {
   let retrieved = () => {};
   const retrievedPromise = new Promise<void>((resolve) => {
     retrieved = resolve;
@@ -158,6 +244,21 @@ function clientServing(events: WireEvent[]): Anthropic {
     apiKey: "test",
     maxRetries: 0,
     fetch: (input) => {
+      const thread = /\/threads\/[^/?]+(\/events)?\?/.exec(String(input));
+      if (thread) {
+        if (!threadEvents)
+          return Promise.resolve(Response.json({}, { status: 404 }));
+        return Promise.resolve(
+          Response.json(
+            thread[1]
+              ? { data: threadEvents, next_page: null }
+              : {
+                  id: THREAD_ID,
+                  agent: { ...AGENT, type: "agent", name: "specialist" },
+                },
+          ),
+        );
+      }
       if (!String(input).includes("/events/stream")) {
         setTimeout(retrieved, 0);
         return Promise.resolve(Response.json({ id: SESSION_ID, agent: AGENT }));
@@ -178,11 +279,24 @@ function clientServing(events: WireEvent[]): Anthropic {
   });
 }
 
+/** Waits for the sub-agent threads, which are read in the background. */
+async function settle(): Promise<void> {
+  let count = -1;
+  while (exporter.getFinishedSpans().length !== count) {
+    count = exporter.getFinishedSpans().length;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await processor.forceFlush();
+  }
+}
+
 async function runSession(
   events: WireEvent[],
   stopAfter = events.length,
+  threadEvents?: WireEvent[],
 ): Promise<{ received: unknown[]; spans: ReadableSpan[] }> {
-  const client = wrapAnthropicManagedAgents(clientServing(events));
+  const client = wrapAnthropicManagedAgents(
+    clientServing(events, threadEvents),
+  );
   const received: unknown[] = [];
   for await (const item of await client.beta.sessions.events.stream(
     SESSION_ID,
@@ -190,7 +304,7 @@ async function runSession(
     received.push(item);
     if (received.length >= stopAfter) break;
   }
-  await processor.forceFlush();
+  await settle();
   return { received, spans: exporter.getFinishedSpans() };
 }
 
@@ -198,6 +312,16 @@ function spanNamed(spans: ReadableSpan[], name: string): ReadableSpan {
   const span = spans.find((candidate) => candidate.name === name);
   if (!span) throw new Error(`No span named ${name}`);
   return span;
+}
+
+/** The run of the sub-agent that the coordinator transferred to. */
+function subAgentRun(spans: ReadableSpan[]): ReadableSpan {
+  const transfer = spanNamed(spans, "execute_tool transfer_to_agent");
+  const run = spans.find(
+    (span) => span.parentSpanContext?.spanId === transfer.spanContext().spanId,
+  );
+  if (!run) throw new Error("No sub-agent run under the transfer");
+  return run;
 }
 
 interface RecordedMessage {
@@ -326,6 +450,85 @@ describe("wrapAnthropicManagedAgents", () => {
   test("traces a turn that the stream ends before it finishes", async () => {
     const { spans } = await runSession(toolTurn(), 4);
     expect(spanNamed(spans, "invoke_agent").name).toBe("invoke_agent");
+  });
+
+  test("records a sub-agent's run, model requests and tool calls", async () => {
+    const { spans } = await runSession(
+      delegationTurn(),
+      undefined,
+      specialistThread(),
+    );
+    expect(spans.map((span) => span.name).sort()).toEqual([
+      "execute_tool search_policies",
+      "execute_tool transfer_to_agent",
+      "generate_content",
+      "generate_content",
+      "generate_content",
+      "generate_content",
+      "invoke_agent",
+      "invoke_agent",
+    ]);
+  });
+
+  test("nests the sub-agent's run under the transfer call", async () => {
+    const { spans } = await runSession(
+      delegationTurn(),
+      undefined,
+      specialistThread(),
+    );
+    expect(subAgentRun(spans).name).toBe("invoke_agent");
+  });
+
+  test("records the transfer's message and the sub-agent's reply on the call", async () => {
+    const { spans } = await runSession(
+      delegationTurn(),
+      undefined,
+      specialistThread(),
+    );
+    const transfer = spanNamed(spans, "execute_tool transfer_to_agent");
+    expect([
+      transfer.attributes[AttributeKeys.JUDGMENT_INPUT],
+      transfer.attributes[AttributeKeys.JUDGMENT_OUTPUT],
+    ]).toEqual([
+      JSON.stringify({
+        agent_name: "specialist",
+        message: "Find Jane's policies",
+      }),
+      "One policy: P-1001",
+    ]);
+  });
+
+  test("keeps a sub-agent's spans in the coordinator's trace and session", async () => {
+    const { spans } = await runSession(
+      delegationTurn(),
+      undefined,
+      specialistThread(),
+    );
+    expect([
+      new Set(spans.map((span) => span.spanContext().traceId)).size,
+      spans.every(
+        (span) =>
+          span.attributes[AttributeKeys.JUDGMENT_SESSION_ID] === SESSION_ID,
+      ),
+    ]).toEqual([1, true]);
+  });
+
+  test("records only the latest exchange when a thread is reused", async () => {
+    const { spans } = await runSession(delegationTurn(), undefined, [
+      ...specialistThread(-100),
+      ...specialistThread(),
+    ]);
+    expect(subAgentRun(spans).startTime[0]).toBe(Math.floor(T0 / 1000) + 1);
+  });
+
+  test("traces the transfer when the sub-agent's thread cannot be read", async () => {
+    const { spans } = await runSession(delegationTurn());
+    expect(spans.map((span) => span.name).sort()).toEqual([
+      "execute_tool transfer_to_agent",
+      "generate_content",
+      "generate_content",
+      "invoke_agent",
+    ]);
   });
 
   test("traces nothing when a session only changes status", async () => {
