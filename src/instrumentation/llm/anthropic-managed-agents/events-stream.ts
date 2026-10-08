@@ -8,6 +8,7 @@ import type { BetaManagedAgentsSessionAgent } from "@anthropic-ai/sdk/resources/
 import { trace, type Context, type Span } from "@opentelemetry/api";
 import { AttributeKeys } from "../../../JudgmentAttributeKeys";
 import { BaseTracer } from "../../../trace/BaseTracer";
+import { getBaggage } from "../../../trace/baggage";
 import { getTraceRuntime } from "../../../trace/runtime";
 import { Logger } from "../../../utils/logger";
 import {
@@ -104,6 +105,7 @@ class SessionRecorder {
   private history: Message[] = [];
   private tools = new Map<string, Span>();
   private delegatedAt = new Map<string, Date>();
+  private traceSessionId?: string;
   private turn?: {
     span: Span;
     context: Context;
@@ -139,6 +141,10 @@ class SessionRecorder {
 
     if (message && !this.turn) {
       const parent = this.source.parent();
+      // A session ID the app set on the trace wins over the Managed Agents one.
+      this.traceSessionId = getBaggage(parent)?.getEntry(
+        AttributeKeys.JUDGMENT_SESSION_ID,
+      )?.value;
       const span = this.startSpan("invoke_agent", "agent", time, parent);
       this.turn = {
         span,
@@ -336,7 +342,7 @@ class SessionRecorder {
     BaseTracer.setSpanKind(kind, span);
     BaseTracer.setAttribute(
       AttributeKeys.JUDGMENT_SESSION_ID,
-      this.sessionId,
+      this.traceSessionId ?? this.sessionId,
       span,
     );
     return span;

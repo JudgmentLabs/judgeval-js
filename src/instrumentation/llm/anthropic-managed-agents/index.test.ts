@@ -393,6 +393,21 @@ describe("wrapAnthropicManagedAgents", () => {
     ).toBe(true);
   });
 
+  test("uses the session ID the app set on the trace", async () => {
+    const spans = await BaseTracer.with("batch", async () => {
+      BaseTracer.setSessionId("batch-42");
+      return (await runSession(toolTurn())).spans;
+    });
+    expect(
+      spans
+        .filter((span) => span.name !== "batch")
+        .every(
+          (span) =>
+            span.attributes[AttributeKeys.JUDGMENT_SESSION_ID] === "batch-42",
+        ),
+    ).toBe(true);
+  });
+
   test("keeps a turn open while the session waits for a tool result", async () => {
     const { spans } = await runSession([
       event("user.message", 0, { content: text("Search") }),
