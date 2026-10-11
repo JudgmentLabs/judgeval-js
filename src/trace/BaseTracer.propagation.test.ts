@@ -109,7 +109,9 @@ describe("BaseTracer.setPropagatingAttribute", () => {
       const span = exporter
         .getFinishedSpans()
         .find((s) => s.name === "reserved");
-      expect(span?.attributes[AttributeKeys.JUDGMENT_CUSTOMER_ID]).toBeUndefined();
+      expect(
+        span?.attributes[AttributeKeys.JUDGMENT_CUSTOMER_ID],
+      ).toBeUndefined();
       expect(errorSpy).toHaveBeenCalledTimes(1);
     } finally {
       errorSpy.mockRestore();
@@ -165,23 +167,32 @@ describe("BaseTracer.testCase", () => {
     const { exporter, cleanup } = setupProxy();
     const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
     try {
+      const caseIds = [0, 1, 2, 3, 4].map((i) => `case-${i}`);
       await Promise.all(
-        [0, 1, 2, 3, 4].map((i) =>
-          BaseTracer.testCase("run-1", `case-${i}`, () =>
-            BaseTracer.span(`root-${i}`, async () => {
+        caseIds.map((caseId) =>
+          BaseTracer.testCase("run-1", caseId, () =>
+            BaseTracer.span(`root-${caseId}`, async () => {
               await tick();
-              await BaseTracer.span(`child-${i}`, tick);
+              await BaseTracer.span(`child-${caseId}`, tick);
             }),
           ),
         ),
       );
 
-      const spans = exporter.getFinishedSpans();
-      expect(spans).toHaveLength(10);
-      for (const span of spans) {
-        expect(span.attributes[RUN]).toBe("run-1");
-        expect(span.attributes[CASE]).toBe(`case-${span.name.split("-")[1]}`);
-      }
+      const expected = Object.fromEntries(
+        caseIds.flatMap((caseId) =>
+          ["root", "child"].map((kind) => [
+            `${kind}-${caseId}`,
+            ["run-1", caseId],
+          ]),
+        ),
+      );
+      const actual = Object.fromEntries(
+        exporter
+          .getFinishedSpans()
+          .map((s) => [s.name, [s.attributes[RUN], s.attributes[CASE]]]),
+      );
+      expect(actual).toEqual(expected);
     } finally {
       cleanup();
     }
