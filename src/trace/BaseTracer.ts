@@ -491,6 +491,10 @@ export abstract class BaseTracer {
    * so Judgment can attach the trace to the run's case. The tags are scoped
    * to `fn`, so concurrent cases don't leak into each other.
    *
+   * Each case must be its own trace: Judgment reads the ids off the root
+   * span. Run concurrent cases outside any active span, not inside a shared
+   * parent span (the parent would take the last case's ids).
+   *
    * @param runId - The test run id.
    * @param caseId - The test case id.
    * @param fn - Function to run as the case. Sync or async.
