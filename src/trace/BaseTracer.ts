@@ -483,6 +483,38 @@ export abstract class BaseTracer {
     return proxy.withContext(ctx, () => fn(ctx));
   }
 
+  /**
+   * Tag every span in `fn` as one case of a test run.
+   *
+   * Sets `judgment.test.run_id` and `judgment.test.case_id` on the current
+   * span and on every span started inside `fn`, including the trace root,
+   * so Judgment can attach the trace to the run's case. The tags are scoped
+   * to `fn`, so concurrent cases don't leak into each other.
+   *
+   * @param runId - The test run id.
+   * @param caseId - The test case id.
+   * @param fn - Function to run as the case. Sync or async.
+   * @returns The return value of `fn`.
+   *
+   * @example
+   * ```typescript
+   * await Tracer.testCase(run.id, testCase.id, () => supportAgent(testCase.input));
+   * ```
+   */
+  static testCase<T>(runId: string, caseId: string, fn: () => T): T {
+    const proxy = BaseTracer._getProxyProvider();
+    const currentSpan = proxy.getCurrentSpan();
+    if (currentSpan?.isRecording()) {
+      currentSpan.setAttribute(AttributeKeys.JUDGMENT_TEST_RUN_ID, runId);
+      currentSpan.setAttribute(AttributeKeys.JUDGMENT_TEST_CASE_ID, caseId);
+    }
+    const ctx = proxy.getCurrentContext();
+    const baggage = (getBaggage(ctx) ?? createBaggage())
+      .setEntry(AttributeKeys.JUDGMENT_TEST_RUN_ID, { value: runId })
+      .setEntry(AttributeKeys.JUDGMENT_TEST_CASE_ID, { value: caseId });
+    return proxy.withContext(setBaggage(ctx, baggage), fn);
+  }
+
   // ------------------------------------------------------------------ //
   //  Static API: Observation Decorator                                 //
   // ------------------------------------------------------------------ //
