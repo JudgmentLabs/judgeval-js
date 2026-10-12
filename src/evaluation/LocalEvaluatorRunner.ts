@@ -14,7 +14,7 @@ interface ScorerJobResult {
 }
 
 /**
- * Evaluation runner for custom (in-process) scorers.
+ * Evaluation runner for Code judges (in-process).
  *
  * Runs all {@link Judge} instances locally against the provided examples,
  * posts results to the Judgment platform, then polls for finalized scores.
