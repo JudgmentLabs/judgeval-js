@@ -54,7 +54,7 @@ export {
 } from "./datasets/schema";
 
 export { AgentJudgeFactory } from "./agent-judges";
-export type { AgentJudge, ScoreType } from "./agent-judges";
+export type { AgentJudge, ReasoningLevel, ScoreType } from "./agent-judges";
 
 export {
   OfflineTestsFactory,

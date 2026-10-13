@@ -70,4 +70,19 @@ export interface DatasetInfo {
   creator: string;
 }
 
-export type * from "./legacy-judges";
+export type CreateJudgeRequest = RequestBody<
+  "/v1/projects/{projectId}/judges",
+  "post"
+>;
+export type UpdateJudgeRequest = RequestBody<
+  "/v1/projects/{projectId}/judges/{judgeId}",
+  "patch"
+>;
+export type JudgeVersionSelector = RequestBody<
+  "/v1/projects/{projectId}/judges/{judgeId}/lookup",
+  "post"
+>["version"];
+export type JudgeDetail = OkResponse<
+  "/v1/projects/{projectId}/judges/{judgeId}/lookup",
+  "post"
+>["judge"];

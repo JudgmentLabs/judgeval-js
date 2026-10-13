@@ -1,10 +1,4 @@
 import createClient from "openapi-fetch";
-import type {
-  SDKCreateAgentJudgeRequest,
-  SDKCreateAgentJudgeResponse,
-  SDKUpdateAgentJudgeRequest,
-  SDKUpdateAgentJudgeResponse,
-} from "./legacy-judges";
 import type { RequestBody } from "./models";
 import type { paths } from "./schema";
 
@@ -270,41 +264,45 @@ export class JudgmentApiClient {
     );
   }
 
-  // The flat agent-judge routes were removed from /v1 in judgment-mono#4302 and
-  // are not in the spec; these stay untyped until JUD-10954 ports agent judges.
   postV1projectsJudges(
     projectId: string,
-    payload: SDKCreateAgentJudgeRequest,
-  ): Promise<SDKCreateAgentJudgeResponse> {
-    return this.untyped("POST", `/v1/projects/${projectId}/judges`, payload);
+    payload: RequestBody<"/v1/projects/{projectId}/judges", "post">,
+  ) {
+    return ok(
+      this.api.POST("/v1/projects/{projectId}/judges", {
+        params: { path: { projectId } },
+        body: payload,
+      }),
+    );
   }
 
   patchV1projectsJudgesByJudgeId(
     projectId: string,
     judgeId: string,
-    payload: SDKUpdateAgentJudgeRequest,
-  ): Promise<SDKUpdateAgentJudgeResponse> {
-    return this.untyped(
-      "PATCH",
-      `/v1/projects/${projectId}/judges/${judgeId}`,
-      payload,
+    payload: RequestBody<"/v1/projects/{projectId}/judges/{judgeId}", "patch">,
+  ) {
+    return ok(
+      this.api.PATCH("/v1/projects/{projectId}/judges/{judgeId}", {
+        params: { path: { projectId, judgeId } },
+        body: payload,
+      }),
     );
   }
 
-  private async untyped<T>(method: string, path: string, body: unknown) {
-    const response = await fetch(this.baseUrl + path, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.apiKey}`,
-        "X-Organization-Id": this.organizationId,
-      },
-      body: JSON.stringify(body),
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
-    }
-    return (await response.json()) as T;
+  postV1projectsJudgesByJudgeIdLookup(
+    projectId: string,
+    judgeId: string,
+    payload: RequestBody<
+      "/v1/projects/{projectId}/judges/{judgeId}/lookup",
+      "post"
+    >,
+  ) {
+    return ok(
+      this.api.POST("/v1/projects/{projectId}/judges/{judgeId}/lookup", {
+        params: { path: { projectId, judgeId } },
+        body: payload,
+      }),
+    );
   }
 }
 
