@@ -15,12 +15,6 @@
       "types": "./dist/workers/index.d.ts",
       "import": "./dist/workers/index.mjs"
     },
-    "./jql": {
-      "types": "./dist/jql/index.d.ts",
-      "browser": "./dist/workers/jql.mjs",
-      "import": "./dist/node/jql.mjs",
-      "require": "./dist/node/jql.cjs"
-    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -29,7 +23,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "bun run generate-query-contracts && bun run check && bun scripts/build.ts",
+    "build": "bun run check && bun scripts/build.ts",
     "build:dev": "bun scripts/build.ts --dev",
     "check": "tsc --noEmit && oxlint src/",
     "check-package": "bun scripts/check-package-contents.ts",
@@ -37,7 +31,6 @@
     "lint:fix": "oxlint --fix src/",
     "format": "prettier --write \"src/**/*.ts\"",
     "generate-client": "bunx tsx scripts/generate-client.ts && bun run format",
-    "generate-query-contracts": "bun scripts/generate-query-contracts.ts",
     "test": "bun test --coverage",
     "clean": "rm -rf dist",
     "prepublishOnly": "bun run clean && bun run build",
@@ -86,7 +79,6 @@
     "@anthropic-ai/sdk": "^0.129.0",
     "@types/bun": "^1.3.12",
     "openai": "^6.38.0",
-    "openapi-typescript": "^7.10.0",
     "oxlint": "^1.65.0",
     "prettier": "^3.8.3",
     "typescript": "^6.0.3"
@@ -94,8 +86,5 @@
   "engines": {
     "node": ">=18.0.0",
     "bun": ">=1.0.0"
-  },
-  "resolutions": {
-    "js-yaml": "^4.3.2"
   }
 }
