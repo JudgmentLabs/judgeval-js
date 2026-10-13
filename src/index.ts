@@ -43,8 +43,8 @@ export type {
 export { Evaluation, type EvaluationRunOptions } from "./evaluation";
 
 export { Dataset } from "./datasets";
-export type { DatasetInfo } from "./internal/api/models/DatasetInfo";
-export type { ExperimentScorer } from "./internal/api/models/ExperimentScorer";
+export type { DatasetInfo } from "./internal/api/models";
+export type { ExperimentScorer } from "./internal/api/models";
 export {
   validateDatasetSchema,
   inferSchemaFromExamples,
