@@ -32,7 +32,6 @@ yarn-error.log*
 
 dist/
 dist-examples/
-.jql-source/
 *.tgz
 # env files (can opt-in for committing if needed)
 .env*

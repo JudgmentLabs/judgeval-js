@@ -9,16 +9,7 @@ import { OfflineTestsFactory } from "./offline-tests/OfflineTestsFactory";
 import { warnOfflineTestsDeprecated } from "./offline-tests/deprecation";
 import { TestRunsFactory, TestSuitesFactory } from "./testing";
 import type { OfflineTracer, OfflineTracerConfig } from "./trace/OfflineTracer";
-import {
-  JudgevalQueryClient,
-  type JqlPresentationResponse,
-  type JqlQueryInput,
-  type JqlQueryResponse,
-  type JqlRequestOptions,
-  type SqlResponse,
-} from "./jql/client";
-import type { DiscoveryKind, DiscoveryOptions } from "./jql/builder";
-import type { PresentationQuery } from "./jql/wire";
+import { JudgevalQueryClient, type SqlResponse } from "./sql/client";
 
 /**
  * Options for {@link Judgeval.offlineTracer}.
@@ -200,49 +191,6 @@ export class Judgeval {
    */
   sql(sql: string, options?: { signal?: AbortSignal }): Promise<SqlResponse> {
     return this.queryClient().sql(sql, options);
-  }
-
-  /**
-   * Runs a legacy JQL query.
-   *
-   * **Deprecated.** Use [`sql()`](#sql) for new integrations, with SQL
-   * predicates to narrow results. Existing JQL calls remain supported.
-   */
-  query(
-    query: JqlQueryInput,
-    options?: JqlRequestOptions,
-  ): Promise<JqlQueryResponse> {
-    return this.queryClient().query(query, options);
-  }
-
-  /**
-   * Runs a legacy JQL chart or table query.
-   *
-   * **Deprecated.** Use [`sql()`](#sql) for new queries and render its
-   * rows as charts or tables in your application. SQL does not return a
-   * JQL presentation frame. Existing presentation calls and their frame
-   * responses remain supported.
-   */
-  present(
-    query: PresentationQuery,
-    options?: JqlRequestOptions,
-  ): Promise<JqlPresentationResponse> {
-    return this.queryClient().present(query, options);
-  }
-
-  /**
-   * Discovers project-scoped judges, fields, models, and related values.
-   *
-   * **Deprecated.** Use [`discoverSchema()`](#discoverschema) to inspect
-   * the SQL tables and columns, then [`sql()`](#sql) to query project values.
-   * Schema discovery returns documentation, not project data. Existing
-   * JQL discovery calls remain supported; SQL returns a different row schema.
-   */
-  discover(
-    kind: DiscoveryKind,
-    options?: DiscoveryOptions & JqlRequestOptions,
-  ): Promise<JqlQueryResponse> {
-    return this.queryClient().discover(kind, options);
   }
 
   private queryClient(): JudgevalQueryClient {
