@@ -1,7 +1,9 @@
 import type { JudgmentApiClient } from "../internal/api/client";
-import type { SDKCreateAgentJudgeRequest } from "../internal/api/models/SDKCreateAgentJudgeRequest";
-import type { SDKUpdateAgentJudgeRequest } from "../internal/api/models/SDKUpdateAgentJudgeRequest";
-import type { SDKUpdateAgentJudgeResponse } from "../internal/api/models/SDKUpdateAgentJudgeResponse";
+import type {
+  SDKCreateAgentJudgeRequest,
+  SDKUpdateAgentJudgeRequest,
+  SDKUpdateAgentJudgeResponse,
+} from "../internal/api/models";
 import { Logger } from "../utils/logger";
 import type { AgentJudge, ScoreType } from "./AgentJudge";
 
