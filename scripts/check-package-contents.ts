@@ -1,8 +1,7 @@
 #!/usr/bin/env bun
 
-import { mkdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { unlinkSync } from "node:fs";
 
-const PRIVATE_SOURCE_MARKER = "PRIVATE MONOREPO CONTENT";
 const MAX_ARCHIVE_FILES = 1_000;
 const MAX_ARCHIVE_BYTES = 5 * 1024 * 1024;
 const MAX_UNPACKED_BYTES = 10 * 1024 * 1024;
@@ -13,14 +12,8 @@ const BUNDLE_FILES = new Set([
   "dist/node/index.d.ts",
   "dist/node/index.mjs",
   "dist/node/index.mjs.map",
-  "dist/node/jql.cjs",
-  "dist/node/jql.cjs.map",
-  "dist/node/jql.mjs",
-  "dist/node/jql.mjs.map",
   "dist/workers/index.mjs",
   "dist/workers/index.mjs.map",
-  "dist/workers/jql.mjs",
-  "dist/workers/jql.mjs.map",
 ]);
 
 export interface PackResult {
@@ -118,31 +111,10 @@ function packPackage(): PackResult {
   return results[0];
 }
 
-function archiveContainsMarker(filename: string): boolean {
-  const result = Bun.spawnSync(["tar", "-xOzf", filename]);
-  if (result.exitCode !== 0) {
-    throw new Error(
-      `could not inspect ${filename}: ${result.stderr.toString()}`,
-    );
-  }
-  return result.stdout.toString().includes(PRIVATE_SOURCE_MARKER);
-}
-
-function plantMarker(): void {
-  mkdirSync(".jql-source/judgment-mono", { recursive: true });
-  writeFileSync(
-    ".jql-source/judgment-mono/PRIVATE_SOURCE_MARKER",
-    PRIVATE_SOURCE_MARKER,
-  );
-}
-
 function main(): void {
   const pack = packPackage();
   try {
     const errors = manifestErrors(pack, expectedPackageFiles(trackedPaths()));
-    if (archiveContainsMarker(pack.filename)) {
-      errors.push("private-source marker found in packed file contents");
-    }
     if (errors.length > 0) {
       throw new Error(`Invalid npm package contents:\n${errors.join("\n")}`);
     }
@@ -155,9 +127,5 @@ function main(): void {
 }
 
 if (import.meta.main) {
-  if (process.argv.includes("--plant")) {
-    plantMarker();
-  } else {
-    main();
-  }
+  main();
 }
