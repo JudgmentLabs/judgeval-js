@@ -62,6 +62,17 @@ describe("TestsFactory", () => {
       calls: [],
     });
   });
+
+  test("an id that leaves the tests route is rejected", async () => {
+    const calls = stubFetch({});
+    const error = await new TestsFactory(client, "p1", "proj")
+      .delete("../../projects/p2")
+      .catch((e: Error) => e.message);
+    expect({ error, calls }).toEqual({
+      error: "Invalid id in API path: /../../projects/p2",
+      calls: [],
+    });
+  });
 });
 
 test("the offline-tests deprecation is logged once", async () => {

@@ -108,6 +108,10 @@ class ProjectTestsClient {
     path: string,
     options: { body?: unknown; query?: Record<string, string | number> } = {},
   ): Promise<T> {
+    // Ids land in the path, so "..", "?" or "#" could reach another route.
+    if (!/^(\/[\w-]+)*$/.test(path)) {
+      throw new Error(`Invalid id in API path: ${path}`);
+    }
     if (!this._projectId) {
       throw new Error(`Project '${this._projectName}' not found`);
     }
