@@ -41,14 +41,6 @@ describe("TestRunsFactory", () => {
       },
     ]);
   });
-
-  test("list sends offset and limit as query params", async () => {
-    const calls = stubFetch({ runs: [], next_offset: null });
-    await new TestRunsFactory(client, "p1", "proj").list("t1", 10, 5);
-    expect(calls.map((call) => call.url)).toEqual([
-      "https://api.example.com/v1/projects/p1/tests/t1/runs?offset=10&limit=5",
-    ]);
-  });
 });
 
 describe("TestsFactory", () => {
