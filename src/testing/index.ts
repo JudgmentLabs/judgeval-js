@@ -199,9 +199,7 @@ export class TestsFactory extends ProjectTestsClient {
   }
 
   /** Copy the published cases into the draft so they can be edited. */
-  createDraft(
-    testId: string,
-  ): Promise<{ version: number }> {
+  createDraft(testId: string): Promise<{ version: number }> {
     return this.call("POST", `/${testId}/draft`);
   }
 
