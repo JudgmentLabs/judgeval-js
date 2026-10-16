@@ -63,7 +63,7 @@ export interface TestRun {
   run_id: string;
   test_id: string;
   test_version: number;
-  rescored_from_run_id: string | null;
+  scored_from_run_id: string | null;
   candidate: string | null;
   candidate_meta: Record<string, unknown>;
   trigger: string;
@@ -251,10 +251,11 @@ export class TestRunsFactory extends ProjectTestsClient {
   }
 
   /**
-   * Score a run's traces again with the latest published version. Returns the
-   * new run right away; its cases are scored in the background, so poll `get`.
+   * Trigger scoring of an existing run's traces with the latest published
+   * version. Returns the new run right away; its cases are scored in the
+   * background, so poll `get`.
    */
-  rescore(runId: string): Promise<{ run_id: string }> {
-    return this.call("POST", `/runs/${runId}/rescore`);
+  score(runId: string): Promise<{ run_id: string }> {
+    return this.call("POST", `/runs/${runId}/score`);
   }
 }
