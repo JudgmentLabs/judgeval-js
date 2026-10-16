@@ -152,7 +152,7 @@ class ProjectTestsClient {
  * Create tests and edit their cases. Access via `judgeval.tests`.
  *
  * Cases change only in a test's draft (version + 1). New cases go straight
- * into the draft; to edit published cases, call `createDraft` first.
+ * into the draft; to edit or remove published cases, call `createDraft` first.
  * `publish` freezes the draft as the next version.
  */
 export class AgentTestsFactory extends ProjectTestsClient {
@@ -202,6 +202,11 @@ export class AgentTestsFactory extends ProjectTestsClient {
     testCase: AgentTestCaseInput,
   ): Promise<{ case_id: string }> {
     return this.call("PUT", `/${testId}/cases/${caseId}`, { body: testCase });
+  }
+
+  /** Remove a case from the draft. Call `createDraft` first for published cases. */
+  removeCase(testId: string, caseId: string): Promise<{ case_id: string }> {
+    return this.call("DELETE", `/${testId}/cases/${caseId}`);
   }
 
   /** Copy the published cases into the draft so they can be edited. */
