@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import type { JudgmentApiClient } from "../internal/api/client";
 import { Logger } from "../utils/logger";
-import { TestRunsFactory, TestsFactory } from "./index";
+import { TestRunsFactory, TestSuitesFactory } from "./index";
 
 const client = {
   getBaseUrl: () => "https://api.example.com",
@@ -29,13 +29,13 @@ afterEach(() => {
 
 describe("TestRunsFactory", () => {
   test("start posts the options to the test's runs", async () => {
-    const calls = stubFetch({ run_id: "r1", test_version: 2, cases: [] });
+    const calls = stubFetch({ run_id: "r1", test_suite_version: 2, cases: [] });
     await new TestRunsFactory(client, "p1", "proj").start("t1", {
       candidate: "abc123",
     });
     expect(calls).toEqual([
       {
-        url: "https://api.example.com/v1/projects/p1/tests/t1/runs",
+        url: "https://api.example.com/v1/projects/p1/test-suites/t1/runs",
         method: "POST",
         body: JSON.stringify({ candidate: "abc123" }),
       },
@@ -43,10 +43,10 @@ describe("TestRunsFactory", () => {
   });
 });
 
-describe("TestsFactory", () => {
+describe("TestSuitesFactory", () => {
   test("a missing project fails before calling the API", async () => {
     const calls = stubFetch({});
-    const error = await new TestsFactory(client, null, "proj")
+    const error = await new TestSuitesFactory(client, null, "proj")
       .list()
       .catch((e: Error) => e.message);
     expect({ error, calls }).toEqual({
@@ -55,9 +55,9 @@ describe("TestsFactory", () => {
     });
   });
 
-  test("an id that leaves the tests route is rejected", async () => {
+  test("an id that leaves the test suites route is rejected", async () => {
     const calls = stubFetch({});
-    const error = await new TestsFactory(client, "p1", "proj")
+    const error = await new TestSuitesFactory(client, "p1", "proj")
       .delete("../../projects/p2")
       .catch((e: Error) => e.message);
     expect({ error, calls }).toEqual({

@@ -35,8 +35,8 @@ export interface TestCase extends Required<TestCaseInput> {
   version_added: number;
 }
 
-export interface Test {
-  test_id: string;
+export interface TestSuite {
+  test_suite_id: string;
   name: string;
   description: string | null;
   labels: string[];
@@ -54,15 +54,15 @@ export type CaseFilter =
 
 export interface StartedRun {
   run_id: string;
-  test_version: number;
+  test_suite_version: number;
   /** Run the agent once per case, with `headers` (or `Tracer.testCase`) tagging its trace. */
   cases: { case_id: string; input: unknown; headers: Record<string, string> }[];
 }
 
 export interface TestRun {
   run_id: string;
-  test_id: string;
-  test_version: number;
+  test_suite_id: string;
+  test_suite_version: number;
   scored_from_run_id: string | null;
   candidate: string | null;
   candidate_meta: Record<string, unknown>;
@@ -95,7 +95,7 @@ type Page<K extends string, T> = { [key in K]: T[] } & {
   next_offset: number | null;
 };
 
-class ProjectTestsClient {
+class ProjectTestSuitesClient {
   constructor(
     protected readonly _client: JudgmentApiClient,
     protected readonly _projectId: string | null,
@@ -116,7 +116,7 @@ class ProjectTestsClient {
       throw new Error(`Project '${this._projectName}' not found`);
     }
     const url = new URL(
-      `${this._client.getBaseUrl()}/v1/projects/${this._projectId}/tests${path}`,
+      `${this._client.getBaseUrl()}/v1/projects/${this._projectId}/test-suites${path}`,
     );
     for (const [key, value] of Object.entries(options.query ?? {})) {
       url.searchParams.set(key, String(value));
@@ -138,32 +138,32 @@ class ProjectTestsClient {
 }
 
 /**
- * Create tests and edit their cases. Access via `judgeval.tests`.
+ * Create test suites and edit their cases. Access via `judgeval.testSuites`.
  *
- * Cases change only in a test's draft (version + 1). New cases go straight
+ * Cases change only in a suite's draft (version + 1). New cases go straight
  * into the draft; to edit or remove published cases, call `createDraft` first.
  * `publish` freezes the draft as the next version.
  */
-export class TestsFactory extends ProjectTestsClient {
-  create(test: {
+export class TestSuitesFactory extends ProjectTestSuitesClient {
+  create(testSuite: {
     name: string;
     description?: string;
     labels?: string[];
-  }): Promise<Test> {
-    return this.call("POST", "", { body: test });
+  }): Promise<TestSuite> {
+    return this.call("POST", "", { body: testSuite });
   }
 
-  list(offset = 0, limit = 50): Promise<Page<"tests", Test>> {
+  list(offset = 0, limit = 50): Promise<Page<"test_suites", TestSuite>> {
     return this.call("GET", "", { query: { offset, limit } });
   }
 
-  delete(testId: string): Promise<{ test_id: string }> {
-    return this.call("DELETE", `/${testId}`);
+  delete(testSuiteId: string): Promise<{ test_suite_id: string }> {
+    return this.call("DELETE", `/${testSuiteId}`);
   }
 
   /** Cases in a published version (default: the latest) or the draft. */
   listCases(
-    testId: string,
+    testSuiteId: string,
     options: {
       version?: number | "draft";
       offset?: number;
@@ -171,65 +171,70 @@ export class TestsFactory extends ProjectTestsClient {
     } = {},
   ): Promise<Page<"cases", TestCase> & { version: number }> {
     const { version, offset = 0, limit = 100 } = options;
-    return this.call("GET", `/${testId}/cases`, {
+    return this.call("GET", `/${testSuiteId}/cases`, {
       query: { offset, limit, ...(version !== undefined && { version }) },
     });
   }
 
   /** Add cases to the draft. Returns their ids in order. */
   addCases(
-    testId: string,
+    testSuiteId: string,
     cases: TestCaseInput[],
   ): Promise<{ case_ids: string[] }> {
-    return this.call("POST", `/${testId}/cases`, { body: { cases } });
+    return this.call("POST", `/${testSuiteId}/cases`, { body: { cases } });
   }
 
   /** Replace a case in the draft. Call `createDraft` first for published cases. */
   updateCase(
-    testId: string,
+    testSuiteId: string,
     caseId: string,
     testCase: TestCaseInput,
   ): Promise<{ case_id: string }> {
-    return this.call("PUT", `/${testId}/cases/${caseId}`, { body: testCase });
+    return this.call("PUT", `/${testSuiteId}/cases/${caseId}`, {
+      body: testCase,
+    });
   }
 
   /** Remove a case from the draft. Call `createDraft` first for published cases. */
-  removeCase(testId: string, caseId: string): Promise<{ case_id: string }> {
-    return this.call("DELETE", `/${testId}/cases/${caseId}`);
+  removeCase(
+    testSuiteId: string,
+    caseId: string,
+  ): Promise<{ case_id: string }> {
+    return this.call("DELETE", `/${testSuiteId}/cases/${caseId}`);
   }
 
   /** Copy the published cases into the draft so they can be edited. */
-  createDraft(testId: string): Promise<{ version: number }> {
-    return this.call("POST", `/${testId}/draft`);
+  createDraft(testSuiteId: string): Promise<{ version: number }> {
+    return this.call("POST", `/${testSuiteId}/draft`);
   }
 
   /** Freeze the draft as the next version. */
-  publish(testId: string): Promise<{ version: number }> {
-    return this.call("POST", `/${testId}/publish`);
+  publish(testSuiteId: string): Promise<{ version: number }> {
+    return this.call("POST", `/${testSuiteId}/publish`);
   }
 
   /** Throw away the draft's changes. */
-  discard(testId: string): Promise<{ discarded: boolean }> {
-    return this.call("POST", `/${testId}/discard`);
+  discard(testSuiteId: string): Promise<{ discarded: boolean }> {
+    return this.call("POST", `/${testSuiteId}/discard`);
   }
 }
 
 /**
- * Run tests and read results. Access via `judgeval.testRuns`.
+ * Run test suites and read results. Access via `judgeval.testRuns`.
  *
  * @example
  * ```typescript
- * const run = await judgeval.testRuns.start(testId, { candidate: process.env.GIT_SHA });
+ * const run = await judgeval.testRuns.start(testSuiteId, { candidate: process.env.GIT_SHA });
  * await Promise.all(
  *   run.cases.map((c) => Tracer.testCase(run.run_id, c.case_id, () => agent(c.input))),
  * );
  * const { results } = await judgeval.testRuns.results(run.run_id);
  * ```
  */
-export class TestRunsFactory extends ProjectTestsClient {
-  /** Start a run of the test's latest published version. */
+export class TestRunsFactory extends ProjectTestSuitesClient {
+  /** Start a run of the test suite's latest published version. */
   start(
-    testId: string,
+    testSuiteId: string,
     options: {
       case_filter?: CaseFilter;
       candidate?: string;
@@ -237,11 +242,17 @@ export class TestRunsFactory extends ProjectTestsClient {
       trigger?: "manual" | "ci" | "schedule" | "api";
     } = {},
   ): Promise<StartedRun> {
-    return this.call("POST", `/${testId}/runs`, { body: options });
+    return this.call("POST", `/${testSuiteId}/runs`, { body: options });
   }
 
-  list(testId: string, offset = 0, limit = 50): Promise<Page<"runs", TestRun>> {
-    return this.call("GET", `/${testId}/runs`, { query: { offset, limit } });
+  list(
+    testSuiteId: string,
+    offset = 0,
+    limit = 50,
+  ): Promise<Page<"runs", TestRun>> {
+    return this.call("GET", `/${testSuiteId}/runs`, {
+      query: { offset, limit },
+    });
   }
 
   get(runId: string): Promise<TestRun> {

@@ -80,12 +80,12 @@ export type {
 } from "./jql/client";
 export {
   TestRunsFactory,
-  TestsFactory,
+  TestSuitesFactory,
   type CaseCheck,
   type CaseFilter,
   type CheckOp,
   type StartedRun,
-  type Test,
+  type TestSuite,
   type TestCase,
   type TestCaseInput,
   type TestResults,
