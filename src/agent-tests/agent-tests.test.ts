@@ -15,9 +15,8 @@ afterEach(() => {
 });
 
 test("routes each call to its v1 tests endpoint", async () => {
-  const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
-    (async () => new Response("{}")) as unknown as typeof fetch,
-  );
+  const fetchSpy = spyOn(globalThis, "fetch").mockImplementation((() =>
+    Promise.resolve(new Response("{}"))) as unknown as typeof fetch);
   const tests = new AgentTestsFactory(fakeClient, "p1", "proj");
   const runs = new AgentTestRunsFactory(fakeClient, "p1", "proj");
 
