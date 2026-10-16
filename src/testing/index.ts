@@ -1,19 +1,4 @@
 import type { JudgmentApiClient } from "../internal/api/client";
-import { Logger } from "../utils/logger";
-
-/** Shown by the deprecated offline-test APIs. */
-export const OFFLINE_TESTS_DEPRECATION =
-  "Offline tests and OfflineTracer are deprecated. Use judgeval.tests and " +
-  "judgeval.testRuns, and tag your normal Tracer's traces with Tracer.testCase.";
-
-let warnedOfflineTests = false;
-
-/** Logs the offline-tests deprecation once per process. */
-export function warnOfflineTestsDeprecated(): void {
-  if (warnedOfflineTests) return;
-  warnedOfflineTests = true;
-  Logger.warning(OFFLINE_TESTS_DEPRECATION);
-}
 
 /** How a judge's output must compare to `expected` for the check to pass. */
 export type CheckOp =
@@ -35,7 +20,7 @@ export interface CaseCheck {
   expected: unknown;
 }
 
-export interface AgentTestCaseInput {
+export interface TestCaseInput {
   /** What the agent gets. */
   input: unknown;
   /** The case's checks, keyed by lowercase judge id. */
@@ -45,12 +30,12 @@ export interface AgentTestCaseInput {
   metadata?: Record<string, unknown>;
 }
 
-export interface AgentTestCase extends Required<AgentTestCaseInput> {
+export interface TestCase extends Required<TestCaseInput> {
   case_id: string;
   version_added: number;
 }
 
-export interface AgentTest {
+export interface Test {
   test_id: string;
   name: string;
   description: string | null;
@@ -74,7 +59,7 @@ export interface StartedRun {
   cases: { case_id: string; input: unknown; headers: Record<string, string> }[];
 }
 
-export interface AgentTestRun {
+export interface TestRun {
   run_id: string;
   test_id: string;
   test_version: number;
@@ -90,7 +75,7 @@ export interface AgentTestRun {
   created_at: string;
 }
 
-export interface AgentTestResults {
+export interface TestResults {
   results: {
     case_id: string;
     trace_id: string | null;
@@ -117,7 +102,7 @@ class ProjectTestsClient {
     protected readonly _projectName: string,
   ) {}
 
-  // ponytail: hand-written fetch until the generated client covers the /v1 tests routes.
+  // TODO: switch to the generated client once it covers these routes (#94).
   protected async call<T>(
     method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
     path: string,
@@ -155,16 +140,16 @@ class ProjectTestsClient {
  * into the draft; to edit or remove published cases, call `createDraft` first.
  * `publish` freezes the draft as the next version.
  */
-export class AgentTestsFactory extends ProjectTestsClient {
+export class TestsFactory extends ProjectTestsClient {
   create(test: {
     name: string;
     description?: string;
     labels?: string[];
-  }): Promise<AgentTest> {
+  }): Promise<Test> {
     return this.call("POST", "", { body: test });
   }
 
-  list(offset = 0, limit = 50): Promise<Page<"tests", AgentTest>> {
+  list(offset = 0, limit = 50): Promise<Page<"tests", Test>> {
     return this.call("GET", "", { query: { offset, limit } });
   }
 
@@ -180,7 +165,7 @@ export class AgentTestsFactory extends ProjectTestsClient {
       offset?: number;
       limit?: number;
     } = {},
-  ): Promise<Page<"cases", AgentTestCase> & { version: number }> {
+  ): Promise<Page<"cases", TestCase> & { version: number }> {
     const { version, offset = 0, limit = 100 } = options;
     return this.call("GET", `/${testId}/cases`, {
       query: { offset, limit, ...(version !== undefined && { version }) },
@@ -190,7 +175,7 @@ export class AgentTestsFactory extends ProjectTestsClient {
   /** Add cases to the draft. Returns their ids in order. */
   addCases(
     testId: string,
-    cases: AgentTestCaseInput[],
+    cases: TestCaseInput[],
   ): Promise<{ case_ids: string[] }> {
     return this.call("POST", `/${testId}/cases`, { body: { cases } });
   }
@@ -199,7 +184,7 @@ export class AgentTestsFactory extends ProjectTestsClient {
   updateCase(
     testId: string,
     caseId: string,
-    testCase: AgentTestCaseInput,
+    testCase: TestCaseInput,
   ): Promise<{ case_id: string }> {
     return this.call("PUT", `/${testId}/cases/${caseId}`, { body: testCase });
   }
@@ -239,7 +224,7 @@ export class AgentTestsFactory extends ProjectTestsClient {
  * const { results } = await judgeval.testRuns.results(run.run_id);
  * ```
  */
-export class AgentTestRunsFactory extends ProjectTestsClient {
+export class TestRunsFactory extends ProjectTestsClient {
   /** Start a run of the test's latest published version. */
   start(
     testId: string,
@@ -253,23 +238,22 @@ export class AgentTestRunsFactory extends ProjectTestsClient {
     return this.call("POST", `/${testId}/runs`, { body: options });
   }
 
-  list(
-    testId: string,
-    offset = 0,
-    limit = 50,
-  ): Promise<Page<"runs", AgentTestRun>> {
+  list(testId: string, offset = 0, limit = 50): Promise<Page<"runs", TestRun>> {
     return this.call("GET", `/${testId}/runs`, { query: { offset, limit } });
   }
 
-  get(runId: string): Promise<AgentTestRun> {
+  get(runId: string): Promise<TestRun> {
     return this.call("GET", `/runs/${runId}`);
   }
 
-  results(runId: string): Promise<AgentTestResults> {
+  results(runId: string): Promise<TestResults> {
     return this.call("GET", `/runs/${runId}/results`);
   }
 
-  /** Score a run's traces again with the latest published version. Returns the new run. */
+  /**
+   * Score a run's traces again with the latest published version. Returns the
+   * new run right away; its cases are scored in the background, so poll `get`.
+   */
   rescore(runId: string): Promise<{ run_id: string }> {
     return this.call("POST", `/runs/${runId}/rescore`);
   }

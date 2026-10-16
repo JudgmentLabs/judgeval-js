@@ -1,4 +1,3 @@
-import { warnOfflineTestsDeprecated } from "../agent-tests";
 import {
   defaultResource,
   resourceFromAttributes,
@@ -9,6 +8,7 @@ import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import type { Example } from "../data/Example";
 import { JUDGMENT_API_KEY, JUDGMENT_API_URL, JUDGMENT_ORG_ID } from "../env";
 import { JudgmentApiClient } from "../internal/api";
+import { warnOfflineTestsDeprecated } from "../offline-tests/deprecation";
 import { resolveProjectId } from "../utils/resolve-project-id";
 import { safeStringify } from "../utils/serializer";
 import { VERSION } from "../version";

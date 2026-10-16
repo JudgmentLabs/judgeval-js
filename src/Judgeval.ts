@@ -6,11 +6,8 @@ import { EvaluationFactory } from "./evaluation/EvaluationFactory";
 import { DatasetFactory } from "./datasets/DatasetFactory";
 import { AgentJudgeFactory } from "./agent-judges/AgentJudgeFactory";
 import { OfflineTestsFactory } from "./offline-tests/OfflineTestsFactory";
-import {
-  AgentTestRunsFactory,
-  AgentTestsFactory,
-  warnOfflineTestsDeprecated,
-} from "./agent-tests";
+import { warnOfflineTestsDeprecated } from "./offline-tests/deprecation";
+import { TestRunsFactory, TestsFactory } from "./testing";
 import type { OfflineTracer, OfflineTracerConfig } from "./trace/OfflineTracer";
 import {
   JudgevalQueryClient,
@@ -280,18 +277,14 @@ export class Judgeval {
     );
   }
 
-  /** Create agent tests and edit their versioned cases. */
-  get tests(): AgentTestsFactory {
-    return new AgentTestsFactory(
-      this._client,
-      this._projectId,
-      this._projectName,
-    );
+  /** Create tests and edit their versioned cases. */
+  get tests(): TestsFactory {
+    return new TestsFactory(this._client, this._projectId, this._projectName);
   }
 
-  /** Run agent tests and read their results. */
-  get testRuns(): AgentTestRunsFactory {
-    return new AgentTestRunsFactory(
+  /** Run tests and read their results. */
+  get testRuns(): TestRunsFactory {
+    return new TestRunsFactory(
       this._client,
       this._projectId,
       this._projectName,
