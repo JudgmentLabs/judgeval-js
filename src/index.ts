@@ -78,3 +78,16 @@ export type {
   JqlRequestOptions,
   SqlResponse,
 } from "./jql/client";
+export {
+  AgentTestRunsFactory,
+  AgentTestsFactory,
+  type AgentTest,
+  type AgentTestCase,
+  type AgentTestCaseInput,
+  type AgentTestResults,
+  type AgentTestRun,
+  type CaseCheck,
+  type CaseFilter,
+  type CheckOp,
+  type StartedRun,
+} from "./agent-tests";
