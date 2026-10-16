@@ -220,6 +220,11 @@ export class AgentTestsFactory extends ProjectTestsClient {
   publish(testId: string): Promise<{ version: number }> {
     return this.call("POST", `/${testId}/publish`);
   }
+
+  /** Throw away the draft's changes. */
+  discard(testId: string): Promise<{ discarded: boolean }> {
+    return this.call("POST", `/${testId}/discard`);
+  }
 }
 
 /**
