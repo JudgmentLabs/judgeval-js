@@ -152,8 +152,8 @@ class ProjectTestsClient {
  * Create tests and edit their cases. Access via `judgeval.tests`.
  *
  * Cases change only in a test's draft (version + 1). New cases go straight
- * into the draft; to edit or remove published cases, call `createDraft`
- * first. `publish` freezes the draft as the next version.
+ * into the draft; to edit published cases, call `createDraft` first.
+ * `publish` freezes the draft as the next version.
  */
 export class AgentTestsFactory extends ProjectTestsClient {
   create(test: {
@@ -166,17 +166,6 @@ export class AgentTestsFactory extends ProjectTestsClient {
 
   list(offset = 0, limit = 50): Promise<Page<"tests", AgentTest>> {
     return this.call("GET", "", { query: { offset, limit } });
-  }
-
-  get(testId: string): Promise<AgentTest> {
-    return this.call("GET", `/${testId}`);
-  }
-
-  update(
-    testId: string,
-    fields: { name?: string; description?: string | null; labels?: string[] },
-  ): Promise<AgentTest> {
-    return this.call("PATCH", `/${testId}`, { body: fields });
   }
 
   delete(testId: string): Promise<{ test_id: string }> {
@@ -215,11 +204,6 @@ export class AgentTestsFactory extends ProjectTestsClient {
     return this.call("PUT", `/${testId}/cases/${caseId}`, { body: testCase });
   }
 
-  /** Remove a case from the draft. Published versions keep it. */
-  removeCase(testId: string, caseId: string): Promise<{ case_id: string }> {
-    return this.call("DELETE", `/${testId}/cases/${caseId}`);
-  }
-
   /** Copy the published cases into the draft so they can be edited. */
   createDraft(
     testId: string,
@@ -230,11 +214,6 @@ export class AgentTestsFactory extends ProjectTestsClient {
   /** Freeze the draft as the next version. */
   publish(testId: string): Promise<{ version: number }> {
     return this.call("POST", `/${testId}/publish`);
-  }
-
-  /** Throw away the draft's changes. */
-  discard(testId: string): Promise<{ discarded: boolean }> {
-    return this.call("POST", `/${testId}/discard`);
   }
 }
 
