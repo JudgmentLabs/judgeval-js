@@ -188,7 +188,7 @@ export class OfflineTestRunner {
       datasetVersion?: number | string;
       judgeVersions?: JudgeVersionPin[];
       agentTraces?: Record<string, string>;
-      source?: string;
+      source?: CreateTestRunRequest["source"];
       name?: string;
     } = {},
   ): Promise<PreparedTestRunResponse> {

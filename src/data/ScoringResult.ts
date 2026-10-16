@@ -1,5 +1,5 @@
 import type { Example } from "./Example";
-import type { ExperimentScorer } from "../internal/api/models/ExperimentScorer";
+import type { ExperimentScorer } from "../internal/api/models";
 
 /** The combined result of running scorers against a single example. */
 export interface ScoringResult {
