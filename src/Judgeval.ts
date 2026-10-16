@@ -6,6 +6,8 @@ import { EvaluationFactory } from "./evaluation/EvaluationFactory";
 import { DatasetFactory } from "./datasets/DatasetFactory";
 import { AgentJudgeFactory } from "./agent-judges/AgentJudgeFactory";
 import { OfflineTestsFactory } from "./offline-tests/OfflineTestsFactory";
+import { warnOfflineTestsDeprecated } from "./offline-tests/deprecation";
+import { TestRunsFactory, TestSuitesFactory } from "./testing";
 import type { OfflineTracer, OfflineTracerConfig } from "./trace/OfflineTracer";
 import {
   JudgevalQueryClient,
@@ -126,6 +128,9 @@ export class Judgeval {
 
   /**
    * Create and activate an `OfflineTracer` for this project.
+   *
+   * @deprecated Use the normal `Tracer` with `Tracer.testCase` and
+   *   {@link Judgeval.testRuns}.
    *
    * Reuses the credentials supplied to this `Judgeval` instance. Each
    * completed root span appends an `Example` to `dataset`, carrying
@@ -272,8 +277,31 @@ export class Judgeval {
     );
   }
 
-  /** Create test configs and run offline tests (dataset + judges). */
+  /** Create test suites and edit their versioned cases. */
+  get testSuites(): TestSuitesFactory {
+    return new TestSuitesFactory(
+      this._client,
+      this._projectId,
+      this._projectName,
+    );
+  }
+
+  /** Run test suites and read their results. */
+  get testRuns(): TestRunsFactory {
+    return new TestRunsFactory(
+      this._client,
+      this._projectId,
+      this._projectName,
+    );
+  }
+
+  /**
+   * Create test configs and run offline tests (dataset + judges).
+   *
+   * @deprecated Use {@link Judgeval.testSuites} and {@link Judgeval.testRuns}.
+   */
   get offlineTests(): OfflineTestsFactory {
+    warnOfflineTestsDeprecated();
     return new OfflineTestsFactory(
       this._client,
       this._projectId,
