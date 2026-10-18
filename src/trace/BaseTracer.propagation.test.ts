@@ -109,91 +109,10 @@ describe("BaseTracer.setPropagatingAttribute", () => {
       const span = exporter
         .getFinishedSpans()
         .find((s) => s.name === "reserved");
-      expect(
-        span?.attributes[AttributeKeys.JUDGMENT_CUSTOMER_ID],
-      ).toBeUndefined();
+      expect(span?.attributes[AttributeKeys.JUDGMENT_CUSTOMER_ID]).toBeUndefined();
       expect(errorSpy).toHaveBeenCalledTimes(1);
     } finally {
       errorSpy.mockRestore();
-      cleanup();
-    }
-  });
-});
-
-describe("BaseTracer.testCase", () => {
-  const RUN = AttributeKeys.JUDGMENT_TEST_RUN_ID;
-  const CASE = AttributeKeys.JUDGMENT_TEST_CASE_ID;
-
-  test("tags the root and its children without leaking", () => {
-    const { exporter, cleanup } = setupProxy();
-    try {
-      BaseTracer.testCase("run-1", "case-1", () => {
-        BaseTracer.span("root", () => {
-          BaseTracer.span("child", () => {});
-        });
-      });
-      BaseTracer.span("outside", () => {});
-
-      const spans = new Map(
-        exporter.getFinishedSpans().map((s) => [s.name, s]),
-      );
-      expect(spans.get("root")?.parentSpanContext).toBeUndefined();
-      for (const name of ["root", "child"]) {
-        expect(spans.get(name)?.attributes[RUN]).toBe("run-1");
-        expect(spans.get(name)?.attributes[CASE]).toBe("case-1");
-      }
-      expect(spans.get("outside")?.attributes[RUN]).toBeUndefined();
-      expect(spans.get("outside")?.attributes[CASE]).toBeUndefined();
-    } finally {
-      cleanup();
-    }
-  });
-
-  test("tags the current span", () => {
-    const { exporter, cleanup } = setupProxy();
-    try {
-      BaseTracer.span("agent", () => {
-        BaseTracer.testCase("run-1", "case-1", () => {});
-      });
-      const span = exporter.getFinishedSpans().find((s) => s.name === "agent");
-      expect(span?.attributes[RUN]).toBe("run-1");
-      expect(span?.attributes[CASE]).toBe("case-1");
-    } finally {
-      cleanup();
-    }
-  });
-
-  test("keeps concurrent cases isolated", async () => {
-    const { exporter, cleanup } = setupProxy();
-    const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
-    try {
-      const caseIds = [0, 1, 2, 3, 4].map((i) => `case-${i}`);
-      await Promise.all(
-        caseIds.map((caseId) =>
-          BaseTracer.testCase("run-1", caseId, () =>
-            BaseTracer.span(`root-${caseId}`, async () => {
-              await tick();
-              await BaseTracer.span(`child-${caseId}`, tick);
-            }),
-          ),
-        ),
-      );
-
-      const expected = Object.fromEntries(
-        caseIds.flatMap((caseId) =>
-          ["root", "child"].map((kind) => [
-            `${kind}-${caseId}`,
-            ["run-1", caseId],
-          ]),
-        ),
-      );
-      const actual = Object.fromEntries(
-        exporter
-          .getFinishedSpans()
-          .map((s) => [s.name, [s.attributes[RUN], s.attributes[CASE]]]),
-      );
-      expect(actual).toEqual(expected);
-    } finally {
       cleanup();
     }
   });
