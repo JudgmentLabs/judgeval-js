@@ -78,3 +78,16 @@ export type {
   JqlRequestOptions,
   SqlResponse,
 } from "./jql/client";
+export {
+  TestRunsFactory,
+  TestSuitesFactory,
+  type CaseCheck,
+  type CaseFilter,
+  type CheckOp,
+  type StartedRun,
+  type TestSuite,
+  type TestCase,
+  type TestCaseInput,
+  type TestResults,
+  type TestRun,
+} from "./testing";
