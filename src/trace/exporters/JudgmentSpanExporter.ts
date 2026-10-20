@@ -1,4 +1,4 @@
-import type { ExportResult } from "@opentelemetry/core";
+import { ExportResultCode, type ExportResult } from "@opentelemetry/core";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import type { ReadableSpan, SpanExporter } from "@opentelemetry/sdk-trace-base";
 import { Logger } from "../../utils/logger";
@@ -11,6 +11,7 @@ import { Logger } from "../../utils/logger";
  */
 export class JudgmentSpanExporter implements SpanExporter {
   protected _delegate: OTLPTraceExporter | null;
+  private billingErrorReported = false;
 
   /**
    * Create a new JudgmentSpanExporter.
@@ -51,7 +52,35 @@ export class JudgmentSpanExporter implements SpanExporter {
     resultCallback: (result: ExportResult) => void,
   ): void {
     Logger.info(`Exported ${spans.length} spans`);
-    this._delegate?.export(spans, resultCallback);
+    this._delegate?.export(spans, (result) => {
+      this.reportBillingError(result);
+      resultCallback(result);
+    });
+  }
+
+  private reportBillingError(result: ExportResult): void {
+    // OTel's error message may contain only the HTTP reason; data holds the body.
+    try {
+      if (result.code === ExportResultCode.SUCCESS) {
+        this.billingErrorReported = false;
+        return;
+      }
+      const error = result.error;
+      if (
+        !error ||
+        !("code" in error) ||
+        error.code !== 402 ||
+        this.billingErrorReported
+      ) {
+        return;
+      }
+      Logger.error(
+        `Trace export rejected (HTTP 402): ${billingMessage(error)}`,
+      );
+      this.billingErrorReported = true;
+    } catch {
+      // Diagnostics must not prevent delivery of OTel's original export result.
+    }
   }
 
   /**
@@ -67,4 +96,27 @@ export class JudgmentSpanExporter implements SpanExporter {
   forceFlush(): Promise<void> {
     return this._delegate?.forceFlush() ?? Promise.resolve();
   }
+}
+
+function billingMessage(error: Error): string {
+  const fallback =
+    "Payment required. Review your organization's billing and usage limits.";
+  if (!("data" in error) || typeof error.data !== "string") {
+    return fallback;
+  }
+  try {
+    const body: unknown = JSON.parse(error.data);
+    if (
+      body &&
+      typeof body === "object" &&
+      "message" in body &&
+      typeof body.message === "string" &&
+      body.message.trim()
+    ) {
+      return body.message.trim();
+    }
+  } catch {
+    // Do not log arbitrary HTML or an unstructured response body.
+  }
+  return fallback;
 }
