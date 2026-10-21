@@ -83,6 +83,14 @@ function patchBody(client: FakeClient) {
   return client.patchV1projectsJudgesByJudgeId.mock.calls[0][2];
 }
 
+const PASS_FAIL = {
+  scoreType: "categorical",
+  outputs: [
+    { name: "Pass", description: "The output meets the rubric." },
+    { name: "Fail", description: "The output does not meet the rubric." },
+  ],
+};
+
 describe("AgentJudgeFactory.create", () => {
   test("sends the prompt-judge create body", async () => {
     const { factory, client } = makeFactory();
@@ -90,7 +98,7 @@ describe("AgentJudgeFactory.create", () => {
     await factory.create({
       name: "n",
       prompt: "p",
-      scoreType: "numeric",
+      scoreType: "binary",
       reasoningLevel: "high",
       description: "d",
       judgeDescription: "jd",
@@ -105,7 +113,7 @@ describe("AgentJudgeFactory.create", () => {
           name: "n",
           judgeDescription: "jd",
           judgeType: "prompt",
-          initialVersion: { scoreType: "numeric" },
+          initialVersion: PASS_FAIL,
           config: {
             prompt: "p",
             description: "d",
@@ -144,7 +152,7 @@ describe("AgentJudgeFactory.create", () => {
       name: "helpfulness",
       prompt: "Rate helpfulness 0-1.",
       model: "ignored",
-      scoreType: "numeric",
+      scoreType: "binary",
     });
 
     expect(result).toEqual({
@@ -170,7 +178,7 @@ describe("AgentJudgeFactory.create", () => {
     const result = await factory.create({
       name: "n",
       prompt: "p",
-      scoreType: "numeric",
+      scoreType: "binary",
     });
 
     expect(result).toBeNull();
@@ -179,9 +187,26 @@ describe("AgentJudgeFactory.create", () => {
   test("does not call the API when project_id is unresolved", async () => {
     const { factory, client } = makeFactory(null);
 
-    await factory.create({ name: "n", prompt: "p", scoreType: "numeric" });
+    await factory.create({ name: "n", prompt: "p", scoreType: "binary" });
 
     expect(client.postV1projectsJudges).not.toHaveBeenCalled();
+  });
+
+  test("rejects numeric judges before calling the API", async () => {
+    const { factory, client } = makeFactory();
+
+    const error = await factory
+      .create({ name: "n", prompt: "p", scoreType: "numeric" })
+      .catch((e: Error) => e.message);
+
+    expect({
+      error,
+      calls: client.postV1projectsJudges.mock.calls.length,
+    }).toEqual({
+      error:
+        'New Agent judges must be categorical. Use scoreType "categorical" with categories, or "binary" for Pass / Fail.',
+      calls: 0,
+    });
   });
 });
 
