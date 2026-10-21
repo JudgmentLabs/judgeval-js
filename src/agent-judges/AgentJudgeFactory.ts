@@ -8,6 +8,13 @@ import type {
 import { Logger } from "../utils/logger";
 import type { AgentJudge, ReasoningLevel, ScoreType } from "./AgentJudge";
 
+// The platform creates only categorical judges (judgment-mono#5377), so a
+// binary judge is created as two categorical outputs.
+const BINARY_OUTPUTS = [
+  { name: "Pass", description: "The output meets the rubric." },
+  { name: "Fail", description: "The output does not meet the rubric." },
+];
+
 type PromptJudgeDetail = Extract<JudgeDetail, { judge_type: "prompt" }>;
 type NewVersion = NonNullable<UpdateJudgeRequest["update"]["newVersion"]>;
 
@@ -20,8 +27,8 @@ type NewVersion = NonNullable<UpdateJudgeRequest["update"]["newVersion"]>;
  * ```typescript
  * const judge = await client.agentJudges.create({
  *   name: "helpfulness",
- *   prompt: "Rate the assistant's helpfulness from 0 to 1.",
- *   scoreType: "numeric",
+ *   prompt: "Did the assistant answer the user's question?",
+ *   scoreType: "binary",
  * });
  *
  * await client.agentJudges.update({
@@ -52,13 +59,16 @@ export class AgentJudgeFactory {
    * @param options.prompt - Rubric prompt template used by the Agent judge harness.
    * @param options.model - Ignored: the platform picks the model from `reasoningLevel`.
    * @param options.reasoningLevel - `"lite"` (server default), `"normal"`, or `"high"`.
-   * @param options.scoreType - One of `"numeric"`, `"binary"`, or `"categorical"`.
+   * @param options.scoreType - `"categorical"`, or `"binary"` for a categorical judge with
+   *   `Pass` / `Fail` outputs. New judges cannot be `"numeric"`; existing numeric judges
+   *   can still be updated.
    * @param options.description - Description stored on the initial judge version.
    * @param options.judgeDescription - Description shown in the UI.
    * @param options.categories - Choice list for `categorical` judges (at least two).
-   * @param options.minScore - Lower bound for `numeric` judges (defaults to `0` server-side).
-   * @param options.maxScore - Upper bound for `numeric` judges (defaults to `1` server-side).
+   * @param options.minScore - Lower score bound stored on the version.
+   * @param options.maxScore - Upper score bound stored on the version.
    * @returns The newly created `AgentJudge`, or `null` if the project is unresolved.
+   * @throws If `scoreType` is `"numeric"`.
    */
   async create(options: {
     name: string;
@@ -73,6 +83,11 @@ export class AgentJudgeFactory {
     minScore?: number;
     maxScore?: number;
   }): Promise<AgentJudge | null> {
+    if (options.scoreType === "numeric") {
+      throw new Error(
+        'New Agent judges must be categorical. Use scoreType "categorical" with categories, or "binary" for Pass / Fail.',
+      );
+    }
     const projectId = this._expectProjectId();
     if (!projectId) return null;
     warnIfModel(options.model);
@@ -82,10 +97,13 @@ export class AgentJudgeFactory {
         name: options.name,
         judgeDescription: options.judgeDescription,
         judgeType: "prompt",
-        initialVersion:
-          options.scoreType === "categorical"
-            ? { scoreType: "categorical", outputs: options.categories ?? [] }
-            : { scoreType: options.scoreType },
+        initialVersion: {
+          scoreType: "categorical",
+          outputs:
+            options.scoreType === "binary"
+              ? BINARY_OUTPUTS
+              : (options.categories ?? []),
+        },
         config: {
           prompt: options.prompt,
           description: options.description,
