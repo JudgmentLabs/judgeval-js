@@ -74,15 +74,14 @@ const result = await client.sql("SELECT count() AS run_count FROM telemetry.trac
 console.log(result.rows);
 ```
 
-SQL execution requires organization viewer access, a resolved project, and public
-query access enabled for your organization. Results contain `catalog_version`,
+SQL execution requires organization viewer access and a resolved project. Results contain `catalog_version`,
 `columns`, `rows`, `row_count`, and `elapsed_ms`, with a maximum of 1,000 rows and
 5 MiB. Integers outside JavaScript's safe range remain exact decimal strings,
 including nested values; use `BigInt(value)` when needed. Both methods accept
 `{ signal }` for cancellation and preserve `JudgevalAPIError` details.
 
 Schema discovery uses `GET /v1/sql/schema` and returns no project data. It needs
-no resolved project or public query opt-in. Query execution uses
+no resolved project. Query execution uses
 `POST /v1/projects/{projectId}/sql` with `{ "sql": "..." }`; the server enforces
 tenant scope. Use SQL predicates and `LIMIT` to narrow results.
 See the [SQL guide](https://docs.judgmentlabs.ai/documentation/mcp-and-agent-tools/sql)

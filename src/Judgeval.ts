@@ -153,7 +153,7 @@ export class Judgeval {
   /**
    * Returns the server's SQL reference as Markdown, matching MCP
    * discover_schema: tables, columns, descriptions, examples, and limits.
-   * Requires organization viewer access, but no resolved project or query opt-in.
+   * Requires organization viewer access, but no resolved project.
    *
    * @param options - Pass `signal` to cancel the request with an AbortSignal.
    * @returns The virtual schema reference as a Markdown string; no project data.
@@ -172,7 +172,7 @@ export class Judgeval {
    *
    * The server derives scope from the client's credentials and resolved project.
    * Call `discoverSchema()` for supported tables and columns. Requires viewer
-   * access and public SDK/API queries enabled for the organization.
+   * access.
    *
    * Results are capped at 1,000 rows and 5 MiB; exceeding either cap returns an
    * error. Use SQL predicates and LIMIT to narrow results. Integers outside
