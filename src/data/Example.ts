@@ -1,4 +1,4 @@
-import type { Example as APIExample } from "../internal/api/models/Example";
+import type { Example as APIExample } from "../internal/api/models";
 
 /**
  * The wire format for examples: the fixed API fields plus arbitrary
