@@ -96,6 +96,7 @@
     "bun": ">=1.0.0"
   },
   "resolutions": {
+    "brace-expansion": "^2.1.7",
     "js-yaml": "^4.3.2"
   }
 }
