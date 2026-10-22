@@ -282,6 +282,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/projects/{projectId}/artifacts/optimistic-eval-tests": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Test optimistic eval candidate
+     * @description Backtest unsaved preprocessing source against one historical trace using an exact saved judge version. Runs preprocessing/JEV and an independent ordinary agent judge (AAAJ) in parallel with the same resolved rubric, current judge knowledge, and output definitions. Returns the candidate verdict/confidence or fallback/error diagnostics, the AAAJ verdict/explanation, timing for both paths, evidence size, and matches (null unless the candidate is accepted and AAAJ completes). AAAJ always bypasses optimistic evaluation and runs even when the candidate succeeds or falls back. Consumes both JEV and ordinary-agent evaluation usage and may take longer than the candidate-only 30-second deadline. Does not save artifacts, attach source, change toggles, or persist evaluation score rows. One path failing preserves the other result. Only whole-trace binary/categorical prompt judges in SaaS with BYOK disabled are supported, even when their optimistic toggle is off. Use test_preprocessing_candidate separately to inspect extracted evidence and script diagnostics.
+     */
+    post: operations["postV1ProjectsByProjectIdArtifactsOptimistic-eval-tests"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/projects/{projectId}/artifacts/preprocessing-tests": {
     parameters: {
       query?: never;
@@ -363,13 +383,13 @@ export interface paths {
     };
     /**
      * List automations
-     * @description List all automations (rules) for a project, including conditions, actions, and active status.
+     * @description List legacy automations (rules) for a project, including conditions, actions, and active status. Alerts owned by a judge are managed as its action groups.
      */
     get: operations["getV1ProjectsByProjectIdAutomations"];
     put?: never;
     /**
      * Create automation
-     * @description Create a new automation (rule) for a project.
+     * @description Create a new legacy automation (rule) for a project. Alerts owned by a judge are managed as its action groups.
      */
     post: operations["postV1ProjectsByProjectIdAutomations"];
     delete?: never;
@@ -387,21 +407,21 @@ export interface paths {
     };
     /**
      * Get automation
-     * @description Get a single automation (rule) by ID.
+     * @description Get a single legacy automation (rule) by ID. Alerts owned by a judge are managed as its action groups.
      */
     get: operations["getV1ProjectsByProjectIdAutomationsByRuleId"];
     put?: never;
     post?: never;
     /**
      * Delete automation
-     * @description Delete an automation (rule).
+     * @description Delete a legacy automation (rule). Alerts owned by a judge are managed as its action groups.
      */
     delete: operations["deleteV1ProjectsByProjectIdAutomationsByRuleId"];
     options?: never;
     head?: never;
     /**
      * Update automation
-     * @description Update an existing automation (rule).
+     * @description Update an existing legacy automation (rule). Alerts owned by a judge are managed as its action groups.
      */
     patch: operations["patchV1ProjectsByProjectIdAutomationsByRuleId"];
     trace?: never;
@@ -420,8 +440,8 @@ export interface paths {
     options?: never;
     head?: never;
     /**
-     * Update behavior
-     * @description Update a behavior (currently supports description).
+     * Update judge label
+     * @description Update a judge label (currently supports description). For binary judges, true means the judge applied its label, which the app shows under the judge's name. false means no label was applied. For classification judges, the value is the label, meaning the chosen option.
      */
     patch: operations["patchV1ProjectsByProjectIdBehaviorsByBehaviorId"];
     trace?: never;
@@ -434,11 +454,35 @@ export interface paths {
       cookie?: never;
     };
     /**
-     * Get behavior analytics
-     * @description Get analytics for one enabled production Behavior output, including its rate, eligible denominator, last-seen time, and time series.
+     * Get judge label
+     * @description Get analytics for one enabled production judge label, including its label rate, eligible denominator, last-applied time, and time series. For binary judges, true means the judge applied its label, which the app shows under the judge's name. false means no label was applied. For classification judges, the value is the label, meaning the chosen option.
      */
     get: operations["getV1ProjectsByProjectIdBehaviorsByBehaviorIdAnalytics"];
     put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/projects/{projectId}/conversation-display-rules": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get conversation display rules
+     * @description Get a project's ordered regex find/replace rules that clean up chat message text when traces are viewed. Display only; stored traces and judge inputs are never changed.
+     */
+    get: operations["getV1ProjectsByProjectIdConversation-display-rules"];
+    /**
+     * Replace conversation display rules
+     * @description Replace a project's conversation display rules with a complete ordered list, applied in order to chat message text in Conversation View and span chat views. Display only. Patterns that backtrack catastrophically are rejected.
+     */
+    put: operations["putV1ProjectsByProjectIdConversation-display-rules"];
     post?: never;
     delete?: never;
     options?: never;
@@ -594,26 +638,6 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/v1/projects/{projectId}/eval-queue/examples/preflight": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Pre-flight an example evaluation
-     * @description Return how many runs (examples * scorers) an example evaluation would produce and whether any named scorer is missing, without enqueueing.
-     */
-    post: operations["postV1ProjectsByProjectIdEval-queueExamplesPreflight"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
   "/v1/projects/{projectId}/eval-queue/traces": {
     parameters: {
       query?: never;
@@ -628,26 +652,6 @@ export interface paths {
      * @description Add trace evaluation job to queue
      */
     post: operations["postV1ProjectsByProjectIdEval-queueTraces"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/projects/{projectId}/eval-queue/traces/preflight": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Pre-flight a trace evaluation
-     * @description Return how many runs (traces * scorers) a trace evaluation would produce and whether any named scorer is missing, without enqueueing.
-     */
-    post: operations["postV1ProjectsByProjectIdEval-queueTracesPreflight"];
     delete?: never;
     options?: never;
     head?: never;
@@ -811,13 +815,13 @@ export interface paths {
     };
     /**
      * List judges
-     * @description List judges and their selected configuration. Defaults to the latest configuration; use version='production' for production judges and enabled Behavior outputs.
+     * @description List judges and their selected configuration. Defaults to the latest configuration; use version='production' for production judges and enabled judge labels.
      */
     get: operations["getV1ProjectsByProjectIdJudges"];
     put?: never;
     /**
      * Create judge
-     * @description Create a prompt or custom-code judge and its initial production version. This call fixes the judge type for its lifetime. Prompt judges require prompt configuration; custom judges require a base64-encoded tar.gz bundle and Python entrypoint metadata.
+     * @description Create an Agent judge (wire value `prompt`), a Code judge (wire value `custom`), or a deterministic judge with categorical outputs and its initial production version. Deterministic judges require two outputs ordered match, then miss. This call fixes the judge type for its lifetime. Agent judges require prompt configuration; Code judges require a base64-encoded tar.gz bundle and Python entrypoint metadata.
      */
     post: operations["postV1ProjectsByProjectIdJudges"];
     delete?: never;
@@ -838,16 +842,36 @@ export interface paths {
     post?: never;
     /**
      * Delete judge
-     * @description Delete one judge by ID. Behaviors that reference this judge are also removed.
+     * @description Delete one judge by ID. This judge's labels are also removed.
      */
     delete: operations["deleteV1ProjectsByProjectIdJudgesByJudgeId"];
     options?: never;
     head?: never;
     /**
      * Update judge
-     * @description Update a judge description and/or create one complete immutable judge version. A new version requires an explicit target version, the existing judge and score types, a complete implementation config, outputs, and monitoring-settings snapshot. Categorical outputs may reference existing Behaviors by ID or define new Behaviors. Custom-judge versions require a base64-encoded tar.gz bundle. Set promoteToProduction to make the new version production; latest is inferred automatically. Judge and score types cannot change.
+     * @description Update a judge description and/or create one complete immutable judge version. A new version requires an explicit target version, the existing judge and score types, a complete implementation config, outputs, and monitoring-settings snapshot. Categorical outputs may reference existing labels by ID or define new labels. Code judge versions require a base64-encoded tar.gz bundle. Set promoteToProduction to make the new version production; latest is inferred automatically. Judge and score types cannot change.
      */
     patch: operations["patchV1ProjectsByProjectIdJudgesByJudgeId"];
+    trace?: never;
+  };
+  "/v1/projects/{projectId}/judges/{judgeId}/action-groups": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Set judge action groups
+     * @description Replace the action groups of a judge version by creating a new immutable version that keeps its evaluation method, outputs, and run settings. Call list_judge_action_groups first. IDs survive edits; new or duplicated groups and actions need new UUIDs.
+     */
+    post: operations["postV1ProjectsByProjectIdJudgesByJudgeIdAction-groups"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
     trace?: never;
   };
   "/v1/projects/{projectId}/judges/{judgeId}/lookup": {
@@ -861,7 +885,7 @@ export interface paths {
     put?: never;
     /**
      * Get judge
-     * @description Get one selected version of a judge, including its definition, outputs, version metadata, pinned preprocessing artifact revision, and online-evaluation settings. Defaults to the latest version; custom-judge source bundles are omitted.
+     * @description Get one selected version of a judge, including its definition, outputs, version metadata, pinned preprocessing artifact revision, and online-evaluation settings. Also returns optimistic_eval_eligibility with authoritative BYOK and SaaS-runtime checks and configuration blockers. Eligibility is independent of the toggle and attached script; it does not establish extraction reliability, verdict agreement, feature availability, or permission to enable execution. Defaults to the latest version. For Code judges, set include_code_url=true to receive a temporary download URL for the source bundle. Bundle contents are omitted.
      */
     post: operations["postV1ProjectsByProjectIdJudgesByJudgeIdLookup"];
     delete?: never;
@@ -910,6 +934,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/projects/{projectId}/judges/action-groups": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List judge action groups
+     * @description List action groups owned by judges, with stable group IDs and the selected judge version. Each group runs its actions when the judge result matches its condition, subject to its environments, frequency, and cooldown. Legacy rules are listed by list_automations.
+     */
+    get: operations["getV1ProjectsByProjectIdJudgesAction-groups"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/projects/{projectId}/memory/entries": {
     parameters: {
       query?: never;
@@ -919,7 +963,7 @@ export interface paths {
     };
     /**
      * List memory entries
-     * @description List project memory entry paths and metadata for a project, including folders and files. Does not include file bodies; call read_memory_files with entry IDs or paths for full file contents.
+     * @description List project memory entry paths and metadata for a project, including folders and files. Does not include file bodies; read files by entry ID or path for full contents.
      */
     get: operations["getV1ProjectsByProjectIdMemoryEntries"];
     put?: never;
@@ -979,7 +1023,7 @@ export interface paths {
     };
     /**
      * Search memory files
-     * @description Search project memory files by path and body. Use this before fetching files when you do not already know the exact memory path. Returns concise file references and snippets; call read_memory_files with result IDs or paths for full bodies.
+     * @description Search project memory files by path and body. Returns concise file references and snippets; read files by result ID or path for full bodies.
      */
     get: operations["getV1ProjectsByProjectIdMemorySearch"];
     put?: never;
@@ -1074,44 +1118,52 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
-  "/v1/projects/{projectId}/query": {
+  "/v1/projects/{projectId}/scheduled-tasks": {
     parameters: {
       query?: never;
       header?: never;
       path?: never;
       cookie?: never;
     };
-    get?: never;
+    /**
+     * List scheduled tasks
+     * @description List a project's scheduled tasks, including their saved instructions, schedule, and Slack delivery.
+     */
+    get: operations["getV1ProjectsByProjectIdScheduled-tasks"];
     put?: never;
     /**
-     * Run a tenant-scoped JQL query
-     * @description Runs structured JQL for the authenticated organization and project, optionally narrowed by trace_ids or by traces resolved from session_ids.
+     * Create a scheduled task
+     * @description Create a scheduled task: saved instructions that run as an agent on a schedule or on demand, optionally with Slack delivery.
      */
-    post: operations["postV1ProjectsByProjectIdQuery"];
+    post: operations["postV1ProjectsByProjectIdScheduled-tasks"];
     delete?: never;
     options?: never;
     head?: never;
     patch?: never;
     trace?: never;
   };
-  "/v1/projects/{projectId}/query/presentation": {
+  "/v1/projects/{projectId}/scheduled-tasks/{taskId}": {
     parameters: {
       query?: never;
       header?: never;
       path?: never;
       cookie?: never;
     };
-    get?: never;
-    put?: never;
     /**
-     * Run a tenant-scoped JQL presentation query
-     * @description Runs a structured chart or table query for the authenticated organization and project, optionally narrowed by trace_ids or by traces resolved from session_ids.
+     * Get a scheduled task
+     * @description Get one scheduled task, including the saved instructions used for future runs, its schedule, and its Slack delivery.
      */
-    post: operations["postV1ProjectsByProjectIdQueryPresentation"];
+    get: operations["getV1ProjectsByProjectIdScheduled-tasksByTaskId"];
+    put?: never;
+    post?: never;
     delete?: never;
     options?: never;
     head?: never;
-    patch?: never;
+    /**
+     * Update a scheduled task
+     * @description Update a scheduled task's name, description, instructions, schedule, execution mode, write-tool approval mode, or Slack delivery. The task's owner or an organization admin may update it.
+     */
+    patch: operations["patchV1ProjectsByProjectIdScheduled-tasksByTaskId"];
     trace?: never;
   };
   "/v1/projects/{projectId}/scorers": {
@@ -1450,7 +1502,99 @@ export interface paths {
     patch: operations["patchV1ProjectsByProjectIdTest-runsByTestRunIdSuccess"];
     trace?: never;
   };
-  "/v1/projects/{projectId}/test-runs/preflight": {
+  "/v1/projects/{projectId}/test-suites": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List test suites
+     * @description List the project's test suites, newest first.
+     */
+    get: operations["getV1ProjectsByProjectIdTest-suites"];
+    put?: never;
+    /**
+     * Create a test suite
+     * @description Create an empty test suite. Add cases with add_test_cases, then publish_test_suite to make version 1 runnable.
+     */
+    post: operations["postV1ProjectsByProjectIdTest-suites"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/projects/{projectId}/test-suites/{testSuiteId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Delete a test suite with its runs
+     * @description Delete a test suite with all its versions, runs and results.
+     */
+    delete: operations["deleteV1ProjectsByProjectIdTest-suitesByTestSuiteId"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/projects/{projectId}/test-suites/{testSuiteId}/cases": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List test cases in a version or the draft
+     * @description List the cases of a published version (default: the latest), or of the draft with version='draft'.
+     */
+    get: operations["getV1ProjectsByProjectIdTest-suitesByTestSuiteIdCases"];
+    put?: never;
+    /**
+     * Add cases to a test suite's draft
+     * @description Add cases to the test suite's draft. Each case has an input for the agent and an expected object keyed by judge id: {judge_major_version, judge_minor_version, op, expected}. A check passes when the judge's output <op> expected; op is eq, ne, lt, lte, gt, gte, in or not_in. Publish the draft to run it.
+     */
+    post: operations["postV1ProjectsByProjectIdTest-suitesByTestSuiteIdCases"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/projects/{projectId}/test-suites/{testSuiteId}/cases/{caseId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Replace a case in the draft
+     * @description Replace a case in the draft. For a published case, call create_test_suite_draft first.
+     */
+    put: operations["putV1ProjectsByProjectIdTest-suitesByTestSuiteIdCasesByCaseId"];
+    post?: never;
+    /**
+     * Remove a case from the draft
+     * @description Remove a case from the draft; published versions keep it. For a published case, call create_test_suite_draft first.
+     */
+    delete: operations["deleteV1ProjectsByProjectIdTest-suitesByTestSuiteIdCasesByCaseId"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/projects/{projectId}/test-suites/{testSuiteId}/discard": {
     parameters: {
       query?: never;
       header?: never;
@@ -1460,10 +1604,134 @@ export interface paths {
     get?: never;
     put?: never;
     /**
-     * Pre-flight a test run
-     * @description Resolve the config, dataset version, examples, and judges for a test run and return how many examples/judges/runs it would produce, without creating the run or enqueueing work.
+     * Throw away the draft's changes
+     * @description Throw away the draft's changes.
      */
-    post: operations["postV1ProjectsByProjectIdTest-runsPreflight"];
+    post: operations["postV1ProjectsByProjectIdTest-suitesByTestSuiteIdDiscard"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/projects/{projectId}/test-suites/{testSuiteId}/draft": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Copy the published cases into the draft to edit
+     * @description Copy the published cases into the draft so update_test_case and remove_test_case can change them. Safe to call again.
+     */
+    post: operations["postV1ProjectsByProjectIdTest-suitesByTestSuiteIdDraft"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/projects/{projectId}/test-suites/{testSuiteId}/publish": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Publish the draft as the next version
+     * @description Freeze the draft as the next version so test runs can use it.
+     */
+    post: operations["postV1ProjectsByProjectIdTest-suitesByTestSuiteIdPublish"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/projects/{projectId}/test-suites/{testSuiteId}/runs": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List test runs
+     * @description The test suite's runs, newest first, with their case counts.
+     */
+    get: operations["getV1ProjectsByProjectIdTest-suitesByTestSuiteIdRuns"];
+    put?: never;
+    /**
+     * Start a test run
+     * @description Runs the test suite's latest published version over the cases the filter selects; each case is scored by the checks in its expected. Run your agent once per returned case on your normal tracer, with judgment.test.run_id and judgment.test.case_id set; traces are attached and scored as they arrive.
+     */
+    post: operations["postV1ProjectsByProjectIdTest-suitesByTestSuiteIdRuns"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/projects/{projectId}/test-suites/runs/{runId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get a test run
+     * @description The run and how many of its cases have an output, are scored and passed.
+     */
+    get: operations["getV1ProjectsByProjectIdTest-suitesRunsByRunId"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/projects/{projectId}/test-suites/runs/{runId}/results": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get test run results
+     * @description Every case of the run with its output trace, whether it is scored, its outcome and check results.
+     */
+    get: operations["getV1ProjectsByProjectIdTest-suitesRunsByRunIdResults"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/projects/{projectId}/test-suites/runs/{runId}/score": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Score a test run
+     * @description Triggers scoring of an existing run's traces with the test suite's latest published version, which may be the run's own, without re-running the agent. Returns a new run with the cases that have an output and an unchanged input, which links back through scored_from_run_id. Its cases are scored in the background; poll the run for progress.
+     */
+    post: operations["postV1ProjectsByProjectIdTest-suitesRunsByRunIdScore"];
     delete?: never;
     options?: never;
     head?: never;
@@ -1639,7 +1907,7 @@ export interface paths {
     };
     /**
      * Discover the virtual SQL schema
-     * @description Returns the same generated Markdown reference as MCP discover_schema: published tables, columns, descriptions, examples, and query limits. Contains no project data and requires no project or public query opt-in.
+     * @description Returns the same generated Markdown reference as MCP discover_schema: published tables, columns, descriptions, examples, and query limits. Contains no project data and requires no project.
      */
     get: operations["getV1SqlSchema"];
     put?: never;
@@ -1670,6 +1938,1424 @@ export interface components {
       is_offline: boolean;
       /** @default false */
       is_behavior: boolean;
+    };
+    E2EFetchSpanScoreRequest: {
+      project_name: string;
+      trace_id: string;
+      span_id: string;
+    };
+    E2EFetchSpanScoreResponse: {
+      [key: string]: unknown;
+    }[];
+    E2EFetchTraceResponse: {
+      [key: string]: unknown;
+    }[];
+    AddProjectRequest: {
+      project_name: string;
+    };
+    AddProjectResponse: {
+      project_id: string;
+      project: {
+        project_id: string;
+        project_name: string;
+        created_at: (string | null) | null;
+        organization_id: string;
+      };
+    };
+    DeleteProjectResponse: {
+      status: string;
+      message: string;
+    };
+    T1:
+      | null
+      | boolean
+      | number
+      | string
+      | unknown[]
+      | {
+          [key: string]: unknown;
+        };
+    CreateOfflineDatasetRequest: {
+      name: string;
+      schema: {
+        [key: string]: unknown;
+      };
+      examples?: {
+        [key: string]: unknown;
+      }[];
+      /** @default false */
+      overwrite: boolean;
+      /** @constant */
+      dataset_kind?: "example";
+      metadata?:
+        | ({
+            [key: string]: unknown;
+          } | null)
+        | null;
+    };
+    CreateOfflineDatasetResponse: {
+      detail: string;
+      dataset_id: string;
+      dataset: {
+        dataset_id: string;
+        organization_id?: string;
+        project_id?: string;
+        name: string;
+        schema?:
+          | ({
+              [key: string]: unknown;
+            } | null)
+          | null;
+        current_version?: number;
+        created_at?: string;
+        updated_at?: string;
+        creator_id: (string | null) | null;
+        entries?: number;
+        test_config_count?: number;
+        test_run_count?: number;
+      };
+    };
+    PullAllOfflineDatasetsResponse: {
+      dataset_id: string;
+      organization_id?: string;
+      project_id?: string;
+      name: string;
+      schema?:
+        | ({
+            [key: string]: unknown;
+          } | null)
+        | null;
+      current_version?: number;
+      created_at?: string;
+      updated_at?: string;
+      creator_id: (string | null) | null;
+      entries?: number;
+      test_config_count?: number;
+      test_run_count?: number;
+    }[];
+    DeleteOfflineDatasetResponse: {
+      status: string;
+      message: string;
+    };
+    PullOfflineDatasetResponse: {
+      dataset_id: string;
+      organization_id?: string;
+      project_id?: string;
+      name: string;
+      schema?:
+        | ({
+            [key: string]: unknown;
+          } | null)
+        | null;
+      current_version?: number;
+      created_at?: string;
+      updated_at?: string;
+      creator_id: (string | null) | null;
+      entries?: number;
+      test_config_count?: number;
+      test_run_count?: number;
+      dataset_kind: "example" & "example";
+      examples: {
+        example_id: string;
+        organization_id?: string;
+        project_id?: string;
+        data: {
+          [key: string]: unknown;
+        };
+        metadata?:
+          | ({
+              [key: string]: unknown;
+            } | null)
+          | null;
+        managed_metadata: {
+          [key: string]: unknown;
+        };
+        created_at?: string;
+        user_id: string;
+      }[];
+    };
+    InsertOfflineDatasetExamplesRequest: {
+      examples: {
+        [key: string]: unknown;
+      }[];
+    };
+    AddDatasetItemsResponse: {
+      example_ids: string[];
+      version_added: number;
+    };
+    RemoveDatasetExamplesRequest: {
+      example_ids: string[];
+    };
+    RemoveDatasetExamplesResponse: {
+      removed_example_ids: string[];
+      version_created: number;
+    };
+    OfflineDatasetPageResponse: {
+      dataset: {
+        dataset_id: string;
+        organization_id?: string;
+        project_id?: string;
+        name: string;
+        schema?:
+          | ({
+              [key: string]: unknown;
+            } | null)
+          | null;
+        current_version?: number;
+        created_at?: string;
+        updated_at?: string;
+        creator_id: (string | null) | null;
+        entries?: number;
+        test_config_count?: number;
+        test_run_count?: number;
+      };
+      entries: {
+        item: {
+          id: string;
+          organization_id: string;
+          project_id: string;
+          dataset_id: string;
+          version_added: number;
+          version_removed?: (number | null) | null;
+          example_id: string;
+          created_at: string;
+          user_id: string;
+        };
+        example: {
+          example_id: string;
+          organization_id?: string;
+          project_id?: string;
+          data: {
+            [key: string]: unknown;
+          };
+          metadata?:
+            | ({
+                [key: string]: unknown;
+              } | null)
+            | null;
+          managed_metadata: {
+            [key: string]: unknown;
+          };
+          created_at?: string;
+          user_id: string;
+        };
+      }[];
+      metadata: {
+        hasMore: boolean;
+        nextCursor:
+          | ({
+              created_at: string;
+              example_id: string;
+            } | null)
+          | null;
+      };
+    };
+    OfflineDatasetVersionsResponse: {
+      versions: {
+        version_id: string;
+        dataset_id: string;
+        organization_id: string;
+        project_id: string;
+        version_number: number;
+        created_at: string;
+        user_id: (string | null) | null;
+        item_count: number;
+      }[];
+    };
+    BaseScorer: {
+      score_type: string;
+      name: string;
+      class_name?: (string | null) | null;
+      score?: (number | null) | null;
+      /** @default 0 */
+      minimum_score_range: number;
+      /** @default 1 */
+      maximum_score_range: number;
+      score_breakdown?:
+        | ({
+            [key: string]: unknown;
+          } | null)
+        | null;
+      reason?:
+        | string
+        | {
+            [key: string]: unknown;
+          };
+      success?: (boolean | null) | null;
+      model?: (string | null) | null;
+      error?: (string | null) | null;
+      additional_metadata?:
+        | ({
+            [key: string]: unknown;
+          } | null)
+        | null;
+      user?: (string | null) | null;
+      server_hosted?: (boolean | null) | null;
+      using_native_model?: (boolean | null) | null;
+      required_params?: (string[] | null) | null;
+      strict_mode?: (boolean | null) | null;
+    };
+    ScorerConfig: {
+      score_type?: (string | null) | null;
+      name: string;
+      model?: (string | null) | null;
+      required_params?: (string[] | null) | null;
+      kwargs?:
+        | ({
+            [key: string]: unknown;
+          } | null)
+        | null;
+      /** @enum {string} */
+      result_type?: "numeric" | "binary" | "categorical";
+    };
+    Example: {
+      example_id: string;
+      created_at: string;
+      name?: (string | null) | null;
+      conversation_id?: (string | null) | null;
+      trace_id?: (string | null) | null;
+      span_id?: (string | null) | null;
+      offline_trace_id?: (string | null) | null;
+      session_id?: (string | null) | null;
+      session_trace_ids?: string[];
+      agent_offline_trace_id?: (string | null) | null;
+    } & {
+      [key: string]: unknown;
+    };
+    ExampleEvaluationRun: {
+      id?: (string | null) | null;
+      project_id: string;
+      eval_name: string;
+      model?: (string | null) | null;
+      created_at?: (string | null) | null;
+      user_id?: string;
+      scorers?: (unknown[] | null) | null;
+      /** @default [] */
+      custom_scorers: components["schemas"]["BaseScorer"][];
+      /** @default [] */
+      judgment_scorers: components["schemas"]["ScorerConfig"][];
+      examples: components["schemas"]["Example"][];
+      trace_span_id?: (string | null) | null;
+      trace_id?: (string | null) | null;
+    };
+    AddToRunEvalQueueExamplesResponse: {
+      success: boolean;
+      status: string;
+      message: string;
+    };
+    TraceEvaluationRun: {
+      id?: (string | null) | null;
+      project_id: string;
+      eval_name: string;
+      model?: (string | null) | null;
+      created_at?: (string | null) | null;
+      user_id?: string;
+      scorers?: (unknown[] | null) | null;
+      /** @default [] */
+      custom_scorers: components["schemas"]["BaseScorer"][];
+      /** @default [] */
+      judgment_scorers: components["schemas"]["ScorerConfig"][];
+      trace_and_span_ids: [string, string][];
+      /** @default false */
+      is_offline: boolean;
+      /** @default false */
+      is_behavior: boolean;
+    };
+    AddToRunEvalQueueTracesResponse: {
+      success: boolean;
+      status: string;
+      message: string;
+    };
+    ExampleScoringResult: {
+      scorers_data: ({
+        scorer_name: string;
+      } & (
+        | ({
+            reason: {
+              text: string;
+              citations?:
+                | (
+                    | {
+                        span_id: string;
+                        span_attribute: string;
+                      }[]
+                    | null
+                  )
+                | null;
+            };
+            metadata?: {
+              evaluation_model?: string;
+              evaluation_reasoning_level?: "lite" | "normal" | "high";
+            };
+            error?: (string | null) | null;
+          } & {
+            /** @constant */
+            score_type: "numeric";
+            num_value: number;
+            /** @default 0 */
+            minimum_score_range: number;
+            /** @default 1 */
+            maximum_score_range: number;
+          })
+        | ({
+            reason: {
+              text: string;
+              citations?:
+                | (
+                    | {
+                        span_id: string;
+                        span_attribute: string;
+                      }[]
+                    | null
+                  )
+                | null;
+            };
+            metadata?: {
+              evaluation_model?: string;
+              evaluation_reasoning_level?: "lite" | "normal" | "high";
+            };
+            error?: (string | null) | null;
+          } & {
+            /** @constant */
+            score_type: "binary";
+            bool_value: boolean;
+          })
+        | ({
+            reason: {
+              text: string;
+              citations?:
+                | (
+                    | {
+                        span_id: string;
+                        span_attribute: string;
+                      }[]
+                    | null
+                  )
+                | null;
+            };
+            metadata?: {
+              evaluation_model?: string;
+              evaluation_reasoning_level?: "lite" | "normal" | "high";
+            };
+            error?: (string | null) | null;
+          } & {
+            /** @constant */
+            score_type: "categorical";
+            str_value: string;
+          })
+      ))[];
+      name?: (string | null) | null;
+      data_object: components["schemas"]["Example"];
+      trace_id?: (string | null) | null;
+      run_duration?: (number | null) | null;
+      evaluation_cost?: (number | null) | null;
+    };
+    TraceSpan: {
+      organization_id: string;
+      project_id: string;
+      timestamp: string;
+      trace_id: string;
+      span_id: string;
+      parent_span_id: (string | null) | null;
+      trace_state: (string | null) | null;
+      span_name: (string | null) | null;
+      span_kind: (string | null) | null;
+      service_name: (string | null) | null;
+      resource_attributes: {
+        [key: string]: string;
+      };
+      span_attributes: {
+        [key: string]: string;
+      };
+      duration: string;
+      status_code: number;
+      status_message: (string | null) | null;
+      events: {
+        Timestamp: string;
+        Name: string;
+        Attributes: {
+          [key: string]: string;
+        };
+      }[];
+      links: (string | null) | null;
+    };
+    TraceScoringResult: {
+      scorers_data: ({
+        scorer_name: string;
+      } & (
+        | ({
+            reason: {
+              text: string;
+              citations?:
+                | (
+                    | {
+                        span_id: string;
+                        span_attribute: string;
+                      }[]
+                    | null
+                  )
+                | null;
+            };
+            metadata?: {
+              evaluation_model?: string;
+              evaluation_reasoning_level?: "lite" | "normal" | "high";
+            };
+            error?: (string | null) | null;
+          } & {
+            /** @constant */
+            score_type: "numeric";
+            num_value: number;
+            /** @default 0 */
+            minimum_score_range: number;
+            /** @default 1 */
+            maximum_score_range: number;
+          })
+        | ({
+            reason: {
+              text: string;
+              citations?:
+                | (
+                    | {
+                        span_id: string;
+                        span_attribute: string;
+                      }[]
+                    | null
+                  )
+                | null;
+            };
+            metadata?: {
+              evaluation_model?: string;
+              evaluation_reasoning_level?: "lite" | "normal" | "high";
+            };
+            error?: (string | null) | null;
+          } & {
+            /** @constant */
+            score_type: "binary";
+            bool_value: boolean;
+          })
+        | ({
+            reason: {
+              text: string;
+              citations?:
+                | (
+                    | {
+                        span_id: string;
+                        span_attribute: string;
+                      }[]
+                    | null
+                  )
+                | null;
+            };
+            metadata?: {
+              evaluation_model?: string;
+              evaluation_reasoning_level?: "lite" | "normal" | "high";
+            };
+            error?: (string | null) | null;
+          } & {
+            /** @constant */
+            score_type: "categorical";
+            str_value: string;
+          })
+      ))[];
+      name?: string;
+      data_object: components["schemas"]["TraceSpan"];
+      trace_id?: string;
+      run_duration?: number;
+      evaluation_cost?: number;
+    };
+    ScoringResult:
+      | components["schemas"]["ExampleScoringResult"]
+      | components["schemas"]["TraceScoringResult"];
+    OfflineTestsLogEvalResultsRequest: {
+      results: components["schemas"]["ScoringResult"][];
+      run: components["schemas"]["ExampleEvaluationRun"];
+    };
+    OfflineTestsLogEvalResultsResponse: {
+      ui_results_url: string;
+    };
+    OfflineTestsLocalScorerResult: {
+      scorers_data: {
+        scorer_name: string;
+        value: boolean | number | string;
+        reason: string;
+        citations?:
+          | (
+              | {
+                  span_id: string;
+                  span_attribute: string;
+                }[]
+              | null
+            )
+          | null;
+        error?: (string | null) | null;
+      }[];
+      data_object: components["schemas"]["Example"];
+    };
+    OfflineTestsLogEvalResultsExamplesRequest: {
+      results: components["schemas"]["OfflineTestsLocalScorerResult"][];
+      run: components["schemas"]["ExampleEvaluationRun"];
+    };
+    OfflineTestsLogEvalResultsExamplesResponse: {
+      ui_results_url: string;
+    };
+    ExperimentScorer: {
+      scorer_data_id: string;
+      judge_id: string;
+      judge_name: string;
+      name: string;
+      score_type: "numeric" | "binary" | "categorical";
+      num_value: number;
+      bool_value: boolean;
+      str_value: string;
+      score: number;
+      success: number;
+      reason: (string | null) | null;
+      evaluation_model: (string | null) | null;
+      threshold: number;
+      created_at: string;
+      error: (string | null) | null;
+      additional_metadata:
+        | ({
+            [key: string]: unknown;
+          } | null)
+        | null;
+      minimum_score_range: number;
+      maximum_score_range: number;
+    };
+    ExperimentRunItem: {
+      organization_id: string;
+      experiment_run_id: string;
+      example_id: string;
+      data: unknown;
+      name: (string | null) | null;
+      created_at: string;
+      scorers: components["schemas"]["ExperimentScorer"][];
+    };
+    FetchTestRunViaExperimentAliasResponse: {
+      results:
+        | (
+            | (
+                | {
+                    organization_id: string;
+                    project_id: string;
+                    test_run_id: string;
+                    dataset_id: string;
+                    dataset_version_id: string;
+                    example_id: string;
+                    agent_offline_trace_id: (string | null) | null;
+                    created_at: string;
+                    example:
+                      | ({
+                          example_id: string;
+                          organization_id?: string;
+                          project_id?: string;
+                          data: {
+                            [key: string]: unknown;
+                          };
+                          metadata?:
+                            | ({
+                                [key: string]: unknown;
+                              } | null)
+                            | null;
+                          managed_metadata: {
+                            [key: string]: unknown;
+                          };
+                          created_at?: string;
+                          user_id: string;
+                        } | null)
+                      | null;
+                    data: {
+                      [key: string]: unknown;
+                    };
+                    scorers: {
+                      judge_id: string;
+                      judge_name: (string | null) | null;
+                      judge_major_version: number;
+                      judge_minor_version: number;
+                      score_type: string;
+                      num_value: number;
+                      bool_value: boolean;
+                      str_value: string;
+                      reason: unknown;
+                      metadata: unknown;
+                      success: (boolean | null) | null;
+                      error: (string | null) | null;
+                      created_at: string;
+                    }[];
+                  }[]
+                | components["schemas"]["ExperimentRunItem"][]
+              )
+            | null
+          )
+        | null;
+      has_more?: boolean;
+      next_cursor?: (string | null) | null;
+      ui_results_url: (string | null) | null;
+    };
+    JudgeAction:
+      | {
+          id: string;
+          enabled: boolean;
+          /** @enum {string} */
+          type: "email";
+          config: {
+            email_address: string;
+          };
+        }
+      | {
+          id: string;
+          enabled: boolean;
+          /** @enum {string} */
+          type: "slack";
+          config: {
+            team_id?: string;
+            channel_id?: string;
+            message?: string;
+            custom_attribute_keys?: string[];
+          };
+        }
+      | {
+          id: string;
+          enabled: boolean;
+          /** @enum {string} */
+          type: "dataset";
+          config: {
+            dataset_id: string;
+          };
+        }
+      | {
+          id: string;
+          enabled: boolean;
+          /** @enum {string} */
+          type: "run_behavior";
+          config: {
+            judge_ids: string[];
+          };
+        };
+    JudgeActionGroup: {
+      id: string;
+      /** @description Shown as the alert title */
+      name: string;
+      enabled: boolean;
+      /** @description Empty runs the group in every environment */
+      environment_names: string[];
+      /** @description Judge result that runs the group. Categorical groups run when the result is any listed output name. */
+      when:
+        | {
+            /** @enum {string} */
+            kind: "any";
+          }
+        | {
+            /** @enum {string} */
+            kind: "binary";
+            value: boolean;
+          }
+        | {
+            /** @enum {string} */
+            kind: "categorical";
+            values: string[];
+          }
+        | {
+            /** @enum {string} */
+            kind: "numeric";
+            /** @enum {string} */
+            operator: "lt" | "lte" | "eq" | "gte" | "gt";
+            value: number;
+          };
+      frequency: {
+        count: number;
+        window_seconds: number;
+      };
+      cooldown_seconds: number;
+      actions: components["schemas"]["JudgeAction"][];
+    };
+    InsertPromptRequest: {
+      name: string;
+      prompt: string;
+      tags?: string[];
+    };
+    InsertPromptResponse: {
+      commit_id: string;
+      parent_commit_id: (string | null) | null;
+      created_at: string;
+    };
+    ErrorResponse: {
+      error: string;
+      message?: string;
+    };
+    PromptCommitInfo: {
+      name: string;
+      prompt: string;
+      tags: string[];
+      commit_id: string;
+      parent_commit_id: (string | null) | null;
+      created_at: string;
+      first_name: string;
+      last_name: string;
+      user_email: string;
+    };
+    FetchPromptResponse: {
+      commit: (components["schemas"]["PromptCommitInfo"] | null) | null;
+    };
+    TagPromptRequest: {
+      commit_id: string;
+      tags: string[];
+    };
+    TagPromptResponse: {
+      commit_id: string;
+    };
+    UntagPromptRequest: {
+      tags: string[];
+    };
+    UntagPromptResponse: {
+      commit_ids: string[];
+    };
+    GetPromptVersionsResponse: {
+      versions: components["schemas"]["PromptCommitInfo"][];
+    };
+    FetchPromptScorersResponse: {
+      scorers: {
+        id: string;
+        user_id: string;
+        organization_id: string;
+        project_id: string;
+        name: string;
+        prompt: string;
+        /** @enum {string} */
+        reasoning_level: "lite" | "normal" | "high";
+        /** @default 0 */
+        min_score: number;
+        /** @default 1 */
+        max_score: number;
+        description?: (string | null) | null;
+        created_at: (string | null) | null;
+        updated_at: (string | null) | null;
+        /** @default false */
+        is_trace: boolean;
+        /** @enum {string} */
+        score_type: "numeric" | "binary" | "categorical";
+        judge_id: string;
+        judge_version_id: string;
+        judge_major_version: number;
+        judge_minor_version: number;
+        tag?: (string | null) | null;
+        categories?:
+          | (
+              | {
+                  name: string;
+                  description: string;
+                }[]
+              | null
+            )
+          | null;
+      }[];
+    };
+    ScorerExistsResponse: {
+      exists: boolean;
+    };
+    CustomScorerExistsResponse: {
+      exists: boolean;
+    };
+    UploadCustomScorerBundleMetadata: {
+      scorer_name: string;
+      entrypoint_path: string;
+      requirements_path?: string;
+      class_name: string;
+      scorer_type?: (("example" | "trace") | null) | null;
+      /** @enum {string} */
+      response_type: "binary" | "categorical" | "numeric";
+      version?: number;
+      bump_major?: boolean;
+      categories?:
+        | (
+            | {
+                value: string;
+                description: string;
+              }[]
+            | null
+          )
+        | null;
+    };
+    UploadCustomScorerBundleRequest: {
+      metadata: components["schemas"]["UploadCustomScorerBundleMetadata"];
+      /**
+       * Format: binary
+       * @default File
+       */
+      bundle: string;
+    };
+    UploadCustomScorerResponse: {
+      scorer_name: string;
+      status: string;
+      message: string;
+    };
+    PublicSqlRequest: {
+      sql: string;
+    };
+    PublicSqlResponse: {
+      catalog_version: string;
+      columns: {
+        name: string;
+        type: string;
+        nullable: boolean;
+      }[];
+      /** @description SQL integers outside the JavaScript safe range (-(2^53 - 1) to 2^53 - 1) are returned as exact decimal strings, including in nested values. Column types retain the original SQL types. */
+      rows: {
+        [key: string]: unknown;
+      }[];
+      row_count: number;
+      elapsed_ms: number;
+    };
+    PublicJqlErrorResponse: {
+      error: string;
+      message: string;
+      hint?: string;
+    };
+    TestConfigsResponse: {
+      test_configs: {
+        id: string;
+        organization_id?: string;
+        project_id: string;
+        dataset_id: string;
+        name: string;
+        description?: (string | null) | null;
+        created_at?: string;
+        updated_at?: string;
+        user_id: string;
+        judges?: {
+          id?: string;
+          organization_id?: string;
+          project_id?: string;
+          test_config_id?: string;
+          judge_id: string;
+          created_at?: string;
+          user_id: string;
+          judge?: {
+            id: string;
+            name: string;
+            judge_type: string;
+            score_type: string;
+          };
+        }[];
+      }[];
+    };
+    CreateTestConfigRequest: {
+      name: string;
+      description?: (string | null) | null;
+      dataset_id?: string;
+      dataset_name?: string;
+      judge_ids?: string[];
+      judges?: {
+        judge_id?: string;
+        name?: string;
+      }[];
+    };
+    TestConfigResponse: {
+      test_config: {
+        id: string;
+        organization_id?: string;
+        project_id: string;
+        dataset_id: string;
+        name: string;
+        description?: (string | null) | null;
+        created_at?: string;
+        updated_at?: string;
+        user_id: string;
+        judges?: {
+          id?: string;
+          organization_id?: string;
+          project_id?: string;
+          test_config_id?: string;
+          judge_id: string;
+          created_at?: string;
+          user_id: string;
+          judge?: {
+            id: string;
+            name: string;
+            judge_type: string;
+            score_type: string;
+          };
+        }[];
+      };
+    };
+    UpdateTestConfigRequest: {
+      name?: string;
+      description?: (string | null) | null;
+    };
+    DeleteTestConfigResponse: {
+      status: string;
+      message: string;
+    };
+    TestRunsResponse: {
+      test_runs: {
+        id: string;
+        organization_id?: string;
+        project_id: string;
+        user_id: string;
+        test_config_id: string;
+        dataset_id: string;
+        dataset_version_id: string;
+        /** @enum {string} */
+        source: "sdk" | "cli" | "mcp" | "platform" | "legacy";
+        /** @enum {string} */
+        status: "pending" | "running" | "completed" | "error" | "cancelled";
+        name: string;
+        error_message?: (string | null) | null;
+        created_at?: string;
+        updated_at?: string;
+        started_at?: (string | null) | null;
+        completed_at?: (string | null) | null;
+      }[];
+    };
+    CreateTestRunRequest: {
+      /**
+       * Format: uuid
+       * @description Reuse an owned, pending platform agent run instead of creating a new run.
+       */
+      test_run_id?: string;
+      test_config_id: string;
+      name?: string;
+      dataset_version_id?: string;
+      dataset_version_number?: number;
+      judge_versions?: {
+        judge_id?: string;
+        name?: string;
+        version?: string;
+        major_version?: number;
+        minor_version?: number;
+      }[];
+      /** @enum {string} */
+      source?: "sdk" | "cli" | "mcp" | "platform" | "legacy";
+      agent_errors?: {
+        example_id: string;
+        error: string;
+      }[];
+      agent_traces?: {
+        example_id: string;
+        agent_offline_trace_id: string;
+      }[];
+    };
+    PreparedTestRunResponse: {
+      test_run: {
+        id: string;
+        organization_id?: string;
+        project_id: string;
+        user_id: string;
+        test_config_id: string;
+        dataset_id: string;
+        dataset_version_id: string;
+        /** @enum {string} */
+        source: "sdk" | "cli" | "mcp" | "platform" | "legacy";
+        /** @enum {string} */
+        status: "pending" | "running" | "completed" | "error" | "cancelled";
+        name: string;
+        error_message?: (string | null) | null;
+        created_at?: string;
+        updated_at?: string;
+        started_at?: (string | null) | null;
+        completed_at?: (string | null) | null;
+      };
+      dataset: {
+        dataset_id: string;
+        organization_id?: string;
+        project_id?: string;
+        name: string;
+        schema?:
+          | ({
+              [key: string]: unknown;
+            } | null)
+          | null;
+        current_version?: number;
+        created_at?: string;
+        updated_at?: string;
+        creator_id: (string | null) | null;
+        entries?: number;
+        test_config_count?: number;
+        test_run_count?: number;
+      };
+      dataset_version: {
+        version_id: string;
+        dataset_id: string;
+        organization_id: string;
+        project_id: string;
+        version_number: number;
+        created_at: string;
+        user_id: (string | null) | null;
+        item_count: number;
+      };
+      examples: {
+        example_id: string;
+        organization_id?: string;
+        project_id?: string;
+        data: {
+          [key: string]: unknown;
+        };
+        metadata?:
+          | ({
+              [key: string]: unknown;
+            } | null)
+          | null;
+        managed_metadata: {
+          [key: string]: unknown;
+        };
+        created_at?: string;
+        user_id: string;
+      }[];
+      judges: {
+        judge_id: string;
+        judge_name: string;
+        judge_type: string;
+        score_type: string;
+        judge_major_version: number;
+        judge_minor_version: number;
+      }[];
+      evaluation_runs: {
+        run_id: string;
+        judge_name: string;
+        example_id: string;
+        test_run_id: string;
+        judge_id: string;
+        judge_major_version: number;
+        judge_minor_version: number;
+      }[];
+      ui_results_url: string;
+    };
+    TestRunResponse: {
+      test_run: {
+        id: string;
+        organization_id?: string;
+        project_id: string;
+        user_id: string;
+        test_config_id: string;
+        dataset_id: string;
+        dataset_version_id: string;
+        /** @enum {string} */
+        source: "sdk" | "cli" | "mcp" | "platform" | "legacy";
+        /** @enum {string} */
+        status: "pending" | "running" | "completed" | "error" | "cancelled";
+        name: string;
+        error_message?: (string | null) | null;
+        created_at?: string;
+        updated_at?: string;
+        started_at?: (string | null) | null;
+        completed_at?: (string | null) | null;
+      };
+      ui_results_url?: (string | null) | null;
+    };
+    TestRunGraphResponse: {
+      graph: {
+        [key: string]: {
+          judge_id: string;
+          judge_name: (string | null) | null;
+          judge_major_version: number;
+          judge_minor_version: number;
+          score_type: string;
+          score_distribution: number[];
+          true_count: number;
+          false_count: number;
+          value_counts: {
+            [key: string]: number;
+          };
+        };
+      };
+    };
+    TestRunItemsResponse: {
+      results: {
+        organization_id: string;
+        project_id: string;
+        test_run_id: string;
+        dataset_id: string;
+        dataset_version_id: string;
+        example_id: string;
+        agent_offline_trace_id: (string | null) | null;
+        created_at: string;
+        example:
+          | ({
+              example_id: string;
+              organization_id?: string;
+              project_id?: string;
+              data: {
+                [key: string]: unknown;
+              };
+              metadata?:
+                | ({
+                    [key: string]: unknown;
+                  } | null)
+                | null;
+              managed_metadata: {
+                [key: string]: unknown;
+              };
+              created_at?: string;
+              user_id: string;
+            } | null)
+          | null;
+        data: {
+          [key: string]: unknown;
+        };
+        scorers: {
+          judge_id: string;
+          judge_name: (string | null) | null;
+          judge_major_version: number;
+          judge_minor_version: number;
+          score_type: string;
+          num_value: number;
+          bool_value: boolean;
+          str_value: string;
+          reason: unknown;
+          metadata: unknown;
+          success: (boolean | null) | null;
+          error: (string | null) | null;
+          created_at: string;
+        }[];
+      }[];
+      /** @description Whether more items exist beyond this page. */
+      has_more: boolean;
+      next_cursor: (string | null) | null;
+      ui_results_url?: (string | null) | null;
+    };
+    UpdateTestRunStatusRequest: {
+      /** @enum {string} */
+      status: "pending" | "running" | "completed" | "error" | "cancelled";
+      error_message?: (string | null) | null;
+    };
+    ApplyTestRunSuccessRequest: {
+      successes: {
+        evaluation_run_id: string;
+        success: (boolean | null) | null;
+      }[];
+    };
+    ApplyTestRunSuccessResponse: {
+      updated: number;
+    };
+    CreateTestSuiteRequest: {
+      name: string;
+      description?: string;
+      labels?: string[];
+    };
+    TestSuite: {
+      /** Format: uuid */
+      test_suite_id: string;
+      name: string;
+      description: (string | null) | null;
+      labels: string[];
+      /** @description Latest published; the draft is +1. */
+      version: string | number;
+      /** Format: date-time */
+      created_at: string;
+      /** Format: date-time */
+      updated_at: string;
+    };
+    ListTestSuitesResponse: {
+      test_suites: components["schemas"]["TestSuite"][];
+      next_offset: ((string | number) | null) | null;
+    };
+    TestCase: {
+      /** Format: uuid */
+      case_id: string;
+      name: (string | null) | null;
+      input: unknown;
+      expected: {
+        [key: string]: {
+          judge_major_version: number;
+          judge_minor_version: number;
+          /**
+           * @default eq
+           * @enum {string}
+           */
+          op: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "not_in";
+          /** @description Passes when output <op> expected. */
+          expected: unknown;
+        };
+      };
+      tags: string[];
+      metadata: {
+        [key: string]: unknown;
+      };
+      version_added: string | number;
+    };
+    ListTestCasesResponse: {
+      version: string | number;
+      cases: components["schemas"]["TestCase"][];
+      next_offset: ((string | number) | null) | null;
+    };
+    TestCaseInput: {
+      name?: (string | null) | null;
+      /** @description What the agent gets. */
+      input: unknown;
+      expected?: {
+        [key: string]: {
+          judge_major_version: number;
+          judge_minor_version: number;
+          /**
+           * @default eq
+           * @enum {string}
+           */
+          op: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "not_in";
+          /** @description Passes when output <op> expected. */
+          expected: unknown;
+        };
+      };
+      tags?: string[];
+      metadata?: {
+        [key: string]: unknown;
+      };
+    };
+    AddTestCasesRequest: {
+      cases: components["schemas"]["TestCaseInput"][];
+    };
+    TestCaseFilter:
+      | {
+          /** @constant */
+          kind: "all";
+        }
+      | {
+          /** @constant */
+          kind: "tags";
+          tags: string[];
+        }
+      | {
+          /** @constant */
+          kind: "case_ids";
+          case_ids: string[];
+        }
+      | {
+          /** @constant */
+          kind: "last_failures";
+          /** Format: uuid */
+          run_id: string;
+        };
+    StartTestRunRequest: {
+      case_filter?: components["schemas"]["TestCaseFilter"];
+      /** @description What is being tested, for example a git SHA or agent version. */
+      candidate?: string;
+      candidate_meta?: {
+        [key: string]: unknown;
+      };
+      /**
+       * @default api
+       * @enum {string}
+       */
+      trigger: "manual" | "ci" | "schedule" | "api";
+    };
+    StartTestRunResponse: {
+      /** Format: uuid */
+      run_id: string;
+      test_suite_version: string | number;
+      /** @description Run the agent once per case, with judgment.test.run_id and judgment.test.case_id set on its trace. */
+      cases: {
+        /** Format: uuid */
+        case_id: string;
+        /** @description What the agent gets. */
+        input: unknown;
+        /** @description Send these with the request to a deployed agent; Tracer.continue_trace turns them into the test attributes on its trace. */
+        headers: {
+          [key: string]: string;
+        };
+      }[];
+    };
+    TestRun: {
+      /** Format: uuid */
+      run_id: string;
+      /** Format: uuid */
+      test_suite_id: string;
+      /** @description The test suite version whose cases and checks the run uses. */
+      test_suite_version: string | number;
+      scored_from_run_id: (string | null) | null;
+      candidate: (string | null) | null;
+      candidate_meta: {
+        [key: string]: unknown;
+      };
+      trigger: string;
+      case_filter: components["schemas"]["TestCaseFilter"];
+      cases_total: string | number;
+      /** @description Cases whose trace arrived. */
+      cases_with_output: string | number;
+      cases_scored: string | number;
+      /** @description Scored cases whose checks all passed. */
+      cases_passed: string | number;
+      /** @description Scored cases with a failed check. Scored cases with no checks are neither passed nor failed. */
+      cases_failed: string | number;
+      /** Format: date-time */
+      created_at: string;
+    };
+    ListTestRunsResponse: {
+      runs: components["schemas"]["TestRun"][];
+      next_offset: ((string | number) | null) | null;
+    };
+    TestResultsResponse: {
+      results: {
+        /** Format: uuid */
+        case_id: string;
+        trace_id: (string | null) | null;
+        scored_at: (string | null) | null;
+        passed: (boolean | null) | null;
+        checks: {
+          /**
+           * Format: uuid
+           * @description The check's key in the case's expected; join judges for its name.
+           */
+          judge_id: string;
+          judge_major_version: number;
+          judge_minor_version: number;
+          /**
+           * @default eq
+           * @enum {string}
+           */
+          op: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "not_in";
+          /** @description The golden value. */
+          expected: unknown;
+          /** @description What the judge returned; NULL when it errored. */
+          judge_output: unknown;
+          passed: boolean;
+          reason: (string | null) | null;
+          error_message: (string | null) | null;
+        }[];
+        /** @description Checks in the case's expected that have no result yet. */
+        pending_checks: {
+          /** Format: uuid */
+          judge_id: string;
+          judge_major_version: number;
+          judge_minor_version: number;
+          /**
+           * @description The judge run's status; not_queued until the case's trace is scored.
+           * @default not_queued
+           * @enum {string}
+           */
+          status:
+            | "not_queued"
+            | "pending"
+            | "running"
+            | "completed"
+            | "error"
+            | "cancelled";
+          queued_at: (string | null) | null;
+          started_at: (string | null) | null;
+          error_message: (string | null) | null;
+        }[];
+      }[];
+    };
+    ScoreTestRunResponse: {
+      /**
+       * Format: uuid
+       * @description The new run.
+       */
+      run_id: string;
+    };
+    AddTraceTagsRequest: {
+      tags: string[];
+    };
+    AddTraceTagsResponse: {
+      success: boolean;
+    };
+    ResolveProjectRequest: {
+      project_name: string;
+    };
+    ResolveProjectResponse: {
+      project_id: string;
+    };
+    PublicSqlSchemaResponse: {
+      /** @description The virtual SQL catalog in Markdown. */
+      schema: string;
     };
   };
   responses: never;
@@ -1709,21 +3395,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": {
-          project_name: string;
-          trace_id: string;
-          span_id: string;
-        };
-        "application/x-www-form-urlencoded": {
-          project_name: string;
-          trace_id: string;
-          span_id: string;
-        };
-        "multipart/form-data": {
-          project_name: string;
-          trace_id: string;
-          span_id: string;
-        };
+        "application/json": components["schemas"]["E2EFetchSpanScoreRequest"];
       };
     };
     responses: {
@@ -1733,9 +3405,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            [key: string]: unknown;
-          }[];
+          "application/json": components["schemas"]["E2EFetchSpanScoreResponse"];
         };
       };
     };
@@ -1758,9 +3428,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            [key: string]: unknown;
-          }[];
+          "application/json": components["schemas"]["E2EFetchTraceResponse"];
         };
       };
     };
@@ -1899,15 +3567,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": {
-          project_name: string;
-        };
-        "application/x-www-form-urlencoded": {
-          project_name: string;
-        };
-        "multipart/form-data": {
-          project_name: string;
-        };
+        "application/json": components["schemas"]["AddProjectRequest"];
       };
     };
     responses: {
@@ -1917,15 +3577,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            project_id: string;
-            project: {
-              project_id: string;
-              project_name: string;
-              created_at: (string | null) | null;
-              organization_id: string;
-            };
-          };
+          "application/json": components["schemas"]["AddProjectResponse"];
         };
       };
     };
@@ -1947,10 +3599,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            status: string;
-            message: string;
-          };
+          "application/json": components["schemas"]["DeleteProjectResponse"];
         };
       };
     };
@@ -1986,47 +3635,7 @@ export interface operations {
           name: string;
           version?: string | number;
           config: {
-            [key: string]:
-              | null
-              | boolean
-              | number
-              | string
-              | unknown[]
-              | {
-                  [key: string]: unknown;
-                };
-          };
-          tags?: string[];
-        };
-        "application/x-www-form-urlencoded": {
-          name: string;
-          version?: string | number;
-          config: {
-            [key: string]:
-              | null
-              | boolean
-              | number
-              | string
-              | unknown[]
-              | {
-                  [key: string]: unknown;
-                };
-          };
-          tags?: string[];
-        };
-        "multipart/form-data": {
-          name: string;
-          version?: string | number;
-          config: {
-            [key: string]:
-              | null
-              | boolean
-              | number
-              | string
-              | unknown[]
-              | {
-                  [key: string]: unknown;
-                };
+            [key: string]: components["schemas"]["T1"];
           };
           tags?: string[];
         };
@@ -2060,12 +3669,6 @@ export interface operations {
     requestBody: {
       content: {
         "application/json": {
-          tags: string[];
-        };
-        "application/x-www-form-urlencoded": {
-          tags: string[];
-        };
-        "multipart/form-data": {
           tags: string[];
         };
       };
@@ -2134,32 +3737,6 @@ export interface operations {
           /** @description The complete source code to store without truncation */
           source_code: string;
         };
-        "application/x-www-form-urlencoded": {
-          /**
-           * @description The artifact consumer
-           * @enum {string}
-           */
-          scope: "judge_preprocessor";
-          /** @description The artifact display name */
-          name: string;
-          /** @description The source filename, such as preprocess.js */
-          filename: string;
-          /** @description The complete source code to store without truncation */
-          source_code: string;
-        };
-        "multipart/form-data": {
-          /**
-           * @description The artifact consumer
-           * @enum {string}
-           */
-          scope: "judge_preprocessor";
-          /** @description The artifact display name */
-          name: string;
-          /** @description The source filename, such as preprocess.js */
-          filename: string;
-          /** @description The complete source code to store without truncation */
-          source_code: string;
-        };
       };
     };
     responses: {
@@ -2214,22 +3791,6 @@ export interface operations {
           /** @description The complete source code to store without truncation */
           source_code: string;
         };
-        "application/x-www-form-urlencoded": {
-          /** @description The revision version; reuse it when retrying the same save */
-          version: number;
-          /** @description The source filename, such as preprocess.js */
-          filename: string;
-          /** @description The complete source code to store without truncation */
-          source_code: string;
-        };
-        "multipart/form-data": {
-          /** @description The revision version; reuse it when retrying the same save */
-          version: number;
-          /** @description The source filename, such as preprocess.js */
-          filename: string;
-          /** @description The complete source code to store without truncation */
-          source_code: string;
-        };
       };
     };
     responses: {
@@ -2255,7 +3816,7 @@ export interface operations {
       };
     };
   };
-  "postV1ProjectsByProjectIdArtifactsPreprocessing-tests": {
+  "postV1ProjectsByProjectIdArtifactsOptimistic-eval-tests": {
     parameters: {
       query?: never;
       header?: never;
@@ -2271,14 +3832,123 @@ export interface operations {
           trace_id: string;
           /** @description A complete JavaScript function expression: async ({ traceId, sql }) => { ... }. Return JSON evidence; throw when validation fails. */
           source_code: string;
+          /**
+           * Format: uuid
+           * @description The judge in this project
+           */
+          judge_id: string;
+          /**
+           * Format: uuid
+           * @description The exact judge version ID returned by get_judge
+           */
+          judge_version_id: string;
         };
-        "application/x-www-form-urlencoded": {
-          /** @description The historical trace to extract evidence from */
-          trace_id: string;
-          /** @description A complete JavaScript function expression: async ({ traceId, sql }) => { ... }. Return JSON evidence; throw when validation fails. */
-          source_code: string;
+      };
+    };
+    responses: {
+      /** @description Response for status 200 */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        "multipart/form-data": {
+        content: {
+          "application/json": {
+            /** Format: uuid */
+            judge_id: string;
+            /** Format: uuid */
+            judge_version_id: string;
+            judge_major_version: number;
+            judge_minor_version: number;
+            /** @enum {string} */
+            score_type: "binary" | "categorical";
+            trace_id: string;
+            result:
+              | {
+                  /** @enum {string} */
+                  status: "accepted";
+                  verdict: boolean | string;
+                  /** @enum {string|null} */
+                  reason: null;
+                  /** @enum {string|null} */
+                  error: null;
+                  confidence: number;
+                  duration_ms: number;
+                  artifact_duration_ms: number;
+                  evidence_size_bytes: number;
+                }
+              | {
+                  /** @enum {string} */
+                  status: "fallback";
+                  /** @enum {string|null} */
+                  verdict: null;
+                  /** @enum {string} */
+                  reason:
+                    | "artifact_failed"
+                    | "evidence_and_rubric_too_large"
+                    | "model_failed"
+                    | "low_confidence"
+                    | "timeout";
+                  /** @enum {string|null} */
+                  error: null;
+                  confidence: number | null;
+                  duration_ms: number;
+                  artifact_duration_ms: number | null;
+                  evidence_size_bytes: number | null;
+                }
+              | {
+                  /** @enum {string} */
+                  status: "failed";
+                  /** @enum {string|null} */
+                  verdict: null;
+                  /** @enum {string|null} */
+                  reason: null;
+                  error: string;
+                  /** @enum {string|null} */
+                  confidence: null;
+                  duration_ms: number;
+                  /** @enum {string|null} */
+                  artifact_duration_ms: null;
+                  /** @enum {string|null} */
+                  evidence_size_bytes: null;
+                };
+            ordinary_agent:
+              | {
+                  /** @enum {string} */
+                  status: "completed";
+                  verdict: boolean | string;
+                  reason: string;
+                  /** @enum {string|null} */
+                  error: null;
+                  duration_ms: number;
+                }
+              | {
+                  /** @enum {string} */
+                  status: "failed";
+                  /** @enum {string|null} */
+                  verdict: null;
+                  /** @enum {string|null} */
+                  reason: null;
+                  error: string;
+                  duration_ms: number;
+                };
+            matches: boolean | null;
+          };
+        };
+      };
+    };
+  };
+  "postV1ProjectsByProjectIdArtifactsPreprocessing-tests": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
           /** @description The historical trace to extract evidence from */
           trace_id: string;
           /** @description A complete JavaScript function expression: async ({ traceId, sql }) => { ... }. Return JSON evidence; throw when validation fails. */
@@ -2366,34 +4036,6 @@ export interface operations {
     requestBody: {
       content: {
         "application/json": {
-          /** @description A descriptive name for the mapper */
-          name: string;
-          /** @description The source-to-target attribute mapping rules */
-          rules: {
-            /** @description The incoming span attribute key to read */
-            source_key: string;
-            /** @description The Judgment attribute key to write to (must be a valid judgment.* key) */
-            target_key: string;
-          }[];
-          enabled?: boolean;
-          override?: boolean;
-          remove_source?: boolean;
-        };
-        "application/x-www-form-urlencoded": {
-          /** @description A descriptive name for the mapper */
-          name: string;
-          /** @description The source-to-target attribute mapping rules */
-          rules: {
-            /** @description The incoming span attribute key to read */
-            source_key: string;
-            /** @description The Judgment attribute key to write to (must be a valid judgment.* key) */
-            target_key: string;
-          }[];
-          enabled?: boolean;
-          override?: boolean;
-          remove_source?: boolean;
-        };
-        "multipart/form-data": {
           /** @description A descriptive name for the mapper */
           name: string;
           /** @description The source-to-target attribute mapping rules */
@@ -2525,30 +4167,6 @@ export interface operations {
           override?: boolean;
           remove_source?: boolean;
         };
-        "application/x-www-form-urlencoded": {
-          name?: string;
-          rules?: {
-            /** @description The incoming span attribute key to read */
-            source_key: string;
-            /** @description The Judgment attribute key to write to (must be a valid judgment.* key) */
-            target_key: string;
-          }[];
-          enabled?: boolean;
-          override?: boolean;
-          remove_source?: boolean;
-        };
-        "multipart/form-data": {
-          name?: string;
-          rules?: {
-            /** @description The incoming span attribute key to read */
-            source_key: string;
-            /** @description The Judgment attribute key to write to (must be a valid judgment.* key) */
-            target_key: string;
-          }[];
-          enabled?: boolean;
-          override?: boolean;
-          remove_source?: boolean;
-        };
       };
     };
     responses: {
@@ -2661,226 +4279,6 @@ export interface operations {
     requestBody: {
       content: {
         "application/json": {
-          name: string;
-          description?: string;
-          /** @description Required scope: [] for all environments; [""] for traces without an environment. */
-          environment_names: string[];
-          conditions: ({
-            metric: {
-              /** @enum {string} */
-              scorer_type:
-                | "static"
-                | "prompt"
-                | "custom"
-                | "judge"
-                | "behavior"
-                | "span_attribute"
-                | "error";
-              name: string;
-              threshold?: number | string | null;
-            } & {
-              [key: string]: unknown;
-            };
-            /** @enum {string} */
-            comparison:
-              | "lt"
-              | "gt"
-              | "eq"
-              | "gte"
-              | "lte"
-              | "chooses"
-              | "detected"
-              | "equals"
-              | "notEquals"
-              | "contains"
-              | "doesNotContain"
-              | "exists";
-          } & {
-            [key: string]: unknown;
-          })[];
-          /** @enum {string} */
-          combine_type: "all" | "any";
-          actions?: {
-            dataset_addition?:
-              | ({
-                  enabled?: boolean;
-                  dataset_name: string;
-                  metadata_fields?: unknown;
-                } & {
-                  [key: string]: unknown;
-                })
-              | null;
-            notification?:
-              | ({
-                  enabled?: boolean;
-                  communication_methods: (
-                    | "email"
-                    | "slack"
-                    | "pagerduty"
-                    | "webhook"
-                  )[];
-                  email_addresses?: string[];
-                  slack_channels?: string[];
-                  pagerduty_config?:
-                    | ({
-                        routing_key: string;
-                        /** @enum {string} */
-                        severity?: "critical" | "error" | "warning" | "info";
-                      } & {
-                        [key: string]: unknown;
-                      })
-                    | null;
-                  webhook_config?:
-                    | ({
-                        /** Format: uri */
-                        url: string;
-                        secret: string;
-                      } & {
-                        [key: string]: unknown;
-                      })
-                    | null;
-                  send_at?: number | null;
-                } & {
-                  [key: string]: unknown;
-                })
-              | null;
-            behavior_evaluation?:
-              | ({
-                  enabled?: boolean;
-                  behavior_judge_names: string[];
-                  sampling_rate?: number;
-                } & {
-                  [key: string]: unknown;
-                })
-              | null;
-          } & {
-            [key: string]: unknown;
-          };
-          /** @description Cooldown period; both value and unit are required. */
-          cooldown_period?: {
-            value: number;
-            /** @enum {string} */
-            unit: "seconds" | "minutes" | "hours" | "days";
-          };
-          /** @description Trigger frequency; count, period, and period_unit are all required. */
-          trigger_frequency?: {
-            count: number;
-            period: number;
-            /** @enum {string} */
-            period_unit: "seconds" | "minutes" | "hours" | "days";
-          };
-        };
-        "application/x-www-form-urlencoded": {
-          name: string;
-          description?: string;
-          /** @description Required scope: [] for all environments; [""] for traces without an environment. */
-          environment_names: string[];
-          conditions: ({
-            metric: {
-              /** @enum {string} */
-              scorer_type:
-                | "static"
-                | "prompt"
-                | "custom"
-                | "judge"
-                | "behavior"
-                | "span_attribute"
-                | "error";
-              name: string;
-              threshold?: number | string | null;
-            } & {
-              [key: string]: unknown;
-            };
-            /** @enum {string} */
-            comparison:
-              | "lt"
-              | "gt"
-              | "eq"
-              | "gte"
-              | "lte"
-              | "chooses"
-              | "detected"
-              | "equals"
-              | "notEquals"
-              | "contains"
-              | "doesNotContain"
-              | "exists";
-          } & {
-            [key: string]: unknown;
-          })[];
-          /** @enum {string} */
-          combine_type: "all" | "any";
-          actions?: {
-            dataset_addition?:
-              | ({
-                  enabled?: boolean;
-                  dataset_name: string;
-                  metadata_fields?: unknown;
-                } & {
-                  [key: string]: unknown;
-                })
-              | null;
-            notification?:
-              | ({
-                  enabled?: boolean;
-                  communication_methods: (
-                    | "email"
-                    | "slack"
-                    | "pagerduty"
-                    | "webhook"
-                  )[];
-                  email_addresses?: string[];
-                  slack_channels?: string[];
-                  pagerduty_config?:
-                    | ({
-                        routing_key: string;
-                        /** @enum {string} */
-                        severity?: "critical" | "error" | "warning" | "info";
-                      } & {
-                        [key: string]: unknown;
-                      })
-                    | null;
-                  webhook_config?:
-                    | ({
-                        /** Format: uri */
-                        url: string;
-                        secret: string;
-                      } & {
-                        [key: string]: unknown;
-                      })
-                    | null;
-                  send_at?: number | null;
-                } & {
-                  [key: string]: unknown;
-                })
-              | null;
-            behavior_evaluation?:
-              | ({
-                  enabled?: boolean;
-                  behavior_judge_names: string[];
-                  sampling_rate?: number;
-                } & {
-                  [key: string]: unknown;
-                })
-              | null;
-          } & {
-            [key: string]: unknown;
-          };
-          /** @description Cooldown period; both value and unit are required. */
-          cooldown_period?: {
-            value: number;
-            /** @enum {string} */
-            unit: "seconds" | "minutes" | "hours" | "days";
-          };
-          /** @description Trigger frequency; count, period, and period_unit are all required. */
-          trigger_frequency?: {
-            count: number;
-            period: number;
-            /** @enum {string} */
-            period_unit: "seconds" | "minutes" | "hours" | "days";
-          };
-        };
-        "multipart/form-data": {
           name: string;
           description?: string;
           /** @description Required scope: [] for all environments; [""] for traces without an environment. */
@@ -3224,226 +4622,6 @@ export interface operations {
             period_unit: "seconds" | "minutes" | "hours" | "days";
           };
         };
-        "application/x-www-form-urlencoded": {
-          name?: string;
-          description?: string | null;
-          environment_names?: string[];
-          conditions?: ({
-            metric: {
-              /** @enum {string} */
-              scorer_type:
-                | "static"
-                | "prompt"
-                | "custom"
-                | "judge"
-                | "behavior"
-                | "span_attribute"
-                | "error";
-              name: string;
-              threshold?: number | string | null;
-            } & {
-              [key: string]: unknown;
-            };
-            /** @enum {string} */
-            comparison:
-              | "lt"
-              | "gt"
-              | "eq"
-              | "gte"
-              | "lte"
-              | "chooses"
-              | "detected"
-              | "equals"
-              | "notEquals"
-              | "contains"
-              | "doesNotContain"
-              | "exists";
-          } & {
-            [key: string]: unknown;
-          })[];
-          /** @enum {string} */
-          combine_type?: "all" | "any";
-          actions?: {
-            dataset_addition?:
-              | ({
-                  enabled?: boolean;
-                  dataset_name: string;
-                  metadata_fields?: unknown;
-                } & {
-                  [key: string]: unknown;
-                })
-              | null;
-            notification?:
-              | ({
-                  enabled?: boolean;
-                  communication_methods: (
-                    | "email"
-                    | "slack"
-                    | "pagerduty"
-                    | "webhook"
-                  )[];
-                  email_addresses?: string[];
-                  slack_channels?: string[];
-                  pagerduty_config?:
-                    | ({
-                        routing_key: string;
-                        /** @enum {string} */
-                        severity?: "critical" | "error" | "warning" | "info";
-                      } & {
-                        [key: string]: unknown;
-                      })
-                    | null;
-                  webhook_config?:
-                    | ({
-                        /** Format: uri */
-                        url: string;
-                        secret: string;
-                      } & {
-                        [key: string]: unknown;
-                      })
-                    | null;
-                  send_at?: number | null;
-                } & {
-                  [key: string]: unknown;
-                })
-              | null;
-            behavior_evaluation?:
-              | ({
-                  enabled?: boolean;
-                  behavior_judge_names: string[];
-                  sampling_rate?: number;
-                } & {
-                  [key: string]: unknown;
-                })
-              | null;
-          } & {
-            [key: string]: unknown;
-          };
-          active?: boolean;
-          /** @description Cooldown period; both value and unit are required. */
-          cooldown_period?: {
-            value: number;
-            /** @enum {string} */
-            unit: "seconds" | "minutes" | "hours" | "days";
-          };
-          /** @description Trigger frequency; count, period, and period_unit are all required. */
-          trigger_frequency?: {
-            count: number;
-            period: number;
-            /** @enum {string} */
-            period_unit: "seconds" | "minutes" | "hours" | "days";
-          };
-        };
-        "multipart/form-data": {
-          name?: string;
-          description?: string | null;
-          environment_names?: string[];
-          conditions?: ({
-            metric: {
-              /** @enum {string} */
-              scorer_type:
-                | "static"
-                | "prompt"
-                | "custom"
-                | "judge"
-                | "behavior"
-                | "span_attribute"
-                | "error";
-              name: string;
-              threshold?: number | string | null;
-            } & {
-              [key: string]: unknown;
-            };
-            /** @enum {string} */
-            comparison:
-              | "lt"
-              | "gt"
-              | "eq"
-              | "gte"
-              | "lte"
-              | "chooses"
-              | "detected"
-              | "equals"
-              | "notEquals"
-              | "contains"
-              | "doesNotContain"
-              | "exists";
-          } & {
-            [key: string]: unknown;
-          })[];
-          /** @enum {string} */
-          combine_type?: "all" | "any";
-          actions?: {
-            dataset_addition?:
-              | ({
-                  enabled?: boolean;
-                  dataset_name: string;
-                  metadata_fields?: unknown;
-                } & {
-                  [key: string]: unknown;
-                })
-              | null;
-            notification?:
-              | ({
-                  enabled?: boolean;
-                  communication_methods: (
-                    | "email"
-                    | "slack"
-                    | "pagerduty"
-                    | "webhook"
-                  )[];
-                  email_addresses?: string[];
-                  slack_channels?: string[];
-                  pagerduty_config?:
-                    | ({
-                        routing_key: string;
-                        /** @enum {string} */
-                        severity?: "critical" | "error" | "warning" | "info";
-                      } & {
-                        [key: string]: unknown;
-                      })
-                    | null;
-                  webhook_config?:
-                    | ({
-                        /** Format: uri */
-                        url: string;
-                        secret: string;
-                      } & {
-                        [key: string]: unknown;
-                      })
-                    | null;
-                  send_at?: number | null;
-                } & {
-                  [key: string]: unknown;
-                })
-              | null;
-            behavior_evaluation?:
-              | ({
-                  enabled?: boolean;
-                  behavior_judge_names: string[];
-                  sampling_rate?: number;
-                } & {
-                  [key: string]: unknown;
-                })
-              | null;
-          } & {
-            [key: string]: unknown;
-          };
-          active?: boolean;
-          /** @description Cooldown period; both value and unit are required. */
-          cooldown_period?: {
-            value: number;
-            /** @enum {string} */
-            unit: "seconds" | "minutes" | "hours" | "days";
-          };
-          /** @description Trigger frequency; count, period, and period_unit are all required. */
-          trigger_frequency?: {
-            count: number;
-            period: number;
-            /** @enum {string} */
-            period_unit: "seconds" | "minutes" | "hours" | "days";
-          };
-        };
       };
     };
     responses: {
@@ -3519,12 +4697,7 @@ export interface operations {
     requestBody: {
       content: {
         "application/json": {
-          description?: string | null;
-        };
-        "application/x-www-form-urlencoded": {
-          description?: string | null;
-        };
-        "multipart/form-data": {
+          /** @description Replacement label description. Omit or pass null to clear it. */
           description?: string | null;
         };
       };
@@ -3574,7 +4747,7 @@ export interface operations {
         };
         content: {
           "application/json": {
-            start_time: string | null;
+            start_time: (string | null) | null;
             end_time: string;
             /** @enum {string} */
             granularity: "1m" | "5m" | "30m" | "1h" | "6h" | "12h" | "1d";
@@ -3589,8 +4762,78 @@ export interface operations {
               behavior_id: string;
               trace_count: string;
               judge_trace_count: string;
-              distribution_rate: number | null;
-              last_seen_at: string | null;
+              distribution_rate: (number | null) | null;
+              last_seen_at: (string | null) | null;
+            }[];
+          };
+        };
+      };
+    };
+  };
+  "getV1ProjectsByProjectIdConversation-display-rules": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Response for status 200 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            rules: {
+              /** @description JavaScript regular expression source, without slashes. Always runs with the g and m flags. */
+              pattern: string;
+              /** @description Replacement text. Empty removes the match. Supports $1 and $<name>, and \n / \t escapes. Rendered as Markdown. */
+              replacement: string;
+            }[];
+          };
+        };
+      };
+    };
+  };
+  "putV1ProjectsByProjectIdConversation-display-rules": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          /** @description The complete ordered rule list. Replaces every existing rule; pass [] to clear them. */
+          rules: {
+            /** @description JavaScript regular expression source, without slashes. Always runs with the g and m flags. */
+            pattern: string;
+            /** @description Replacement text. Empty removes the match. Supports $1 and $<name>, and \n / \t escapes. Rendered as Markdown. */
+            replacement: string;
+          }[];
+        };
+      };
+    };
+    responses: {
+      /** @description Response for status 200 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            rules: {
+              /** @description JavaScript regular expression source, without slashes. Always runs with the g and m flags. */
+              pattern: string;
+              /** @description Replacement text. Empty removes the match. Supports $1 and $<name>, and \n / \t escapes. Rendered as Markdown. */
+              replacement: string;
             }[];
           };
         };
@@ -3614,24 +4857,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            dataset_id: string;
-            organization_id?: string;
-            project_id?: string;
-            name: string;
-            schema?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            current_version?: number;
-            created_at?: string;
-            updated_at?: string;
-            creator_id: (string | null) | null;
-            entries?: number;
-            test_config_count?: number;
-            test_run_count?: number;
-          }[];
+          "application/json": components["schemas"]["PullAllOfflineDatasetsResponse"];
         };
       };
     };
@@ -3647,60 +4873,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": {
-          name: string;
-          schema: {
-            [key: string]: unknown;
-          };
-          examples?: {
-            [key: string]: unknown;
-          }[];
-          /** @default false */
-          overwrite?: boolean;
-          /** @constant */
-          dataset_kind?: "example";
-          metadata?:
-            | ({
-                [key: string]: unknown;
-              } | null)
-            | null;
-        };
-        "application/x-www-form-urlencoded": {
-          name: string;
-          schema: {
-            [key: string]: unknown;
-          };
-          examples?: {
-            [key: string]: unknown;
-          }[];
-          /** @default false */
-          overwrite?: boolean;
-          /** @constant */
-          dataset_kind?: "example";
-          metadata?:
-            | ({
-                [key: string]: unknown;
-              } | null)
-            | null;
-        };
-        "multipart/form-data": {
-          name: string;
-          schema: {
-            [key: string]: unknown;
-          };
-          examples?: {
-            [key: string]: unknown;
-          }[];
-          /** @default false */
-          overwrite?: boolean;
-          /** @constant */
-          dataset_kind?: "example";
-          metadata?:
-            | ({
-                [key: string]: unknown;
-              } | null)
-            | null;
-        };
+        "application/json": components["schemas"]["CreateOfflineDatasetRequest"];
       };
     };
     responses: {
@@ -3710,28 +4883,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            detail: string;
-            dataset_id: string;
-            dataset: {
-              dataset_id: string;
-              organization_id?: string;
-              project_id?: string;
-              name: string;
-              schema?:
-                | ({
-                    [key: string]: unknown;
-                  } | null)
-                | null;
-              current_version?: number;
-              created_at?: string;
-              updated_at?: string;
-              creator_id: (string | null) | null;
-              entries?: number;
-              test_config_count?: number;
-              test_run_count?: number;
-            };
-          };
+          "application/json": components["schemas"]["CreateOfflineDatasetResponse"];
         };
       };
       /** @description Response for status 400 */
@@ -3796,43 +4948,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            dataset_id: string;
-            organization_id?: string;
-            project_id?: string;
-            name: string;
-            schema?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            current_version?: number;
-            created_at?: string;
-            updated_at?: string;
-            creator_id: (string | null) | null;
-            entries?: number;
-            test_config_count?: number;
-            test_run_count?: number;
-            dataset_kind: "example" & "example";
-            examples: {
-              example_id: string;
-              organization_id?: string;
-              project_id?: string;
-              data: {
-                [key: string]: unknown;
-              };
-              metadata?:
-                | ({
-                    [key: string]: unknown;
-                  } | null)
-                | null;
-              managed_metadata: {
-                [key: string]: unknown;
-              };
-              created_at?: string;
-              user_id: string;
-            }[];
-          };
+          "application/json": components["schemas"]["PullOfflineDatasetResponse"];
         };
       };
       /** @description Response for status 404 */
@@ -3869,10 +4985,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            status: string;
-            message: string;
-          };
+          "application/json": components["schemas"]["DeleteOfflineDatasetResponse"];
         };
       };
       /** @description Response for status 404 */
@@ -3903,21 +5016,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": {
-          examples: {
-            [key: string]: unknown;
-          }[];
-        };
-        "application/x-www-form-urlencoded": {
-          examples: {
-            [key: string]: unknown;
-          }[];
-        };
-        "multipart/form-data": {
-          examples: {
-            [key: string]: unknown;
-          }[];
-        };
+        "application/json": components["schemas"]["InsertOfflineDatasetExamplesRequest"];
       };
     };
     responses: {
@@ -3927,10 +5026,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            example_ids: string[];
-            version_added: number;
-          };
+          "application/json": components["schemas"]["AddDatasetItemsResponse"];
         };
       };
       /** @description Response for status 404 */
@@ -3975,15 +5071,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": {
-          example_ids: string[];
-        };
-        "application/x-www-form-urlencoded": {
-          example_ids: string[];
-        };
-        "multipart/form-data": {
-          example_ids: string[];
-        };
+        "application/json": components["schemas"]["RemoveDatasetExamplesRequest"];
       };
     };
     responses: {
@@ -3993,10 +5081,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            removed_example_ids: string[];
-            version_created: number;
-          };
+          "application/json": components["schemas"]["RemoveDatasetExamplesResponse"];
         };
       };
       /** @description Response for status 404 */
@@ -4018,8 +5103,8 @@ export interface operations {
   getV1ProjectsByProjectIdDatasetsByDatasetIdentifierPage: {
     parameters: {
       query?: {
-        version?: string | number;
-        limit?: string | number;
+        version?: number;
+        limit?: number;
         cursor_created_at?: string;
         cursor_example_id?: string;
       };
@@ -4038,66 +5123,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            dataset: {
-              dataset_id: string;
-              organization_id?: string;
-              project_id?: string;
-              name: string;
-              schema?:
-                | ({
-                    [key: string]: unknown;
-                  } | null)
-                | null;
-              current_version?: number;
-              created_at?: string;
-              updated_at?: string;
-              creator_id: (string | null) | null;
-              entries?: number;
-              test_config_count?: number;
-              test_run_count?: number;
-            };
-            entries: {
-              item: {
-                id: string;
-                organization_id: string;
-                project_id: string;
-                dataset_id: string;
-                version_added: number;
-                version_removed?: (number | null) | null;
-                example_id: string;
-                created_at: string;
-                user_id: string;
-              };
-              example: {
-                example_id: string;
-                organization_id?: string;
-                project_id?: string;
-                data: {
-                  [key: string]: unknown;
-                };
-                metadata?:
-                  | ({
-                      [key: string]: unknown;
-                    } | null)
-                  | null;
-                managed_metadata: {
-                  [key: string]: unknown;
-                };
-                created_at?: string;
-                user_id: string;
-              };
-            }[];
-            metadata: {
-              hasMore: boolean;
-              nextCursor:
-                | ({
-                    created_at: string;
-                    example_id: string;
-                  } | null)
-                | null;
-            };
-          };
+          "application/json": components["schemas"]["OfflineDatasetPageResponse"];
         };
       };
       /** @description Response for status 404 */
@@ -4134,18 +5160,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            versions: {
-              version_id: string;
-              dataset_id: string;
-              organization_id: string;
-              project_id: string;
-              version_number: number;
-              created_at: string;
-              user_id: (string | null) | null;
-              item_count: number;
-            }[];
-          };
+          "application/json": components["schemas"]["OfflineDatasetVersionsResponse"];
         };
       };
       /** @description Response for status 404 */
@@ -4175,222 +5190,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": {
-          id?: (string | null) | null;
-          project_id: string;
-          eval_name: string;
-          model?: (string | null) | null;
-          created_at?: (string | null) | null;
-          user_id?: string;
-          scorers?: (unknown[] | null) | null;
-          /** @default [] */
-          custom_scorers: {
-            score_type: string;
-            name: string;
-            class_name?: (string | null) | null;
-            score?: (number | null) | null;
-            /** @default 0 */
-            minimum_score_range?: number;
-            /** @default 1 */
-            maximum_score_range?: number;
-            score_breakdown?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            reason?:
-              | string
-              | {
-                  [key: string]: unknown;
-                };
-            success?: (boolean | null) | null;
-            model?: (string | null) | null;
-            error?: (string | null) | null;
-            additional_metadata?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            user?: (string | null) | null;
-            server_hosted?: (boolean | null) | null;
-            using_native_model?: (boolean | null) | null;
-            required_params?: (string[] | null) | null;
-            strict_mode?: (boolean | null) | null;
-          }[];
-          /** @default [] */
-          judgment_scorers: {
-            score_type?: (string | null) | null;
-            name: string;
-            model?: (string | null) | null;
-            required_params?: (string[] | null) | null;
-            kwargs?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            /** @enum {string} */
-            result_type?: "numeric" | "binary" | "categorical";
-          }[];
-          examples: ({
-            example_id: string;
-            created_at: string;
-            name?: (string | null) | null;
-            trace_id?: (string | null) | null;
-            span_id?: (string | null) | null;
-            offline_trace_id?: (string | null) | null;
-            session_id?: (string | null) | null;
-            session_trace_ids?: string[];
-            agent_offline_trace_id?: (string | null) | null;
-          } & {
-            [key: string]: unknown;
-          })[];
-          trace_span_id?: (string | null) | null;
-          trace_id?: (string | null) | null;
-        };
-        "application/x-www-form-urlencoded": {
-          id?: (string | null) | null;
-          project_id: string;
-          eval_name: string;
-          model?: (string | null) | null;
-          created_at?: (string | null) | null;
-          user_id?: string;
-          scorers?: (unknown[] | null) | null;
-          /** @default [] */
-          custom_scorers: {
-            score_type: string;
-            name: string;
-            class_name?: (string | null) | null;
-            score?: (number | null) | null;
-            /** @default 0 */
-            minimum_score_range?: number;
-            /** @default 1 */
-            maximum_score_range?: number;
-            score_breakdown?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            reason?:
-              | string
-              | {
-                  [key: string]: unknown;
-                };
-            success?: (boolean | null) | null;
-            model?: (string | null) | null;
-            error?: (string | null) | null;
-            additional_metadata?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            user?: (string | null) | null;
-            server_hosted?: (boolean | null) | null;
-            using_native_model?: (boolean | null) | null;
-            required_params?: (string[] | null) | null;
-            strict_mode?: (boolean | null) | null;
-          }[];
-          /** @default [] */
-          judgment_scorers: {
-            score_type?: (string | null) | null;
-            name: string;
-            model?: (string | null) | null;
-            required_params?: (string[] | null) | null;
-            kwargs?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            /** @enum {string} */
-            result_type?: "numeric" | "binary" | "categorical";
-          }[];
-          examples: ({
-            example_id: string;
-            created_at: string;
-            name?: (string | null) | null;
-            trace_id?: (string | null) | null;
-            span_id?: (string | null) | null;
-            offline_trace_id?: (string | null) | null;
-            session_id?: (string | null) | null;
-            session_trace_ids?: string[];
-            agent_offline_trace_id?: (string | null) | null;
-          } & {
-            [key: string]: unknown;
-          })[];
-          trace_span_id?: (string | null) | null;
-          trace_id?: (string | null) | null;
-        };
-        "multipart/form-data": {
-          id?: (string | null) | null;
-          project_id: string;
-          eval_name: string;
-          model?: (string | null) | null;
-          created_at?: (string | null) | null;
-          user_id?: string;
-          scorers?: (unknown[] | null) | null;
-          /** @default [] */
-          custom_scorers: {
-            score_type: string;
-            name: string;
-            class_name?: (string | null) | null;
-            score?: (number | null) | null;
-            /** @default 0 */
-            minimum_score_range?: number;
-            /** @default 1 */
-            maximum_score_range?: number;
-            score_breakdown?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            reason?:
-              | string
-              | {
-                  [key: string]: unknown;
-                };
-            success?: (boolean | null) | null;
-            model?: (string | null) | null;
-            error?: (string | null) | null;
-            additional_metadata?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            user?: (string | null) | null;
-            server_hosted?: (boolean | null) | null;
-            using_native_model?: (boolean | null) | null;
-            required_params?: (string[] | null) | null;
-            strict_mode?: (boolean | null) | null;
-          }[];
-          /** @default [] */
-          judgment_scorers: {
-            score_type?: (string | null) | null;
-            name: string;
-            model?: (string | null) | null;
-            required_params?: (string[] | null) | null;
-            kwargs?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            /** @enum {string} */
-            result_type?: "numeric" | "binary" | "categorical";
-          }[];
-          examples: ({
-            example_id: string;
-            created_at: string;
-            name?: (string | null) | null;
-            trace_id?: (string | null) | null;
-            span_id?: (string | null) | null;
-            offline_trace_id?: (string | null) | null;
-            session_id?: (string | null) | null;
-            session_trace_ids?: string[];
-            agent_offline_trace_id?: (string | null) | null;
-          } & {
-            [key: string]: unknown;
-          })[];
-          trace_span_id?: (string | null) | null;
-          trace_id?: (string | null) | null;
-        };
+        "application/json": components["schemas"]["ExampleEvaluationRun"];
       };
     };
     responses: {
@@ -4400,11 +5200,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            success: boolean;
-            status: string;
-            message: string;
-          };
+          "application/json": components["schemas"]["AddToRunEvalQueueExamplesResponse"];
         };
       };
       /** @description Response for status 402 */
@@ -4433,319 +5229,6 @@ export interface operations {
             code?: string;
             details?: string[];
           };
-        };
-      };
-    };
-  };
-  "postV1ProjectsByProjectIdEval-queueExamplesPreflight": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        projectId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          id?: (string | null) | null;
-          project_id: string;
-          eval_name: string;
-          model?: (string | null) | null;
-          created_at?: (string | null) | null;
-          user_id?: string;
-          scorers?: (unknown[] | null) | null;
-          /** @default [] */
-          custom_scorers: {
-            score_type: string;
-            name: string;
-            class_name?: (string | null) | null;
-            score?: (number | null) | null;
-            /** @default 0 */
-            minimum_score_range?: number;
-            /** @default 1 */
-            maximum_score_range?: number;
-            score_breakdown?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            reason?:
-              | string
-              | {
-                  [key: string]: unknown;
-                };
-            success?: (boolean | null) | null;
-            model?: (string | null) | null;
-            error?: (string | null) | null;
-            additional_metadata?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            user?: (string | null) | null;
-            server_hosted?: (boolean | null) | null;
-            using_native_model?: (boolean | null) | null;
-            required_params?: (string[] | null) | null;
-            strict_mode?: (boolean | null) | null;
-          }[];
-          /** @default [] */
-          judgment_scorers: {
-            score_type?: (string | null) | null;
-            name: string;
-            model?: (string | null) | null;
-            required_params?: (string[] | null) | null;
-            kwargs?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            /** @enum {string} */
-            result_type?: "numeric" | "binary" | "categorical";
-          }[];
-          examples: ({
-            example_id: string;
-            created_at: string;
-            name?: (string | null) | null;
-            trace_id?: (string | null) | null;
-            span_id?: (string | null) | null;
-            offline_trace_id?: (string | null) | null;
-            session_id?: (string | null) | null;
-            session_trace_ids?: string[];
-            agent_offline_trace_id?: (string | null) | null;
-          } & {
-            [key: string]: unknown;
-          })[];
-          trace_span_id?: (string | null) | null;
-          trace_id?: (string | null) | null;
-        };
-        "application/x-www-form-urlencoded": {
-          id?: (string | null) | null;
-          project_id: string;
-          eval_name: string;
-          model?: (string | null) | null;
-          created_at?: (string | null) | null;
-          user_id?: string;
-          scorers?: (unknown[] | null) | null;
-          /** @default [] */
-          custom_scorers: {
-            score_type: string;
-            name: string;
-            class_name?: (string | null) | null;
-            score?: (number | null) | null;
-            /** @default 0 */
-            minimum_score_range?: number;
-            /** @default 1 */
-            maximum_score_range?: number;
-            score_breakdown?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            reason?:
-              | string
-              | {
-                  [key: string]: unknown;
-                };
-            success?: (boolean | null) | null;
-            model?: (string | null) | null;
-            error?: (string | null) | null;
-            additional_metadata?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            user?: (string | null) | null;
-            server_hosted?: (boolean | null) | null;
-            using_native_model?: (boolean | null) | null;
-            required_params?: (string[] | null) | null;
-            strict_mode?: (boolean | null) | null;
-          }[];
-          /** @default [] */
-          judgment_scorers: {
-            score_type?: (string | null) | null;
-            name: string;
-            model?: (string | null) | null;
-            required_params?: (string[] | null) | null;
-            kwargs?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            /** @enum {string} */
-            result_type?: "numeric" | "binary" | "categorical";
-          }[];
-          examples: ({
-            example_id: string;
-            created_at: string;
-            name?: (string | null) | null;
-            trace_id?: (string | null) | null;
-            span_id?: (string | null) | null;
-            offline_trace_id?: (string | null) | null;
-            session_id?: (string | null) | null;
-            session_trace_ids?: string[];
-            agent_offline_trace_id?: (string | null) | null;
-          } & {
-            [key: string]: unknown;
-          })[];
-          trace_span_id?: (string | null) | null;
-          trace_id?: (string | null) | null;
-        };
-        "multipart/form-data": {
-          id?: (string | null) | null;
-          project_id: string;
-          eval_name: string;
-          model?: (string | null) | null;
-          created_at?: (string | null) | null;
-          user_id?: string;
-          scorers?: (unknown[] | null) | null;
-          /** @default [] */
-          custom_scorers: {
-            score_type: string;
-            name: string;
-            class_name?: (string | null) | null;
-            score?: (number | null) | null;
-            /** @default 0 */
-            minimum_score_range?: number;
-            /** @default 1 */
-            maximum_score_range?: number;
-            score_breakdown?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            reason?:
-              | string
-              | {
-                  [key: string]: unknown;
-                };
-            success?: (boolean | null) | null;
-            model?: (string | null) | null;
-            error?: (string | null) | null;
-            additional_metadata?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            user?: (string | null) | null;
-            server_hosted?: (boolean | null) | null;
-            using_native_model?: (boolean | null) | null;
-            required_params?: (string[] | null) | null;
-            strict_mode?: (boolean | null) | null;
-          }[];
-          /** @default [] */
-          judgment_scorers: {
-            score_type?: (string | null) | null;
-            name: string;
-            model?: (string | null) | null;
-            required_params?: (string[] | null) | null;
-            kwargs?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            /** @enum {string} */
-            result_type?: "numeric" | "binary" | "categorical";
-          }[];
-          examples: ({
-            example_id: string;
-            created_at: string;
-            name?: (string | null) | null;
-            trace_id?: (string | null) | null;
-            span_id?: (string | null) | null;
-            offline_trace_id?: (string | null) | null;
-            session_id?: (string | null) | null;
-            session_trace_ids?: string[];
-            agent_offline_trace_id?: (string | null) | null;
-          } & {
-            [key: string]: unknown;
-          })[];
-          trace_span_id?: (string | null) | null;
-          trace_id?: (string | null) | null;
-        };
-      };
-    };
-    responses: {
-      /** @description Response for status 200 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json":
-            | {
-                matches: boolean;
-                predicate_translatable: boolean;
-                capped: boolean;
-                warnings: string[];
-                /** @constant */
-                unit: "traces";
-                trace_count: string | number;
-                trace_ids?: string[];
-                ids_capped?: boolean;
-                sampling_rate: number;
-                estimated_run_count: string | number;
-                series?: {
-                  timestamp: string;
-                  candidate_count: string | number;
-                  matching_count: string | number;
-                  estimated_eval_count: number;
-                }[];
-                forecast?: {
-                  timestamp: string;
-                  candidate_count: string | number;
-                  matching_count: string | number;
-                  estimated_eval_count: number;
-                }[];
-                forecast_method?: "seasonal_weekly" | "linear" | "mean";
-              }
-            | {
-                matches: boolean;
-                predicate_translatable: boolean;
-                capped: boolean;
-                warnings: string[];
-                session_evaluation_count_enabled: boolean;
-                session_evaluation_idle_enabled: boolean;
-                session_evaluation_min_candidate_traces: string | number;
-                session_evaluation_max_wait_minutes: string | number;
-                /** @constant */
-                unit: "sessions";
-                session_count: string | number;
-                session_ids?: string[];
-                trace_count: string | number;
-                candidate_trace_count: string | number;
-                sampled_session_count: string | number;
-                sampled_candidate_trace_count: string | number;
-                trace_ids?: string[];
-                ids_capped?: boolean;
-                sampling_rate: number;
-                estimated_run_count: string | number;
-                series?: {
-                  timestamp: string;
-                  candidate_count: string | number;
-                  matching_count: string | number;
-                  estimated_eval_count: number;
-                }[];
-                forecast?: {
-                  timestamp: string;
-                  candidate_count: string | number;
-                  matching_count: string | number;
-                  estimated_eval_count: number;
-                }[];
-                forecast_method?: "seasonal_weekly" | "linear" | "mean";
-              }
-            | {
-                matches: boolean;
-                predicate_translatable: boolean;
-                capped: boolean;
-                warnings: string[];
-                /** @constant */
-                unit: "examples";
-                example_count: string | number;
-                judge_count: string | number;
-                run_count: string | number;
-              };
         };
       };
     };
@@ -4761,192 +5244,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": {
-          id?: (string | null) | null;
-          project_id: string;
-          eval_name: string;
-          model?: (string | null) | null;
-          created_at?: (string | null) | null;
-          user_id?: string;
-          scorers?: (unknown[] | null) | null;
-          /** @default [] */
-          custom_scorers: {
-            score_type: string;
-            name: string;
-            class_name?: (string | null) | null;
-            score?: (number | null) | null;
-            /** @default 0 */
-            minimum_score_range?: number;
-            /** @default 1 */
-            maximum_score_range?: number;
-            score_breakdown?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            reason?:
-              | string
-              | {
-                  [key: string]: unknown;
-                };
-            success?: (boolean | null) | null;
-            model?: (string | null) | null;
-            error?: (string | null) | null;
-            additional_metadata?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            user?: (string | null) | null;
-            server_hosted?: (boolean | null) | null;
-            using_native_model?: (boolean | null) | null;
-            required_params?: (string[] | null) | null;
-            strict_mode?: (boolean | null) | null;
-          }[];
-          /** @default [] */
-          judgment_scorers: {
-            score_type?: (string | null) | null;
-            name: string;
-            model?: (string | null) | null;
-            required_params?: (string[] | null) | null;
-            kwargs?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            /** @enum {string} */
-            result_type?: "numeric" | "binary" | "categorical";
-          }[];
-          trace_and_span_ids: [string, string][];
-          /** @default false */
-          is_offline: boolean;
-          /** @default false */
-          is_behavior: boolean;
-        };
-        "application/x-www-form-urlencoded": {
-          id?: (string | null) | null;
-          project_id: string;
-          eval_name: string;
-          model?: (string | null) | null;
-          created_at?: (string | null) | null;
-          user_id?: string;
-          scorers?: (unknown[] | null) | null;
-          /** @default [] */
-          custom_scorers: {
-            score_type: string;
-            name: string;
-            class_name?: (string | null) | null;
-            score?: (number | null) | null;
-            /** @default 0 */
-            minimum_score_range?: number;
-            /** @default 1 */
-            maximum_score_range?: number;
-            score_breakdown?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            reason?:
-              | string
-              | {
-                  [key: string]: unknown;
-                };
-            success?: (boolean | null) | null;
-            model?: (string | null) | null;
-            error?: (string | null) | null;
-            additional_metadata?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            user?: (string | null) | null;
-            server_hosted?: (boolean | null) | null;
-            using_native_model?: (boolean | null) | null;
-            required_params?: (string[] | null) | null;
-            strict_mode?: (boolean | null) | null;
-          }[];
-          /** @default [] */
-          judgment_scorers: {
-            score_type?: (string | null) | null;
-            name: string;
-            model?: (string | null) | null;
-            required_params?: (string[] | null) | null;
-            kwargs?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            /** @enum {string} */
-            result_type?: "numeric" | "binary" | "categorical";
-          }[];
-          trace_and_span_ids: [string, string][];
-          /** @default false */
-          is_offline: boolean;
-          /** @default false */
-          is_behavior: boolean;
-        };
-        "multipart/form-data": {
-          id?: (string | null) | null;
-          project_id: string;
-          eval_name: string;
-          model?: (string | null) | null;
-          created_at?: (string | null) | null;
-          user_id?: string;
-          scorers?: (unknown[] | null) | null;
-          /** @default [] */
-          custom_scorers: {
-            score_type: string;
-            name: string;
-            class_name?: (string | null) | null;
-            score?: (number | null) | null;
-            /** @default 0 */
-            minimum_score_range?: number;
-            /** @default 1 */
-            maximum_score_range?: number;
-            score_breakdown?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            reason?:
-              | string
-              | {
-                  [key: string]: unknown;
-                };
-            success?: (boolean | null) | null;
-            model?: (string | null) | null;
-            error?: (string | null) | null;
-            additional_metadata?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            user?: (string | null) | null;
-            server_hosted?: (boolean | null) | null;
-            using_native_model?: (boolean | null) | null;
-            required_params?: (string[] | null) | null;
-            strict_mode?: (boolean | null) | null;
-          }[];
-          /** @default [] */
-          judgment_scorers: {
-            score_type?: (string | null) | null;
-            name: string;
-            model?: (string | null) | null;
-            required_params?: (string[] | null) | null;
-            kwargs?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            /** @enum {string} */
-            result_type?: "numeric" | "binary" | "categorical";
-          }[];
-          trace_and_span_ids: [string, string][];
-          /** @default false */
-          is_offline: boolean;
-          /** @default false */
-          is_behavior: boolean;
-        };
+        "application/json": components["schemas"]["TraceEvaluationRun"];
       };
     };
     responses: {
@@ -4956,11 +5254,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            success: boolean;
-            status: string;
-            message: string;
-          };
+          "application/json": components["schemas"]["AddToRunEvalQueueTracesResponse"];
         };
       };
       /** @description Response for status 402 */
@@ -4993,289 +5287,6 @@ export interface operations {
       };
     };
   };
-  "postV1ProjectsByProjectIdEval-queueTracesPreflight": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        projectId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          id?: (string | null) | null;
-          project_id: string;
-          eval_name: string;
-          model?: (string | null) | null;
-          created_at?: (string | null) | null;
-          user_id?: string;
-          scorers?: (unknown[] | null) | null;
-          /** @default [] */
-          custom_scorers: {
-            score_type: string;
-            name: string;
-            class_name?: (string | null) | null;
-            score?: (number | null) | null;
-            /** @default 0 */
-            minimum_score_range?: number;
-            /** @default 1 */
-            maximum_score_range?: number;
-            score_breakdown?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            reason?:
-              | string
-              | {
-                  [key: string]: unknown;
-                };
-            success?: (boolean | null) | null;
-            model?: (string | null) | null;
-            error?: (string | null) | null;
-            additional_metadata?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            user?: (string | null) | null;
-            server_hosted?: (boolean | null) | null;
-            using_native_model?: (boolean | null) | null;
-            required_params?: (string[] | null) | null;
-            strict_mode?: (boolean | null) | null;
-          }[];
-          /** @default [] */
-          judgment_scorers: {
-            score_type?: (string | null) | null;
-            name: string;
-            model?: (string | null) | null;
-            required_params?: (string[] | null) | null;
-            kwargs?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            /** @enum {string} */
-            result_type?: "numeric" | "binary" | "categorical";
-          }[];
-          trace_and_span_ids: [string, string][];
-          /** @default false */
-          is_offline: boolean;
-          /** @default false */
-          is_behavior: boolean;
-        };
-        "application/x-www-form-urlencoded": {
-          id?: (string | null) | null;
-          project_id: string;
-          eval_name: string;
-          model?: (string | null) | null;
-          created_at?: (string | null) | null;
-          user_id?: string;
-          scorers?: (unknown[] | null) | null;
-          /** @default [] */
-          custom_scorers: {
-            score_type: string;
-            name: string;
-            class_name?: (string | null) | null;
-            score?: (number | null) | null;
-            /** @default 0 */
-            minimum_score_range?: number;
-            /** @default 1 */
-            maximum_score_range?: number;
-            score_breakdown?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            reason?:
-              | string
-              | {
-                  [key: string]: unknown;
-                };
-            success?: (boolean | null) | null;
-            model?: (string | null) | null;
-            error?: (string | null) | null;
-            additional_metadata?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            user?: (string | null) | null;
-            server_hosted?: (boolean | null) | null;
-            using_native_model?: (boolean | null) | null;
-            required_params?: (string[] | null) | null;
-            strict_mode?: (boolean | null) | null;
-          }[];
-          /** @default [] */
-          judgment_scorers: {
-            score_type?: (string | null) | null;
-            name: string;
-            model?: (string | null) | null;
-            required_params?: (string[] | null) | null;
-            kwargs?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            /** @enum {string} */
-            result_type?: "numeric" | "binary" | "categorical";
-          }[];
-          trace_and_span_ids: [string, string][];
-          /** @default false */
-          is_offline: boolean;
-          /** @default false */
-          is_behavior: boolean;
-        };
-        "multipart/form-data": {
-          id?: (string | null) | null;
-          project_id: string;
-          eval_name: string;
-          model?: (string | null) | null;
-          created_at?: (string | null) | null;
-          user_id?: string;
-          scorers?: (unknown[] | null) | null;
-          /** @default [] */
-          custom_scorers: {
-            score_type: string;
-            name: string;
-            class_name?: (string | null) | null;
-            score?: (number | null) | null;
-            /** @default 0 */
-            minimum_score_range?: number;
-            /** @default 1 */
-            maximum_score_range?: number;
-            score_breakdown?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            reason?:
-              | string
-              | {
-                  [key: string]: unknown;
-                };
-            success?: (boolean | null) | null;
-            model?: (string | null) | null;
-            error?: (string | null) | null;
-            additional_metadata?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            user?: (string | null) | null;
-            server_hosted?: (boolean | null) | null;
-            using_native_model?: (boolean | null) | null;
-            required_params?: (string[] | null) | null;
-            strict_mode?: (boolean | null) | null;
-          }[];
-          /** @default [] */
-          judgment_scorers: {
-            score_type?: (string | null) | null;
-            name: string;
-            model?: (string | null) | null;
-            required_params?: (string[] | null) | null;
-            kwargs?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            /** @enum {string} */
-            result_type?: "numeric" | "binary" | "categorical";
-          }[];
-          trace_and_span_ids: [string, string][];
-          /** @default false */
-          is_offline: boolean;
-          /** @default false */
-          is_behavior: boolean;
-        };
-      };
-    };
-    responses: {
-      /** @description Response for status 200 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json":
-            | {
-                matches: boolean;
-                predicate_translatable: boolean;
-                capped: boolean;
-                warnings: string[];
-                /** @constant */
-                unit: "traces";
-                trace_count: string | number;
-                trace_ids?: string[];
-                ids_capped?: boolean;
-                sampling_rate: number;
-                estimated_run_count: string | number;
-                series?: {
-                  timestamp: string;
-                  candidate_count: string | number;
-                  matching_count: string | number;
-                  estimated_eval_count: number;
-                }[];
-                forecast?: {
-                  timestamp: string;
-                  candidate_count: string | number;
-                  matching_count: string | number;
-                  estimated_eval_count: number;
-                }[];
-                forecast_method?: "seasonal_weekly" | "linear" | "mean";
-              }
-            | {
-                matches: boolean;
-                predicate_translatable: boolean;
-                capped: boolean;
-                warnings: string[];
-                session_evaluation_count_enabled: boolean;
-                session_evaluation_idle_enabled: boolean;
-                session_evaluation_min_candidate_traces: string | number;
-                session_evaluation_max_wait_minutes: string | number;
-                /** @constant */
-                unit: "sessions";
-                session_count: string | number;
-                session_ids?: string[];
-                trace_count: string | number;
-                candidate_trace_count: string | number;
-                sampled_session_count: string | number;
-                sampled_candidate_trace_count: string | number;
-                trace_ids?: string[];
-                ids_capped?: boolean;
-                sampling_rate: number;
-                estimated_run_count: string | number;
-                series?: {
-                  timestamp: string;
-                  candidate_count: string | number;
-                  matching_count: string | number;
-                  estimated_eval_count: number;
-                }[];
-                forecast?: {
-                  timestamp: string;
-                  candidate_count: string | number;
-                  matching_count: string | number;
-                  estimated_eval_count: number;
-                }[];
-                forecast_method?: "seasonal_weekly" | "linear" | "mean";
-              }
-            | {
-                matches: boolean;
-                predicate_translatable: boolean;
-                capped: boolean;
-                warnings: string[];
-                /** @constant */
-                unit: "examples";
-                example_count: string | number;
-                judge_count: string | number;
-                run_count: string | number;
-              };
-        };
-      };
-    };
-  };
   "postV1ProjectsByProjectIdEval-results": {
     parameters: {
       query?: never;
@@ -5287,858 +5298,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": {
-          results: (
-            | {
-                scorers_data: ({
-                  scorer_name: string;
-                } & (
-                  | ({
-                      reason: {
-                        text: string;
-                        citations?:
-                          | (
-                              | {
-                                  span_id: string;
-                                  span_attribute: string;
-                                }[]
-                              | null
-                            )
-                          | null;
-                      };
-                      metadata?: {
-                        evaluation_model?: string;
-                        evaluation_reasoning_level?: "lite" | "normal" | "high";
-                      };
-                      error?: (string | null) | null;
-                    } & {
-                      /** @constant */
-                      score_type: "numeric";
-                      num_value: number;
-                      /** @default 0 */
-                      minimum_score_range?: string | number;
-                      /** @default 1 */
-                      maximum_score_range?: string | number;
-                    })
-                  | ({
-                      reason: {
-                        text: string;
-                        citations?:
-                          | (
-                              | {
-                                  span_id: string;
-                                  span_attribute: string;
-                                }[]
-                              | null
-                            )
-                          | null;
-                      };
-                      metadata?: {
-                        evaluation_model?: string;
-                        evaluation_reasoning_level?: "lite" | "normal" | "high";
-                      };
-                      error?: (string | null) | null;
-                    } & {
-                      /** @constant */
-                      score_type: "binary";
-                      bool_value: boolean;
-                    })
-                  | ({
-                      reason: {
-                        text: string;
-                        citations?:
-                          | (
-                              | {
-                                  span_id: string;
-                                  span_attribute: string;
-                                }[]
-                              | null
-                            )
-                          | null;
-                      };
-                      metadata?: {
-                        evaluation_model?: string;
-                        evaluation_reasoning_level?: "lite" | "normal" | "high";
-                      };
-                      error?: (string | null) | null;
-                    } & {
-                      /** @constant */
-                      score_type: "categorical";
-                      str_value: string;
-                    })
-                ))[];
-                name?: (string | null) | null;
-                data_object: {
-                  example_id: string;
-                  created_at: string;
-                  name?: (string | null) | null;
-                  trace_id?: (string | null) | null;
-                  span_id?: (string | null) | null;
-                  offline_trace_id?: (string | null) | null;
-                  session_id?: (string | null) | null;
-                  session_trace_ids?: string[];
-                  agent_offline_trace_id?: (string | null) | null;
-                } & {
-                  [key: string]: unknown;
-                };
-                trace_id?: (string | null) | null;
-                run_duration?: (number | null) | null;
-                evaluation_cost?: (number | null) | null;
-              }
-            | {
-                scorers_data: ({
-                  scorer_name: string;
-                } & (
-                  | ({
-                      reason: {
-                        text: string;
-                        citations?:
-                          | (
-                              | {
-                                  span_id: string;
-                                  span_attribute: string;
-                                }[]
-                              | null
-                            )
-                          | null;
-                      };
-                      metadata?: {
-                        evaluation_model?: string;
-                        evaluation_reasoning_level?: "lite" | "normal" | "high";
-                      };
-                      error?: (string | null) | null;
-                    } & {
-                      /** @constant */
-                      score_type: "numeric";
-                      num_value: number;
-                      /** @default 0 */
-                      minimum_score_range?: string | number;
-                      /** @default 1 */
-                      maximum_score_range?: string | number;
-                    })
-                  | ({
-                      reason: {
-                        text: string;
-                        citations?:
-                          | (
-                              | {
-                                  span_id: string;
-                                  span_attribute: string;
-                                }[]
-                              | null
-                            )
-                          | null;
-                      };
-                      metadata?: {
-                        evaluation_model?: string;
-                        evaluation_reasoning_level?: "lite" | "normal" | "high";
-                      };
-                      error?: (string | null) | null;
-                    } & {
-                      /** @constant */
-                      score_type: "binary";
-                      bool_value: boolean;
-                    })
-                  | ({
-                      reason: {
-                        text: string;
-                        citations?:
-                          | (
-                              | {
-                                  span_id: string;
-                                  span_attribute: string;
-                                }[]
-                              | null
-                            )
-                          | null;
-                      };
-                      metadata?: {
-                        evaluation_model?: string;
-                        evaluation_reasoning_level?: "lite" | "normal" | "high";
-                      };
-                      error?: (string | null) | null;
-                    } & {
-                      /** @constant */
-                      score_type: "categorical";
-                      str_value: string;
-                    })
-                ))[];
-                name?: string;
-                data_object: {
-                  organization_id: string;
-                  project_id: string;
-                  timestamp: string;
-                  trace_id: string;
-                  span_id: string;
-                  parent_span_id: (string | null) | null;
-                  trace_state: (string | null) | null;
-                  span_name: (string | null) | null;
-                  span_kind: (string | null) | null;
-                  service_name: (string | null) | null;
-                  resource_attributes: {
-                    [key: string]: string;
-                  };
-                  span_attributes: {
-                    [key: string]: string;
-                  };
-                  duration: string;
-                  status_code: number;
-                  status_message: (string | null) | null;
-                  events: {
-                    Timestamp: string;
-                    Name: string;
-                    Attributes: {
-                      [key: string]: string;
-                    };
-                  }[];
-                  links: (string | null) | null;
-                };
-                trace_id?: string;
-                run_duration?: number;
-                evaluation_cost?: number;
-              }
-          )[];
-          run: {
-            id?: (string | null) | null;
-            project_id: string;
-            eval_name: string;
-            model?: (string | null) | null;
-            created_at?: (string | null) | null;
-            user_id?: string;
-            scorers?: (unknown[] | null) | null;
-            /** @default [] */
-            custom_scorers: {
-              score_type: string;
-              name: string;
-              class_name?: (string | null) | null;
-              score?: (number | null) | null;
-              /** @default 0 */
-              minimum_score_range?: number;
-              /** @default 1 */
-              maximum_score_range?: number;
-              score_breakdown?:
-                | ({
-                    [key: string]: unknown;
-                  } | null)
-                | null;
-              reason?:
-                | string
-                | {
-                    [key: string]: unknown;
-                  };
-              success?: (boolean | null) | null;
-              model?: (string | null) | null;
-              error?: (string | null) | null;
-              additional_metadata?:
-                | ({
-                    [key: string]: unknown;
-                  } | null)
-                | null;
-              user?: (string | null) | null;
-              server_hosted?: (boolean | null) | null;
-              using_native_model?: (boolean | null) | null;
-              required_params?: (string[] | null) | null;
-              strict_mode?: (boolean | null) | null;
-            }[];
-            /** @default [] */
-            judgment_scorers: {
-              score_type?: (string | null) | null;
-              name: string;
-              model?: (string | null) | null;
-              required_params?: (string[] | null) | null;
-              kwargs?:
-                | ({
-                    [key: string]: unknown;
-                  } | null)
-                | null;
-              /** @enum {string} */
-              result_type?: "numeric" | "binary" | "categorical";
-            }[];
-            examples: ({
-              example_id: string;
-              created_at: string;
-              name?: (string | null) | null;
-              trace_id?: (string | null) | null;
-              span_id?: (string | null) | null;
-              offline_trace_id?: (string | null) | null;
-              session_id?: (string | null) | null;
-              session_trace_ids?: string[];
-              agent_offline_trace_id?: (string | null) | null;
-            } & {
-              [key: string]: unknown;
-            })[];
-            trace_span_id?: (string | null) | null;
-            trace_id?: (string | null) | null;
-          };
-        };
-        "application/x-www-form-urlencoded": {
-          results: (
-            | {
-                scorers_data: ({
-                  scorer_name: string;
-                } & (
-                  | ({
-                      reason: {
-                        text: string;
-                        citations?:
-                          | (
-                              | {
-                                  span_id: string;
-                                  span_attribute: string;
-                                }[]
-                              | null
-                            )
-                          | null;
-                      };
-                      metadata?: {
-                        evaluation_model?: string;
-                        evaluation_reasoning_level?: "lite" | "normal" | "high";
-                      };
-                      error?: (string | null) | null;
-                    } & {
-                      /** @constant */
-                      score_type: "numeric";
-                      num_value: number;
-                      /** @default 0 */
-                      minimum_score_range?: string | number;
-                      /** @default 1 */
-                      maximum_score_range?: string | number;
-                    })
-                  | ({
-                      reason: {
-                        text: string;
-                        citations?:
-                          | (
-                              | {
-                                  span_id: string;
-                                  span_attribute: string;
-                                }[]
-                              | null
-                            )
-                          | null;
-                      };
-                      metadata?: {
-                        evaluation_model?: string;
-                        evaluation_reasoning_level?: "lite" | "normal" | "high";
-                      };
-                      error?: (string | null) | null;
-                    } & {
-                      /** @constant */
-                      score_type: "binary";
-                      bool_value: boolean;
-                    })
-                  | ({
-                      reason: {
-                        text: string;
-                        citations?:
-                          | (
-                              | {
-                                  span_id: string;
-                                  span_attribute: string;
-                                }[]
-                              | null
-                            )
-                          | null;
-                      };
-                      metadata?: {
-                        evaluation_model?: string;
-                        evaluation_reasoning_level?: "lite" | "normal" | "high";
-                      };
-                      error?: (string | null) | null;
-                    } & {
-                      /** @constant */
-                      score_type: "categorical";
-                      str_value: string;
-                    })
-                ))[];
-                name?: (string | null) | null;
-                data_object: {
-                  example_id: string;
-                  created_at: string;
-                  name?: (string | null) | null;
-                  trace_id?: (string | null) | null;
-                  span_id?: (string | null) | null;
-                  offline_trace_id?: (string | null) | null;
-                  session_id?: (string | null) | null;
-                  session_trace_ids?: string[];
-                  agent_offline_trace_id?: (string | null) | null;
-                } & {
-                  [key: string]: unknown;
-                };
-                trace_id?: (string | null) | null;
-                run_duration?: (number | null) | null;
-                evaluation_cost?: (number | null) | null;
-              }
-            | {
-                scorers_data: ({
-                  scorer_name: string;
-                } & (
-                  | ({
-                      reason: {
-                        text: string;
-                        citations?:
-                          | (
-                              | {
-                                  span_id: string;
-                                  span_attribute: string;
-                                }[]
-                              | null
-                            )
-                          | null;
-                      };
-                      metadata?: {
-                        evaluation_model?: string;
-                        evaluation_reasoning_level?: "lite" | "normal" | "high";
-                      };
-                      error?: (string | null) | null;
-                    } & {
-                      /** @constant */
-                      score_type: "numeric";
-                      num_value: number;
-                      /** @default 0 */
-                      minimum_score_range?: string | number;
-                      /** @default 1 */
-                      maximum_score_range?: string | number;
-                    })
-                  | ({
-                      reason: {
-                        text: string;
-                        citations?:
-                          | (
-                              | {
-                                  span_id: string;
-                                  span_attribute: string;
-                                }[]
-                              | null
-                            )
-                          | null;
-                      };
-                      metadata?: {
-                        evaluation_model?: string;
-                        evaluation_reasoning_level?: "lite" | "normal" | "high";
-                      };
-                      error?: (string | null) | null;
-                    } & {
-                      /** @constant */
-                      score_type: "binary";
-                      bool_value: boolean;
-                    })
-                  | ({
-                      reason: {
-                        text: string;
-                        citations?:
-                          | (
-                              | {
-                                  span_id: string;
-                                  span_attribute: string;
-                                }[]
-                              | null
-                            )
-                          | null;
-                      };
-                      metadata?: {
-                        evaluation_model?: string;
-                        evaluation_reasoning_level?: "lite" | "normal" | "high";
-                      };
-                      error?: (string | null) | null;
-                    } & {
-                      /** @constant */
-                      score_type: "categorical";
-                      str_value: string;
-                    })
-                ))[];
-                name?: string;
-                data_object: {
-                  organization_id: string;
-                  project_id: string;
-                  timestamp: string;
-                  trace_id: string;
-                  span_id: string;
-                  parent_span_id: (string | null) | null;
-                  trace_state: (string | null) | null;
-                  span_name: (string | null) | null;
-                  span_kind: (string | null) | null;
-                  service_name: (string | null) | null;
-                  resource_attributes: {
-                    [key: string]: string;
-                  };
-                  span_attributes: {
-                    [key: string]: string;
-                  };
-                  duration: string;
-                  status_code: number;
-                  status_message: (string | null) | null;
-                  events: {
-                    Timestamp: string;
-                    Name: string;
-                    Attributes: {
-                      [key: string]: string;
-                    };
-                  }[];
-                  links: (string | null) | null;
-                };
-                trace_id?: string;
-                run_duration?: number;
-                evaluation_cost?: number;
-              }
-          )[];
-          run: {
-            id?: (string | null) | null;
-            project_id: string;
-            eval_name: string;
-            model?: (string | null) | null;
-            created_at?: (string | null) | null;
-            user_id?: string;
-            scorers?: (unknown[] | null) | null;
-            /** @default [] */
-            custom_scorers: {
-              score_type: string;
-              name: string;
-              class_name?: (string | null) | null;
-              score?: (number | null) | null;
-              /** @default 0 */
-              minimum_score_range?: number;
-              /** @default 1 */
-              maximum_score_range?: number;
-              score_breakdown?:
-                | ({
-                    [key: string]: unknown;
-                  } | null)
-                | null;
-              reason?:
-                | string
-                | {
-                    [key: string]: unknown;
-                  };
-              success?: (boolean | null) | null;
-              model?: (string | null) | null;
-              error?: (string | null) | null;
-              additional_metadata?:
-                | ({
-                    [key: string]: unknown;
-                  } | null)
-                | null;
-              user?: (string | null) | null;
-              server_hosted?: (boolean | null) | null;
-              using_native_model?: (boolean | null) | null;
-              required_params?: (string[] | null) | null;
-              strict_mode?: (boolean | null) | null;
-            }[];
-            /** @default [] */
-            judgment_scorers: {
-              score_type?: (string | null) | null;
-              name: string;
-              model?: (string | null) | null;
-              required_params?: (string[] | null) | null;
-              kwargs?:
-                | ({
-                    [key: string]: unknown;
-                  } | null)
-                | null;
-              /** @enum {string} */
-              result_type?: "numeric" | "binary" | "categorical";
-            }[];
-            examples: ({
-              example_id: string;
-              created_at: string;
-              name?: (string | null) | null;
-              trace_id?: (string | null) | null;
-              span_id?: (string | null) | null;
-              offline_trace_id?: (string | null) | null;
-              session_id?: (string | null) | null;
-              session_trace_ids?: string[];
-              agent_offline_trace_id?: (string | null) | null;
-            } & {
-              [key: string]: unknown;
-            })[];
-            trace_span_id?: (string | null) | null;
-            trace_id?: (string | null) | null;
-          };
-        };
-        "multipart/form-data": {
-          results: (
-            | {
-                scorers_data: ({
-                  scorer_name: string;
-                } & (
-                  | ({
-                      reason: {
-                        text: string;
-                        citations?:
-                          | (
-                              | {
-                                  span_id: string;
-                                  span_attribute: string;
-                                }[]
-                              | null
-                            )
-                          | null;
-                      };
-                      metadata?: {
-                        evaluation_model?: string;
-                        evaluation_reasoning_level?: "lite" | "normal" | "high";
-                      };
-                      error?: (string | null) | null;
-                    } & {
-                      /** @constant */
-                      score_type: "numeric";
-                      num_value: number;
-                      /** @default 0 */
-                      minimum_score_range?: string | number;
-                      /** @default 1 */
-                      maximum_score_range?: string | number;
-                    })
-                  | ({
-                      reason: {
-                        text: string;
-                        citations?:
-                          | (
-                              | {
-                                  span_id: string;
-                                  span_attribute: string;
-                                }[]
-                              | null
-                            )
-                          | null;
-                      };
-                      metadata?: {
-                        evaluation_model?: string;
-                        evaluation_reasoning_level?: "lite" | "normal" | "high";
-                      };
-                      error?: (string | null) | null;
-                    } & {
-                      /** @constant */
-                      score_type: "binary";
-                      bool_value: boolean;
-                    })
-                  | ({
-                      reason: {
-                        text: string;
-                        citations?:
-                          | (
-                              | {
-                                  span_id: string;
-                                  span_attribute: string;
-                                }[]
-                              | null
-                            )
-                          | null;
-                      };
-                      metadata?: {
-                        evaluation_model?: string;
-                        evaluation_reasoning_level?: "lite" | "normal" | "high";
-                      };
-                      error?: (string | null) | null;
-                    } & {
-                      /** @constant */
-                      score_type: "categorical";
-                      str_value: string;
-                    })
-                ))[];
-                name?: (string | null) | null;
-                data_object: {
-                  example_id: string;
-                  created_at: string;
-                  name?: (string | null) | null;
-                  trace_id?: (string | null) | null;
-                  span_id?: (string | null) | null;
-                  offline_trace_id?: (string | null) | null;
-                  session_id?: (string | null) | null;
-                  session_trace_ids?: string[];
-                  agent_offline_trace_id?: (string | null) | null;
-                } & {
-                  [key: string]: unknown;
-                };
-                trace_id?: (string | null) | null;
-                run_duration?: (number | null) | null;
-                evaluation_cost?: (number | null) | null;
-              }
-            | {
-                scorers_data: ({
-                  scorer_name: string;
-                } & (
-                  | ({
-                      reason: {
-                        text: string;
-                        citations?:
-                          | (
-                              | {
-                                  span_id: string;
-                                  span_attribute: string;
-                                }[]
-                              | null
-                            )
-                          | null;
-                      };
-                      metadata?: {
-                        evaluation_model?: string;
-                        evaluation_reasoning_level?: "lite" | "normal" | "high";
-                      };
-                      error?: (string | null) | null;
-                    } & {
-                      /** @constant */
-                      score_type: "numeric";
-                      num_value: number;
-                      /** @default 0 */
-                      minimum_score_range?: string | number;
-                      /** @default 1 */
-                      maximum_score_range?: string | number;
-                    })
-                  | ({
-                      reason: {
-                        text: string;
-                        citations?:
-                          | (
-                              | {
-                                  span_id: string;
-                                  span_attribute: string;
-                                }[]
-                              | null
-                            )
-                          | null;
-                      };
-                      metadata?: {
-                        evaluation_model?: string;
-                        evaluation_reasoning_level?: "lite" | "normal" | "high";
-                      };
-                      error?: (string | null) | null;
-                    } & {
-                      /** @constant */
-                      score_type: "binary";
-                      bool_value: boolean;
-                    })
-                  | ({
-                      reason: {
-                        text: string;
-                        citations?:
-                          | (
-                              | {
-                                  span_id: string;
-                                  span_attribute: string;
-                                }[]
-                              | null
-                            )
-                          | null;
-                      };
-                      metadata?: {
-                        evaluation_model?: string;
-                        evaluation_reasoning_level?: "lite" | "normal" | "high";
-                      };
-                      error?: (string | null) | null;
-                    } & {
-                      /** @constant */
-                      score_type: "categorical";
-                      str_value: string;
-                    })
-                ))[];
-                name?: string;
-                data_object: {
-                  organization_id: string;
-                  project_id: string;
-                  timestamp: string;
-                  trace_id: string;
-                  span_id: string;
-                  parent_span_id: (string | null) | null;
-                  trace_state: (string | null) | null;
-                  span_name: (string | null) | null;
-                  span_kind: (string | null) | null;
-                  service_name: (string | null) | null;
-                  resource_attributes: {
-                    [key: string]: string;
-                  };
-                  span_attributes: {
-                    [key: string]: string;
-                  };
-                  duration: string;
-                  status_code: number;
-                  status_message: (string | null) | null;
-                  events: {
-                    Timestamp: string;
-                    Name: string;
-                    Attributes: {
-                      [key: string]: string;
-                    };
-                  }[];
-                  links: (string | null) | null;
-                };
-                trace_id?: string;
-                run_duration?: number;
-                evaluation_cost?: number;
-              }
-          )[];
-          run: {
-            id?: (string | null) | null;
-            project_id: string;
-            eval_name: string;
-            model?: (string | null) | null;
-            created_at?: (string | null) | null;
-            user_id?: string;
-            scorers?: (unknown[] | null) | null;
-            /** @default [] */
-            custom_scorers: {
-              score_type: string;
-              name: string;
-              class_name?: (string | null) | null;
-              score?: (number | null) | null;
-              /** @default 0 */
-              minimum_score_range?: number;
-              /** @default 1 */
-              maximum_score_range?: number;
-              score_breakdown?:
-                | ({
-                    [key: string]: unknown;
-                  } | null)
-                | null;
-              reason?:
-                | string
-                | {
-                    [key: string]: unknown;
-                  };
-              success?: (boolean | null) | null;
-              model?: (string | null) | null;
-              error?: (string | null) | null;
-              additional_metadata?:
-                | ({
-                    [key: string]: unknown;
-                  } | null)
-                | null;
-              user?: (string | null) | null;
-              server_hosted?: (boolean | null) | null;
-              using_native_model?: (boolean | null) | null;
-              required_params?: (string[] | null) | null;
-              strict_mode?: (boolean | null) | null;
-            }[];
-            /** @default [] */
-            judgment_scorers: {
-              score_type?: (string | null) | null;
-              name: string;
-              model?: (string | null) | null;
-              required_params?: (string[] | null) | null;
-              kwargs?:
-                | ({
-                    [key: string]: unknown;
-                  } | null)
-                | null;
-              /** @enum {string} */
-              result_type?: "numeric" | "binary" | "categorical";
-            }[];
-            examples: ({
-              example_id: string;
-              created_at: string;
-              name?: (string | null) | null;
-              trace_id?: (string | null) | null;
-              span_id?: (string | null) | null;
-              offline_trace_id?: (string | null) | null;
-              session_id?: (string | null) | null;
-              session_trace_ids?: string[];
-              agent_offline_trace_id?: (string | null) | null;
-            } & {
-              [key: string]: unknown;
-            })[];
-            trace_span_id?: (string | null) | null;
-            trace_id?: (string | null) | null;
-          };
-        };
+        "application/json": components["schemas"]["OfflineTestsLogEvalResultsRequest"];
       };
     };
     responses: {
@@ -6148,9 +5308,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            ui_results_url: string;
-          };
+          "application/json": components["schemas"]["OfflineTestsLogEvalResultsResponse"];
         };
       };
       /** @description Response for status 422 */
@@ -6180,318 +5338,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": {
-          results: {
-            scorers_data: {
-              scorer_name: string;
-              value: boolean | number | string;
-              reason: string;
-              citations?:
-                | (
-                    | {
-                        span_id: string;
-                        span_attribute: string;
-                      }[]
-                    | null
-                  )
-                | null;
-              error?: (string | null) | null;
-            }[];
-            data_object: {
-              example_id: string;
-              created_at: string;
-              name?: (string | null) | null;
-              trace_id?: (string | null) | null;
-              span_id?: (string | null) | null;
-              offline_trace_id?: (string | null) | null;
-              session_id?: (string | null) | null;
-              session_trace_ids?: string[];
-              agent_offline_trace_id?: (string | null) | null;
-            } & {
-              [key: string]: unknown;
-            };
-          }[];
-          run: {
-            id?: (string | null) | null;
-            project_id: string;
-            eval_name: string;
-            model?: (string | null) | null;
-            created_at?: (string | null) | null;
-            user_id?: string;
-            scorers?: (unknown[] | null) | null;
-            /** @default [] */
-            custom_scorers: {
-              score_type: string;
-              name: string;
-              class_name?: (string | null) | null;
-              score?: (number | null) | null;
-              /** @default 0 */
-              minimum_score_range?: number;
-              /** @default 1 */
-              maximum_score_range?: number;
-              score_breakdown?:
-                | ({
-                    [key: string]: unknown;
-                  } | null)
-                | null;
-              reason?:
-                | string
-                | {
-                    [key: string]: unknown;
-                  };
-              success?: (boolean | null) | null;
-              model?: (string | null) | null;
-              error?: (string | null) | null;
-              additional_metadata?:
-                | ({
-                    [key: string]: unknown;
-                  } | null)
-                | null;
-              user?: (string | null) | null;
-              server_hosted?: (boolean | null) | null;
-              using_native_model?: (boolean | null) | null;
-              required_params?: (string[] | null) | null;
-              strict_mode?: (boolean | null) | null;
-            }[];
-            /** @default [] */
-            judgment_scorers: {
-              score_type?: (string | null) | null;
-              name: string;
-              model?: (string | null) | null;
-              required_params?: (string[] | null) | null;
-              kwargs?:
-                | ({
-                    [key: string]: unknown;
-                  } | null)
-                | null;
-              /** @enum {string} */
-              result_type?: "numeric" | "binary" | "categorical";
-            }[];
-            examples: ({
-              example_id: string;
-              created_at: string;
-              name?: (string | null) | null;
-              trace_id?: (string | null) | null;
-              span_id?: (string | null) | null;
-              offline_trace_id?: (string | null) | null;
-              session_id?: (string | null) | null;
-              session_trace_ids?: string[];
-              agent_offline_trace_id?: (string | null) | null;
-            } & {
-              [key: string]: unknown;
-            })[];
-            trace_span_id?: (string | null) | null;
-            trace_id?: (string | null) | null;
-          };
-        };
-        "application/x-www-form-urlencoded": {
-          results: {
-            scorers_data: {
-              scorer_name: string;
-              value: boolean | number | string;
-              reason: string;
-              citations?:
-                | (
-                    | {
-                        span_id: string;
-                        span_attribute: string;
-                      }[]
-                    | null
-                  )
-                | null;
-              error?: (string | null) | null;
-            }[];
-            data_object: {
-              example_id: string;
-              created_at: string;
-              name?: (string | null) | null;
-              trace_id?: (string | null) | null;
-              span_id?: (string | null) | null;
-              offline_trace_id?: (string | null) | null;
-              session_id?: (string | null) | null;
-              session_trace_ids?: string[];
-              agent_offline_trace_id?: (string | null) | null;
-            } & {
-              [key: string]: unknown;
-            };
-          }[];
-          run: {
-            id?: (string | null) | null;
-            project_id: string;
-            eval_name: string;
-            model?: (string | null) | null;
-            created_at?: (string | null) | null;
-            user_id?: string;
-            scorers?: (unknown[] | null) | null;
-            /** @default [] */
-            custom_scorers: {
-              score_type: string;
-              name: string;
-              class_name?: (string | null) | null;
-              score?: (number | null) | null;
-              /** @default 0 */
-              minimum_score_range?: number;
-              /** @default 1 */
-              maximum_score_range?: number;
-              score_breakdown?:
-                | ({
-                    [key: string]: unknown;
-                  } | null)
-                | null;
-              reason?:
-                | string
-                | {
-                    [key: string]: unknown;
-                  };
-              success?: (boolean | null) | null;
-              model?: (string | null) | null;
-              error?: (string | null) | null;
-              additional_metadata?:
-                | ({
-                    [key: string]: unknown;
-                  } | null)
-                | null;
-              user?: (string | null) | null;
-              server_hosted?: (boolean | null) | null;
-              using_native_model?: (boolean | null) | null;
-              required_params?: (string[] | null) | null;
-              strict_mode?: (boolean | null) | null;
-            }[];
-            /** @default [] */
-            judgment_scorers: {
-              score_type?: (string | null) | null;
-              name: string;
-              model?: (string | null) | null;
-              required_params?: (string[] | null) | null;
-              kwargs?:
-                | ({
-                    [key: string]: unknown;
-                  } | null)
-                | null;
-              /** @enum {string} */
-              result_type?: "numeric" | "binary" | "categorical";
-            }[];
-            examples: ({
-              example_id: string;
-              created_at: string;
-              name?: (string | null) | null;
-              trace_id?: (string | null) | null;
-              span_id?: (string | null) | null;
-              offline_trace_id?: (string | null) | null;
-              session_id?: (string | null) | null;
-              session_trace_ids?: string[];
-              agent_offline_trace_id?: (string | null) | null;
-            } & {
-              [key: string]: unknown;
-            })[];
-            trace_span_id?: (string | null) | null;
-            trace_id?: (string | null) | null;
-          };
-        };
-        "multipart/form-data": {
-          results: {
-            scorers_data: {
-              scorer_name: string;
-              value: boolean | number | string;
-              reason: string;
-              citations?:
-                | (
-                    | {
-                        span_id: string;
-                        span_attribute: string;
-                      }[]
-                    | null
-                  )
-                | null;
-              error?: (string | null) | null;
-            }[];
-            data_object: {
-              example_id: string;
-              created_at: string;
-              name?: (string | null) | null;
-              trace_id?: (string | null) | null;
-              span_id?: (string | null) | null;
-              offline_trace_id?: (string | null) | null;
-              session_id?: (string | null) | null;
-              session_trace_ids?: string[];
-              agent_offline_trace_id?: (string | null) | null;
-            } & {
-              [key: string]: unknown;
-            };
-          }[];
-          run: {
-            id?: (string | null) | null;
-            project_id: string;
-            eval_name: string;
-            model?: (string | null) | null;
-            created_at?: (string | null) | null;
-            user_id?: string;
-            scorers?: (unknown[] | null) | null;
-            /** @default [] */
-            custom_scorers: {
-              score_type: string;
-              name: string;
-              class_name?: (string | null) | null;
-              score?: (number | null) | null;
-              /** @default 0 */
-              minimum_score_range?: number;
-              /** @default 1 */
-              maximum_score_range?: number;
-              score_breakdown?:
-                | ({
-                    [key: string]: unknown;
-                  } | null)
-                | null;
-              reason?:
-                | string
-                | {
-                    [key: string]: unknown;
-                  };
-              success?: (boolean | null) | null;
-              model?: (string | null) | null;
-              error?: (string | null) | null;
-              additional_metadata?:
-                | ({
-                    [key: string]: unknown;
-                  } | null)
-                | null;
-              user?: (string | null) | null;
-              server_hosted?: (boolean | null) | null;
-              using_native_model?: (boolean | null) | null;
-              required_params?: (string[] | null) | null;
-              strict_mode?: (boolean | null) | null;
-            }[];
-            /** @default [] */
-            judgment_scorers: {
-              score_type?: (string | null) | null;
-              name: string;
-              model?: (string | null) | null;
-              required_params?: (string[] | null) | null;
-              kwargs?:
-                | ({
-                    [key: string]: unknown;
-                  } | null)
-                | null;
-              /** @enum {string} */
-              result_type?: "numeric" | "binary" | "categorical";
-            }[];
-            examples: ({
-              example_id: string;
-              created_at: string;
-              name?: (string | null) | null;
-              trace_id?: (string | null) | null;
-              span_id?: (string | null) | null;
-              offline_trace_id?: (string | null) | null;
-              session_id?: (string | null) | null;
-              session_trace_ids?: string[];
-              agent_offline_trace_id?: (string | null) | null;
-            } & {
-              [key: string]: unknown;
-            })[];
-            trace_span_id?: (string | null) | null;
-            trace_id?: (string | null) | null;
-          };
-        };
+        "application/json": components["schemas"]["OfflineTestsLogEvalResultsExamplesRequest"];
       };
     };
     responses: {
@@ -6501,9 +5348,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            ui_results_url: string;
-          };
+          "application/json": components["schemas"]["OfflineTestsLogEvalResultsExamplesResponse"];
         };
       };
       /** @description Response for status 422 */
@@ -6533,222 +5378,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": {
-          id?: (string | null) | null;
-          project_id: string;
-          eval_name: string;
-          model?: (string | null) | null;
-          created_at?: (string | null) | null;
-          user_id?: string;
-          scorers?: (unknown[] | null) | null;
-          /** @default [] */
-          custom_scorers: {
-            score_type: string;
-            name: string;
-            class_name?: (string | null) | null;
-            score?: (number | null) | null;
-            /** @default 0 */
-            minimum_score_range?: number;
-            /** @default 1 */
-            maximum_score_range?: number;
-            score_breakdown?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            reason?:
-              | string
-              | {
-                  [key: string]: unknown;
-                };
-            success?: (boolean | null) | null;
-            model?: (string | null) | null;
-            error?: (string | null) | null;
-            additional_metadata?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            user?: (string | null) | null;
-            server_hosted?: (boolean | null) | null;
-            using_native_model?: (boolean | null) | null;
-            required_params?: (string[] | null) | null;
-            strict_mode?: (boolean | null) | null;
-          }[];
-          /** @default [] */
-          judgment_scorers: {
-            score_type?: (string | null) | null;
-            name: string;
-            model?: (string | null) | null;
-            required_params?: (string[] | null) | null;
-            kwargs?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            /** @enum {string} */
-            result_type?: "numeric" | "binary" | "categorical";
-          }[];
-          examples: ({
-            example_id: string;
-            created_at: string;
-            name?: (string | null) | null;
-            trace_id?: (string | null) | null;
-            span_id?: (string | null) | null;
-            offline_trace_id?: (string | null) | null;
-            session_id?: (string | null) | null;
-            session_trace_ids?: string[];
-            agent_offline_trace_id?: (string | null) | null;
-          } & {
-            [key: string]: unknown;
-          })[];
-          trace_span_id?: (string | null) | null;
-          trace_id?: (string | null) | null;
-        };
-        "application/x-www-form-urlencoded": {
-          id?: (string | null) | null;
-          project_id: string;
-          eval_name: string;
-          model?: (string | null) | null;
-          created_at?: (string | null) | null;
-          user_id?: string;
-          scorers?: (unknown[] | null) | null;
-          /** @default [] */
-          custom_scorers: {
-            score_type: string;
-            name: string;
-            class_name?: (string | null) | null;
-            score?: (number | null) | null;
-            /** @default 0 */
-            minimum_score_range?: number;
-            /** @default 1 */
-            maximum_score_range?: number;
-            score_breakdown?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            reason?:
-              | string
-              | {
-                  [key: string]: unknown;
-                };
-            success?: (boolean | null) | null;
-            model?: (string | null) | null;
-            error?: (string | null) | null;
-            additional_metadata?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            user?: (string | null) | null;
-            server_hosted?: (boolean | null) | null;
-            using_native_model?: (boolean | null) | null;
-            required_params?: (string[] | null) | null;
-            strict_mode?: (boolean | null) | null;
-          }[];
-          /** @default [] */
-          judgment_scorers: {
-            score_type?: (string | null) | null;
-            name: string;
-            model?: (string | null) | null;
-            required_params?: (string[] | null) | null;
-            kwargs?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            /** @enum {string} */
-            result_type?: "numeric" | "binary" | "categorical";
-          }[];
-          examples: ({
-            example_id: string;
-            created_at: string;
-            name?: (string | null) | null;
-            trace_id?: (string | null) | null;
-            span_id?: (string | null) | null;
-            offline_trace_id?: (string | null) | null;
-            session_id?: (string | null) | null;
-            session_trace_ids?: string[];
-            agent_offline_trace_id?: (string | null) | null;
-          } & {
-            [key: string]: unknown;
-          })[];
-          trace_span_id?: (string | null) | null;
-          trace_id?: (string | null) | null;
-        };
-        "multipart/form-data": {
-          id?: (string | null) | null;
-          project_id: string;
-          eval_name: string;
-          model?: (string | null) | null;
-          created_at?: (string | null) | null;
-          user_id?: string;
-          scorers?: (unknown[] | null) | null;
-          /** @default [] */
-          custom_scorers: {
-            score_type: string;
-            name: string;
-            class_name?: (string | null) | null;
-            score?: (number | null) | null;
-            /** @default 0 */
-            minimum_score_range?: number;
-            /** @default 1 */
-            maximum_score_range?: number;
-            score_breakdown?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            reason?:
-              | string
-              | {
-                  [key: string]: unknown;
-                };
-            success?: (boolean | null) | null;
-            model?: (string | null) | null;
-            error?: (string | null) | null;
-            additional_metadata?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            user?: (string | null) | null;
-            server_hosted?: (boolean | null) | null;
-            using_native_model?: (boolean | null) | null;
-            required_params?: (string[] | null) | null;
-            strict_mode?: (boolean | null) | null;
-          }[];
-          /** @default [] */
-          judgment_scorers: {
-            score_type?: (string | null) | null;
-            name: string;
-            model?: (string | null) | null;
-            required_params?: (string[] | null) | null;
-            kwargs?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            /** @enum {string} */
-            result_type?: "numeric" | "binary" | "categorical";
-          }[];
-          examples: ({
-            example_id: string;
-            created_at: string;
-            name?: (string | null) | null;
-            trace_id?: (string | null) | null;
-            span_id?: (string | null) | null;
-            offline_trace_id?: (string | null) | null;
-            session_id?: (string | null) | null;
-            session_trace_ids?: string[];
-            agent_offline_trace_id?: (string | null) | null;
-          } & {
-            [key: string]: unknown;
-          })[];
-          trace_span_id?: (string | null) | null;
-          trace_id?: (string | null) | null;
-        };
+        "application/json": components["schemas"]["ExampleEvaluationRun"];
       };
     };
     responses: {
@@ -6779,192 +5409,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": {
-          id?: (string | null) | null;
-          project_id: string;
-          eval_name: string;
-          model?: (string | null) | null;
-          created_at?: (string | null) | null;
-          user_id?: string;
-          scorers?: (unknown[] | null) | null;
-          /** @default [] */
-          custom_scorers: {
-            score_type: string;
-            name: string;
-            class_name?: (string | null) | null;
-            score?: (number | null) | null;
-            /** @default 0 */
-            minimum_score_range?: number;
-            /** @default 1 */
-            maximum_score_range?: number;
-            score_breakdown?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            reason?:
-              | string
-              | {
-                  [key: string]: unknown;
-                };
-            success?: (boolean | null) | null;
-            model?: (string | null) | null;
-            error?: (string | null) | null;
-            additional_metadata?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            user?: (string | null) | null;
-            server_hosted?: (boolean | null) | null;
-            using_native_model?: (boolean | null) | null;
-            required_params?: (string[] | null) | null;
-            strict_mode?: (boolean | null) | null;
-          }[];
-          /** @default [] */
-          judgment_scorers: {
-            score_type?: (string | null) | null;
-            name: string;
-            model?: (string | null) | null;
-            required_params?: (string[] | null) | null;
-            kwargs?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            /** @enum {string} */
-            result_type?: "numeric" | "binary" | "categorical";
-          }[];
-          trace_and_span_ids: [string, string][];
-          /** @default false */
-          is_offline: boolean;
-          /** @default false */
-          is_behavior: boolean;
-        };
-        "application/x-www-form-urlencoded": {
-          id?: (string | null) | null;
-          project_id: string;
-          eval_name: string;
-          model?: (string | null) | null;
-          created_at?: (string | null) | null;
-          user_id?: string;
-          scorers?: (unknown[] | null) | null;
-          /** @default [] */
-          custom_scorers: {
-            score_type: string;
-            name: string;
-            class_name?: (string | null) | null;
-            score?: (number | null) | null;
-            /** @default 0 */
-            minimum_score_range?: number;
-            /** @default 1 */
-            maximum_score_range?: number;
-            score_breakdown?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            reason?:
-              | string
-              | {
-                  [key: string]: unknown;
-                };
-            success?: (boolean | null) | null;
-            model?: (string | null) | null;
-            error?: (string | null) | null;
-            additional_metadata?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            user?: (string | null) | null;
-            server_hosted?: (boolean | null) | null;
-            using_native_model?: (boolean | null) | null;
-            required_params?: (string[] | null) | null;
-            strict_mode?: (boolean | null) | null;
-          }[];
-          /** @default [] */
-          judgment_scorers: {
-            score_type?: (string | null) | null;
-            name: string;
-            model?: (string | null) | null;
-            required_params?: (string[] | null) | null;
-            kwargs?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            /** @enum {string} */
-            result_type?: "numeric" | "binary" | "categorical";
-          }[];
-          trace_and_span_ids: [string, string][];
-          /** @default false */
-          is_offline: boolean;
-          /** @default false */
-          is_behavior: boolean;
-        };
-        "multipart/form-data": {
-          id?: (string | null) | null;
-          project_id: string;
-          eval_name: string;
-          model?: (string | null) | null;
-          created_at?: (string | null) | null;
-          user_id?: string;
-          scorers?: (unknown[] | null) | null;
-          /** @default [] */
-          custom_scorers: {
-            score_type: string;
-            name: string;
-            class_name?: (string | null) | null;
-            score?: (number | null) | null;
-            /** @default 0 */
-            minimum_score_range?: number;
-            /** @default 1 */
-            maximum_score_range?: number;
-            score_breakdown?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            reason?:
-              | string
-              | {
-                  [key: string]: unknown;
-                };
-            success?: (boolean | null) | null;
-            model?: (string | null) | null;
-            error?: (string | null) | null;
-            additional_metadata?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            user?: (string | null) | null;
-            server_hosted?: (boolean | null) | null;
-            using_native_model?: (boolean | null) | null;
-            required_params?: (string[] | null) | null;
-            strict_mode?: (boolean | null) | null;
-          }[];
-          /** @default [] */
-          judgment_scorers: {
-            score_type?: (string | null) | null;
-            name: string;
-            model?: (string | null) | null;
-            required_params?: (string[] | null) | null;
-            kwargs?:
-              | ({
-                  [key: string]: unknown;
-                } | null)
-              | null;
-            /** @enum {string} */
-            result_type?: "numeric" | "binary" | "categorical";
-          }[];
-          trace_and_span_ids: [string, string][];
-          /** @default false */
-          is_offline: boolean;
-          /** @default false */
-          is_behavior: boolean;
-        };
+        "application/json": components["schemas"]["TraceEvaluationRun"];
       };
     };
     responses: {
@@ -6987,7 +5432,7 @@ export interface operations {
   getV1ProjectsByProjectIdExperimentsByRunId: {
     parameters: {
       query?: {
-        limit?: string | number;
+        limit?: number;
         cursor?: string;
       };
       header?: never;
@@ -7005,98 +5450,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            results:
-              | (
-                  | (
-                      | {
-                          organization_id: string;
-                          project_id: string;
-                          test_run_id: string;
-                          dataset_id: string;
-                          dataset_version_id: string;
-                          example_id: string;
-                          agent_offline_trace_id: (string | null) | null;
-                          created_at: string;
-                          example:
-                            | ({
-                                example_id: string;
-                                organization_id?: string;
-                                project_id?: string;
-                                data: {
-                                  [key: string]: unknown;
-                                };
-                                metadata?:
-                                  | ({
-                                      [key: string]: unknown;
-                                    } | null)
-                                  | null;
-                                managed_metadata: {
-                                  [key: string]: unknown;
-                                };
-                                created_at?: string;
-                                user_id: string;
-                              } | null)
-                            | null;
-                          data: {
-                            [key: string]: unknown;
-                          };
-                          scorers: {
-                            judge_id: string;
-                            judge_name: (string | null) | null;
-                            judge_major_version: number;
-                            judge_minor_version: number;
-                            score_type: string;
-                            num_value: number;
-                            bool_value: boolean;
-                            str_value: string;
-                            reason: unknown;
-                            metadata: unknown;
-                            success: (boolean | null) | null;
-                            error: (string | null) | null;
-                            created_at: string;
-                          }[];
-                        }[]
-                      | {
-                          organization_id: string;
-                          experiment_run_id: string;
-                          example_id: string;
-                          data: unknown;
-                          name: (string | null) | null;
-                          created_at: string;
-                          scorers: {
-                            scorer_data_id: string;
-                            judge_id: string;
-                            judge_name: string;
-                            name: string;
-                            score_type: "numeric" | "binary" | "categorical";
-                            num_value: number;
-                            bool_value: boolean;
-                            str_value: string;
-                            score: number;
-                            success: number;
-                            reason: (string | null) | null;
-                            evaluation_model: (string | null) | null;
-                            threshold: number;
-                            created_at: string;
-                            error: (string | null) | null;
-                            additional_metadata:
-                              | ({
-                                  [key: string]: unknown;
-                                } | null)
-                              | null;
-                            minimum_score_range: number;
-                            maximum_score_range: number;
-                          }[];
-                        }[]
-                    )
-                  | null
-                )
-              | null;
-            has_more?: boolean;
-            next_cursor?: (string | null) | null;
-            ui_results_url: (string | null) | null;
-          };
+          "application/json": components["schemas"]["FetchTestRunViaExperimentAliasResponse"];
         };
       };
     };
@@ -7183,7 +5537,7 @@ export interface operations {
           title: string;
           /** @description 1–2 short sentences describing the observed failure, with inline trace and relevant signal citations. Omit fixes and investigation history. */
           diagnosis: string;
-          /** @description 2–3 Markdown bullets on impact, scope, frequency, trends, and material uncertainty. Quantify contributing Behavior/Judge signals with inline citations. Combine related facts; omit immaterial unknowns and labeled checklists. */
+          /** @description 2–3 Markdown bullets on impact, scope, frequency, trends, and material uncertainty. Quantify how often contributing labels were applied, and any other judge signals, with inline citations. Combine related facts; omit immaterial unknowns and labeled checklists. */
           impact_summary?: string | null;
           /** @enum {string} */
           priority?: "low" | "medium" | "high" | "critical";
@@ -7191,51 +5545,7 @@ export interface operations {
           production_activity?: "new" | "ongoing" | "increasing" | "recurring";
           /** @description 1–3 Markdown bullets suggesting evidence-backed remediation. Omit repeated evidence and claims of an exact cause or fix. */
           agent_reasoning?: string | null;
-          /** @description Cite every supporting trace with a one-sentence failure label and optional short quote. Add a span or trace-behavior citation for each contributing location, using the same trace_id and real span_id when available; use trace-only evidence only when no deeper location is reliable. For contributing Behavior/Judge signals, include their citation with a stable name label and matching trace-behavior verdicts with tool-returned behavior_id/judge_id and value. Put changing metrics and confidence in impact_summary. */
-          cited_items: ({
-            type: string;
-          } & {
-            [key: string]: unknown;
-          })[];
-        };
-        "application/x-www-form-urlencoded": {
-          /** @description Stable root-cause key: lowercase letters, digits, hyphens, and colons. */
-          issue_key?: string;
-          /** @description Short issue title. */
-          title: string;
-          /** @description 1–2 short sentences describing the observed failure, with inline trace and relevant signal citations. Omit fixes and investigation history. */
-          diagnosis: string;
-          /** @description 2–3 Markdown bullets on impact, scope, frequency, trends, and material uncertainty. Quantify contributing Behavior/Judge signals with inline citations. Combine related facts; omit immaterial unknowns and labeled checklists. */
-          impact_summary?: string | null;
-          /** @enum {string} */
-          priority?: "low" | "medium" | "high" | "critical";
-          /** @enum {string} */
-          production_activity?: "new" | "ongoing" | "increasing" | "recurring";
-          /** @description 1–3 Markdown bullets suggesting evidence-backed remediation. Omit repeated evidence and claims of an exact cause or fix. */
-          agent_reasoning?: string | null;
-          /** @description Cite every supporting trace with a one-sentence failure label and optional short quote. Add a span or trace-behavior citation for each contributing location, using the same trace_id and real span_id when available; use trace-only evidence only when no deeper location is reliable. For contributing Behavior/Judge signals, include their citation with a stable name label and matching trace-behavior verdicts with tool-returned behavior_id/judge_id and value. Put changing metrics and confidence in impact_summary. */
-          cited_items: ({
-            type: string;
-          } & {
-            [key: string]: unknown;
-          })[];
-        };
-        "multipart/form-data": {
-          /** @description Stable root-cause key: lowercase letters, digits, hyphens, and colons. */
-          issue_key?: string;
-          /** @description Short issue title. */
-          title: string;
-          /** @description 1–2 short sentences describing the observed failure, with inline trace and relevant signal citations. Omit fixes and investigation history. */
-          diagnosis: string;
-          /** @description 2–3 Markdown bullets on impact, scope, frequency, trends, and material uncertainty. Quantify contributing Behavior/Judge signals with inline citations. Combine related facts; omit immaterial unknowns and labeled checklists. */
-          impact_summary?: string | null;
-          /** @enum {string} */
-          priority?: "low" | "medium" | "high" | "critical";
-          /** @enum {string} */
-          production_activity?: "new" | "ongoing" | "increasing" | "recurring";
-          /** @description 1–3 Markdown bullets suggesting evidence-backed remediation. Omit repeated evidence and claims of an exact cause or fix. */
-          agent_reasoning?: string | null;
-          /** @description Cite every supporting trace with a one-sentence failure label and optional short quote. Add a span or trace-behavior citation for each contributing location, using the same trace_id and real span_id when available; use trace-only evidence only when no deeper location is reliable. For contributing Behavior/Judge signals, include their citation with a stable name label and matching trace-behavior verdicts with tool-returned behavior_id/judge_id and value. Put changing metrics and confidence in impact_summary. */
+          /** @description Cite every supporting trace with a one-sentence failure description in its `label` field and an optional short quote. Add a span or trace-behavior citation for each contributing location, using the same trace_id and real span_id when available; use trace-only evidence only when no deeper location is reliable. For contributing label or judge signals, include their citation with the stable name in its `label` field and matching trace-behavior verdicts with tool-returned behavior_id/judge_id and value. Label citations use type "behavior". Put changing metrics and confidence in impact_summary. */
           cited_items: ({
             type: string;
           } & {
@@ -7363,7 +5673,7 @@ export interface operations {
           title?: string;
           /** @description 1–2 short sentences describing the observed failure, with inline trace and relevant signal citations. Omit fixes and investigation history. */
           diagnosis?: string;
-          /** @description 2–3 Markdown bullets on impact, scope, frequency, trends, and material uncertainty. Quantify contributing Behavior/Judge signals with inline citations. Combine related facts; omit immaterial unknowns and labeled checklists. */
+          /** @description 2–3 Markdown bullets on impact, scope, frequency, trends, and material uncertainty. Quantify how often contributing labels were applied, and any other judge signals, with inline citations. Combine related facts; omit immaterial unknowns and labeled checklists. */
           impact_summary?: string | null;
           /** @enum {string} */
           priority?: "low" | "medium" | "high" | "critical";
@@ -7371,7 +5681,7 @@ export interface operations {
           production_activity?: "new" | "ongoing" | "increasing" | "recurring";
           /** @description 1–3 Markdown bullets suggesting evidence-backed remediation. Omit repeated evidence and claims of an exact cause or fix. */
           agent_reasoning?: string | null;
-          /** @description Cite every supporting trace with a one-sentence failure label and optional short quote. Add a span or trace-behavior citation for each contributing location, using the same trace_id and real span_id when available; use trace-only evidence only when no deeper location is reliable. For contributing Behavior/Judge signals, include their citation with a stable name label and matching trace-behavior verdicts with tool-returned behavior_id/judge_id and value. Put changing metrics and confidence in impact_summary. */
+          /** @description Cite every supporting trace with a one-sentence failure description in its `label` field and an optional short quote. Add a span or trace-behavior citation for each contributing location, using the same trace_id and real span_id when available; use trace-only evidence only when no deeper location is reliable. For contributing label or judge signals, include their citation with the stable name in its `label` field and matching trace-behavior verdicts with tool-returned behavior_id/judge_id and value. Label citations use type "behavior". Put changing metrics and confidence in impact_summary. */
           cited_items?: ({
             type: string;
           } & {
@@ -7381,63 +5691,7 @@ export interface operations {
           user_status?: "needs_review" | "ignored" | "merged" | "monitored";
           /** @description Monitoring Judge ID; required for monitored status. */
           judge_id?: string;
-          /** @description Failure Behavior ID from the production Judge version; required for monitored status. */
-          behavior_id?: string;
-          /** @description Timeline comment, alone or with other changes. */
-          message?: string;
-        };
-        "application/x-www-form-urlencoded": {
-          /** @description Short issue title. */
-          title?: string;
-          /** @description 1–2 short sentences describing the observed failure, with inline trace and relevant signal citations. Omit fixes and investigation history. */
-          diagnosis?: string;
-          /** @description 2–3 Markdown bullets on impact, scope, frequency, trends, and material uncertainty. Quantify contributing Behavior/Judge signals with inline citations. Combine related facts; omit immaterial unknowns and labeled checklists. */
-          impact_summary?: string | null;
-          /** @enum {string} */
-          priority?: "low" | "medium" | "high" | "critical";
-          /** @enum {string} */
-          production_activity?: "new" | "ongoing" | "increasing" | "recurring";
-          /** @description 1–3 Markdown bullets suggesting evidence-backed remediation. Omit repeated evidence and claims of an exact cause or fix. */
-          agent_reasoning?: string | null;
-          /** @description Cite every supporting trace with a one-sentence failure label and optional short quote. Add a span or trace-behavior citation for each contributing location, using the same trace_id and real span_id when available; use trace-only evidence only when no deeper location is reliable. For contributing Behavior/Judge signals, include their citation with a stable name label and matching trace-behavior verdicts with tool-returned behavior_id/judge_id and value. Put changing metrics and confidence in impact_summary. */
-          cited_items?: ({
-            type: string;
-          } & {
-            [key: string]: unknown;
-          })[];
-          /** @enum {string} */
-          user_status?: "needs_review" | "ignored" | "merged" | "monitored";
-          /** @description Monitoring Judge ID; required for monitored status. */
-          judge_id?: string;
-          /** @description Failure Behavior ID from the production Judge version; required for monitored status. */
-          behavior_id?: string;
-          /** @description Timeline comment, alone or with other changes. */
-          message?: string;
-        };
-        "multipart/form-data": {
-          /** @description Short issue title. */
-          title?: string;
-          /** @description 1–2 short sentences describing the observed failure, with inline trace and relevant signal citations. Omit fixes and investigation history. */
-          diagnosis?: string;
-          /** @description 2–3 Markdown bullets on impact, scope, frequency, trends, and material uncertainty. Quantify contributing Behavior/Judge signals with inline citations. Combine related facts; omit immaterial unknowns and labeled checklists. */
-          impact_summary?: string | null;
-          /** @enum {string} */
-          priority?: "low" | "medium" | "high" | "critical";
-          /** @enum {string} */
-          production_activity?: "new" | "ongoing" | "increasing" | "recurring";
-          /** @description 1–3 Markdown bullets suggesting evidence-backed remediation. Omit repeated evidence and claims of an exact cause or fix. */
-          agent_reasoning?: string | null;
-          /** @description Cite every supporting trace with a one-sentence failure label and optional short quote. Add a span or trace-behavior citation for each contributing location, using the same trace_id and real span_id when available; use trace-only evidence only when no deeper location is reliable. For contributing Behavior/Judge signals, include their citation with a stable name label and matching trace-behavior verdicts with tool-returned behavior_id/judge_id and value. Put changing metrics and confidence in impact_summary. */
-          cited_items?: ({
-            type: string;
-          } & {
-            [key: string]: unknown;
-          })[];
-          /** @enum {string} */
-          user_status?: "needs_review" | "ignored" | "merged" | "monitored";
-          /** @description Monitoring Judge ID; required for monitored status. */
-          judge_id?: string;
-          /** @description Failure Behavior ID from the production Judge version; required for monitored status. */
+          /** @description ID of the label the production judge applies; required for monitored status. The field name remains behavior_id. */
           behavior_id?: string;
           /** @description Timeline comment, alone or with other changes. */
           message?: string;
@@ -7513,10 +5767,16 @@ export interface operations {
               id: string;
               name: string;
               judge_description: string | null;
-              /** @enum {string} */
+              /**
+               * @description Agent judge (wire value `prompt`); Code judge (wire value `custom`); legacy Agent judge (wire value `agent`); Condition judge (wire value `deterministic`)
+               * @enum {string}
+               */
               judge_type: "prompt" | "custom" | "agent" | "deterministic";
               knowledge_file_id: string | null;
-              /** @enum {string} */
+              /**
+               * @description numeric, binary, or categorical. For binary judges, true means the judge applied its label, which the app shows under the judge's name. false means no label was applied. For classification judges, the value is the label, meaning the chosen option.
+               * @enum {string}
+               */
               score_type: "numeric" | "binary" | "categorical";
               updated_at: string;
               judge_version_id: string;
@@ -7527,6 +5787,7 @@ export interface operations {
               optimistic_eval_enabled: boolean;
               /** @enum {string|null} */
               reasoning_level: "lite" | "normal" | "high" | null;
+              /** @description Labels this judge can apply. For binary judges, true means the judge applied its label, which the app shows under the judge's name. false means no label was applied. For classification judges, the value is the label, meaning the chosen option. */
               outputs: {
                 behavior_id: string;
                 name: string;
@@ -7535,8 +5796,17 @@ export interface operations {
               online_environment_names: string[] | null;
               /** @enum {string} */
               online_evaluation_mode: "continuous" | "on_demand";
+              action_config?: {
+                action_groups: components["schemas"]["JudgeActionGroup"][];
+              } | null;
               online_sampling_rate: number;
-              online_span_triggers: unknown;
+              online_span_triggers:
+                | unknown
+                | {
+                    /** @enum {string} */
+                    kind: "and" | "or";
+                    conditions: unknown[];
+                  };
               online_session_scoring: boolean;
             }[];
           };
@@ -7562,75 +5832,51 @@ export interface operations {
                 name: string;
                 /** @description Human-readable description shown in the UI */
                 judgeDescription?: string | null;
-                /** @enum {string} */
+                /**
+                 * @description Agent judge (wire value `prompt`)
+                 * @enum {string}
+                 */
                 judgeType: "prompt";
-                initialVersion:
-                  | {
-                      /** @enum {string} */
-                      scoreType: "binary";
-                      advancedSettings?: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled?: boolean | null;
-                        session_evaluation_idle_enabled?: boolean | null;
-                        session_evaluation_min_candidate_traces?: number | null;
-                        session_evaluation_max_wait_minutes?: number | null;
-                      };
-                    }
-                  | {
-                      /** @enum {string} */
-                      scoreType: "numeric";
-                      advancedSettings?: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled?: boolean | null;
-                        session_evaluation_idle_enabled?: boolean | null;
-                        session_evaluation_min_candidate_traces?: number | null;
-                        session_evaluation_max_wait_minutes?: number | null;
-                      };
-                    }
-                  | {
-                      /** @enum {string} */
-                      scoreType: "categorical";
-                      /** @description At least two outputs emitted by the judge */
-                      outputs: {
-                        name: string;
-                        description: string;
-                      }[];
-                      advancedSettings?: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled?: boolean | null;
-                        session_evaluation_idle_enabled?: boolean | null;
-                        session_evaluation_min_candidate_traces?: number | null;
-                        session_evaluation_max_wait_minutes?: number | null;
-                      };
-                    };
+                initialVersion: {
+                  actionConfig?: {
+                    action_groups: components["schemas"]["JudgeActionGroup"][];
+                  } | null;
+                  /** @enum {string} */
+                  scoreType: "categorical";
+                  outputs: {
+                    name: string;
+                    description: string;
+                  }[];
+                  advancedSettings?: {
+                    /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
+                    online_environment_names: string[] | null;
+                    /** @enum {string} */
+                    online_evaluation_mode: "continuous" | "on_demand";
+                    online_sampling_rate: number;
+                    online_span_triggers:
+                      | unknown
+                      | {
+                          /** @enum {string} */
+                          kind: "and" | "or";
+                          conditions: unknown[];
+                        };
+                    online_session_scoring: boolean;
+                    session_evaluation_count_enabled?: boolean | null;
+                    session_evaluation_idle_enabled?: boolean | null;
+                    session_evaluation_min_candidate_traces?: number | null;
+                    session_evaluation_max_wait_minutes?: number | null;
+                  };
+                };
                 config: {
                   /** @description Judge prompt template */
                   prompt: string;
                   /**
-                   * @description Description stored on the initial prompt version
+                   * @description Description stored on the initial Agent judge version
                    * @default null
                    */
                   description?: string | null;
                   /**
-                   * @description Reasoning level for the agent judge runtime
+                   * @description Reasoning level for the Agent judge runtime
                    * @default lite
                    * @enum {string}
                    */
@@ -7646,67 +5892,46 @@ export interface operations {
                 name: string;
                 /** @description Human-readable description shown in the UI */
                 judgeDescription?: string | null;
-                /** @enum {string} */
+                /**
+                 * @description Code judge (wire value `custom`)
+                 * @enum {string}
+                 */
                 judgeType: "custom";
-                initialVersion:
-                  | {
-                      /** @enum {string} */
-                      scoreType: "binary";
-                      advancedSettings?: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled?: boolean | null;
-                        session_evaluation_idle_enabled?: boolean | null;
-                        session_evaluation_min_candidate_traces?: number | null;
-                        session_evaluation_max_wait_minutes?: number | null;
-                      };
-                    }
-                  | {
-                      /** @enum {string} */
-                      scoreType: "numeric";
-                      advancedSettings?: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled?: boolean | null;
-                        session_evaluation_idle_enabled?: boolean | null;
-                        session_evaluation_min_candidate_traces?: number | null;
-                        session_evaluation_max_wait_minutes?: number | null;
-                      };
-                    }
-                  | {
-                      /** @enum {string} */
-                      scoreType: "categorical";
-                      /** @description At least two outputs emitted by the judge */
-                      outputs: {
-                        name: string;
-                        description: string;
-                      }[];
-                      advancedSettings?: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled?: boolean | null;
-                        session_evaluation_idle_enabled?: boolean | null;
-                        session_evaluation_min_candidate_traces?: number | null;
-                        session_evaluation_max_wait_minutes?: number | null;
-                      };
-                    };
+                initialVersion: {
+                  actionConfig?: {
+                    action_groups: components["schemas"]["JudgeActionGroup"][];
+                  } | null;
+                  /** @enum {string} */
+                  scoreType: "categorical";
+                  outputs: {
+                    name: string;
+                    description: string;
+                  }[];
+                  advancedSettings?: {
+                    /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
+                    online_environment_names: string[] | null;
+                    /** @enum {string} */
+                    online_evaluation_mode: "continuous" | "on_demand";
+                    online_sampling_rate: number;
+                    online_span_triggers:
+                      | unknown
+                      | {
+                          /** @enum {string} */
+                          kind: "and" | "or";
+                          conditions: unknown[];
+                        };
+                    online_session_scoring: boolean;
+                    session_evaluation_count_enabled?: boolean | null;
+                    session_evaluation_idle_enabled?: boolean | null;
+                    session_evaluation_min_candidate_traces?: number | null;
+                    session_evaluation_max_wait_minutes?: number | null;
+                  };
+                };
                 config: {
-                  /** @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB. */
+                  /**
+                   * Format: base64
+                   * @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB.
+                   */
                   bundleBase64: string;
                   /** @description Path to the Python entrypoint inside the tar.gz bundle */
                   entrypointPath: string;
@@ -7715,365 +5940,57 @@ export interface operations {
                   /** @description Python scorer class name exported by the entrypoint */
                   className: string;
                   /**
-                   * @description Input format expected by the code judge. Defaults to 'example'.
+                   * @description Input format expected by the Code judge. Defaults to 'example'.
                    * @enum {string|null}
                    */
                   scorerType?: "example" | "trace" | null;
                   /**
-                   * @description judgeval SDK major version targeted by the code judge
+                   * @description judgeval SDK major version targeted by the Code judge
                    * @default 4
                    */
                   sdkVersion?: number;
-                  /** @description Description stored on the custom-code version */
+                  /** @description Description stored on the Code judge version */
                   description?: string | null;
-                };
-              };
-        };
-        "application/x-www-form-urlencoded": {
-          judge:
-            | {
-                /** @description Unique judge name within the project */
-                name: string;
-                /** @description Human-readable description shown in the UI */
-                judgeDescription?: string | null;
-                /** @enum {string} */
-                judgeType: "prompt";
-                initialVersion:
-                  | {
-                      /** @enum {string} */
-                      scoreType: "binary";
-                      advancedSettings?: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled?: boolean | null;
-                        session_evaluation_idle_enabled?: boolean | null;
-                        session_evaluation_min_candidate_traces?: number | null;
-                        session_evaluation_max_wait_minutes?: number | null;
-                      };
-                    }
-                  | {
-                      /** @enum {string} */
-                      scoreType: "numeric";
-                      advancedSettings?: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled?: boolean | null;
-                        session_evaluation_idle_enabled?: boolean | null;
-                        session_evaluation_min_candidate_traces?: number | null;
-                        session_evaluation_max_wait_minutes?: number | null;
-                      };
-                    }
-                  | {
-                      /** @enum {string} */
-                      scoreType: "categorical";
-                      /** @description At least two outputs emitted by the judge */
-                      outputs: {
-                        name: string;
-                        description: string;
-                      }[];
-                      advancedSettings?: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled?: boolean | null;
-                        session_evaluation_idle_enabled?: boolean | null;
-                        session_evaluation_min_candidate_traces?: number | null;
-                        session_evaluation_max_wait_minutes?: number | null;
-                      };
-                    };
-                config: {
-                  /** @description Judge prompt template */
-                  prompt: string;
-                  /**
-                   * @description Description stored on the initial prompt version
-                   * @default null
-                   */
-                  description?: string | null;
-                  /**
-                   * @description Reasoning level for the agent judge runtime
-                   * @default lite
-                   * @enum {string}
-                   */
-                  reasoningLevel?: "lite" | "normal" | "high";
-                  /** @default 0 */
-                  minScore?: number;
-                  /** @default 1 */
-                  maxScore?: number;
                 };
               }
             | {
-                /** @description Unique judge name within the project */
                 name: string;
-                /** @description Human-readable description shown in the UI */
                 judgeDescription?: string | null;
                 /** @enum {string} */
-                judgeType: "custom";
-                initialVersion:
-                  | {
-                      /** @enum {string} */
-                      scoreType: "binary";
-                      advancedSettings?: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled?: boolean | null;
-                        session_evaluation_idle_enabled?: boolean | null;
-                        session_evaluation_min_candidate_traces?: number | null;
-                        session_evaluation_max_wait_minutes?: number | null;
-                      };
-                    }
-                  | {
-                      /** @enum {string} */
-                      scoreType: "numeric";
-                      advancedSettings?: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled?: boolean | null;
-                        session_evaluation_idle_enabled?: boolean | null;
-                        session_evaluation_min_candidate_traces?: number | null;
-                        session_evaluation_max_wait_minutes?: number | null;
-                      };
-                    }
-                  | {
-                      /** @enum {string} */
-                      scoreType: "categorical";
-                      /** @description At least two outputs emitted by the judge */
-                      outputs: {
-                        name: string;
-                        description: string;
-                      }[];
-                      advancedSettings?: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled?: boolean | null;
-                        session_evaluation_idle_enabled?: boolean | null;
-                        session_evaluation_min_candidate_traces?: number | null;
-                        session_evaluation_max_wait_minutes?: number | null;
-                      };
-                    };
-                config: {
-                  /** @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB. */
-                  bundleBase64: string;
-                  /** @description Path to the Python entrypoint inside the tar.gz bundle */
-                  entrypointPath: string;
-                  /** @description Optional requirements file path inside the bundle */
-                  requirementsPath?: string;
-                  /** @description Python scorer class name exported by the entrypoint */
-                  className: string;
-                  /**
-                   * @description Input format expected by the code judge. Defaults to 'example'.
-                   * @enum {string|null}
-                   */
-                  scorerType?: "example" | "trace" | null;
-                  /**
-                   * @description judgeval SDK major version targeted by the code judge
-                   * @default 4
-                   */
-                  sdkVersion?: number;
-                  /** @description Description stored on the custom-code version */
-                  description?: string | null;
+                judgeType: "deterministic";
+                initialVersion: {
+                  actionConfig?: {
+                    action_groups: components["schemas"]["JudgeActionGroup"][];
+                  } | null;
+                  /** @enum {string} */
+                  scoreType: "categorical";
+                  /** @description Exactly two outputs: first for a match, second for a miss */
+                  outputs: {
+                    name: string;
+                    description: string;
+                  }[];
+                  advancedSettings?: {
+                    /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
+                    online_environment_names: string[] | null;
+                    /** @enum {string} */
+                    online_evaluation_mode: "continuous" | "on_demand";
+                    online_sampling_rate: number;
+                    online_span_triggers:
+                      | unknown
+                      | {
+                          /** @enum {string} */
+                          kind: "and" | "or";
+                          conditions: unknown[];
+                        };
+                    online_session_scoring: boolean;
+                    session_evaluation_count_enabled?: boolean | null;
+                    session_evaluation_idle_enabled?: boolean | null;
+                    session_evaluation_min_candidate_traces?: number | null;
+                    session_evaluation_max_wait_minutes?: number | null;
+                  };
                 };
-              };
-        };
-        "multipart/form-data": {
-          judge:
-            | {
-                /** @description Unique judge name within the project */
-                name: string;
-                /** @description Human-readable description shown in the UI */
-                judgeDescription?: string | null;
-                /** @enum {string} */
-                judgeType: "prompt";
-                initialVersion:
-                  | {
-                      /** @enum {string} */
-                      scoreType: "binary";
-                      advancedSettings?: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled?: boolean | null;
-                        session_evaluation_idle_enabled?: boolean | null;
-                        session_evaluation_min_candidate_traces?: number | null;
-                        session_evaluation_max_wait_minutes?: number | null;
-                      };
-                    }
-                  | {
-                      /** @enum {string} */
-                      scoreType: "numeric";
-                      advancedSettings?: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled?: boolean | null;
-                        session_evaluation_idle_enabled?: boolean | null;
-                        session_evaluation_min_candidate_traces?: number | null;
-                        session_evaluation_max_wait_minutes?: number | null;
-                      };
-                    }
-                  | {
-                      /** @enum {string} */
-                      scoreType: "categorical";
-                      /** @description At least two outputs emitted by the judge */
-                      outputs: {
-                        name: string;
-                        description: string;
-                      }[];
-                      advancedSettings?: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled?: boolean | null;
-                        session_evaluation_idle_enabled?: boolean | null;
-                        session_evaluation_min_candidate_traces?: number | null;
-                        session_evaluation_max_wait_minutes?: number | null;
-                      };
-                    };
                 config: {
-                  /** @description Judge prompt template */
-                  prompt: string;
-                  /**
-                   * @description Description stored on the initial prompt version
-                   * @default null
-                   */
-                  description?: string | null;
-                  /**
-                   * @description Reasoning level for the agent judge runtime
-                   * @default lite
-                   * @enum {string}
-                   */
-                  reasoningLevel?: "lite" | "normal" | "high";
-                  /** @default 0 */
-                  minScore?: number;
-                  /** @default 1 */
-                  maxScore?: number;
-                };
-              }
-            | {
-                /** @description Unique judge name within the project */
-                name: string;
-                /** @description Human-readable description shown in the UI */
-                judgeDescription?: string | null;
-                /** @enum {string} */
-                judgeType: "custom";
-                initialVersion:
-                  | {
-                      /** @enum {string} */
-                      scoreType: "binary";
-                      advancedSettings?: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled?: boolean | null;
-                        session_evaluation_idle_enabled?: boolean | null;
-                        session_evaluation_min_candidate_traces?: number | null;
-                        session_evaluation_max_wait_minutes?: number | null;
-                      };
-                    }
-                  | {
-                      /** @enum {string} */
-                      scoreType: "numeric";
-                      advancedSettings?: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled?: boolean | null;
-                        session_evaluation_idle_enabled?: boolean | null;
-                        session_evaluation_min_candidate_traces?: number | null;
-                        session_evaluation_max_wait_minutes?: number | null;
-                      };
-                    }
-                  | {
-                      /** @enum {string} */
-                      scoreType: "categorical";
-                      /** @description At least two outputs emitted by the judge */
-                      outputs: {
-                        name: string;
-                        description: string;
-                      }[];
-                      advancedSettings?: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled?: boolean | null;
-                        session_evaluation_idle_enabled?: boolean | null;
-                        session_evaluation_min_candidate_traces?: number | null;
-                        session_evaluation_max_wait_minutes?: number | null;
-                      };
-                    };
-                config: {
-                  /** @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB. */
-                  bundleBase64: string;
-                  /** @description Path to the Python entrypoint inside the tar.gz bundle */
-                  entrypointPath: string;
-                  /** @description Optional requirements file path inside the bundle */
-                  requirementsPath?: string;
-                  /** @description Python scorer class name exported by the entrypoint */
-                  className: string;
-                  /**
-                   * @description Input format expected by the code judge. Defaults to 'example'.
-                   * @enum {string|null}
-                   */
-                  scorerType?: "example" | "trace" | null;
-                  /**
-                   * @description judgeval SDK major version targeted by the code judge
-                   * @default 4
-                   */
-                  sdkVersion?: number;
-                  /** @description Description stored on the custom-code version */
-                  description?: string | null;
+                  expression: unknown;
                 };
               };
         };
@@ -8140,6 +6057,10 @@ export interface operations {
             newVersion?:
               | (
                   | {
+                      /** @description Omit to preserve the latest version’s action groups; null clears them. */
+                      actionConfig?: {
+                        action_groups: components["schemas"]["JudgeActionGroup"][];
+                      } | null;
                       targetVersion: {
                         major: number;
                         minor: number;
@@ -8153,22 +6074,31 @@ export interface operations {
                         /** @enum {string} */
                         online_evaluation_mode: "continuous" | "on_demand";
                         online_sampling_rate: number;
-                        online_span_triggers: unknown;
+                        online_span_triggers:
+                          | unknown
+                          | {
+                              /** @enum {string} */
+                              kind: "and" | "or";
+                              conditions: unknown[];
+                            };
                         online_session_scoring: boolean;
                         session_evaluation_count_enabled: boolean | null;
                         session_evaluation_idle_enabled: boolean | null;
                         session_evaluation_min_candidate_traces: number | null;
                         session_evaluation_max_wait_minutes: number | null;
                       };
-                      /** @enum {string} */
+                      /**
+                       * @description Agent judge (wire value `prompt`)
+                       * @enum {string}
+                       */
                       judgeType: "prompt";
                       config: {
                         /** @description Complete prompt for the new version */
                         prompt: string;
-                        /** @description Description stored on the new prompt version */
+                        /** @description Description stored on the new Agent judge version */
                         description: string | null;
                         /**
-                         * @description Reasoning level for the new prompt version
+                         * @description Reasoning level for the new Agent judge version
                          * @enum {string}
                          */
                         reasoningLevel: "lite" | "normal" | "high";
@@ -8181,6 +6111,10 @@ export interface operations {
                       scoreType: "binary";
                     }
                   | {
+                      /** @description Omit to preserve the latest version’s action groups; null clears them. */
+                      actionConfig?: {
+                        action_groups: components["schemas"]["JudgeActionGroup"][];
+                      } | null;
                       targetVersion: {
                         major: number;
                         minor: number;
@@ -8194,22 +6128,31 @@ export interface operations {
                         /** @enum {string} */
                         online_evaluation_mode: "continuous" | "on_demand";
                         online_sampling_rate: number;
-                        online_span_triggers: unknown;
+                        online_span_triggers:
+                          | unknown
+                          | {
+                              /** @enum {string} */
+                              kind: "and" | "or";
+                              conditions: unknown[];
+                            };
                         online_session_scoring: boolean;
                         session_evaluation_count_enabled: boolean | null;
                         session_evaluation_idle_enabled: boolean | null;
                         session_evaluation_min_candidate_traces: number | null;
                         session_evaluation_max_wait_minutes: number | null;
                       };
-                      /** @enum {string} */
+                      /**
+                       * @description Agent judge (wire value `prompt`)
+                       * @enum {string}
+                       */
                       judgeType: "prompt";
                       config: {
                         /** @description Complete prompt for the new version */
                         prompt: string;
-                        /** @description Description stored on the new prompt version */
+                        /** @description Description stored on the new Agent judge version */
                         description: string | null;
                         /**
-                         * @description Reasoning level for the new prompt version
+                         * @description Reasoning level for the new Agent judge version
                          * @enum {string}
                          */
                         reasoningLevel: "lite" | "normal" | "high";
@@ -8222,6 +6165,10 @@ export interface operations {
                       scoreType: "numeric";
                     }
                   | {
+                      /** @description Omit to preserve the latest version’s action groups; null clears them. */
+                      actionConfig?: {
+                        action_groups: components["schemas"]["JudgeActionGroup"][];
+                      } | null;
                       targetVersion: {
                         major: number;
                         minor: number;
@@ -8235,22 +6182,31 @@ export interface operations {
                         /** @enum {string} */
                         online_evaluation_mode: "continuous" | "on_demand";
                         online_sampling_rate: number;
-                        online_span_triggers: unknown;
+                        online_span_triggers:
+                          | unknown
+                          | {
+                              /** @enum {string} */
+                              kind: "and" | "or";
+                              conditions: unknown[];
+                            };
                         online_session_scoring: boolean;
                         session_evaluation_count_enabled: boolean | null;
                         session_evaluation_idle_enabled: boolean | null;
                         session_evaluation_min_candidate_traces: number | null;
                         session_evaluation_max_wait_minutes: number | null;
                       };
-                      /** @enum {string} */
+                      /**
+                       * @description Agent judge (wire value `prompt`)
+                       * @enum {string}
+                       */
                       judgeType: "prompt";
                       config: {
                         /** @description Complete prompt for the new version */
                         prompt: string;
-                        /** @description Description stored on the new prompt version */
+                        /** @description Description stored on the new Agent judge version */
                         description: string | null;
                         /**
-                         * @description Reasoning level for the new prompt version
+                         * @description Reasoning level for the new Agent judge version
                          * @enum {string}
                          */
                         reasoningLevel: "lite" | "normal" | "high";
@@ -8264,15 +6220,15 @@ export interface operations {
                       /** @description Complete categorical output set for the new version */
                       outputs: (
                         | {
-                            /** @description An existing Behavior ID */
+                            /** @description An existing label ID. The field name remains behaviorId. */
                             behaviorId: string;
                           }
                         | {
-                            /** @description Name of the Behavior to create */
+                            /** @description Name of the label to create */
                             name: string;
-                            /** @description Description of the Behavior to create */
+                            /** @description Description of the label to create */
                             description: string;
-                            /** @description Behavior category IDs from the same project as the judge */
+                            /** @description Label category IDs from the same project as the judge */
                             categoryIds?: string[];
                           }
                       )[];
@@ -8280,6 +6236,10 @@ export interface operations {
                 )
               | (
                   | {
+                      /** @description Omit to preserve the latest version’s action groups; null clears them. */
+                      actionConfig?: {
+                        action_groups: components["schemas"]["JudgeActionGroup"][];
+                      } | null;
                       targetVersion: {
                         major: number;
                         minor: number;
@@ -8293,17 +6253,29 @@ export interface operations {
                         /** @enum {string} */
                         online_evaluation_mode: "continuous" | "on_demand";
                         online_sampling_rate: number;
-                        online_span_triggers: unknown;
+                        online_span_triggers:
+                          | unknown
+                          | {
+                              /** @enum {string} */
+                              kind: "and" | "or";
+                              conditions: unknown[];
+                            };
                         online_session_scoring: boolean;
                         session_evaluation_count_enabled: boolean | null;
                         session_evaluation_idle_enabled: boolean | null;
                         session_evaluation_min_candidate_traces: number | null;
                         session_evaluation_max_wait_minutes: number | null;
                       };
-                      /** @enum {string} */
+                      /**
+                       * @description Code judge (wire value `custom`)
+                       * @enum {string}
+                       */
                       judgeType: "custom";
                       config: {
-                        /** @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB. */
+                        /**
+                         * Format: base64
+                         * @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB.
+                         */
                         bundleBase64: string;
                         /** @description Path to the Python entrypoint inside the tar.gz bundle */
                         entrypointPath: string;
@@ -8312,22 +6284,26 @@ export interface operations {
                         /** @description Python scorer class name exported by the entrypoint */
                         className: string;
                         /**
-                         * @description Input format expected by the code judge. Defaults to 'example'.
+                         * @description Input format expected by the Code judge. Defaults to 'example'.
                          * @enum {string|null}
                          */
                         scorerType?: "example" | "trace" | null;
                         /**
-                         * @description judgeval SDK major version targeted by the code judge
+                         * @description judgeval SDK major version targeted by the Code judge
                          * @default 4
                          */
                         sdkVersion?: number;
-                        /** @description Description stored on the custom-code version */
+                        /** @description Description stored on the Code judge version */
                         description?: string | null;
                       };
                       /** @enum {string} */
                       scoreType: "binary";
                     }
                   | {
+                      /** @description Omit to preserve the latest version’s action groups; null clears them. */
+                      actionConfig?: {
+                        action_groups: components["schemas"]["JudgeActionGroup"][];
+                      } | null;
                       targetVersion: {
                         major: number;
                         minor: number;
@@ -8341,17 +6317,29 @@ export interface operations {
                         /** @enum {string} */
                         online_evaluation_mode: "continuous" | "on_demand";
                         online_sampling_rate: number;
-                        online_span_triggers: unknown;
+                        online_span_triggers:
+                          | unknown
+                          | {
+                              /** @enum {string} */
+                              kind: "and" | "or";
+                              conditions: unknown[];
+                            };
                         online_session_scoring: boolean;
                         session_evaluation_count_enabled: boolean | null;
                         session_evaluation_idle_enabled: boolean | null;
                         session_evaluation_min_candidate_traces: number | null;
                         session_evaluation_max_wait_minutes: number | null;
                       };
-                      /** @enum {string} */
+                      /**
+                       * @description Code judge (wire value `custom`)
+                       * @enum {string}
+                       */
                       judgeType: "custom";
                       config: {
-                        /** @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB. */
+                        /**
+                         * Format: base64
+                         * @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB.
+                         */
                         bundleBase64: string;
                         /** @description Path to the Python entrypoint inside the tar.gz bundle */
                         entrypointPath: string;
@@ -8360,22 +6348,26 @@ export interface operations {
                         /** @description Python scorer class name exported by the entrypoint */
                         className: string;
                         /**
-                         * @description Input format expected by the code judge. Defaults to 'example'.
+                         * @description Input format expected by the Code judge. Defaults to 'example'.
                          * @enum {string|null}
                          */
                         scorerType?: "example" | "trace" | null;
                         /**
-                         * @description judgeval SDK major version targeted by the code judge
+                         * @description judgeval SDK major version targeted by the Code judge
                          * @default 4
                          */
                         sdkVersion?: number;
-                        /** @description Description stored on the custom-code version */
+                        /** @description Description stored on the Code judge version */
                         description?: string | null;
                       };
                       /** @enum {string} */
                       scoreType: "numeric";
                     }
                   | {
+                      /** @description Omit to preserve the latest version’s action groups; null clears them. */
+                      actionConfig?: {
+                        action_groups: components["schemas"]["JudgeActionGroup"][];
+                      } | null;
                       targetVersion: {
                         major: number;
                         minor: number;
@@ -8389,17 +6381,29 @@ export interface operations {
                         /** @enum {string} */
                         online_evaluation_mode: "continuous" | "on_demand";
                         online_sampling_rate: number;
-                        online_span_triggers: unknown;
+                        online_span_triggers:
+                          | unknown
+                          | {
+                              /** @enum {string} */
+                              kind: "and" | "or";
+                              conditions: unknown[];
+                            };
                         online_session_scoring: boolean;
                         session_evaluation_count_enabled: boolean | null;
                         session_evaluation_idle_enabled: boolean | null;
                         session_evaluation_min_candidate_traces: number | null;
                         session_evaluation_max_wait_minutes: number | null;
                       };
-                      /** @enum {string} */
+                      /**
+                       * @description Code judge (wire value `custom`)
+                       * @enum {string}
+                       */
                       judgeType: "custom";
                       config: {
-                        /** @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB. */
+                        /**
+                         * Format: base64
+                         * @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB.
+                         */
                         bundleBase64: string;
                         /** @description Path to the Python entrypoint inside the tar.gz bundle */
                         entrypointPath: string;
@@ -8408,16 +6412,16 @@ export interface operations {
                         /** @description Python scorer class name exported by the entrypoint */
                         className: string;
                         /**
-                         * @description Input format expected by the code judge. Defaults to 'example'.
+                         * @description Input format expected by the Code judge. Defaults to 'example'.
                          * @enum {string|null}
                          */
                         scorerType?: "example" | "trace" | null;
                         /**
-                         * @description judgeval SDK major version targeted by the code judge
+                         * @description judgeval SDK major version targeted by the Code judge
                          * @default 4
                          */
                         sdkVersion?: number;
-                        /** @description Description stored on the custom-code version */
+                        /** @description Description stored on the Code judge version */
                         description?: string | null;
                       };
                       /** @enum {string} */
@@ -8425,163 +6429,15 @@ export interface operations {
                       /** @description Complete categorical output set for the new version */
                       outputs: (
                         | {
-                            /** @description An existing Behavior ID */
+                            /** @description An existing label ID. The field name remains behaviorId. */
                             behaviorId: string;
                           }
                         | {
-                            /** @description Name of the Behavior to create */
+                            /** @description Name of the label to create */
                             name: string;
-                            /** @description Description of the Behavior to create */
+                            /** @description Description of the label to create */
                             description: string;
-                            /** @description Behavior category IDs from the same project as the judge */
-                            categoryIds?: string[];
-                          }
-                      )[];
-                    }
-                );
-          };
-        };
-        "application/x-www-form-urlencoded": {
-          update: {
-            /** @description Updated human-readable judge description */
-            judgeDescription?: string | null;
-            /** @description Complete immutable version to create */
-            newVersion?:
-              | (
-                  | {
-                      targetVersion: {
-                        major: number;
-                        minor: number;
-                      };
-                      /** @description Whether the new version becomes the production version */
-                      promoteToProduction: boolean;
-                      /** @description Complete monitoring-settings snapshot for the new version */
-                      advancedSettings: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled: boolean | null;
-                        session_evaluation_idle_enabled: boolean | null;
-                        session_evaluation_min_candidate_traces: number | null;
-                        session_evaluation_max_wait_minutes: number | null;
-                      };
-                      /** @enum {string} */
-                      judgeType: "prompt";
-                      config: {
-                        /** @description Complete prompt for the new version */
-                        prompt: string;
-                        /** @description Description stored on the new prompt version */
-                        description: string | null;
-                        /**
-                         * @description Reasoning level for the new prompt version
-                         * @enum {string}
-                         */
-                        reasoningLevel: "lite" | "normal" | "high";
-                        /** @description Minimum numeric score for the new version */
-                        minScore: number;
-                        /** @description Maximum numeric score for the new version */
-                        maxScore: number;
-                      };
-                      /** @enum {string} */
-                      scoreType: "binary";
-                    }
-                  | {
-                      targetVersion: {
-                        major: number;
-                        minor: number;
-                      };
-                      /** @description Whether the new version becomes the production version */
-                      promoteToProduction: boolean;
-                      /** @description Complete monitoring-settings snapshot for the new version */
-                      advancedSettings: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled: boolean | null;
-                        session_evaluation_idle_enabled: boolean | null;
-                        session_evaluation_min_candidate_traces: number | null;
-                        session_evaluation_max_wait_minutes: number | null;
-                      };
-                      /** @enum {string} */
-                      judgeType: "prompt";
-                      config: {
-                        /** @description Complete prompt for the new version */
-                        prompt: string;
-                        /** @description Description stored on the new prompt version */
-                        description: string | null;
-                        /**
-                         * @description Reasoning level for the new prompt version
-                         * @enum {string}
-                         */
-                        reasoningLevel: "lite" | "normal" | "high";
-                        /** @description Minimum numeric score for the new version */
-                        minScore: number;
-                        /** @description Maximum numeric score for the new version */
-                        maxScore: number;
-                      };
-                      /** @enum {string} */
-                      scoreType: "numeric";
-                    }
-                  | {
-                      targetVersion: {
-                        major: number;
-                        minor: number;
-                      };
-                      /** @description Whether the new version becomes the production version */
-                      promoteToProduction: boolean;
-                      /** @description Complete monitoring-settings snapshot for the new version */
-                      advancedSettings: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled: boolean | null;
-                        session_evaluation_idle_enabled: boolean | null;
-                        session_evaluation_min_candidate_traces: number | null;
-                        session_evaluation_max_wait_minutes: number | null;
-                      };
-                      /** @enum {string} */
-                      judgeType: "prompt";
-                      config: {
-                        /** @description Complete prompt for the new version */
-                        prompt: string;
-                        /** @description Description stored on the new prompt version */
-                        description: string | null;
-                        /**
-                         * @description Reasoning level for the new prompt version
-                         * @enum {string}
-                         */
-                        reasoningLevel: "lite" | "normal" | "high";
-                        /** @description Minimum numeric score for the new version */
-                        minScore: number;
-                        /** @description Maximum numeric score for the new version */
-                        maxScore: number;
-                      };
-                      /** @enum {string} */
-                      scoreType: "categorical";
-                      /** @description Complete categorical output set for the new version */
-                      outputs: (
-                        | {
-                            /** @description An existing Behavior ID */
-                            behaviorId: string;
-                          }
-                        | {
-                            /** @description Name of the Behavior to create */
-                            name: string;
-                            /** @description Description of the Behavior to create */
-                            description: string;
-                            /** @description Behavior category IDs from the same project as the judge */
+                            /** @description Label category IDs from the same project as the judge */
                             categoryIds?: string[];
                           }
                       )[];
@@ -8589,6 +6445,10 @@ export interface operations {
                 )
               | (
                   | {
+                      /** @description Omit to preserve the latest version’s action groups; null clears them. */
+                      actionConfig?: {
+                        action_groups: components["schemas"]["JudgeActionGroup"][];
+                      } | null;
                       targetVersion: {
                         major: number;
                         minor: number;
@@ -8602,7 +6462,13 @@ export interface operations {
                         /** @enum {string} */
                         online_evaluation_mode: "continuous" | "on_demand";
                         online_sampling_rate: number;
-                        online_span_triggers: unknown;
+                        online_span_triggers:
+                          | unknown
+                          | {
+                              /** @enum {string} */
+                              kind: "and" | "or";
+                              conditions: unknown[];
+                            };
                         online_session_scoring: boolean;
                         session_evaluation_count_enabled: boolean | null;
                         session_evaluation_idle_enabled: boolean | null;
@@ -8610,33 +6476,18 @@ export interface operations {
                         session_evaluation_max_wait_minutes: number | null;
                       };
                       /** @enum {string} */
-                      judgeType: "custom";
+                      judgeType: "deterministic";
                       config: {
-                        /** @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB. */
-                        bundleBase64: string;
-                        /** @description Path to the Python entrypoint inside the tar.gz bundle */
-                        entrypointPath: string;
-                        /** @description Optional requirements file path inside the bundle */
-                        requirementsPath?: string;
-                        /** @description Python scorer class name exported by the entrypoint */
-                        className: string;
-                        /**
-                         * @description Input format expected by the code judge. Defaults to 'example'.
-                         * @enum {string|null}
-                         */
-                        scorerType?: "example" | "trace" | null;
-                        /**
-                         * @description judgeval SDK major version targeted by the code judge
-                         * @default 4
-                         */
-                        sdkVersion?: number;
-                        /** @description Description stored on the custom-code version */
-                        description?: string | null;
+                        expression: unknown;
                       };
                       /** @enum {string} */
                       scoreType: "binary";
                     }
                   | {
+                      /** @description Omit to preserve the latest version’s action groups; null clears them. */
+                      actionConfig?: {
+                        action_groups: components["schemas"]["JudgeActionGroup"][];
+                      } | null;
                       targetVersion: {
                         major: number;
                         minor: number;
@@ -8650,7 +6501,13 @@ export interface operations {
                         /** @enum {string} */
                         online_evaluation_mode: "continuous" | "on_demand";
                         online_sampling_rate: number;
-                        online_span_triggers: unknown;
+                        online_span_triggers:
+                          | unknown
+                          | {
+                              /** @enum {string} */
+                              kind: "and" | "or";
+                              conditions: unknown[];
+                            };
                         online_session_scoring: boolean;
                         session_evaluation_count_enabled: boolean | null;
                         session_evaluation_idle_enabled: boolean | null;
@@ -8658,400 +6515,24 @@ export interface operations {
                         session_evaluation_max_wait_minutes: number | null;
                       };
                       /** @enum {string} */
-                      judgeType: "custom";
+                      judgeType: "deterministic";
                       config: {
-                        /** @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB. */
-                        bundleBase64: string;
-                        /** @description Path to the Python entrypoint inside the tar.gz bundle */
-                        entrypointPath: string;
-                        /** @description Optional requirements file path inside the bundle */
-                        requirementsPath?: string;
-                        /** @description Python scorer class name exported by the entrypoint */
-                        className: string;
-                        /**
-                         * @description Input format expected by the code judge. Defaults to 'example'.
-                         * @enum {string|null}
-                         */
-                        scorerType?: "example" | "trace" | null;
-                        /**
-                         * @description judgeval SDK major version targeted by the code judge
-                         * @default 4
-                         */
-                        sdkVersion?: number;
-                        /** @description Description stored on the custom-code version */
-                        description?: string | null;
-                      };
-                      /** @enum {string} */
-                      scoreType: "numeric";
-                    }
-                  | {
-                      targetVersion: {
-                        major: number;
-                        minor: number;
-                      };
-                      /** @description Whether the new version becomes the production version */
-                      promoteToProduction: boolean;
-                      /** @description Complete monitoring-settings snapshot for the new version */
-                      advancedSettings: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled: boolean | null;
-                        session_evaluation_idle_enabled: boolean | null;
-                        session_evaluation_min_candidate_traces: number | null;
-                        session_evaluation_max_wait_minutes: number | null;
-                      };
-                      /** @enum {string} */
-                      judgeType: "custom";
-                      config: {
-                        /** @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB. */
-                        bundleBase64: string;
-                        /** @description Path to the Python entrypoint inside the tar.gz bundle */
-                        entrypointPath: string;
-                        /** @description Optional requirements file path inside the bundle */
-                        requirementsPath?: string;
-                        /** @description Python scorer class name exported by the entrypoint */
-                        className: string;
-                        /**
-                         * @description Input format expected by the code judge. Defaults to 'example'.
-                         * @enum {string|null}
-                         */
-                        scorerType?: "example" | "trace" | null;
-                        /**
-                         * @description judgeval SDK major version targeted by the code judge
-                         * @default 4
-                         */
-                        sdkVersion?: number;
-                        /** @description Description stored on the custom-code version */
-                        description?: string | null;
+                        expression: unknown;
                       };
                       /** @enum {string} */
                       scoreType: "categorical";
-                      /** @description Complete categorical output set for the new version */
+                      /** @description Exactly two outputs: first for a match, second for a miss */
                       outputs: (
                         | {
-                            /** @description An existing Behavior ID */
+                            /** @description An existing label ID. The field name remains behaviorId. */
                             behaviorId: string;
                           }
                         | {
-                            /** @description Name of the Behavior to create */
+                            /** @description Name of the label to create */
                             name: string;
-                            /** @description Description of the Behavior to create */
+                            /** @description Description of the label to create */
                             description: string;
-                            /** @description Behavior category IDs from the same project as the judge */
-                            categoryIds?: string[];
-                          }
-                      )[];
-                    }
-                );
-          };
-        };
-        "multipart/form-data": {
-          update: {
-            /** @description Updated human-readable judge description */
-            judgeDescription?: string | null;
-            /** @description Complete immutable version to create */
-            newVersion?:
-              | (
-                  | {
-                      targetVersion: {
-                        major: number;
-                        minor: number;
-                      };
-                      /** @description Whether the new version becomes the production version */
-                      promoteToProduction: boolean;
-                      /** @description Complete monitoring-settings snapshot for the new version */
-                      advancedSettings: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled: boolean | null;
-                        session_evaluation_idle_enabled: boolean | null;
-                        session_evaluation_min_candidate_traces: number | null;
-                        session_evaluation_max_wait_minutes: number | null;
-                      };
-                      /** @enum {string} */
-                      judgeType: "prompt";
-                      config: {
-                        /** @description Complete prompt for the new version */
-                        prompt: string;
-                        /** @description Description stored on the new prompt version */
-                        description: string | null;
-                        /**
-                         * @description Reasoning level for the new prompt version
-                         * @enum {string}
-                         */
-                        reasoningLevel: "lite" | "normal" | "high";
-                        /** @description Minimum numeric score for the new version */
-                        minScore: number;
-                        /** @description Maximum numeric score for the new version */
-                        maxScore: number;
-                      };
-                      /** @enum {string} */
-                      scoreType: "binary";
-                    }
-                  | {
-                      targetVersion: {
-                        major: number;
-                        minor: number;
-                      };
-                      /** @description Whether the new version becomes the production version */
-                      promoteToProduction: boolean;
-                      /** @description Complete monitoring-settings snapshot for the new version */
-                      advancedSettings: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled: boolean | null;
-                        session_evaluation_idle_enabled: boolean | null;
-                        session_evaluation_min_candidate_traces: number | null;
-                        session_evaluation_max_wait_minutes: number | null;
-                      };
-                      /** @enum {string} */
-                      judgeType: "prompt";
-                      config: {
-                        /** @description Complete prompt for the new version */
-                        prompt: string;
-                        /** @description Description stored on the new prompt version */
-                        description: string | null;
-                        /**
-                         * @description Reasoning level for the new prompt version
-                         * @enum {string}
-                         */
-                        reasoningLevel: "lite" | "normal" | "high";
-                        /** @description Minimum numeric score for the new version */
-                        minScore: number;
-                        /** @description Maximum numeric score for the new version */
-                        maxScore: number;
-                      };
-                      /** @enum {string} */
-                      scoreType: "numeric";
-                    }
-                  | {
-                      targetVersion: {
-                        major: number;
-                        minor: number;
-                      };
-                      /** @description Whether the new version becomes the production version */
-                      promoteToProduction: boolean;
-                      /** @description Complete monitoring-settings snapshot for the new version */
-                      advancedSettings: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled: boolean | null;
-                        session_evaluation_idle_enabled: boolean | null;
-                        session_evaluation_min_candidate_traces: number | null;
-                        session_evaluation_max_wait_minutes: number | null;
-                      };
-                      /** @enum {string} */
-                      judgeType: "prompt";
-                      config: {
-                        /** @description Complete prompt for the new version */
-                        prompt: string;
-                        /** @description Description stored on the new prompt version */
-                        description: string | null;
-                        /**
-                         * @description Reasoning level for the new prompt version
-                         * @enum {string}
-                         */
-                        reasoningLevel: "lite" | "normal" | "high";
-                        /** @description Minimum numeric score for the new version */
-                        minScore: number;
-                        /** @description Maximum numeric score for the new version */
-                        maxScore: number;
-                      };
-                      /** @enum {string} */
-                      scoreType: "categorical";
-                      /** @description Complete categorical output set for the new version */
-                      outputs: (
-                        | {
-                            /** @description An existing Behavior ID */
-                            behaviorId: string;
-                          }
-                        | {
-                            /** @description Name of the Behavior to create */
-                            name: string;
-                            /** @description Description of the Behavior to create */
-                            description: string;
-                            /** @description Behavior category IDs from the same project as the judge */
-                            categoryIds?: string[];
-                          }
-                      )[];
-                    }
-                )
-              | (
-                  | {
-                      targetVersion: {
-                        major: number;
-                        minor: number;
-                      };
-                      /** @description Whether the new version becomes the production version */
-                      promoteToProduction: boolean;
-                      /** @description Complete monitoring-settings snapshot for the new version */
-                      advancedSettings: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled: boolean | null;
-                        session_evaluation_idle_enabled: boolean | null;
-                        session_evaluation_min_candidate_traces: number | null;
-                        session_evaluation_max_wait_minutes: number | null;
-                      };
-                      /** @enum {string} */
-                      judgeType: "custom";
-                      config: {
-                        /** @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB. */
-                        bundleBase64: string;
-                        /** @description Path to the Python entrypoint inside the tar.gz bundle */
-                        entrypointPath: string;
-                        /** @description Optional requirements file path inside the bundle */
-                        requirementsPath?: string;
-                        /** @description Python scorer class name exported by the entrypoint */
-                        className: string;
-                        /**
-                         * @description Input format expected by the code judge. Defaults to 'example'.
-                         * @enum {string|null}
-                         */
-                        scorerType?: "example" | "trace" | null;
-                        /**
-                         * @description judgeval SDK major version targeted by the code judge
-                         * @default 4
-                         */
-                        sdkVersion?: number;
-                        /** @description Description stored on the custom-code version */
-                        description?: string | null;
-                      };
-                      /** @enum {string} */
-                      scoreType: "binary";
-                    }
-                  | {
-                      targetVersion: {
-                        major: number;
-                        minor: number;
-                      };
-                      /** @description Whether the new version becomes the production version */
-                      promoteToProduction: boolean;
-                      /** @description Complete monitoring-settings snapshot for the new version */
-                      advancedSettings: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled: boolean | null;
-                        session_evaluation_idle_enabled: boolean | null;
-                        session_evaluation_min_candidate_traces: number | null;
-                        session_evaluation_max_wait_minutes: number | null;
-                      };
-                      /** @enum {string} */
-                      judgeType: "custom";
-                      config: {
-                        /** @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB. */
-                        bundleBase64: string;
-                        /** @description Path to the Python entrypoint inside the tar.gz bundle */
-                        entrypointPath: string;
-                        /** @description Optional requirements file path inside the bundle */
-                        requirementsPath?: string;
-                        /** @description Python scorer class name exported by the entrypoint */
-                        className: string;
-                        /**
-                         * @description Input format expected by the code judge. Defaults to 'example'.
-                         * @enum {string|null}
-                         */
-                        scorerType?: "example" | "trace" | null;
-                        /**
-                         * @description judgeval SDK major version targeted by the code judge
-                         * @default 4
-                         */
-                        sdkVersion?: number;
-                        /** @description Description stored on the custom-code version */
-                        description?: string | null;
-                      };
-                      /** @enum {string} */
-                      scoreType: "numeric";
-                    }
-                  | {
-                      targetVersion: {
-                        major: number;
-                        minor: number;
-                      };
-                      /** @description Whether the new version becomes the production version */
-                      promoteToProduction: boolean;
-                      /** @description Complete monitoring-settings snapshot for the new version */
-                      advancedSettings: {
-                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                        online_environment_names: string[] | null;
-                        /** @enum {string} */
-                        online_evaluation_mode: "continuous" | "on_demand";
-                        online_sampling_rate: number;
-                        online_span_triggers: unknown;
-                        online_session_scoring: boolean;
-                        session_evaluation_count_enabled: boolean | null;
-                        session_evaluation_idle_enabled: boolean | null;
-                        session_evaluation_min_candidate_traces: number | null;
-                        session_evaluation_max_wait_minutes: number | null;
-                      };
-                      /** @enum {string} */
-                      judgeType: "custom";
-                      config: {
-                        /** @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB. */
-                        bundleBase64: string;
-                        /** @description Path to the Python entrypoint inside the tar.gz bundle */
-                        entrypointPath: string;
-                        /** @description Optional requirements file path inside the bundle */
-                        requirementsPath?: string;
-                        /** @description Python scorer class name exported by the entrypoint */
-                        className: string;
-                        /**
-                         * @description Input format expected by the code judge. Defaults to 'example'.
-                         * @enum {string|null}
-                         */
-                        scorerType?: "example" | "trace" | null;
-                        /**
-                         * @description judgeval SDK major version targeted by the code judge
-                         * @default 4
-                         */
-                        sdkVersion?: number;
-                        /** @description Description stored on the custom-code version */
-                        description?: string | null;
-                      };
-                      /** @enum {string} */
-                      scoreType: "categorical";
-                      /** @description Complete categorical output set for the new version */
-                      outputs: (
-                        | {
-                            /** @description An existing Behavior ID */
-                            behaviorId: string;
-                          }
-                        | {
-                            /** @description Name of the Behavior to create */
-                            name: string;
-                            /** @description Description of the Behavior to create */
-                            description: string;
-                            /** @description Behavior category IDs from the same project as the judge */
+                            /** @description Label category IDs from the same project as the judge */
                             categoryIds?: string[];
                           }
                       )[];
@@ -9077,6 +6558,48 @@ export interface operations {
       };
     };
   };
+  "postV1ProjectsByProjectIdJudgesByJudgeIdAction-groups": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        projectId: string;
+        judgeId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          source_version: {
+            major: number;
+            minor: number;
+          };
+          target_version: {
+            major: number;
+            minor: number;
+          };
+          promote_to_production: boolean;
+          /** @description Complete list. Preserve IDs of existing groups and actions; use new UUIDs when adding or duplicating. Omitted groups are removed in the new version. */
+          action_groups: components["schemas"]["JudgeActionGroup"][];
+        };
+      };
+    };
+    responses: {
+      /** @description Response for status 200 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            judge_id: string;
+            judge_version_id: string | null;
+          };
+        };
+      };
+    };
+  };
   postV1ProjectsByProjectIdJudgesByJudgeIdLookup: {
     parameters: {
       query?: never;
@@ -9090,24 +6613,8 @@ export interface operations {
     requestBody: {
       content: {
         "application/json": {
-          /** @description Judge version to return. Defaults to 'latest'; use 'production' or provide an exact major/minor version. */
-          version?:
-            | ("latest" | "production")
-            | {
-                major: number;
-                minor: number;
-              };
-        };
-        "application/x-www-form-urlencoded": {
-          /** @description Judge version to return. Defaults to 'latest'; use 'production' or provide an exact major/minor version. */
-          version?:
-            | ("latest" | "production")
-            | {
-                major: number;
-                minor: number;
-              };
-        };
-        "multipart/form-data": {
+          /** @description For custom-code judges, include a temporary download URL for the selected version’s tar.gz source bundle. Defaults to false; ignored for other judge types. */
+          include_code_url?: boolean;
           /** @description Judge version to return. Defaults to 'latest'; use 'production' or provide an exact major/minor version. */
           version?:
             | ("latest" | "production")
@@ -9126,6 +6633,19 @@ export interface operations {
         };
         content: {
           "application/json": {
+            optimistic_eval_eligibility: {
+              supported: boolean;
+              byok_enabled: boolean;
+              saas_runtime: boolean;
+              blockers: (
+                | "unsupported_runtime"
+                | "byok_enabled"
+                | "unsupported_judge_type"
+                | "unsupported_output_type"
+                | "missing_categorical_outputs"
+                | "session_scope"
+              )[];
+            };
             judge:
               | {
                   id: string;
@@ -9157,14 +6677,26 @@ export interface operations {
                   online_environment_names: string[] | null;
                   /** @enum {string} */
                   online_evaluation_mode: "continuous" | "on_demand";
+                  action_config?: {
+                    action_groups: components["schemas"]["JudgeActionGroup"][];
+                  } | null;
                   online_sampling_rate: number;
-                  online_span_triggers: unknown;
+                  online_span_triggers:
+                    | unknown
+                    | {
+                        /** @enum {string} */
+                        kind: "and" | "or";
+                        conditions: unknown[];
+                      };
                   online_session_scoring: boolean;
                   session_evaluation_count_enabled: boolean | null;
                   session_evaluation_idle_enabled: boolean | null;
                   session_evaluation_min_candidate_traces: number | null;
                   session_evaluation_max_wait_minutes: number | null;
-                  /** @enum {string} */
+                  /**
+                   * @description Agent judge (wire value `prompt`)
+                   * @enum {string}
+                   */
                   judge_type: "prompt";
                   definition: {
                     id: string;
@@ -9208,14 +6740,26 @@ export interface operations {
                   online_environment_names: string[] | null;
                   /** @enum {string} */
                   online_evaluation_mode: "continuous" | "on_demand";
+                  action_config?: {
+                    action_groups: components["schemas"]["JudgeActionGroup"][];
+                  } | null;
                   online_sampling_rate: number;
-                  online_span_triggers: unknown;
+                  online_span_triggers:
+                    | unknown
+                    | {
+                        /** @enum {string} */
+                        kind: "and" | "or";
+                        conditions: unknown[];
+                      };
                   online_session_scoring: boolean;
                   session_evaluation_count_enabled: boolean | null;
                   session_evaluation_idle_enabled: boolean | null;
                   session_evaluation_min_candidate_traces: number | null;
                   session_evaluation_max_wait_minutes: number | null;
-                  /** @enum {string} */
+                  /**
+                   * @description Code judge (wire value `custom`)
+                   * @enum {string}
+                   */
                   judge_type: "custom";
                   definition: {
                     id: string;
@@ -9226,6 +6770,11 @@ export interface operations {
                     /** @enum {string|null} */
                     scorer_type: "example" | "trace" | null;
                     sdk_version: number;
+                    /**
+                     * Format: uri
+                     * @description Presigned tar.gz bundle URL, present only when include_code_url is true. Download promptly; the URL lasts at most 55 minutes. Extract the archive to read individual source files.
+                     */
+                    code_url?: string;
                   };
                 }
               | {
@@ -9258,14 +6807,26 @@ export interface operations {
                   online_environment_names: string[] | null;
                   /** @enum {string} */
                   online_evaluation_mode: "continuous" | "on_demand";
+                  action_config?: {
+                    action_groups: components["schemas"]["JudgeActionGroup"][];
+                  } | null;
                   online_sampling_rate: number;
-                  online_span_triggers: unknown;
+                  online_span_triggers:
+                    | unknown
+                    | {
+                        /** @enum {string} */
+                        kind: "and" | "or";
+                        conditions: unknown[];
+                      };
                   online_session_scoring: boolean;
                   session_evaluation_count_enabled: boolean | null;
                   session_evaluation_idle_enabled: boolean | null;
                   session_evaluation_min_candidate_traces: number | null;
                   session_evaluation_max_wait_minutes: number | null;
-                  /** @enum {string} */
+                  /**
+                   * @description Condition judge (wire value `deterministic`)
+                   * @enum {string}
+                   */
                   judge_type: "deterministic";
                   definition: {
                     id: string;
@@ -9291,12 +6852,6 @@ export interface operations {
     requestBody: {
       content: {
         "application/json": {
-          enabled: boolean;
-        };
-        "application/x-www-form-urlencoded": {
-          enabled: boolean;
-        };
-        "multipart/form-data": {
           enabled: boolean;
         };
       };
@@ -9339,20 +6894,6 @@ export interface operations {
            */
           preprocessor_artifact_revision_id: string | null;
         };
-        "application/x-www-form-urlencoded": {
-          /**
-           * Format: uuid
-           * @description The exact saved revision ID; pass null to detach preprocessing
-           */
-          preprocessor_artifact_revision_id: string | null;
-        };
-        "multipart/form-data": {
-          /**
-           * Format: uuid
-           * @description The exact saved revision ID; pass null to detach preprocessing
-           */
-          preprocessor_artifact_revision_id: string | null;
-        };
       };
     };
     responses: {
@@ -9370,6 +6911,38 @@ export interface operations {
             /** Format: uuid */
             preprocessor_artifact_revision_id: string | null;
             optimistic_eval_enabled: boolean;
+          };
+        };
+      };
+    };
+  };
+  "getV1ProjectsByProjectIdJudgesAction-groups": {
+    parameters: {
+      query?: {
+        version?: "latest" | "production";
+      };
+      header?: never;
+      path: {
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Response for status 200 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            action_groups: {
+              judge_id: string;
+              judge_name: string;
+              judge_major_version: number;
+              judge_minor_version: number;
+              action_group: components["schemas"]["JudgeActionGroup"];
+            }[];
           };
         };
       };
@@ -9423,18 +6996,6 @@ export interface operations {
           /** @description The complete memory file body to write */
           body: string;
         };
-        "application/x-www-form-urlencoded": {
-          /** @description The memory file path to create or update */
-          name: string;
-          /** @description The complete memory file body to write */
-          body: string;
-        };
-        "multipart/form-data": {
-          /** @description The memory file path to create or update */
-          name: string;
-          /** @description The complete memory file body to write */
-          body: string;
-        };
       };
     };
     responses: {
@@ -9471,18 +7032,6 @@ export interface operations {
     requestBody: {
       content: {
         "application/json": {
-          /** @description Memory file IDs to fetch */
-          ids?: string[];
-          /** @description Memory file paths to fetch */
-          names?: string[];
-        };
-        "application/x-www-form-urlencoded": {
-          /** @description Memory file IDs to fetch */
-          ids?: string[];
-          /** @description Memory file paths to fetch */
-          names?: string[];
-        };
-        "multipart/form-data": {
           /** @description Memory file IDs to fetch */
           ids?: string[];
           /** @description Memory file paths to fetch */
@@ -9558,21 +7107,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": {
-          name: string;
-          prompt: string;
-          tags?: string[];
-        };
-        "application/x-www-form-urlencoded": {
-          name: string;
-          prompt: string;
-          tags?: string[];
-        };
-        "multipart/form-data": {
-          name: string;
-          prompt: string;
-          tags?: string[];
-        };
+        "application/json": components["schemas"]["InsertPromptRequest"];
       };
     };
     responses: {
@@ -9582,11 +7117,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            commit_id: string;
-            parent_commit_id: (string | null) | null;
-            created_at: string;
-          };
+          "application/json": components["schemas"]["InsertPromptResponse"];
         };
       };
       /** @description Response for status 400 */
@@ -9595,10 +7126,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            error: string;
-            message?: string;
-          };
+          "application/json": components["schemas"]["ErrorResponse"];
         };
       };
     };
@@ -9624,21 +7152,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            commit:
-              | ({
-                  name: string;
-                  prompt: string;
-                  tags: string[];
-                  commit_id: string;
-                  parent_commit_id: (string | null) | null;
-                  created_at: string;
-                  first_name: string;
-                  last_name: string;
-                  user_email: string;
-                } | null)
-              | null;
-          };
+          "application/json": components["schemas"]["FetchPromptResponse"];
         };
       };
       /** @description Response for status 400 */
@@ -9683,18 +7197,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": {
-          commit_id: string;
-          tags: string[];
-        };
-        "application/x-www-form-urlencoded": {
-          commit_id: string;
-          tags: string[];
-        };
-        "multipart/form-data": {
-          commit_id: string;
-          tags: string[];
-        };
+        "application/json": components["schemas"]["TagPromptRequest"];
       };
     };
     responses: {
@@ -9704,9 +7207,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            commit_id: string;
-          };
+          "application/json": components["schemas"]["TagPromptResponse"];
         };
       };
       /** @description Response for status 400 */
@@ -9765,15 +7266,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": {
-          tags: string[];
-        };
-        "application/x-www-form-urlencoded": {
-          tags: string[];
-        };
-        "multipart/form-data": {
-          tags: string[];
-        };
+        "application/json": components["schemas"]["UntagPromptRequest"];
       };
     };
     responses: {
@@ -9783,9 +7276,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            commit_ids: string[];
-          };
+          "application/json": components["schemas"]["UntagPromptResponse"];
         };
       };
       /** @description Response for status 404 */
@@ -9836,19 +7327,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            versions: {
-              name: string;
-              prompt: string;
-              tags: string[];
-              commit_id: string;
-              parent_commit_id: (string | null) | null;
-              created_at: string;
-              first_name: string;
-              last_name: string;
-              user_email: string;
-            }[];
-          };
+          "application/json": components["schemas"]["GetPromptVersionsResponse"];
         };
       };
       /** @description Response for status 404 */
@@ -9867,7 +7346,7 @@ export interface operations {
       };
     };
   };
-  postV1ProjectsByProjectIdQuery: {
+  "getV1ProjectsByProjectIdScheduled-tasks": {
     parameters: {
       query?: never;
       header?: never;
@@ -9876,34 +7355,7 @@ export interface operations {
       };
       cookie?: never;
     };
-    requestBody: {
-      content: {
-        "application/json": {
-          query: unknown;
-          limit?: number;
-          /** @description Traces to bind directly to the query within the authenticated organization and project. */
-          trace_ids?: string[];
-          /** @description Live sessions to resolve to a trace-scoped query within the authenticated organization and project. Unavailable for offline query sources. */
-          session_ids?: string[];
-        };
-        "application/x-www-form-urlencoded": {
-          query: unknown;
-          limit?: number;
-          /** @description Traces to bind directly to the query within the authenticated organization and project. */
-          trace_ids?: string[];
-          /** @description Live sessions to resolve to a trace-scoped query within the authenticated organization and project. Unavailable for offline query sources. */
-          session_ids?: string[];
-        };
-        "multipart/form-data": {
-          query: unknown;
-          limit?: number;
-          /** @description Traces to bind directly to the query within the authenticated organization and project. */
-          trace_ids?: string[];
-          /** @description Live sessions to resolve to a trace-scoped query within the authenticated organization and project. Unavailable for offline query sources. */
-          session_ids?: string[];
-        };
-      };
-    };
+    requestBody?: never;
     responses: {
       /** @description Response for status 200 */
       200: {
@@ -9912,127 +7364,67 @@ export interface operations {
         };
         content: {
           "application/json": {
-            query_id: string;
-            rows:
-              | (
-                  | {
-                      [key: string]: unknown;
-                    }[]
-                  | null
-                )
-              | null;
-            row_count: (number | null) | null;
-            elapsed_ms: number;
-          };
-        };
-      };
-      /** @description Response for status 400 */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
-          };
-        };
-      };
-      /** @description Response for status 401 */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
-          };
-        };
-      };
-      /** @description Response for status 403 */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
-          };
-        };
-      };
-      /** @description Response for status 404 */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
-          };
-        };
-      };
-      /** @description Response for status 422 */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
-          };
-        };
-      };
-      /** @description Response for status 429 */
-      429: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
-          };
-        };
-      };
-      /** @description Response for status 502 */
-      502: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
-          };
-        };
-      };
-      /** @description Response for status 503 */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
+            tasks: {
+              id: string;
+              /** @enum {string} */
+              kind: "custom" | "system";
+              is_default: boolean;
+              name: string;
+              description: string | null;
+              instructions: string | null;
+              /** @enum {string} */
+              mode: "fast" | "deep_research";
+              /** @enum {string} */
+              tool_permission_mode: "auto_require_permission" | "always_accept";
+              created_by: string | null;
+              created_at: string;
+              updated_at: string;
+              schedule: {
+                enabled: boolean;
+                cadence:
+                  | (
+                      | {
+                          /** @enum {string} */
+                          mode?: "calendar";
+                          /** @enum {string} */
+                          frequency: "daily" | "weekly";
+                          dayOfWeek?: number;
+                          daysOfWeek?: number[];
+                          hour: number;
+                          minute: number;
+                        }
+                      | {
+                          /** @enum {string} */
+                          mode: "interval";
+                          every: number;
+                          /** @enum {string} */
+                          unit: "minutes";
+                        }
+                      | {
+                          /** @enum {string} */
+                          mode: "interval";
+                          every: number;
+                          /** @enum {string} */
+                          unit: "hours";
+                        }
+                      | {
+                          /** @enum {string} */
+                          mode: "cron";
+                          cronExpression: string;
+                        }
+                    )
+                  | null;
+                timezone: string;
+                sync_error: string | null;
+              } | null;
+              slack_channel_ids: string[];
+            }[];
           };
         };
       };
     };
   };
-  postV1ProjectsByProjectIdQueryPresentation: {
+  "postV1ProjectsByProjectIdScheduled-tasks": {
     parameters: {
       query?: never;
       header?: never;
@@ -10044,28 +7436,63 @@ export interface operations {
     requestBody: {
       content: {
         "application/json": {
-          query: unknown;
-          limit?: number;
-          /** @description Traces to bind directly to the query within the authenticated organization and project. */
-          trace_ids?: string[];
-          /** @description Live sessions to resolve to a trace-scoped query within the authenticated organization and project. Unavailable for offline query sources. */
-          session_ids?: string[];
-        };
-        "application/x-www-form-urlencoded": {
-          query: unknown;
-          limit?: number;
-          /** @description Traces to bind directly to the query within the authenticated organization and project. */
-          trace_ids?: string[];
-          /** @description Live sessions to resolve to a trace-scoped query within the authenticated organization and project. Unavailable for offline query sources. */
-          session_ids?: string[];
-        };
-        "multipart/form-data": {
-          query: unknown;
-          limit?: number;
-          /** @description Traces to bind directly to the query within the authenticated organization and project. */
-          trace_ids?: string[];
-          /** @description Live sessions to resolve to a trace-scoped query within the authenticated organization and project. Unavailable for offline query sources. */
-          session_ids?: string[];
+          /** @description Scheduled task name. */
+          name: string;
+          /** @description Human-readable scheduled task description. */
+          description?: string;
+          /** @description Instructions the task follows on each run. */
+          instructions?: string;
+          /**
+           * @description Execution mode. Use fast for quick runs or deep_research for more thorough runs.
+           * @enum {string}
+           */
+          mode?: "fast" | "deep_research";
+          /**
+           * @description Write-tool approval mode. Use auto_require_permission to ask before write actions or always_accept to approve automatically.
+           * @enum {string}
+           */
+          tool_permission_mode?: "auto_require_permission" | "always_accept";
+          /** @description When the task runs on its own. An omitted cadence keeps the one already stored, so a schedule can be turned back on without restating it. */
+          schedule?: {
+            enabled: boolean;
+            /** @description Run daily/weekly at a specific time, every N minutes/hours, or on a standard cron schedule using minute, hour, day, month, and weekday fields. */
+            cadence?:
+              | (
+                  | {
+                      /** @enum {string} */
+                      mode?: "calendar";
+                      /** @enum {string} */
+                      frequency: "daily" | "weekly";
+                      dayOfWeek?: number;
+                      daysOfWeek?: number[];
+                      hour: number;
+                      minute: number;
+                    }
+                  | {
+                      /** @enum {string} */
+                      mode: "interval";
+                      every: number;
+                      /** @enum {string} */
+                      unit: "minutes";
+                    }
+                  | {
+                      /** @enum {string} */
+                      mode: "interval";
+                      every: number;
+                      /** @enum {string} */
+                      unit: "hours";
+                    }
+                  | {
+                      /** @enum {string} */
+                      mode: "cron";
+                      cronExpression: string;
+                    }
+                )
+              | null;
+            timezone?: string;
+          };
+          /** @description Slack channel IDs the final output of each scheduled run is posted to. An empty list stops delivery. Requires the organization to have Slack connected. */
+          slack_channel_ids?: string[];
         };
       };
     };
@@ -10077,114 +7504,281 @@ export interface operations {
         };
         content: {
           "application/json": {
-            query_id: string;
-            presentation: unknown;
-            frame: (unknown | null) | null;
-            elapsed_ms: number;
+            task: {
+              id: string;
+              /** @enum {string} */
+              kind: "custom" | "system";
+              is_default: boolean;
+              name: string;
+              description: string | null;
+              instructions: string | null;
+              /** @enum {string} */
+              mode: "fast" | "deep_research";
+              /** @enum {string} */
+              tool_permission_mode: "auto_require_permission" | "always_accept";
+              created_by: string | null;
+              created_at: string;
+              updated_at: string;
+              schedule: {
+                enabled: boolean;
+                cadence:
+                  | (
+                      | {
+                          /** @enum {string} */
+                          mode?: "calendar";
+                          /** @enum {string} */
+                          frequency: "daily" | "weekly";
+                          dayOfWeek?: number;
+                          daysOfWeek?: number[];
+                          hour: number;
+                          minute: number;
+                        }
+                      | {
+                          /** @enum {string} */
+                          mode: "interval";
+                          every: number;
+                          /** @enum {string} */
+                          unit: "minutes";
+                        }
+                      | {
+                          /** @enum {string} */
+                          mode: "interval";
+                          every: number;
+                          /** @enum {string} */
+                          unit: "hours";
+                        }
+                      | {
+                          /** @enum {string} */
+                          mode: "cron";
+                          cronExpression: string;
+                        }
+                    )
+                  | null;
+                timezone: string;
+                sync_error: string | null;
+              } | null;
+              slack_channel_ids: string[];
+            };
           };
         };
       };
-      /** @description Response for status 400 */
-      400: {
+    };
+  };
+  "getV1ProjectsByProjectIdScheduled-tasksByTaskId": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        projectId: string;
+        taskId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Response for status 200 */
+      200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
           "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
+            task: {
+              id: string;
+              /** @enum {string} */
+              kind: "custom" | "system";
+              is_default: boolean;
+              name: string;
+              description: string | null;
+              instructions: string | null;
+              /** @enum {string} */
+              mode: "fast" | "deep_research";
+              /** @enum {string} */
+              tool_permission_mode: "auto_require_permission" | "always_accept";
+              created_by: string | null;
+              created_at: string;
+              updated_at: string;
+              schedule: {
+                enabled: boolean;
+                cadence:
+                  | (
+                      | {
+                          /** @enum {string} */
+                          mode?: "calendar";
+                          /** @enum {string} */
+                          frequency: "daily" | "weekly";
+                          dayOfWeek?: number;
+                          daysOfWeek?: number[];
+                          hour: number;
+                          minute: number;
+                        }
+                      | {
+                          /** @enum {string} */
+                          mode: "interval";
+                          every: number;
+                          /** @enum {string} */
+                          unit: "minutes";
+                        }
+                      | {
+                          /** @enum {string} */
+                          mode: "interval";
+                          every: number;
+                          /** @enum {string} */
+                          unit: "hours";
+                        }
+                      | {
+                          /** @enum {string} */
+                          mode: "cron";
+                          cronExpression: string;
+                        }
+                    )
+                  | null;
+                timezone: string;
+                sync_error: string | null;
+              } | null;
+              slack_channel_ids: string[];
+            };
           };
         };
       };
-      /** @description Response for status 401 */
-      401: {
+    };
+  };
+  "patchV1ProjectsByProjectIdScheduled-tasksByTaskId": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        projectId: string;
+        taskId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          /** @description Updated scheduled task name. */
+          name?: string;
+          /** @description Updated human-readable scheduled task description. */
+          description?: string | null;
+          /** @description Updated instructions the task follows on each run. */
+          instructions?: string | null;
+          /**
+           * @description Execution mode. Use fast for quick runs or deep_research for more thorough runs.
+           * @enum {string}
+           */
+          mode?: "fast" | "deep_research";
+          /**
+           * @description Write-tool approval mode. Use auto_require_permission to ask before write actions or always_accept to approve automatically.
+           * @enum {string}
+           */
+          tool_permission_mode?: "auto_require_permission" | "always_accept";
+          /** @description When the task runs on its own. An omitted cadence keeps the one already stored, so a schedule can be turned back on without restating it. */
+          schedule?: {
+            enabled: boolean;
+            /** @description Run daily/weekly at a specific time, every N minutes/hours, or on a standard cron schedule using minute, hour, day, month, and weekday fields. */
+            cadence?:
+              | (
+                  | {
+                      /** @enum {string} */
+                      mode?: "calendar";
+                      /** @enum {string} */
+                      frequency: "daily" | "weekly";
+                      dayOfWeek?: number;
+                      daysOfWeek?: number[];
+                      hour: number;
+                      minute: number;
+                    }
+                  | {
+                      /** @enum {string} */
+                      mode: "interval";
+                      every: number;
+                      /** @enum {string} */
+                      unit: "minutes";
+                    }
+                  | {
+                      /** @enum {string} */
+                      mode: "interval";
+                      every: number;
+                      /** @enum {string} */
+                      unit: "hours";
+                    }
+                  | {
+                      /** @enum {string} */
+                      mode: "cron";
+                      cronExpression: string;
+                    }
+                )
+              | null;
+            timezone?: string;
+          };
+          /** @description Slack channel IDs the final output of each scheduled run is posted to. An empty list stops delivery. Requires the organization to have Slack connected. */
+          slack_channel_ids?: string[];
+        };
+      };
+    };
+    responses: {
+      /** @description Response for status 200 */
+      200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
           "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
-          };
-        };
-      };
-      /** @description Response for status 403 */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
-          };
-        };
-      };
-      /** @description Response for status 404 */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
-          };
-        };
-      };
-      /** @description Response for status 422 */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
-          };
-        };
-      };
-      /** @description Response for status 429 */
-      429: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
-          };
-        };
-      };
-      /** @description Response for status 502 */
-      502: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
-          };
-        };
-      };
-      /** @description Response for status 503 */
-      503: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
+            task: {
+              id: string;
+              /** @enum {string} */
+              kind: "custom" | "system";
+              is_default: boolean;
+              name: string;
+              description: string | null;
+              instructions: string | null;
+              /** @enum {string} */
+              mode: "fast" | "deep_research";
+              /** @enum {string} */
+              tool_permission_mode: "auto_require_permission" | "always_accept";
+              created_by: string | null;
+              created_at: string;
+              updated_at: string;
+              schedule: {
+                enabled: boolean;
+                cadence:
+                  | (
+                      | {
+                          /** @enum {string} */
+                          mode?: "calendar";
+                          /** @enum {string} */
+                          frequency: "daily" | "weekly";
+                          dayOfWeek?: number;
+                          daysOfWeek?: number[];
+                          hour: number;
+                          minute: number;
+                        }
+                      | {
+                          /** @enum {string} */
+                          mode: "interval";
+                          every: number;
+                          /** @enum {string} */
+                          unit: "minutes";
+                        }
+                      | {
+                          /** @enum {string} */
+                          mode: "interval";
+                          every: number;
+                          /** @enum {string} */
+                          unit: "hours";
+                        }
+                      | {
+                          /** @enum {string} */
+                          mode: "cron";
+                          cronExpression: string;
+                        }
+                    )
+                  | null;
+                timezone: string;
+                sync_error: string | null;
+              } | null;
+              slack_channel_ids: string[];
+            };
           };
         };
       };
@@ -10210,43 +7804,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            scorers: {
-              id: string;
-              user_id: string;
-              organization_id: string;
-              project_id: string;
-              name: string;
-              prompt: string;
-              /** @enum {string} */
-              reasoning_level: "lite" | "normal" | "high";
-              /** @default 0 */
-              min_score: number;
-              /** @default 1 */
-              max_score: number;
-              description?: (string | null) | null;
-              created_at: (string | null) | null;
-              updated_at: (string | null) | null;
-              /** @default false */
-              is_trace: boolean;
-              /** @enum {string} */
-              score_type: "numeric" | "binary" | "categorical";
-              judge_id: string;
-              judge_version_id: string;
-              judge_major_version: number;
-              judge_minor_version: number;
-              tag?: (string | null) | null;
-              categories?:
-                | (
-                    | {
-                        name: string;
-                        description: string;
-                      }[]
-                    | null
-                  )
-                | null;
-            }[];
-          };
+          "application/json": components["schemas"]["FetchPromptScorersResponse"];
         };
       };
     };
@@ -10269,9 +7827,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            exists: boolean;
-          };
+          "application/json": components["schemas"]["ScorerExistsResponse"];
         };
       };
     };
@@ -10321,9 +7877,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            exists: boolean;
-          };
+          "application/json": components["schemas"]["CustomScorerExistsResponse"];
         };
       };
     };
@@ -10339,33 +7893,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "multipart/form-data": {
-          metadata: {
-            scorer_name: string;
-            entrypoint_path: string;
-            requirements_path?: string;
-            class_name: string;
-            scorer_type?: (("example" | "trace") | null) | null;
-            /** @enum {string} */
-            response_type: "binary" | "categorical" | "numeric";
-            version?: number;
-            bump_major?: boolean;
-            categories?:
-              | (
-                  | {
-                      value: string;
-                      description: string;
-                    }[]
-                  | null
-                )
-              | null;
-          };
-          /**
-           * Format: binary
-           * @default File
-           */
-          bundle: string;
-        };
+        "multipart/form-data": components["schemas"]["UploadCustomScorerBundleRequest"];
       };
     };
     responses: {
@@ -10375,11 +7903,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            scorer_name: string;
-            status: string;
-            message: string;
-          };
+          "application/json": components["schemas"]["UploadCustomScorerResponse"];
         };
       };
       /** @description Response for status 404 */
@@ -10437,15 +7961,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": {
-          sql: string;
-        };
-        "application/x-www-form-urlencoded": {
-          sql: string;
-        };
-        "multipart/form-data": {
-          sql: string;
-        };
+        "application/json": components["schemas"]["PublicSqlRequest"];
       };
     };
     responses: {
@@ -10455,20 +7971,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            catalog_version: string;
-            columns: {
-              name: string;
-              type: string;
-              nullable: boolean;
-            }[];
-            /** @description SQL integers outside the JavaScript safe range (-(2^53 - 1) to 2^53 - 1) are returned as exact decimal strings, including in nested values. Column types retain the original SQL types. */
-            rows: {
-              [key: string]: unknown;
-            }[];
-            row_count: number;
-            elapsed_ms: number;
-          };
+          "application/json": components["schemas"]["PublicSqlResponse"];
         };
       };
       /** @description Response for status 400 */
@@ -10477,11 +7980,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
-          };
+          "application/json": components["schemas"]["PublicJqlErrorResponse"];
         };
       };
       /** @description Response for status 401 */
@@ -10490,11 +7989,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
-          };
+          "application/json": components["schemas"]["PublicJqlErrorResponse"];
         };
       };
       /** @description Response for status 403 */
@@ -10503,11 +7998,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
-          };
+          "application/json": components["schemas"]["PublicJqlErrorResponse"];
         };
       };
       /** @description Response for status 404 */
@@ -10516,11 +8007,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
-          };
+          "application/json": components["schemas"]["PublicJqlErrorResponse"];
         };
       };
       /** @description Response for status 422 */
@@ -10529,11 +8016,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
-          };
+          "application/json": components["schemas"]["PublicJqlErrorResponse"];
         };
       };
       /** @description Response for status 429 */
@@ -10542,11 +8025,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
-          };
+          "application/json": components["schemas"]["PublicJqlErrorResponse"];
         };
       };
       /** @description Response for status 502 */
@@ -10555,11 +8034,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
-          };
+          "application/json": components["schemas"]["PublicJqlErrorResponse"];
         };
       };
       /** @description Response for status 503 */
@@ -10568,11 +8043,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
-          };
+          "application/json": components["schemas"]["PublicJqlErrorResponse"];
         };
       };
     };
@@ -10596,34 +8067,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            test_configs: {
-              id: string;
-              organization_id?: string;
-              project_id: string;
-              dataset_id: string;
-              name: string;
-              description?: (string | null) | null;
-              created_at?: string;
-              updated_at?: string;
-              user_id: string;
-              judges?: {
-                id?: string;
-                organization_id?: string;
-                project_id?: string;
-                test_config_id?: string;
-                judge_id: string;
-                created_at?: string;
-                user_id: string;
-                judge?: {
-                  id: string;
-                  name: string;
-                  judge_type: string;
-                  score_type: string;
-                };
-              }[];
-            }[];
-          };
+          "application/json": components["schemas"]["TestConfigsResponse"];
         };
       };
     };
@@ -10639,39 +8083,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": {
-          name: string;
-          description?: (string | null) | null;
-          dataset_id?: string;
-          dataset_name?: string;
-          judge_ids?: string[];
-          judges?: {
-            judge_id?: string;
-            name?: string;
-          }[];
-        };
-        "application/x-www-form-urlencoded": {
-          name: string;
-          description?: (string | null) | null;
-          dataset_id?: string;
-          dataset_name?: string;
-          judge_ids?: string[];
-          judges?: {
-            judge_id?: string;
-            name?: string;
-          }[];
-        };
-        "multipart/form-data": {
-          name: string;
-          description?: (string | null) | null;
-          dataset_id?: string;
-          dataset_name?: string;
-          judge_ids?: string[];
-          judges?: {
-            judge_id?: string;
-            name?: string;
-          }[];
-        };
+        "application/json": components["schemas"]["CreateTestConfigRequest"];
       };
     };
     responses: {
@@ -10681,34 +8093,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            test_config: {
-              id: string;
-              organization_id?: string;
-              project_id: string;
-              dataset_id: string;
-              name: string;
-              description?: (string | null) | null;
-              created_at?: string;
-              updated_at?: string;
-              user_id: string;
-              judges?: {
-                id?: string;
-                organization_id?: string;
-                project_id?: string;
-                test_config_id?: string;
-                judge_id: string;
-                created_at?: string;
-                user_id: string;
-                judge?: {
-                  id: string;
-                  name: string;
-                  judge_type: string;
-                  score_type: string;
-                };
-              }[];
-            };
-          };
+          "application/json": components["schemas"]["TestConfigResponse"];
         };
       };
       /** @description Response for status 409 */
@@ -10759,34 +8144,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            test_config: {
-              id: string;
-              organization_id?: string;
-              project_id: string;
-              dataset_id: string;
-              name: string;
-              description?: (string | null) | null;
-              created_at?: string;
-              updated_at?: string;
-              user_id: string;
-              judges?: {
-                id?: string;
-                organization_id?: string;
-                project_id?: string;
-                test_config_id?: string;
-                judge_id: string;
-                created_at?: string;
-                user_id: string;
-                judge?: {
-                  id: string;
-                  name: string;
-                  judge_type: string;
-                  score_type: string;
-                };
-              }[];
-            };
-          };
+          "application/json": components["schemas"]["TestConfigResponse"];
         };
       };
       /** @description Response for status 404 */
@@ -10823,10 +8181,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            status: string;
-            message: string;
-          };
+          "application/json": components["schemas"]["DeleteTestConfigResponse"];
         };
       };
     };
@@ -10843,18 +8198,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": {
-          name?: string;
-          description?: (string | null) | null;
-        };
-        "application/x-www-form-urlencoded": {
-          name?: string;
-          description?: (string | null) | null;
-        };
-        "multipart/form-data": {
-          name?: string;
-          description?: (string | null) | null;
-        };
+        "application/json": components["schemas"]["UpdateTestConfigRequest"];
       };
     };
     responses: {
@@ -10864,34 +8208,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            test_config: {
-              id: string;
-              organization_id?: string;
-              project_id: string;
-              dataset_id: string;
-              name: string;
-              description?: (string | null) | null;
-              created_at?: string;
-              updated_at?: string;
-              user_id: string;
-              judges?: {
-                id?: string;
-                organization_id?: string;
-                project_id?: string;
-                test_config_id?: string;
-                judge_id: string;
-                created_at?: string;
-                user_id: string;
-                judge?: {
-                  id: string;
-                  name: string;
-                  judge_type: string;
-                  score_type: string;
-                };
-              }[];
-            };
-          };
+          "application/json": components["schemas"]["TestConfigResponse"];
         };
       };
       /** @description Response for status 404 */
@@ -10930,7 +8247,7 @@ export interface operations {
         test_config_id?: string;
         dataset_id?: string;
         status?: "pending" | "running" | "completed" | "error" | "cancelled";
-        limit?: string | number;
+        limit?: number;
       };
       header?: never;
       path: {
@@ -10946,45 +8263,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            test_runs: {
-              id: string;
-              organization_id?: string;
-              project_id: string;
-              user_id: string;
-              test_config_id: string;
-              dataset_id: string;
-              dataset_version_id: string;
-              /** @enum {string} */
-              source: "sdk" | "cli" | "mcp" | "platform" | "legacy";
-              /** @enum {string} */
-              status:
-                | "pending"
-                | "running"
-                | "completed"
-                | "error"
-                | "cancelled";
-              name: string;
-              error_message?: (string | null) | null;
-              created_at?: string;
-              updated_at?: string;
-              started_at?: (string | null) | null;
-              completed_at?: (string | null) | null;
-              dataset_version_number?: (number | null) | null;
-              judges?: {
-                judge_id: string;
-                judge_name: (string | null) | null;
-                judge_major_version: number;
-                judge_minor_version: number;
-              }[];
-              success_summary?:
-                | ({
-                    passed: number;
-                    failed: number;
-                  } | null)
-                | null;
-            }[];
-          };
+          "application/json": components["schemas"]["TestRunsResponse"];
         };
       };
     };
@@ -11000,90 +8279,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": {
-          /**
-           * Format: uuid
-           * @description Reuse an owned, pending platform agent run instead of creating a new run.
-           */
-          test_run_id?: string;
-          test_config_id: string;
-          name?: string;
-          dataset_version_id?: string;
-          dataset_version_number?: number;
-          judge_versions?: {
-            judge_id?: string;
-            name?: string;
-            version?: string;
-            major_version?: number;
-            minor_version?: number;
-          }[];
-          /** @enum {string} */
-          source?: "sdk" | "cli" | "mcp" | "platform" | "legacy";
-          agent_errors?: {
-            example_id: string;
-            error: string;
-          }[];
-          agent_traces?: {
-            example_id: string;
-            agent_offline_trace_id: string;
-          }[];
-        };
-        "application/x-www-form-urlencoded": {
-          /**
-           * Format: uuid
-           * @description Reuse an owned, pending platform agent run instead of creating a new run.
-           */
-          test_run_id?: string;
-          test_config_id: string;
-          name?: string;
-          dataset_version_id?: string;
-          dataset_version_number?: number;
-          judge_versions?: {
-            judge_id?: string;
-            name?: string;
-            version?: string;
-            major_version?: number;
-            minor_version?: number;
-          }[];
-          /** @enum {string} */
-          source?: "sdk" | "cli" | "mcp" | "platform" | "legacy";
-          agent_errors?: {
-            example_id: string;
-            error: string;
-          }[];
-          agent_traces?: {
-            example_id: string;
-            agent_offline_trace_id: string;
-          }[];
-        };
-        "multipart/form-data": {
-          /**
-           * Format: uuid
-           * @description Reuse an owned, pending platform agent run instead of creating a new run.
-           */
-          test_run_id?: string;
-          test_config_id: string;
-          name?: string;
-          dataset_version_id?: string;
-          dataset_version_number?: number;
-          judge_versions?: {
-            judge_id?: string;
-            name?: string;
-            version?: string;
-            major_version?: number;
-            minor_version?: number;
-          }[];
-          /** @enum {string} */
-          source?: "sdk" | "cli" | "mcp" | "platform" | "legacy";
-          agent_errors?: {
-            example_id: string;
-            error: string;
-          }[];
-          agent_traces?: {
-            example_id: string;
-            agent_offline_trace_id: string;
-          }[];
-        };
+        "application/json": components["schemas"]["CreateTestRunRequest"];
       };
     };
     responses: {
@@ -11093,96 +8289,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            test_run: {
-              id: string;
-              organization_id?: string;
-              project_id: string;
-              user_id: string;
-              test_config_id: string;
-              dataset_id: string;
-              dataset_version_id: string;
-              /** @enum {string} */
-              source: "sdk" | "cli" | "mcp" | "platform" | "legacy";
-              /** @enum {string} */
-              status:
-                | "pending"
-                | "running"
-                | "completed"
-                | "error"
-                | "cancelled";
-              name: string;
-              error_message?: (string | null) | null;
-              created_at?: string;
-              updated_at?: string;
-              started_at?: (string | null) | null;
-              completed_at?: (string | null) | null;
-            };
-            dataset: {
-              dataset_id: string;
-              organization_id?: string;
-              project_id?: string;
-              name: string;
-              schema?:
-                | ({
-                    [key: string]: unknown;
-                  } | null)
-                | null;
-              current_version?: number;
-              created_at?: string;
-              updated_at?: string;
-              creator_id: (string | null) | null;
-              entries?: number;
-              test_config_count?: number;
-              test_run_count?: number;
-            };
-            dataset_version: {
-              version_id: string;
-              dataset_id: string;
-              organization_id: string;
-              project_id: string;
-              version_number: number;
-              created_at: string;
-              user_id: (string | null) | null;
-              item_count: number;
-            };
-            examples: {
-              example_id: string;
-              organization_id?: string;
-              project_id?: string;
-              data: {
-                [key: string]: unknown;
-              };
-              metadata?:
-                | ({
-                    [key: string]: unknown;
-                  } | null)
-                | null;
-              managed_metadata: {
-                [key: string]: unknown;
-              };
-              created_at?: string;
-              user_id: string;
-            }[];
-            judges: {
-              judge_id: string;
-              judge_name: string;
-              judge_type: string;
-              score_type: string;
-              judge_major_version: number;
-              judge_minor_version: number;
-            }[];
-            evaluation_runs: {
-              run_id: string;
-              judge_name: string;
-              example_id: string;
-              test_run_id: string;
-              judge_id: string;
-              judge_major_version: number;
-              judge_minor_version: number;
-            }[];
-            ui_results_url: string;
-          };
+          "application/json": components["schemas"]["PreparedTestRunResponse"];
         };
       };
       /** @description Response for status 402 */
@@ -11275,33 +8382,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            test_run: {
-              id: string;
-              organization_id?: string;
-              project_id: string;
-              user_id: string;
-              test_config_id: string;
-              dataset_id: string;
-              dataset_version_id: string;
-              /** @enum {string} */
-              source: "sdk" | "cli" | "mcp" | "platform" | "legacy";
-              /** @enum {string} */
-              status:
-                | "pending"
-                | "running"
-                | "completed"
-                | "error"
-                | "cancelled";
-              name: string;
-              error_message?: (string | null) | null;
-              created_at?: string;
-              updated_at?: string;
-              started_at?: (string | null) | null;
-              completed_at?: (string | null) | null;
-            };
-            ui_results_url?: (string | null) | null;
-          };
+          "application/json": components["schemas"]["TestRunResponse"];
         };
       };
       /** @description Response for status 404 */
@@ -11338,33 +8419,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            test_run: {
-              id: string;
-              organization_id?: string;
-              project_id: string;
-              user_id: string;
-              test_config_id: string;
-              dataset_id: string;
-              dataset_version_id: string;
-              /** @enum {string} */
-              source: "sdk" | "cli" | "mcp" | "platform" | "legacy";
-              /** @enum {string} */
-              status:
-                | "pending"
-                | "running"
-                | "completed"
-                | "error"
-                | "cancelled";
-              name: string;
-              error_message?: (string | null) | null;
-              created_at?: string;
-              updated_at?: string;
-              started_at?: (string | null) | null;
-              completed_at?: (string | null) | null;
-            };
-            ui_results_url?: (string | null) | null;
-          };
+          "application/json": components["schemas"]["TestRunResponse"];
         };
       };
       /** @description Response for status 404 */
@@ -11415,23 +8470,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            graph: {
-              [key: string]: {
-                judge_id: string;
-                judge_name: (string | null) | null;
-                judge_major_version: number;
-                judge_minor_version: number;
-                score_type: string;
-                score_distribution: number[];
-                true_count: number;
-                false_count: number;
-                value_counts: {
-                  [key: string]: number;
-                };
-              };
-            };
-          };
+          "application/json": components["schemas"]["TestRunGraphResponse"];
         };
       };
     };
@@ -11439,7 +8478,7 @@ export interface operations {
   "getV1ProjectsByProjectIdTest-runsByTestRunIdItems": {
     parameters: {
       query?: {
-        limit?: string | number;
+        limit?: number;
         cursor?: string;
       };
       header?: never;
@@ -11457,60 +8496,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            results: {
-              organization_id: string;
-              project_id: string;
-              test_run_id: string;
-              dataset_id: string;
-              dataset_version_id: string;
-              example_id: string;
-              agent_offline_trace_id: (string | null) | null;
-              created_at: string;
-              example:
-                | ({
-                    example_id: string;
-                    organization_id?: string;
-                    project_id?: string;
-                    data: {
-                      [key: string]: unknown;
-                    };
-                    metadata?:
-                      | ({
-                          [key: string]: unknown;
-                        } | null)
-                      | null;
-                    managed_metadata: {
-                      [key: string]: unknown;
-                    };
-                    created_at?: string;
-                    user_id: string;
-                  } | null)
-                | null;
-              data: {
-                [key: string]: unknown;
-              };
-              scorers: {
-                judge_id: string;
-                judge_name: (string | null) | null;
-                judge_major_version: number;
-                judge_minor_version: number;
-                score_type: string;
-                num_value: number;
-                bool_value: boolean;
-                str_value: string;
-                reason: unknown;
-                metadata: unknown;
-                success: (boolean | null) | null;
-                error: (string | null) | null;
-                created_at: string;
-              }[];
-            }[];
-            /** @description Whether more items exist beyond this page. */
-            has_more: boolean;
-            next_cursor: (string | null) | null;
-            ui_results_url?: (string | null) | null;
-          };
+          "application/json": components["schemas"]["TestRunItemsResponse"];
         };
       };
     };
@@ -11518,7 +8504,7 @@ export interface operations {
   "getV1ProjectsByProjectIdTest-runsByTestRunIdResults": {
     parameters: {
       query?: {
-        limit?: string | number;
+        limit?: number;
         cursor?: string;
       };
       header?: never;
@@ -11536,60 +8522,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            results: {
-              organization_id: string;
-              project_id: string;
-              test_run_id: string;
-              dataset_id: string;
-              dataset_version_id: string;
-              example_id: string;
-              agent_offline_trace_id: (string | null) | null;
-              created_at: string;
-              example:
-                | ({
-                    example_id: string;
-                    organization_id?: string;
-                    project_id?: string;
-                    data: {
-                      [key: string]: unknown;
-                    };
-                    metadata?:
-                      | ({
-                          [key: string]: unknown;
-                        } | null)
-                      | null;
-                    managed_metadata: {
-                      [key: string]: unknown;
-                    };
-                    created_at?: string;
-                    user_id: string;
-                  } | null)
-                | null;
-              data: {
-                [key: string]: unknown;
-              };
-              scorers: {
-                judge_id: string;
-                judge_name: (string | null) | null;
-                judge_major_version: number;
-                judge_minor_version: number;
-                score_type: string;
-                num_value: number;
-                bool_value: boolean;
-                str_value: string;
-                reason: unknown;
-                metadata: unknown;
-                success: (boolean | null) | null;
-                error: (string | null) | null;
-                created_at: string;
-              }[];
-            }[];
-            /** @description Whether more items exist beyond this page. */
-            has_more: boolean;
-            next_cursor: (string | null) | null;
-            ui_results_url?: (string | null) | null;
-          };
+          "application/json": components["schemas"]["TestRunItemsResponse"];
         };
       };
     };
@@ -11606,21 +8539,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": {
-          /** @enum {string} */
-          status: "pending" | "running" | "completed" | "error" | "cancelled";
-          error_message?: (string | null) | null;
-        };
-        "application/x-www-form-urlencoded": {
-          /** @enum {string} */
-          status: "pending" | "running" | "completed" | "error" | "cancelled";
-          error_message?: (string | null) | null;
-        };
-        "multipart/form-data": {
-          /** @enum {string} */
-          status: "pending" | "running" | "completed" | "error" | "cancelled";
-          error_message?: (string | null) | null;
-        };
+        "application/json": components["schemas"]["UpdateTestRunStatusRequest"];
       };
     };
     responses: {
@@ -11630,33 +8549,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            test_run: {
-              id: string;
-              organization_id?: string;
-              project_id: string;
-              user_id: string;
-              test_config_id: string;
-              dataset_id: string;
-              dataset_version_id: string;
-              /** @enum {string} */
-              source: "sdk" | "cli" | "mcp" | "platform" | "legacy";
-              /** @enum {string} */
-              status:
-                | "pending"
-                | "running"
-                | "completed"
-                | "error"
-                | "cancelled";
-              name: string;
-              error_message?: (string | null) | null;
-              created_at?: string;
-              updated_at?: string;
-              started_at?: (string | null) | null;
-              completed_at?: (string | null) | null;
-            };
-            ui_results_url?: (string | null) | null;
-          };
+          "application/json": components["schemas"]["TestRunResponse"];
         };
       };
       /** @description Response for status 404 */
@@ -11715,24 +8608,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": {
-          successes: {
-            evaluation_run_id: string;
-            success: (boolean | null) | null;
-          }[];
-        };
-        "application/x-www-form-urlencoded": {
-          successes: {
-            evaluation_run_id: string;
-            success: (boolean | null) | null;
-          }[];
-        };
-        "multipart/form-data": {
-          successes: {
-            evaluation_run_id: string;
-            success: (boolean | null) | null;
-          }[];
-        };
+        "application/json": components["schemas"]["ApplyTestRunSuccessRequest"];
       };
     };
     responses: {
@@ -11742,9 +8618,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            updated: number;
-          };
+          "application/json": components["schemas"]["ApplyTestRunSuccessResponse"];
         };
       };
       /** @description Response for status 404 */
@@ -11777,7 +8651,32 @@ export interface operations {
       };
     };
   };
-  "postV1ProjectsByProjectIdTest-runsPreflight": {
+  "getV1ProjectsByProjectIdTest-suites": {
+    parameters: {
+      query?: {
+        offset?: string | number;
+        limit?: string | number;
+      };
+      header?: never;
+      path: {
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Response for status 200 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ListTestSuitesResponse"];
+        };
+      };
+    };
+  };
+  "postV1ProjectsByProjectIdTest-suites": {
     parameters: {
       query?: never;
       header?: never;
@@ -11788,90 +8687,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": {
-          /**
-           * Format: uuid
-           * @description Reuse an owned, pending platform agent run instead of creating a new run.
-           */
-          test_run_id?: string;
-          test_config_id: string;
-          name?: string;
-          dataset_version_id?: string;
-          dataset_version_number?: number;
-          judge_versions?: {
-            judge_id?: string;
-            name?: string;
-            version?: string;
-            major_version?: number;
-            minor_version?: number;
-          }[];
-          /** @enum {string} */
-          source?: "sdk" | "cli" | "mcp" | "platform" | "legacy";
-          agent_errors?: {
-            example_id: string;
-            error: string;
-          }[];
-          agent_traces?: {
-            example_id: string;
-            agent_offline_trace_id: string;
-          }[];
-        };
-        "application/x-www-form-urlencoded": {
-          /**
-           * Format: uuid
-           * @description Reuse an owned, pending platform agent run instead of creating a new run.
-           */
-          test_run_id?: string;
-          test_config_id: string;
-          name?: string;
-          dataset_version_id?: string;
-          dataset_version_number?: number;
-          judge_versions?: {
-            judge_id?: string;
-            name?: string;
-            version?: string;
-            major_version?: number;
-            minor_version?: number;
-          }[];
-          /** @enum {string} */
-          source?: "sdk" | "cli" | "mcp" | "platform" | "legacy";
-          agent_errors?: {
-            example_id: string;
-            error: string;
-          }[];
-          agent_traces?: {
-            example_id: string;
-            agent_offline_trace_id: string;
-          }[];
-        };
-        "multipart/form-data": {
-          /**
-           * Format: uuid
-           * @description Reuse an owned, pending platform agent run instead of creating a new run.
-           */
-          test_run_id?: string;
-          test_config_id: string;
-          name?: string;
-          dataset_version_id?: string;
-          dataset_version_number?: number;
-          judge_versions?: {
-            judge_id?: string;
-            name?: string;
-            version?: string;
-            major_version?: number;
-            minor_version?: number;
-          }[];
-          /** @enum {string} */
-          source?: "sdk" | "cli" | "mcp" | "platform" | "legacy";
-          agent_errors?: {
-            example_id: string;
-            error: string;
-          }[];
-          agent_traces?: {
-            example_id: string;
-            agent_offline_trace_id: string;
-          }[];
-        };
+        "application/json": components["schemas"]["CreateTestSuiteRequest"];
       };
     };
     responses: {
@@ -11881,83 +8697,807 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json":
-            | {
-                matches: boolean;
-                predicate_translatable: boolean;
-                capped: boolean;
-                warnings: string[];
-                /** @constant */
-                unit: "traces";
-                trace_count: string | number;
-                trace_ids?: string[];
-                ids_capped?: boolean;
-                sampling_rate: number;
-                estimated_run_count: string | number;
-                series?: {
-                  timestamp: string;
-                  candidate_count: string | number;
-                  matching_count: string | number;
-                  estimated_eval_count: number;
-                }[];
-                forecast?: {
-                  timestamp: string;
-                  candidate_count: string | number;
-                  matching_count: string | number;
-                  estimated_eval_count: number;
-                }[];
-                forecast_method?: "seasonal_weekly" | "linear" | "mean";
-              }
-            | {
-                matches: boolean;
-                predicate_translatable: boolean;
-                capped: boolean;
-                warnings: string[];
-                session_evaluation_count_enabled: boolean;
-                session_evaluation_idle_enabled: boolean;
-                session_evaluation_min_candidate_traces: string | number;
-                session_evaluation_max_wait_minutes: string | number;
-                /** @constant */
-                unit: "sessions";
-                session_count: string | number;
-                session_ids?: string[];
-                trace_count: string | number;
-                candidate_trace_count: string | number;
-                sampled_session_count: string | number;
-                sampled_candidate_trace_count: string | number;
-                trace_ids?: string[];
-                ids_capped?: boolean;
-                sampling_rate: number;
-                estimated_run_count: string | number;
-                series?: {
-                  timestamp: string;
-                  candidate_count: string | number;
-                  matching_count: string | number;
-                  estimated_eval_count: number;
-                }[];
-                forecast?: {
-                  timestamp: string;
-                  candidate_count: string | number;
-                  matching_count: string | number;
-                  estimated_eval_count: number;
-                }[];
-                forecast_method?: "seasonal_weekly" | "linear" | "mean";
-              }
-            | {
-                matches: boolean;
-                predicate_translatable: boolean;
-                capped: boolean;
-                warnings: string[];
-                /** @constant */
-                unit: "examples";
-                example_count: string | number;
-                judge_count: string | number;
-                run_count: string | number;
-              };
+          "application/json": components["schemas"]["TestSuite"];
         };
       };
       /** @description Response for status 404 */
       404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+      /** @description Response for status 409 */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+      /** @description Response for status 422 */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+    };
+  };
+  "deleteV1ProjectsByProjectIdTest-suitesByTestSuiteId": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        projectId: string;
+        testSuiteId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Response for status 200 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            test_suite_id: string;
+          };
+        };
+      };
+      /** @description Response for status 404 */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+      /** @description Response for status 409 */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+      /** @description Response for status 422 */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+    };
+  };
+  "getV1ProjectsByProjectIdTest-suitesByTestSuiteIdCases": {
+    parameters: {
+      query?: {
+        version?: string;
+        offset?: string | number;
+        limit?: string | number;
+      };
+      header?: never;
+      path: {
+        projectId: string;
+        testSuiteId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Response for status 200 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ListTestCasesResponse"];
+        };
+      };
+      /** @description Response for status 404 */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+      /** @description Response for status 409 */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+      /** @description Response for status 422 */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+    };
+  };
+  "postV1ProjectsByProjectIdTest-suitesByTestSuiteIdCases": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        projectId: string;
+        testSuiteId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AddTestCasesRequest"];
+      };
+    };
+    responses: {
+      /** @description Response for status 200 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            case_ids: string[];
+          };
+        };
+      };
+      /** @description Response for status 404 */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+      /** @description Response for status 409 */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+      /** @description Response for status 422 */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+    };
+  };
+  "putV1ProjectsByProjectIdTest-suitesByTestSuiteIdCasesByCaseId": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        projectId: string;
+        testSuiteId: string;
+        caseId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["TestCaseInput"];
+      };
+    };
+    responses: {
+      /** @description Response for status 200 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            case_id: string;
+          };
+        };
+      };
+      /** @description Response for status 404 */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+      /** @description Response for status 409 */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+      /** @description Response for status 422 */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+    };
+  };
+  "deleteV1ProjectsByProjectIdTest-suitesByTestSuiteIdCasesByCaseId": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        projectId: string;
+        testSuiteId: string;
+        caseId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Response for status 200 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            case_id: string;
+          };
+        };
+      };
+      /** @description Response for status 404 */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+      /** @description Response for status 409 */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+      /** @description Response for status 422 */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+    };
+  };
+  "postV1ProjectsByProjectIdTest-suitesByTestSuiteIdDiscard": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        projectId: string;
+        testSuiteId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Response for status 200 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            discarded: boolean;
+          };
+        };
+      };
+      /** @description Response for status 404 */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+      /** @description Response for status 409 */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+      /** @description Response for status 422 */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+    };
+  };
+  "postV1ProjectsByProjectIdTest-suitesByTestSuiteIdDraft": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        projectId: string;
+        testSuiteId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Response for status 200 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            version: string | number;
+          };
+        };
+      };
+      /** @description Response for status 404 */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+      /** @description Response for status 409 */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+      /** @description Response for status 422 */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+    };
+  };
+  "postV1ProjectsByProjectIdTest-suitesByTestSuiteIdPublish": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        projectId: string;
+        testSuiteId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Response for status 200 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            version: string | number;
+          };
+        };
+      };
+      /** @description Response for status 404 */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+      /** @description Response for status 409 */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+      /** @description Response for status 422 */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+    };
+  };
+  "getV1ProjectsByProjectIdTest-suitesByTestSuiteIdRuns": {
+    parameters: {
+      query?: {
+        offset?: string | number;
+        limit?: string | number;
+      };
+      header?: never;
+      path: {
+        projectId: string;
+        testSuiteId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Response for status 200 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ListTestRunsResponse"];
+        };
+      };
+    };
+  };
+  "postV1ProjectsByProjectIdTest-suitesByTestSuiteIdRuns": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        projectId: string;
+        testSuiteId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["StartTestRunRequest"];
+      };
+    };
+    responses: {
+      /** @description Response for status 200 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["StartTestRunResponse"];
+        };
+      };
+      /** @description Response for status 404 */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+      /** @description Response for status 409 */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+      /** @description Response for status 422 */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+    };
+  };
+  "getV1ProjectsByProjectIdTest-suitesRunsByRunId": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        projectId: string;
+        runId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Response for status 200 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TestRun"];
+        };
+      };
+      /** @description Response for status 404 */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+    };
+  };
+  "getV1ProjectsByProjectIdTest-suitesRunsByRunIdResults": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        projectId: string;
+        runId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Response for status 200 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TestResultsResponse"];
+        };
+      };
+      /** @description Response for status 404 */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+    };
+  };
+  "postV1ProjectsByProjectIdTest-suitesRunsByRunIdScore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        projectId: string;
+        runId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Response for status 200 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ScoreTestRunResponse"];
+        };
+      };
+      /** @description Response for status 404 */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+      /** @description Response for status 409 */
+      409: {
         headers: {
           [name: string]: unknown;
         };
@@ -12059,6 +9599,8 @@ export interface operations {
               status: "healthy" | "unhealthy";
               checks: {
                 check_id: string;
+                /** @description Muted checks retain raw results but do not affect health */
+                is_muted: boolean;
                 check_version: number;
                 /** @enum {string} */
                 scope: "trace" | "span";
@@ -12109,6 +9651,8 @@ export interface operations {
               trace_id: string;
               checks: {
                 check_id: string;
+                /** @description Muted checks retain raw results but do not affect health */
+                is_muted: boolean;
                 check_version: number;
                 /** @enum {string} */
                 scope: "trace" | "span";
@@ -12161,15 +9705,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": {
-          tags: string[];
-        };
-        "application/x-www-form-urlencoded": {
-          tags: string[];
-        };
-        "multipart/form-data": {
-          tags: string[];
-        };
+        "application/json": components["schemas"]["AddTraceTagsRequest"];
       };
     };
     responses: {
@@ -12179,9 +9715,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            success: boolean;
-          };
+          "application/json": components["schemas"]["AddTraceTagsResponse"];
         };
       };
     };
@@ -12198,18 +9732,6 @@ export interface operations {
     requestBody: {
       content: {
         "application/json": {
-          /** @description Trace IDs to evaluate */
-          trace_ids: string[];
-          /** @description Restrict evaluation to these judge names */
-          judge_names?: string[];
-        };
-        "application/x-www-form-urlencoded": {
-          /** @description Trace IDs to evaluate */
-          trace_ids: string[];
-          /** @description Restrict evaluation to these judge names */
-          judge_names?: string[];
-        };
-        "multipart/form-data": {
           /** @description Trace IDs to evaluate */
           trace_ids: string[];
           /** @description Restrict evaluation to these judge names */
@@ -12252,24 +9774,6 @@ export interface operations {
            */
           limit?: number;
         };
-        "application/x-www-form-urlencoded": {
-          /** @description Restrict evaluation to these judge names */
-          judge_names?: string[];
-          /**
-           * @description Max number of traces to evaluate, taken from the most recent across all time
-           * @default 100
-           */
-          limit?: number;
-        };
-        "multipart/form-data": {
-          /** @description Restrict evaluation to these judge names */
-          judge_names?: string[];
-          /**
-           * @description Max number of traces to evaluate, taken from the most recent across all time
-           * @default 100
-           */
-          limit?: number;
-        };
       };
     };
     responses: {
@@ -12296,15 +9800,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        "application/json": {
-          project_name: string;
-        };
-        "application/x-www-form-urlencoded": {
-          project_name: string;
-        };
-        "multipart/form-data": {
-          project_name: string;
-        };
+        "application/json": components["schemas"]["ResolveProjectRequest"];
       };
     };
     responses: {
@@ -12314,9 +9810,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            project_id: string;
-          };
+          "application/json": components["schemas"]["ResolveProjectResponse"];
         };
       };
     };
@@ -12370,10 +9864,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            /** @description The virtual SQL catalog in Markdown. */
-            schema: string;
-          };
+          "application/json": components["schemas"]["PublicSqlSchemaResponse"];
         };
       };
       /** @description Response for status 401 */
@@ -12382,11 +9873,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
-          };
+          "application/json": components["schemas"]["PublicJqlErrorResponse"];
         };
       };
       /** @description Response for status 403 */
@@ -12395,11 +9882,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            error: string;
-            message: string;
-            hint?: string;
-          };
+          "application/json": components["schemas"]["PublicJqlErrorResponse"];
         };
       };
     };

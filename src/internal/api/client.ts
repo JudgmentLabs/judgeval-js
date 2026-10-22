@@ -96,8 +96,8 @@ export class JudgmentApiClient {
   getV1projectsDatasetsByDatasetIdentifierPage(
     projectId: string,
     datasetIdentifier: string,
-    version?: string,
-    limit?: string,
+    version?: number,
+    limit?: number,
     cursor_created_at?: string,
     cursor_example_id?: string,
   ) {
@@ -137,7 +137,7 @@ export class JudgmentApiClient {
   getV1projectsTestRunsByTestRunIdItems(
     projectId: string,
     testRunId: string,
-    limit?: string,
+    limit?: number,
     cursor?: string,
   ) {
     return ok(
@@ -208,7 +208,7 @@ export class JudgmentApiClient {
   getV1projectsExperimentsByRunId(
     projectId: string,
     runId: string,
-    limit?: string,
+    limit?: number,
     cursor?: string,
   ) {
     return ok(
