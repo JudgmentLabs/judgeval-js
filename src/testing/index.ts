@@ -72,6 +72,8 @@ export interface TestRun {
   cases_with_output: number;
   cases_scored: number;
   cases_passed: number;
+  /** Set when the run was cancelled; its unscored cases won't be scored. */
+  cancelled_at: string | null;
   created_at: string;
 }
 
@@ -270,5 +272,14 @@ export class TestRunsFactory extends ProjectTestSuitesClient {
    */
   score(runId: string): Promise<{ run_id: string }> {
     return this.call("POST", `/runs/${runId}/score`);
+  }
+
+  /**
+   * Cancel a run: its unscored cases won't be scored, though their traces
+   * still attach. Already-scored cases keep their results. To score the rest
+   * later, call `score`, which creates a new run.
+   */
+  cancel(runId: string): Promise<TestRun> {
+    return this.call("POST", `/runs/${runId}/cancel`);
   }
 }

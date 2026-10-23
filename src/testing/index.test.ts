@@ -41,6 +41,18 @@ describe("TestRunsFactory", () => {
       },
     ]);
   });
+
+  test("cancel posts to the run", async () => {
+    const calls = stubFetch({ run_id: "r1" });
+    await new TestRunsFactory(client, "p1", "proj").cancel("r1");
+    expect(calls).toEqual([
+      {
+        url: "https://api.example.com/v1/projects/p1/test-suites/runs/r1/cancel",
+        method: "POST",
+        body: "{}",
+      },
+    ]);
+  });
 });
 
 describe("TestSuitesFactory", () => {
