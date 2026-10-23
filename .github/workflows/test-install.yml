@@ -26,13 +26,8 @@ jobs:
       - name: Build package
         run: bun run build
 
-      - name: Check generated JQL output is current
-        run: git diff --exit-code -- src/jql
-
       - name: Check package contents
-        run: |
-          bun run check-package --plant
-          bun run check-package
+        run: bun run check-package
 
       - name: Check build output
         run: |

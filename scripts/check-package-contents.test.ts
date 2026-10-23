@@ -32,14 +32,8 @@ describe("package manifest validation", () => {
         "dist/node/index.d.ts",
         "dist/node/index.mjs",
         "dist/node/index.mjs.map",
-        "dist/node/jql.cjs",
-        "dist/node/jql.cjs.map",
-        "dist/node/jql.mjs",
-        "dist/node/jql.mjs.map",
         "dist/workers/index.mjs",
         "dist/workers/index.mjs.map",
-        "dist/workers/jql.mjs",
-        "dist/workers/jql.mjs.map",
       ]),
     );
   });

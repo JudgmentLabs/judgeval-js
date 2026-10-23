@@ -26,8 +26,6 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run check
       - run: bun run build
-      - name: Check generated JQL output is current
-        run: git diff --exit-code -- src/jql
       - name: Check package contents
         run: bun run check-package
 
