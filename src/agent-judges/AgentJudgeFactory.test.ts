@@ -304,6 +304,18 @@ describe("AgentJudgeFactory.update", () => {
     expect(client.patchV1projectsJudgesByJudgeId).not.toHaveBeenCalled();
   });
 
+  test("keeps a Pass / Fail judge categorical when updated as binary", async () => {
+    const { factory, client } = makeFactory("proj-1", [CATEGORICAL]);
+
+    await factory.update({
+      judgeId: "judge-1",
+      prompt: "x",
+      scoreType: "binary",
+    });
+
+    expect(patchBody(client).update.newVersion.scoreType).toBe("categorical");
+  });
+
   test("keeps existing categorical outputs when categories are omitted", async () => {
     const { factory, client } = makeFactory("proj-1", [CATEGORICAL]);
 

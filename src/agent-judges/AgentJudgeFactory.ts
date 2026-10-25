@@ -140,10 +140,10 @@ export class AgentJudgeFactory {
    * @param options.categories - New choices for `categorical` judges; names matching an existing choice keep it, and must keep its description.
    * @param options.minScore - New lower bound for `numeric` judges.
    * @param options.maxScore - New upper bound for `numeric` judges.
-   * @param options.sourceMajorVersion - Major version to copy unspecified fields from.
-   * @param options.sourceMinorVersion - Minor version to copy unspecified fields from.
-   * @param options.targetMajorVersion - Major version to write to.
-   * @param options.targetMinorVersion - Minor version to write to.
+   * @param options.sourceMajorVersion - Major version to copy unspecified fields from. Defaults to the latest major.
+   * @param options.sourceMinorVersion - Minor version to copy unspecified fields from. Defaults to the latest version; required when `sourceMajorVersion` is an older major.
+   * @param options.targetMajorVersion - Major version to write to. Defaults to the latest major.
+   * @param options.targetMinorVersion - Minor version to write to. Defaults to latest minor + 1 in the latest major, else 0.
    * @returns The updated `AgentJudge`, or `null` if the project is unresolved.
    */
   async update(options: {
@@ -192,25 +192,35 @@ export class AgentJudgeFactory {
     options: Parameters<AgentJudgeFactory["update"]>[0],
   ): Promise<NewVersion> {
     const latest = await this._lookup(projectId, options.judgeId);
+    const sourceMajor =
+      options.sourceMajorVersion ?? latest.judge_major_version;
+    // The lookup route takes an exact version, so an older major's latest
+    // minor can't be resolved.
+    if (
+      options.sourceMinorVersion === undefined &&
+      sourceMajor !== latest.judge_major_version
+    ) {
+      throw new Error(
+        "sourceMinorVersion is required when sourceMajorVersion is not the latest major",
+      );
+    }
     const source =
-      options.sourceMajorVersion === undefined &&
       options.sourceMinorVersion === undefined
         ? latest
         : await this._lookup(projectId, options.judgeId, {
-            major: options.sourceMajorVersion ?? latest.judge_major_version,
-            minor: options.sourceMinorVersion ?? 0,
+            major: sourceMajor,
+            minor: options.sourceMinorVersion,
           });
-    const targetVersion =
-      options.targetMajorVersion === undefined &&
-      options.targetMinorVersion === undefined
-        ? {
-            major: latest.judge_major_version,
-            minor: latest.judge_minor_version + 1,
-          }
-        : {
-            major: options.targetMajorVersion ?? latest.judge_major_version,
-            minor: options.targetMinorVersion ?? 0,
-          };
+    const targetMajor =
+      options.targetMajorVersion ?? latest.judge_major_version;
+    const targetVersion = {
+      major: targetMajor,
+      minor:
+        options.targetMinorVersion ??
+        (targetMajor === latest.judge_major_version
+          ? latest.judge_minor_version + 1
+          : 0),
+    };
 
     const { definition } = source;
     const base = {
@@ -240,7 +250,11 @@ export class AgentJudgeFactory {
           source.session_evaluation_max_wait_minutes,
       },
     };
-    const scoreType = options.scoreType ?? source.score_type;
+    // create() writes `binary` as a Pass/Fail categorical judge.
+    const scoreType =
+      options.scoreType === "binary" && source.score_type === "categorical"
+        ? "categorical"
+        : (options.scoreType ?? source.score_type);
     if (scoreType !== "categorical") return { ...base, scoreType };
 
     const existing = new Map(
