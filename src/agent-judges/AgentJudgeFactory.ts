@@ -191,22 +191,15 @@ export class AgentJudgeFactory {
     projectId: string,
     options: Parameters<AgentJudgeFactory["update"]>[0],
   ): Promise<NewVersion> {
-    const hasSource =
-      options.sourceMajorVersion !== undefined ||
-      options.sourceMinorVersion !== undefined;
-    const source = await this._lookup(
-      projectId,
-      options.judgeId,
-      hasSource
-        ? {
-            major: options.sourceMajorVersion ?? 0,
+    const latest = await this._lookup(projectId, options.judgeId);
+    const source =
+      options.sourceMajorVersion === undefined &&
+      options.sourceMinorVersion === undefined
+        ? latest
+        : await this._lookup(projectId, options.judgeId, {
+            major: options.sourceMajorVersion ?? latest.judge_major_version,
             minor: options.sourceMinorVersion ?? 0,
-          }
-        : "latest",
-    );
-    const latest = hasSource
-      ? await this._lookup(projectId, options.judgeId)
-      : source;
+          });
     const targetVersion =
       options.targetMajorVersion === undefined &&
       options.targetMinorVersion === undefined

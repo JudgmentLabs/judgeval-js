@@ -172,8 +172,8 @@ describe("AgentJudgeFactory.create", () => {
     });
   });
 
-  test("returns null when project_id is unresolved", async () => {
-    const { factory } = makeFactory(null);
+  test("returns null without calling the API when project_id is unresolved", async () => {
+    const { factory, client } = makeFactory(null);
 
     const result = await factory.create({
       name: "n",
@@ -182,13 +182,6 @@ describe("AgentJudgeFactory.create", () => {
     });
 
     expect(result).toBeNull();
-  });
-
-  test("does not call the API when project_id is unresolved", async () => {
-    const { factory, client } = makeFactory(null);
-
-    await factory.create({ name: "n", prompt: "p", scoreType: "binary" });
-
     expect(client.postV1projectsJudges).not.toHaveBeenCalled();
   });
 
@@ -249,10 +242,10 @@ describe("AgentJudgeFactory.update", () => {
 
   test("copies from the source version and writes the target version", async () => {
     const { factory, client } = makeFactory("proj-1", [
+      judgeDetail(),
       judgeDetail({
         definition: { ...DEFINITION, prompt: "v0.1" },
       }),
-      judgeDetail(),
     ]);
 
     await factory.update({
@@ -269,24 +262,14 @@ describe("AgentJudgeFactory.update", () => {
     ]).toEqual([{ major: 2, minor: 0 }, "v0.1"]);
   });
 
-  test("looks up the source version before the latest one", async () => {
+  test("reads a minor-only source version from the latest major", async () => {
     const { factory, client } = makeFactory();
 
-    await factory.update({
-      judgeId: "judge-1",
-      sourceMajorVersion: 0,
-      sourceMinorVersion: 1,
-    });
+    await factory.update({ judgeId: "judge-1", sourceMinorVersion: 1 });
 
-    expect(
-      client.postV1projectsJudgesByJudgeIdLookup.mock.calls.map(
-        (call) => call[2],
-      ),
-    ).toEqual([
-      { version: { major: 0, minor: 1 } },
-      { version: "latest" },
-      { version: { major: 1, minor: 3 } },
-    ]);
+    expect(client.postV1projectsJudgesByJudgeIdLookup.mock.calls[1][2]).toEqual(
+      { version: { major: 1, minor: 1 } },
+    );
   });
 
   test("reuses existing behaviors for categories with matching names", async () => {
@@ -338,19 +321,12 @@ describe("AgentJudgeFactory.update", () => {
     await expect(update).rejects.toThrow("only prompt-based Agent judges");
   });
 
-  test("returns null when project_id is unresolved", async () => {
-    const { factory } = makeFactory(null);
+  test("returns null without calling the API when project_id is unresolved", async () => {
+    const { factory, client } = makeFactory(null);
 
     const result = await factory.update({ judgeId: "judge-1", prompt: "x" });
 
     expect(result).toBeNull();
-  });
-
-  test("does not call the API when project_id is unresolved", async () => {
-    const { factory, client } = makeFactory(null);
-
-    await factory.update({ judgeId: "judge-1", prompt: "x" });
-
     expect(client.patchV1projectsJudgesByJudgeId).not.toHaveBeenCalled();
   });
 });
