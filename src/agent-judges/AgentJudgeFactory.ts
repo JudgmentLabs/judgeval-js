@@ -137,7 +137,7 @@ export class AgentJudgeFactory {
    * @param options.scoreType - Must match the judge's existing score type.
    * @param options.description - New judge-version description.
    * @param options.judgeDescription - New UI-facing description.
-   * @param options.categories - New choices for `categorical` judges; names matching an existing choice keep it.
+   * @param options.categories - New choices for `categorical` judges; names matching an existing choice keep it, and must keep its description.
    * @param options.minScore - New lower bound for `numeric` judges.
    * @param options.maxScore - New upper bound for `numeric` judges.
    * @param options.sourceMajorVersion - Major version to copy unspecified fields from.
@@ -217,6 +217,7 @@ export class AgentJudgeFactory {
       targetVersion,
       promoteToProduction: true,
       judgeType: "prompt" as const,
+      actionConfig: source.action_config,
       config: {
         prompt: options.prompt ?? definition.prompt,
         description: options.description ?? definition.description,
@@ -243,12 +244,18 @@ export class AgentJudgeFactory {
     if (scoreType !== "categorical") return { ...base, scoreType };
 
     const existing = new Map(
-      source.outputs.map((output) => [output.name, output.behavior_id]),
+      source.outputs.map((output) => [output.name, output]),
     );
     const outputs = options.categories
       ? options.categories.map((category) => {
-          const behaviorId = existing.get(category.name);
-          return behaviorId ? { behaviorId } : category;
+          const output = existing.get(category.name);
+          if (!output) return category;
+          if (output.description !== category.description) {
+            throw new Error(
+              `Category "${category.name}" already exists with a different description; a new version cannot change it.`,
+            );
+          }
+          return { behaviorId: output.behavior_id };
         })
       : source.outputs.map((output) => ({ behaviorId: output.behavior_id }));
     return { ...base, scoreType, outputs };

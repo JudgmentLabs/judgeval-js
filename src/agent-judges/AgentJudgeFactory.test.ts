@@ -245,6 +245,7 @@ describe("AgentJudgeFactory.update", () => {
       judgeDetail(),
       judgeDetail({
         definition: { ...DEFINITION, prompt: "v0.1" },
+        action_config: { action_groups: [] },
       }),
     ]);
 
@@ -256,10 +257,12 @@ describe("AgentJudgeFactory.update", () => {
       targetMinorVersion: 0,
     });
 
+    const { newVersion } = patchBody(client).update;
     expect([
-      patchBody(client).update.newVersion.targetVersion,
-      patchBody(client).update.newVersion.config.prompt,
-    ]).toEqual([{ major: 2, minor: 0 }, "v0.1"]);
+      newVersion.targetVersion,
+      newVersion.config.prompt,
+      newVersion.actionConfig,
+    ]).toEqual([{ major: 2, minor: 0 }, "v0.1", { action_groups: [] }]);
   });
 
   test("reads a minor-only source version from the latest major", async () => {
@@ -287,6 +290,18 @@ describe("AgentJudgeFactory.update", () => {
       { behaviorId: "b-yes" },
       { name: "Maybe", description: "m" },
     ]);
+  });
+
+  test("rejects a changed description on an existing category", async () => {
+    const { factory, client } = makeFactory("proj-1", [CATEGORICAL]);
+
+    const update = factory.update({
+      judgeId: "judge-1",
+      categories: [{ name: "Yes", description: "changed" }],
+    });
+
+    await expect(update).rejects.toThrow('Category "Yes" already exists');
+    expect(client.patchV1projectsJudgesByJudgeId).not.toHaveBeenCalled();
   });
 
   test("keeps existing categorical outputs when categories are omitted", async () => {
