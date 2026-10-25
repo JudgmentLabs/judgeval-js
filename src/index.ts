@@ -31,6 +31,8 @@ export {
 export { Example } from "./data";
 export type { ScoringResult } from "./data";
 
+export type { JudgmentApi } from "./internal/api/operations";
+
 export { Judge } from "./judges";
 export type {
   BinaryResponse,
