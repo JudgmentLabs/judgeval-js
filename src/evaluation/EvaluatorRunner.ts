@@ -1,7 +1,10 @@
 import pc from "picocolors";
 import type { JudgmentApiClient } from "../internal/api/client";
-import type { ExampleEvaluationRun } from "../internal/api/models/ExampleEvaluationRun";
-import type { ExperimentRunItem } from "../internal/api/models/ExperimentRunItem";
+import type {
+  ExampleEvaluationRun,
+  ExperimentResult,
+  ExperimentRunItem,
+} from "../internal/api/models";
 import type { Example } from "../data/Example";
 import type { ScoringResult } from "../data/ScoringResult";
 import type { Judge } from "../judges/Judge";
@@ -65,7 +68,11 @@ export abstract class EvaluatorRunner<S extends string | Judge> {
         projectId,
         evalId,
       );
-      const resultsData = response.results ?? [];
+      const allResults: ExperimentResult[] = response.results ?? [];
+      // Evaluation runs produce legacy experiment rows.
+      const resultsData = allResults.filter(
+        (item): item is ExperimentRunItem => "experiment_run_id" in item,
+      );
       const completed = resultsData.length;
 
       if (completed >= expectedCount) {

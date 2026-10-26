@@ -143,8 +143,8 @@ export class OfflineTestRunner {
         await this._client.getV1projectsDatasetsByDatasetIdentifierPage(
           this._projectId,
           testConfig.datasetId,
-          String(versionNumber),
-          String(EXAMPLES_PAGE_SIZE),
+          versionNumber,
+          EXAMPLES_PAGE_SIZE,
           cursorCreatedAt,
           cursorExampleId,
         );
@@ -188,7 +188,7 @@ export class OfflineTestRunner {
       datasetVersion?: number | string;
       judgeVersions?: JudgeVersionPin[];
       agentTraces?: Record<string, string>;
-      source?: string;
+      source?: CreateTestRunRequest["source"];
       name?: string;
     } = {},
   ): Promise<PreparedTestRunResponse> {
@@ -333,7 +333,7 @@ export class OfflineTestRunner {
       const response = await this._client.getV1projectsTestRunsByTestRunIdItems(
         this._projectId,
         testRunId,
-        String(ITEMS_PAGE_SIZE),
+        ITEMS_PAGE_SIZE,
         cursor,
       );
       pageCount += 1;

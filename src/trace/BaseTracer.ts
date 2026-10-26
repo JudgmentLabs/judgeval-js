@@ -17,7 +17,7 @@ import type { OpenAI } from "openai";
 import { AttributeKeys, InternalAttributeKeys } from "../JudgmentAttributeKeys";
 import { wrap } from "../instrumentation";
 import { JudgmentApiClient } from "../internal/api";
-import type { PendingEvalPayload } from "../internal/api/models/PendingEvalPayload";
+import type { PendingEvalPayload } from "../internal/api/models";
 import { parseFunctionArgs } from "../utils/annotate";
 import { dontThrow } from "../utils/dont-throw";
 import { Logger } from "../utils/logger";
