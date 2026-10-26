@@ -110,7 +110,7 @@ export class AgentJudgeFactory {
     }
     const projectId = this._expectProjectId();
     if (!projectId) return null;
-    warnModelIgnored(options.model);
+    warnIfModel(options.model);
 
     const payload: CreateJudgeRequest = {
       judge: {
@@ -169,7 +169,7 @@ export class AgentJudgeFactory {
   async update(options: UpdateOptions): Promise<AgentJudge | null> {
     const projectId = this._expectProjectId();
     if (!projectId) return null;
-    warnModelIgnored(options.model);
+    warnIfModel(options.model);
 
     const {
       judgeId,
@@ -197,7 +197,11 @@ export class AgentJudgeFactory {
   ): Promise<NewVersion> {
     const latest = await this._lookupJudge(projectId, options.judgeId);
     const source = await this._lookupSourceVersion(projectId, options, latest);
-    return getPromptVersion(source, getTargetVersion(options, latest), options);
+    return buildPromptVersion(
+      source,
+      resolveTargetVersion(options, latest),
+      options,
+    );
   }
 
   private async _lookupSourceVersion(
@@ -252,7 +256,7 @@ export class AgentJudgeFactory {
   }
 }
 
-function warnModelIgnored(model: string | undefined) {
+function warnIfModel(model: string | undefined) {
   if (model !== undefined) {
     Logger.warn(
       "Agent judge `model` is ignored; the platform picks the model from `reasoningLevel`.",
@@ -260,7 +264,7 @@ function warnModelIgnored(model: string | undefined) {
   }
 }
 
-function getTargetVersion(
+function resolveTargetVersion(
   options: UpdateOptions,
   latest: PromptJudgeDetail,
 ): NewVersion["targetVersion"] {
@@ -276,24 +280,17 @@ function getTargetVersion(
 }
 
 /** A complete production version copied from `source`, with `options` applied. */
-function getPromptVersion(
+function buildPromptVersion(
   source: PromptJudgeDetail,
   targetVersion: NewVersion["targetVersion"],
   options: UpdateOptions,
 ): NewVersion {
-  const { definition } = source;
   const version = {
     targetVersion,
     promoteToProduction: true,
     judgeType: "prompt" as const,
     actionConfig: source.action_config,
-    config: {
-      prompt: options.prompt ?? definition.prompt,
-      description: options.description ?? definition.description,
-      reasoningLevel: options.reasoningLevel ?? definition.reasoning_level,
-      minScore: options.minScore ?? definition.min_score,
-      maxScore: options.maxScore ?? definition.max_score,
-    },
+    config: buildVersionConfig(source, options),
     advancedSettings: {
       online_environment_names: source.online_environment_names,
       online_evaluation_mode: source.online_evaluation_mode,
@@ -308,22 +305,39 @@ function getPromptVersion(
         source.session_evaluation_max_wait_minutes,
     },
   };
-  // create() writes `binary` as a Pass/Fail categorical judge.
-  const scoreType =
-    options.scoreType === "binary" && source.score_type === "categorical"
-      ? "categorical"
-      : (options.scoreType ?? source.score_type);
+  const scoreType = resolveScoreType(source, options.scoreType);
   return scoreType === "categorical"
     ? {
         ...version,
         scoreType,
-        outputs: getCategoricalOutputs(source, options.categories),
+        outputs: buildCategoryOutputs(source, options.categories),
       }
     : { ...version, scoreType };
 }
 
+function buildVersionConfig(source: PromptJudgeDetail, options: UpdateOptions) {
+  const { definition } = source;
+  return {
+    prompt: options.prompt ?? definition.prompt,
+    description: options.description ?? definition.description,
+    reasoningLevel: options.reasoningLevel ?? definition.reasoning_level,
+    minScore: options.minScore ?? definition.min_score,
+    maxScore: options.maxScore ?? definition.max_score,
+  };
+}
+
+function resolveScoreType(
+  source: PromptJudgeDetail,
+  scoreType: ScoreType | undefined,
+) {
+  // create() writes `binary` as a Pass/Fail categorical judge.
+  return scoreType === "binary" && source.score_type === "categorical"
+    ? "categorical"
+    : (scoreType ?? source.score_type);
+}
+
 /** Reuses existing labels by name; new names become new labels. */
-function getCategoricalOutputs(
+function buildCategoryOutputs(
   source: PromptJudgeDetail,
   categories: Category[] | undefined,
 ) {
