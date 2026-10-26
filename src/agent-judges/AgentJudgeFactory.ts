@@ -1,11 +1,42 @@
 import type { JudgmentApiClient } from "../internal/api/client";
 import type {
-  SDKCreateAgentJudgeRequest,
-  SDKUpdateAgentJudgeRequest,
-  SDKUpdateAgentJudgeResponse,
+  CreateJudgeRequest,
+  JudgeDetail,
+  JudgeVersionSelector,
+  UpdateJudgeRequest,
 } from "../internal/api/models";
 import { Logger } from "../utils/logger";
-import type { AgentJudge, ScoreType } from "./AgentJudge";
+import type { AgentJudge, ReasoningLevel, ScoreType } from "./AgentJudge";
+
+// The platform creates only categorical judges (judgment-mono#5377), so a
+// binary judge is created as two categorical outputs.
+const BINARY_OUTPUTS = [
+  { name: "Pass", description: "The output meets the rubric." },
+  { name: "Fail", description: "The output does not meet the rubric." },
+];
+
+type PromptJudgeDetail = Extract<JudgeDetail, { judge_type: "prompt" }>;
+type NewVersion = NonNullable<UpdateJudgeRequest["update"]["newVersion"]>;
+type Category = { name: string; description: string };
+
+/** Options for {@link AgentJudgeFactory.update}. */
+export interface UpdateOptions {
+  judgeId: string;
+  prompt?: string;
+  /** @deprecated Ignored; the platform picks the model from `reasoningLevel`. */
+  model?: string;
+  reasoningLevel?: ReasoningLevel;
+  scoreType?: ScoreType;
+  description?: string;
+  judgeDescription?: string;
+  categories?: Category[];
+  minScore?: number;
+  maxScore?: number;
+  sourceMajorVersion?: number;
+  sourceMinorVersion?: number;
+  targetMajorVersion?: number;
+  targetMinorVersion?: number;
+}
 
 /**
  * Create and update prompt-based Agent judges on the Judgment platform.
@@ -16,9 +47,8 @@ import type { AgentJudge, ScoreType } from "./AgentJudge";
  * ```typescript
  * const judge = await client.agentJudges.create({
  *   name: "helpfulness",
- *   prompt: "Rate the assistant's helpfulness from 0 to 1.",
- *   model: "gpt-5.2",
- *   scoreType: "numeric",
+ *   prompt: "Did the assistant answer the user's question?",
+ *   scoreType: "binary",
  * });
  *
  * await client.agentJudges.update({
@@ -47,135 +77,172 @@ export class AgentJudgeFactory {
    *
    * @param options.name - Unique judge name within the project.
    * @param options.prompt - Rubric prompt template used by the Agent judge harness.
-   * @param options.model - LiteLLM model id (e.g. `"gpt-5.2"`).
-   * @param options.scoreType - One of `"numeric"`, `"binary"`, or `"categorical"`.
-   * @param options.description - Description stored on the underlying scorer version.
+   * @param options.model - Ignored: the platform picks the model from `reasoningLevel`.
+   * @param options.reasoningLevel - `"lite"` (server default), `"normal"`, or `"high"`.
+   * @param options.scoreType - `"categorical"`, or `"binary"` for a categorical judge with
+   *   `Pass` / `Fail` outputs. New judges cannot be `"numeric"`; existing numeric judges
+   *   can still be updated.
+   * @param options.description - Description stored on the initial judge version.
    * @param options.judgeDescription - Description shown in the UI.
-   * @param options.categories - Choice list for `categorical` judges.
-   * @param options.minScore - Lower bound for `numeric` judges (defaults to `0` server-side).
-   * @param options.maxScore - Upper bound for `numeric` judges (defaults to `1` server-side).
+   * @param options.categories - Choice list for `categorical` judges (at least two).
+   * @param options.minScore - Lower score bound stored on the version.
+   * @param options.maxScore - Upper score bound stored on the version.
    * @returns The newly created `AgentJudge`, or `null` if the project is unresolved.
+   * @throws If `scoreType` is `"numeric"`.
    */
   async create(options: {
     name: string;
     prompt: string;
-    model: string;
+    /** @deprecated Ignored; the platform picks the model from `reasoningLevel`. */
+    model?: string;
+    reasoningLevel?: ReasoningLevel;
     scoreType: ScoreType;
     description?: string;
     judgeDescription?: string;
-    categories?: { name: string; description: string }[];
+    categories?: Category[];
     minScore?: number;
     maxScore?: number;
   }): Promise<AgentJudge | null> {
+    if (options.scoreType === "numeric") {
+      throw new Error(
+        'New Agent judges must be categorical. Use scoreType "categorical" with categories, or "binary" for Pass / Fail.',
+      );
+    }
     const projectId = this._expectProjectId();
     if (!projectId) return null;
+    warnIfModel(options.model);
 
-    const payload: SDKCreateAgentJudgeRequest = {
-      name: options.name,
-      prompt: options.prompt,
-      model: options.model,
-      score_type: options.scoreType,
+    const payload: CreateJudgeRequest = {
+      judge: {
+        name: options.name,
+        judgeDescription: options.judgeDescription,
+        judgeType: "prompt",
+        initialVersion: {
+          scoreType: "categorical",
+          outputs:
+            options.scoreType === "binary"
+              ? BINARY_OUTPUTS
+              : (options.categories ?? []),
+        },
+        config: {
+          prompt: options.prompt,
+          description: options.description,
+          reasoningLevel: options.reasoningLevel,
+          minScore: options.minScore,
+          maxScore: options.maxScore,
+        },
+      },
     };
-    if (options.description !== undefined)
-      payload.description = options.description;
-    if (options.judgeDescription !== undefined)
-      payload.judge_description = options.judgeDescription;
-    if (options.categories !== undefined)
-      payload.categories = options.categories;
-    if (options.minScore !== undefined) payload.min_score = options.minScore;
-    if (options.maxScore !== undefined) payload.max_score = options.maxScore;
-
-    const response = await this._client.postV1projectsJudges(
+    const { judge_id } = await this._client.postV1projectsJudges(
       projectId,
       payload,
     );
-
-    return {
-      judgeId: response.judge_id,
-      name: options.name,
-      prompt: options.prompt,
-      model: options.model,
-      scoreType: options.scoreType,
-      description: options.description ?? null,
-      judgeDescription: options.judgeDescription ?? null,
-      categories: options.categories ?? null,
-      minScore: options.minScore ?? null,
-      maxScore: options.maxScore ?? null,
-      majorVersion: 0,
-      minorVersion: 0,
-    };
+    return toAgentJudge(await this._lookupJudge(projectId, judge_id));
   }
 
   /**
    * Update an existing Agent judge.
    *
-   * Passing any of `prompt`, `model`, `categories`, `minScore`, or
-   * `maxScore` writes a new version of the underlying prompt scorer.
-   * When `targetMajorVersion` / `targetMinorVersion` are omitted, the
-   * server auto-bumps the latest version's minor by 1 — matching the
-   * UI's default "save" behaviour.
+   * Passing any version field (`prompt`, `reasoningLevel`, `scoreType`,
+   * `description`, `categories`, `minScore`, `maxScore`, or a source/target
+   * version) writes a new production version, copying unspecified fields from
+   * the source version. When `targetMajorVersion` / `targetMinorVersion` are
+   * omitted, the latest version's minor is bumped by 1 — matching the UI's
+   * default "save" behaviour. The score type of a judge cannot change.
    *
    * @param options.judgeId - ID of the judge to update.
    * @param options.prompt - New rubric prompt template.
-   * @param options.model - New LiteLLM model id.
-   * @param options.scoreType - New score type.
-   * @param options.description - New scorer-version description.
+   * @param options.model - Ignored: the platform picks the model from `reasoningLevel`.
+   * @param options.reasoningLevel - New reasoning level.
+   * @param options.scoreType - Must match the judge's existing score type.
+   * @param options.description - New judge-version description.
    * @param options.judgeDescription - New UI-facing description.
-   * @param options.categories - New choices for `categorical` judges.
+   * @param options.categories - New choices for `categorical` judges; names matching an existing choice keep it, and must keep its description.
    * @param options.minScore - New lower bound for `numeric` judges.
    * @param options.maxScore - New upper bound for `numeric` judges.
-   * @param options.sourceMajorVersion - Major version to copy unspecified fields from.
-   * @param options.sourceMinorVersion - Minor version to copy unspecified fields from.
-   * @param options.targetMajorVersion - Major version to write to.
-   * @param options.targetMinorVersion - Minor version to write to.
+   * @param options.sourceMajorVersion - Major version to copy unspecified fields from. Defaults to the latest major.
+   * @param options.sourceMinorVersion - Minor version to copy unspecified fields from. Defaults to the latest version; required when `sourceMajorVersion` is an older major.
+   * @param options.targetMajorVersion - Major version to write to. Defaults to the latest major.
+   * @param options.targetMinorVersion - Minor version to write to. Defaults to latest minor + 1 in the latest major, else 0.
    * @returns The updated `AgentJudge`, or `null` if the project is unresolved.
    */
-  async update(options: {
-    judgeId: string;
-    prompt?: string;
-    model?: string;
-    scoreType?: ScoreType;
-    description?: string;
-    judgeDescription?: string;
-    categories?: { name: string; description: string }[];
-    minScore?: number;
-    maxScore?: number;
-    sourceMajorVersion?: number;
-    sourceMinorVersion?: number;
-    targetMajorVersion?: number;
-    targetMinorVersion?: number;
-  }): Promise<AgentJudge | null> {
+  async update(options: UpdateOptions): Promise<AgentJudge | null> {
     const projectId = this._expectProjectId();
     if (!projectId) return null;
+    warnIfModel(options.model);
 
-    const payload: SDKUpdateAgentJudgeRequest = {};
-    if (options.prompt !== undefined) payload.prompt = options.prompt;
-    if (options.model !== undefined) payload.model = options.model;
-    if (options.scoreType !== undefined) payload.score_type = options.scoreType;
-    if (options.description !== undefined)
-      payload.description = options.description;
-    if (options.judgeDescription !== undefined)
-      payload.judge_description = options.judgeDescription;
-    if (options.categories !== undefined)
-      payload.categories = options.categories;
-    if (options.minScore !== undefined) payload.min_score = options.minScore;
-    if (options.maxScore !== undefined) payload.max_score = options.maxScore;
-    if (options.sourceMajorVersion !== undefined)
-      payload.source_major_version = options.sourceMajorVersion;
-    if (options.sourceMinorVersion !== undefined)
-      payload.source_minor_version = options.sourceMinorVersion;
-    if (options.targetMajorVersion !== undefined)
-      payload.target_major_version = options.targetMajorVersion;
-    if (options.targetMinorVersion !== undefined)
-      payload.target_minor_version = options.targetMinorVersion;
+    const {
+      judgeId,
+      judgeDescription,
+      model: _model,
+      ...versionFields
+    } = options;
+    const newVersion = Object.values(versionFields).some(
+      (value) => value !== undefined,
+    )
+      ? await this._buildNewVersion(projectId, options)
+      : undefined;
 
-    const response = await this._client.patchV1projectsJudgesByJudgeId(
-      projectId,
-      options.judgeId,
-      payload,
+    await this._client.patchV1projectsJudgesByJudgeId(projectId, judgeId, {
+      update: { judgeDescription, newVersion },
+    });
+    return toAgentJudge(
+      await this._lookupJudge(projectId, judgeId, newVersion?.targetVersion),
     );
+  }
 
-    return agentJudgeFromDetail(response);
+  private async _buildNewVersion(
+    projectId: string,
+    options: UpdateOptions,
+  ): Promise<NewVersion> {
+    const latest = await this._lookupJudge(projectId, options.judgeId);
+    const source = await this._lookupSourceVersion(projectId, options, latest);
+    return buildPromptVersion(
+      source,
+      resolveTargetVersion(options, latest),
+      options,
+    );
+  }
+
+  private async _lookupSourceVersion(
+    projectId: string,
+    options: UpdateOptions,
+    latest: PromptJudgeDetail,
+  ): Promise<PromptJudgeDetail> {
+    const major = options.sourceMajorVersion ?? latest.judge_major_version;
+    // The lookup route takes an exact version, so an older major's latest
+    // minor can't be resolved.
+    if (
+      options.sourceMinorVersion === undefined &&
+      major !== latest.judge_major_version
+    ) {
+      throw new Error(
+        "sourceMinorVersion is required when sourceMajorVersion is not the latest major",
+      );
+    }
+    if (options.sourceMinorVersion === undefined) return latest;
+    return await this._lookupJudge(projectId, options.judgeId, {
+      major,
+      minor: options.sourceMinorVersion,
+    });
+  }
+
+  private async _lookupJudge(
+    projectId: string,
+    judgeId: string,
+    version: JudgeVersionSelector = "latest",
+  ): Promise<PromptJudgeDetail> {
+    const { judge } = await this._client.postV1projectsJudgesByJudgeIdLookup(
+      projectId,
+      judgeId,
+      { version },
+    );
+    if (judge.judge_type !== "prompt") {
+      throw new Error(
+        `Judge ${judgeId} is a ${judge.judge_type} judge; only prompt-based Agent judges are supported.`,
+      );
+    }
+    return judge;
   }
 
   private _expectProjectId(): string | null {
@@ -189,22 +256,126 @@ export class AgentJudgeFactory {
   }
 }
 
-function agentJudgeFromDetail(
-  response: SDKUpdateAgentJudgeResponse,
-): AgentJudge {
-  const judge = response.judge;
+function warnIfModel(model: string | undefined) {
+  if (model !== undefined) {
+    Logger.warn(
+      "Agent judge `model` is ignored; the platform picks the model from `reasoningLevel`.",
+    );
+  }
+}
+
+function resolveTargetVersion(
+  options: UpdateOptions,
+  latest: PromptJudgeDetail,
+): NewVersion["targetVersion"] {
+  const major = options.targetMajorVersion ?? latest.judge_major_version;
+  return {
+    major,
+    minor:
+      options.targetMinorVersion ??
+      (major === latest.judge_major_version
+        ? latest.judge_minor_version + 1
+        : 0),
+  };
+}
+
+/** A complete production version copied from `source`, with `options` applied. */
+function buildPromptVersion(
+  source: PromptJudgeDetail,
+  targetVersion: NewVersion["targetVersion"],
+  options: UpdateOptions,
+): NewVersion {
+  const version = {
+    targetVersion,
+    promoteToProduction: true,
+    judgeType: "prompt" as const,
+    actionConfig: source.action_config,
+    config: buildVersionConfig(source, options),
+    advancedSettings: {
+      online_environment_names: source.online_environment_names,
+      online_evaluation_mode: source.online_evaluation_mode,
+      online_sampling_rate: source.online_sampling_rate,
+      online_span_triggers: source.online_span_triggers,
+      online_session_scoring: source.online_session_scoring,
+      session_evaluation_count_enabled: source.session_evaluation_count_enabled,
+      session_evaluation_idle_enabled: source.session_evaluation_idle_enabled,
+      session_evaluation_min_candidate_traces:
+        source.session_evaluation_min_candidate_traces,
+      session_evaluation_max_wait_minutes:
+        source.session_evaluation_max_wait_minutes,
+    },
+  };
+  const scoreType = resolveScoreType(source, options.scoreType);
+  return scoreType === "categorical"
+    ? {
+        ...version,
+        scoreType,
+        outputs: buildCategoryOutputs(source, options.categories),
+      }
+    : { ...version, scoreType };
+}
+
+function buildVersionConfig(source: PromptJudgeDetail, options: UpdateOptions) {
+  const { definition } = source;
+  return {
+    prompt: options.prompt ?? definition.prompt,
+    description: options.description ?? definition.description,
+    reasoningLevel: options.reasoningLevel ?? definition.reasoning_level,
+    minScore: options.minScore ?? definition.min_score,
+    maxScore: options.maxScore ?? definition.max_score,
+  };
+}
+
+function resolveScoreType(
+  source: PromptJudgeDetail,
+  scoreType: ScoreType | undefined,
+) {
+  // create() writes `binary` as a Pass/Fail categorical judge.
+  return scoreType === "binary" && source.score_type === "categorical"
+    ? "categorical"
+    : (scoreType ?? source.score_type);
+}
+
+/** Reuses existing labels by name; new names become new labels. */
+function buildCategoryOutputs(
+  source: PromptJudgeDetail,
+  categories: Category[] | undefined,
+) {
+  if (!categories) {
+    return source.outputs.map((output) => ({ behaviorId: output.behavior_id }));
+  }
+  const existing = new Map(
+    source.outputs.map((output) => [output.name, output]),
+  );
+  return categories.map((category) => {
+    const output = existing.get(category.name);
+    if (!output) return category;
+    if (output.description !== category.description) {
+      throw new Error(
+        `Category "${category.name}" already exists with a different description; a new version cannot change it.`,
+      );
+    }
+    return { behaviorId: output.behavior_id };
+  });
+}
+
+function toAgentJudge(judge: PromptJudgeDetail): AgentJudge {
   return {
     judgeId: judge.id,
     name: judge.name,
-    prompt: judge.prompt ?? "",
-    model: judge.model ?? "",
-    scoreType: judge.score_type as ScoreType,
-    description: judge.description ?? null,
-    judgeDescription: judge.judge_description ?? null,
-    categories: judge.categories ?? null,
-    minScore: judge.min_score ?? null,
-    maxScore: judge.max_score ?? null,
-    majorVersion: judge.major_version ?? null,
-    minorVersion: judge.minor_version ?? null,
+    prompt: judge.definition.prompt,
+    model: judge.definition.model,
+    reasoningLevel: judge.definition.reasoning_level,
+    scoreType: judge.score_type,
+    description: judge.definition.description,
+    judgeDescription: judge.judge_description,
+    categories:
+      judge.score_type === "categorical"
+        ? judge.outputs.map(({ name, description }) => ({ name, description }))
+        : null,
+    minScore: judge.definition.min_score,
+    maxScore: judge.definition.max_score,
+    majorVersion: judge.judge_major_version,
+    minorVersion: judge.judge_minor_version,
   };
 }
