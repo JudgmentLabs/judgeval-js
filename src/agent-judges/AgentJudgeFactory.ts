@@ -17,6 +17,26 @@ const BINARY_OUTPUTS = [
 
 type PromptJudgeDetail = Extract<JudgeDetail, { judge_type: "prompt" }>;
 type NewVersion = NonNullable<UpdateJudgeRequest["update"]["newVersion"]>;
+type Category = { name: string; description: string };
+
+/** Options for {@link AgentJudgeFactory.update}. */
+export interface UpdateOptions {
+  judgeId: string;
+  prompt?: string;
+  /** @deprecated Ignored; the platform picks the model from `reasoningLevel`. */
+  model?: string;
+  reasoningLevel?: ReasoningLevel;
+  scoreType?: ScoreType;
+  description?: string;
+  judgeDescription?: string;
+  categories?: Category[];
+  minScore?: number;
+  maxScore?: number;
+  sourceMajorVersion?: number;
+  sourceMinorVersion?: number;
+  targetMajorVersion?: number;
+  targetMinorVersion?: number;
+}
 
 /**
  * Create and update prompt-based Agent judges on the Judgment platform.
@@ -79,7 +99,7 @@ export class AgentJudgeFactory {
     scoreType: ScoreType;
     description?: string;
     judgeDescription?: string;
-    categories?: { name: string; description: string }[];
+    categories?: Category[];
     minScore?: number;
     maxScore?: number;
   }): Promise<AgentJudge | null> {
@@ -90,7 +110,7 @@ export class AgentJudgeFactory {
     }
     const projectId = this._expectProjectId();
     if (!projectId) return null;
-    warnIfModel(options.model);
+    warnModelIgnored(options.model);
 
     const payload: CreateJudgeRequest = {
       judge: {
@@ -117,7 +137,7 @@ export class AgentJudgeFactory {
       projectId,
       payload,
     );
-    return agentJudgeFromDetail(await this._lookup(projectId, judge_id));
+    return toAgentJudge(await this._lookupJudge(projectId, judge_id));
   }
 
   /**
@@ -146,26 +166,10 @@ export class AgentJudgeFactory {
    * @param options.targetMinorVersion - Minor version to write to. Defaults to latest minor + 1 in the latest major, else 0.
    * @returns The updated `AgentJudge`, or `null` if the project is unresolved.
    */
-  async update(options: {
-    judgeId: string;
-    prompt?: string;
-    /** @deprecated Ignored; the platform picks the model from `reasoningLevel`. */
-    model?: string;
-    reasoningLevel?: ReasoningLevel;
-    scoreType?: ScoreType;
-    description?: string;
-    judgeDescription?: string;
-    categories?: { name: string; description: string }[];
-    minScore?: number;
-    maxScore?: number;
-    sourceMajorVersion?: number;
-    sourceMinorVersion?: number;
-    targetMajorVersion?: number;
-    targetMinorVersion?: number;
-  }): Promise<AgentJudge | null> {
+  async update(options: UpdateOptions): Promise<AgentJudge | null> {
     const projectId = this._expectProjectId();
     if (!projectId) return null;
-    warnIfModel(options.model);
+    warnModelIgnored(options.model);
 
     const {
       judgeId,
@@ -176,106 +180,50 @@ export class AgentJudgeFactory {
     const newVersion = Object.values(versionFields).some(
       (value) => value !== undefined,
     )
-      ? await this._newVersion(projectId, options)
+      ? await this._buildNewVersion(projectId, options)
       : undefined;
 
     await this._client.patchV1projectsJudgesByJudgeId(projectId, judgeId, {
       update: { judgeDescription, newVersion },
     });
-    return agentJudgeFromDetail(
-      await this._lookup(projectId, judgeId, newVersion?.targetVersion),
+    return toAgentJudge(
+      await this._lookupJudge(projectId, judgeId, newVersion?.targetVersion),
     );
   }
 
-  private async _newVersion(
+  private async _buildNewVersion(
     projectId: string,
-    options: Parameters<AgentJudgeFactory["update"]>[0],
+    options: UpdateOptions,
   ): Promise<NewVersion> {
-    const latest = await this._lookup(projectId, options.judgeId);
-    const sourceMajor =
-      options.sourceMajorVersion ?? latest.judge_major_version;
+    const latest = await this._lookupJudge(projectId, options.judgeId);
+    const source = await this._lookupSourceVersion(projectId, options, latest);
+    return getPromptVersion(source, getTargetVersion(options, latest), options);
+  }
+
+  private async _lookupSourceVersion(
+    projectId: string,
+    options: UpdateOptions,
+    latest: PromptJudgeDetail,
+  ): Promise<PromptJudgeDetail> {
+    const major = options.sourceMajorVersion ?? latest.judge_major_version;
     // The lookup route takes an exact version, so an older major's latest
     // minor can't be resolved.
     if (
       options.sourceMinorVersion === undefined &&
-      sourceMajor !== latest.judge_major_version
+      major !== latest.judge_major_version
     ) {
       throw new Error(
         "sourceMinorVersion is required when sourceMajorVersion is not the latest major",
       );
     }
-    const source =
-      options.sourceMinorVersion === undefined
-        ? latest
-        : await this._lookup(projectId, options.judgeId, {
-            major: sourceMajor,
-            minor: options.sourceMinorVersion,
-          });
-    const targetMajor =
-      options.targetMajorVersion ?? latest.judge_major_version;
-    const targetVersion = {
-      major: targetMajor,
-      minor:
-        options.targetMinorVersion ??
-        (targetMajor === latest.judge_major_version
-          ? latest.judge_minor_version + 1
-          : 0),
-    };
-
-    const { definition } = source;
-    const base = {
-      targetVersion,
-      promoteToProduction: true,
-      judgeType: "prompt" as const,
-      actionConfig: source.action_config,
-      config: {
-        prompt: options.prompt ?? definition.prompt,
-        description: options.description ?? definition.description,
-        reasoningLevel: options.reasoningLevel ?? definition.reasoning_level,
-        minScore: options.minScore ?? definition.min_score,
-        maxScore: options.maxScore ?? definition.max_score,
-      },
-      advancedSettings: {
-        online_environment_names: source.online_environment_names,
-        online_evaluation_mode: source.online_evaluation_mode,
-        online_sampling_rate: source.online_sampling_rate,
-        online_span_triggers: source.online_span_triggers,
-        online_session_scoring: source.online_session_scoring,
-        session_evaluation_count_enabled:
-          source.session_evaluation_count_enabled,
-        session_evaluation_idle_enabled: source.session_evaluation_idle_enabled,
-        session_evaluation_min_candidate_traces:
-          source.session_evaluation_min_candidate_traces,
-        session_evaluation_max_wait_minutes:
-          source.session_evaluation_max_wait_minutes,
-      },
-    };
-    // create() writes `binary` as a Pass/Fail categorical judge.
-    const scoreType =
-      options.scoreType === "binary" && source.score_type === "categorical"
-        ? "categorical"
-        : (options.scoreType ?? source.score_type);
-    if (scoreType !== "categorical") return { ...base, scoreType };
-
-    const existing = new Map(
-      source.outputs.map((output) => [output.name, output]),
-    );
-    const outputs = options.categories
-      ? options.categories.map((category) => {
-          const output = existing.get(category.name);
-          if (!output) return category;
-          if (output.description !== category.description) {
-            throw new Error(
-              `Category "${category.name}" already exists with a different description; a new version cannot change it.`,
-            );
-          }
-          return { behaviorId: output.behavior_id };
-        })
-      : source.outputs.map((output) => ({ behaviorId: output.behavior_id }));
-    return { ...base, scoreType, outputs };
+    if (options.sourceMinorVersion === undefined) return latest;
+    return await this._lookupJudge(projectId, options.judgeId, {
+      major,
+      minor: options.sourceMinorVersion,
+    });
   }
 
-  private async _lookup(
+  private async _lookupJudge(
     projectId: string,
     judgeId: string,
     version: JudgeVersionSelector = "latest",
@@ -304,7 +252,7 @@ export class AgentJudgeFactory {
   }
 }
 
-function warnIfModel(model: string | undefined) {
+function warnModelIgnored(model: string | undefined) {
   if (model !== undefined) {
     Logger.warn(
       "Agent judge `model` is ignored; the platform picks the model from `reasoningLevel`.",
@@ -312,7 +260,92 @@ function warnIfModel(model: string | undefined) {
   }
 }
 
-function agentJudgeFromDetail(judge: PromptJudgeDetail): AgentJudge {
+function getTargetVersion(
+  options: UpdateOptions,
+  latest: PromptJudgeDetail,
+): NewVersion["targetVersion"] {
+  const major = options.targetMajorVersion ?? latest.judge_major_version;
+  return {
+    major,
+    minor:
+      options.targetMinorVersion ??
+      (major === latest.judge_major_version
+        ? latest.judge_minor_version + 1
+        : 0),
+  };
+}
+
+/** A complete production version copied from `source`, with `options` applied. */
+function getPromptVersion(
+  source: PromptJudgeDetail,
+  targetVersion: NewVersion["targetVersion"],
+  options: UpdateOptions,
+): NewVersion {
+  const { definition } = source;
+  const version = {
+    targetVersion,
+    promoteToProduction: true,
+    judgeType: "prompt" as const,
+    actionConfig: source.action_config,
+    config: {
+      prompt: options.prompt ?? definition.prompt,
+      description: options.description ?? definition.description,
+      reasoningLevel: options.reasoningLevel ?? definition.reasoning_level,
+      minScore: options.minScore ?? definition.min_score,
+      maxScore: options.maxScore ?? definition.max_score,
+    },
+    advancedSettings: {
+      online_environment_names: source.online_environment_names,
+      online_evaluation_mode: source.online_evaluation_mode,
+      online_sampling_rate: source.online_sampling_rate,
+      online_span_triggers: source.online_span_triggers,
+      online_session_scoring: source.online_session_scoring,
+      session_evaluation_count_enabled: source.session_evaluation_count_enabled,
+      session_evaluation_idle_enabled: source.session_evaluation_idle_enabled,
+      session_evaluation_min_candidate_traces:
+        source.session_evaluation_min_candidate_traces,
+      session_evaluation_max_wait_minutes:
+        source.session_evaluation_max_wait_minutes,
+    },
+  };
+  // create() writes `binary` as a Pass/Fail categorical judge.
+  const scoreType =
+    options.scoreType === "binary" && source.score_type === "categorical"
+      ? "categorical"
+      : (options.scoreType ?? source.score_type);
+  return scoreType === "categorical"
+    ? {
+        ...version,
+        scoreType,
+        outputs: getCategoricalOutputs(source, options.categories),
+      }
+    : { ...version, scoreType };
+}
+
+/** Reuses existing labels by name; new names become new labels. */
+function getCategoricalOutputs(
+  source: PromptJudgeDetail,
+  categories: Category[] | undefined,
+) {
+  if (!categories) {
+    return source.outputs.map((output) => ({ behaviorId: output.behavior_id }));
+  }
+  const existing = new Map(
+    source.outputs.map((output) => [output.name, output]),
+  );
+  return categories.map((category) => {
+    const output = existing.get(category.name);
+    if (!output) return category;
+    if (output.description !== category.description) {
+      throw new Error(
+        `Category "${category.name}" already exists with a different description; a new version cannot change it.`,
+      );
+    }
+    return { behaviorId: output.behavior_id };
+  });
+}
+
+function toAgentJudge(judge: PromptJudgeDetail): AgentJudge {
   return {
     judgeId: judge.id,
     name: judge.name,
