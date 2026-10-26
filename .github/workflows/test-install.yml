@@ -20,6 +20,9 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Check generated API client is current
+        run: bun run generate-client && git diff --exit-code -- src/internal/api
+
       - name: Test
         run: bun test
 

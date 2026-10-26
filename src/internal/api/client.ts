@@ -4,7 +4,7 @@ import type { paths } from "./schema";
 
 /** Typed client for the /v1 routes the SDK calls, checked against the committed spec. */
 export class JudgmentApiClient {
-  private readonly api: ReturnType<typeof createClient<paths>>;
+  readonly api: ReturnType<typeof createClient<paths>>;
 
   constructor(
     private readonly baseUrl: string,
@@ -307,7 +307,7 @@ export class JudgmentApiClient {
 }
 
 /** Returns the response data, throwing `HTTP <status>: <body>` on failure. */
-async function ok<T>(
+export async function ok<T>(
   request: Promise<{ data?: T; error?: unknown; response: Response }>,
 ): Promise<T> {
   const { data, error, response } = await request;

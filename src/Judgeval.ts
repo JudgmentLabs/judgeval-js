@@ -1,5 +1,6 @@
 import { JUDGMENT_API_KEY, JUDGMENT_API_URL, JUDGMENT_ORG_ID } from "./env";
 import { JudgmentApiClient } from "./internal/api";
+import { JudgmentApi } from "./internal/api/operations";
 import { resolveProjectId } from "./utils/resolve-project-id";
 import { Logger } from "./utils/logger";
 import { EvaluationFactory } from "./evaluation/EvaluationFactory";
@@ -200,6 +201,11 @@ export class Judgeval {
       this._client.getOrganizationId(),
       this._projectId,
     );
+  }
+
+  /** Call any public API route; one method per MCP tool (e.g. `listJudges`). */
+  get api(): JudgmentApi {
+    return new JudgmentApi(this._client.api);
   }
 
   /** Access dataset management (create, get, list). */
