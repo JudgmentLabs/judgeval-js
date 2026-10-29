@@ -13,8 +13,8 @@ export interface Citation {
  * Base fields shared by all scorer response types.
  *
  * Code judges return one of the concrete subtypes
- * (`BinaryResponse`, `NumericResponse`, or `CategoricalResponse`)
- * from their `score()` method.
+ * (`BinaryResponse`, `NumericResponse`, `CategoricalResponse`, or
+ * `LiteralResponse`) from their `score()` method.
  */
 export interface BaseResponse {
   /** The score value. Type depends on the concrete response type. */
@@ -61,8 +61,25 @@ export interface CategoricalResponse extends BaseResponse {
   value: string;
 }
 
+/**
+ * Raw-value response for judges that return a value instead of a score.
+ *
+ * Test suites compare the value against each check's expected value with the
+ * check's operator. Literal judges run in test suites only, not in online
+ * monitoring.
+ *
+ * @example
+ * ```typescript
+ * return { value: 3, reason: "The agent made 3 tool calls." };
+ * ```
+ */
+export interface LiteralResponse extends BaseResponse {
+  value: boolean | string | number;
+}
+
 /** Union of all concrete scorer response types. */
 export type ScorerResponse =
   | BinaryResponse
   | NumericResponse
-  | CategoricalResponse;
+  | CategoricalResponse
+  | LiteralResponse;
