@@ -18,7 +18,7 @@ export interface Citation {
  */
 export interface BaseResponse {
   /** The score value. Type depends on the concrete response type. */
-  value: boolean | string | number;
+  value: boolean | string | number | JsonObject | JsonValue[];
   /** Human-readable explanation of why this score was given. */
   reason: string;
   /** Optional trace citations supporting this score. */
@@ -70,11 +70,26 @@ export interface CategoricalResponse extends BaseResponse {
  *
  * @example
  * ```typescript
- * return { value: 3, reason: "The agent made 3 tool calls." };
+ * return { value: { city: "Paris", days: 3 }, reason: "Parsed the booking." };
  * ```
  */
 export interface LiteralResponse extends BaseResponse {
-  value: boolean | string | number;
+  /** Any JSON value except `null`. */
+  value: boolean | string | number | JsonObject | JsonValue[];
+}
+
+/** A JSON value a literal judge can return. */
+export type JsonValue =
+  | boolean
+  | string
+  | number
+  | null
+  | JsonObject
+  | JsonValue[];
+
+/** A JSON object a literal judge can return. */
+export interface JsonObject {
+  [key: string]: JsonValue;
 }
 
 /** Union of all concrete scorer response types. */

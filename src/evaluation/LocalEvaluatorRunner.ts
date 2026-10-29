@@ -107,7 +107,9 @@ export class LocalEvaluatorRunner extends EvaluatorRunner<Judge> {
           const r = jr.result!;
           return {
             scorer_name: jr.scorer.constructor.name,
-            value: r.value,
+            // Literal judges' objects and arrays are sent as JSON text, as hosted judges do.
+            value:
+              typeof r.value === "object" ? JSON.stringify(r.value) : r.value,
             reason: r.reason,
             ...(r.citations && {
               citations: r.citations.map((c) => ({
