@@ -4,7 +4,7 @@ export type {
   BinaryResponse,
   NumericResponse,
   CategoricalResponse,
-  LiteralResponse,
+  ArbitraryResponse,
   ScorerResponse,
   Citation,
 } from "./responses";

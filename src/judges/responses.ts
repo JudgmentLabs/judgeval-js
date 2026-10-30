@@ -14,7 +14,7 @@ export interface Citation {
  *
  * Code judges return one of the concrete subtypes
  * (`BinaryResponse`, `NumericResponse`, `CategoricalResponse`, or
- * `LiteralResponse`) from their `score()` method.
+ * `ArbitraryResponse`) from their `score()` method.
  */
 export interface BaseResponse {
   /** The score value. Type depends on the concrete response type. */
@@ -65,7 +65,7 @@ export interface CategoricalResponse extends BaseResponse {
  * Raw-value response for judges that return a value instead of a score.
  *
  * Test suites compare the value against each check's expected value with the
- * check's operator. Literal judges run in test suites only, not in online
+ * check's operator. Arbitrary judges run in test suites only, not in online
  * monitoring.
  *
  * @example
@@ -73,12 +73,12 @@ export interface CategoricalResponse extends BaseResponse {
  * return { value: { city: "Paris", days: 3 }, reason: "Parsed the booking." };
  * ```
  */
-export interface LiteralResponse extends BaseResponse {
+export interface ArbitraryResponse extends BaseResponse {
   /** Any JSON value except `null`. */
   value: boolean | string | number | JsonObject | JsonValue[];
 }
 
-/** A JSON value a literal judge can return. */
+/** A JSON value an arbitrary judge can return. */
 export type JsonValue =
   | boolean
   | string
@@ -87,7 +87,7 @@ export type JsonValue =
   | JsonObject
   | JsonValue[];
 
-/** A JSON object a literal judge can return. */
+/** A JSON object an arbitrary judge can return. */
 export interface JsonObject {
   [key: string]: JsonValue;
 }
@@ -97,4 +97,4 @@ export type ScorerResponse =
   | BinaryResponse
   | NumericResponse
   | CategoricalResponse
-  | LiteralResponse;
+  | ArbitraryResponse;

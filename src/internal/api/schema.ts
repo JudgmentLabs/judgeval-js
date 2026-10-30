@@ -2496,7 +2496,7 @@ export interface components {
       class_name: string;
       scorer_type?: ("example" | "trace") | null;
       /** @enum {string} */
-      response_type: "binary" | "categorical" | "numeric" | "literal";
+      response_type: "binary" | "categorical" | "numeric" | "arbitrary";
       version?: number;
       bump_major?: boolean;
       categories?:
