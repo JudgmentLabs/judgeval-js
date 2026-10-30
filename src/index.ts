@@ -38,6 +38,7 @@ export type {
   BinaryResponse,
   NumericResponse,
   CategoricalResponse,
+  ArbitraryResponse,
   ScorerResponse,
   Citation,
 } from "./judges";
