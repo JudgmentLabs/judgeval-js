@@ -217,6 +217,26 @@ export class TestSuitesFactory extends ProjectTestSuitesClient {
   discard(testSuiteId: string): Promise<{ discarded: boolean }> {
     return this.call("POST", `/${testSuiteId}/discard`);
   }
+
+  /**
+   * Move every check by one judge to another version of that judge, in the
+   * draft. Moves nothing if the version doesn't exist or never returns a
+   * case's expected value.
+   */
+  repinChecks(
+    testSuiteId: string,
+    judgeId: string,
+    judgeMajorVersion: number,
+    judgeMinorVersion: number,
+  ): Promise<{ case_ids: string[]; skipped_case_ids: string[] }> {
+    return this.call("POST", `/${testSuiteId}/repin`, {
+      body: {
+        judge_id: judgeId,
+        judge_major_version: judgeMajorVersion,
+        judge_minor_version: judgeMinorVersion,
+      },
+    });
+  }
 }
 
 /**
