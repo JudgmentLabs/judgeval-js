@@ -1,6 +1,8 @@
 import pc from "picocolors";
-import type { ExampleEvaluationRun } from "../internal/api/models/ExampleEvaluationRun";
-import type { LocalScorerResult } from "../internal/api/models/LocalScorerResult";
+import type {
+  ExampleEvaluationRun,
+  LocalScorerResult,
+} from "../internal/api/models";
 import type { Example } from "../data/Example";
 import type { Judge } from "../judges/Judge";
 import type { BaseResponse } from "../judges/responses";

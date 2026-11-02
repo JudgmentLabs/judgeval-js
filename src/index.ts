@@ -31,6 +31,8 @@ export {
 export { Example } from "./data";
 export type { ScoringResult } from "./data";
 
+export type { JudgmentApi } from "./internal/api/operations";
+
 export { Judge } from "./judges";
 export type {
   BinaryResponse,
@@ -43,8 +45,8 @@ export type {
 export { Evaluation, type EvaluationRunOptions } from "./evaluation";
 
 export { Dataset } from "./datasets";
-export type { DatasetInfo } from "./internal/api/models/DatasetInfo";
-export type { ExperimentScorer } from "./internal/api/models/ExperimentScorer";
+export type { DatasetInfo } from "./internal/api/models";
+export type { ExperimentScorer } from "./internal/api/models";
 export {
   validateDatasetSchema,
   inferSchemaFromExamples,
@@ -54,7 +56,7 @@ export {
 } from "./datasets/schema";
 
 export { AgentJudgeFactory } from "./agent-judges";
-export type { AgentJudge, ScoreType } from "./agent-judges";
+export type { AgentJudge, ReasoningLevel, ScoreType } from "./agent-judges";
 
 export {
   OfflineTestsFactory,
@@ -70,14 +72,7 @@ export {
   type PassConditionFn,
 } from "./offline-tests";
 
-export { JudgevalAPIError } from "./jql/client";
-export type {
-  JqlPresentationResponse,
-  JqlQueryInput,
-  JqlQueryResponse,
-  JqlRequestOptions,
-  SqlResponse,
-} from "./jql/client";
+export { JudgevalAPIError, type SqlResponse } from "./sql/client";
 export {
   TestRunsFactory,
   TestSuitesFactory,

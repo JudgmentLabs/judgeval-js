@@ -1,10 +1,12 @@
 export type ScoreType = "binary" | "numeric" | "categorical";
+export type ReasoningLevel = "lite" | "normal" | "high";
 
 export interface AgentJudge {
   judgeId: string;
   name: string;
   prompt: string;
   model: string;
+  reasoningLevel: ReasoningLevel;
   scoreType: ScoreType;
   description: string | null;
   judgeDescription: string | null;

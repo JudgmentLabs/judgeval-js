@@ -17,7 +17,7 @@ import type { OpenAI } from "openai";
 import { AttributeKeys, InternalAttributeKeys } from "../JudgmentAttributeKeys";
 import { wrap } from "../instrumentation";
 import { JudgmentApiClient } from "../internal/api";
-import type { PendingEvalPayload } from "../internal/api/models/PendingEvalPayload";
+import type { PendingEvalPayload } from "../internal/api/models";
 import { parseFunctionArgs } from "../utils/annotate";
 import { dontThrow } from "../utils/dont-throw";
 import { Logger } from "../utils/logger";
@@ -502,7 +502,10 @@ export abstract class BaseTracer {
    *
    * @example
    * ```typescript
-   * await Tracer.testCase(run.id, testCase.id, () => supportAgent(testCase.input));
+   * const run = await judgeval.testRuns.start(testSuiteId);
+   * for (const c of run.cases) {
+   *   await Tracer.testCase(run.run_id, c.case_id, () => supportAgent(c.input));
+   * }
    * ```
    */
   static testCase<T>(runId: string, caseId: string, fn: () => T): T {

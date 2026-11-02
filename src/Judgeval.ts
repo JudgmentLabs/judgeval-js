@@ -1,5 +1,6 @@
 import { JUDGMENT_API_KEY, JUDGMENT_API_URL, JUDGMENT_ORG_ID } from "./env";
 import { JudgmentApiClient } from "./internal/api";
+import { JudgmentApi } from "./internal/api/operations";
 import { resolveProjectId } from "./utils/resolve-project-id";
 import { Logger } from "./utils/logger";
 import { EvaluationFactory } from "./evaluation/EvaluationFactory";
@@ -9,16 +10,7 @@ import { OfflineTestsFactory } from "./offline-tests/OfflineTestsFactory";
 import { warnOfflineTestsDeprecated } from "./offline-tests/deprecation";
 import { TestRunsFactory, TestSuitesFactory } from "./testing";
 import type { OfflineTracer, OfflineTracerConfig } from "./trace/OfflineTracer";
-import {
-  JudgevalQueryClient,
-  type JqlPresentationResponse,
-  type JqlQueryInput,
-  type JqlQueryResponse,
-  type JqlRequestOptions,
-  type SqlResponse,
-} from "./jql/client";
-import type { DiscoveryKind, DiscoveryOptions } from "./jql/builder";
-import type { PresentationQuery } from "./jql/wire";
+import { JudgevalQueryClient, type SqlResponse } from "./sql/client";
 
 /**
  * Options for {@link Judgeval.offlineTracer}.
@@ -162,7 +154,7 @@ export class Judgeval {
   /**
    * Returns the server's SQL reference as Markdown, matching MCP
    * discover_schema: tables, columns, descriptions, examples, and limits.
-   * Requires organization viewer access, but no resolved project or query opt-in.
+   * Requires organization viewer access, but no resolved project.
    *
    * @param options - Pass `signal` to cancel the request with an AbortSignal.
    * @returns The virtual schema reference as a Markdown string; no project data.
@@ -181,7 +173,7 @@ export class Judgeval {
    *
    * The server derives scope from the client's credentials and resolved project.
    * Call `discoverSchema()` for supported tables and columns. Requires viewer
-   * access and public SDK/API queries enabled for the organization.
+   * access.
    *
    * Results are capped at 1,000 rows and 5 MiB; exceeding either cap returns an
    * error. Use SQL predicates and LIMIT to narrow results. Integers outside
@@ -202,49 +194,6 @@ export class Judgeval {
     return this.queryClient().sql(sql, options);
   }
 
-  /**
-   * Runs a legacy JQL query.
-   *
-   * **Deprecated.** Use [`sql()`](#sql) for new integrations, with SQL
-   * predicates to narrow results. Existing JQL calls remain supported.
-   */
-  query(
-    query: JqlQueryInput,
-    options?: JqlRequestOptions,
-  ): Promise<JqlQueryResponse> {
-    return this.queryClient().query(query, options);
-  }
-
-  /**
-   * Runs a legacy JQL chart or table query.
-   *
-   * **Deprecated.** Use [`sql()`](#sql) for new queries and render its
-   * rows as charts or tables in your application. SQL does not return a
-   * JQL presentation frame. Existing presentation calls and their frame
-   * responses remain supported.
-   */
-  present(
-    query: PresentationQuery,
-    options?: JqlRequestOptions,
-  ): Promise<JqlPresentationResponse> {
-    return this.queryClient().present(query, options);
-  }
-
-  /**
-   * Discovers project-scoped judges, fields, models, and related values.
-   *
-   * **Deprecated.** Use [`discoverSchema()`](#discoverschema) to inspect
-   * the SQL tables and columns, then [`sql()`](#sql) to query project values.
-   * Schema discovery returns documentation, not project data. Existing
-   * JQL discovery calls remain supported; SQL returns a different row schema.
-   */
-  discover(
-    kind: DiscoveryKind,
-    options?: DiscoveryOptions & JqlRequestOptions,
-  ): Promise<JqlQueryResponse> {
-    return this.queryClient().discover(kind, options);
-  }
-
   private queryClient(): JudgevalQueryClient {
     return new JudgevalQueryClient(
       this._client.getBaseUrl(),
@@ -252,6 +201,11 @@ export class Judgeval {
       this._client.getOrganizationId(),
       this._projectId,
     );
+  }
+
+  /** Call any public API route; one method per MCP tool (e.g. `listJudges`). */
+  get api(): JudgmentApi {
+    return new JudgmentApi(this._client.api);
   }
 
   /** Access dataset management (create, get, list). */

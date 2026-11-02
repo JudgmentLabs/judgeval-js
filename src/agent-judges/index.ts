@@ -1,2 +1,2 @@
 export { AgentJudgeFactory } from "./AgentJudgeFactory";
-export type { AgentJudge, ScoreType } from "./AgentJudge";
+export type { AgentJudge, ReasoningLevel, ScoreType } from "./AgentJudge";
