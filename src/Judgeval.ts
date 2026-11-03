@@ -175,7 +175,7 @@ export class Judgeval {
    * Call `discoverSchema()` for supported tables and columns. Requires viewer
    * access.
    *
-   * Results are capped at 1,000 rows and 5 MiB; exceeding either cap returns an
+   * Results are capped at 10,000 rows and 25 MiB; exceeding either cap returns an
    * error. Use SQL predicates and LIMIT to narrow results. Integers outside
    * JavaScript's safe range arrive as exact decimal strings.
    *

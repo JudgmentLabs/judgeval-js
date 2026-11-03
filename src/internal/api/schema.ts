@@ -1165,7 +1165,7 @@ export interface paths {
     put?: never;
     /**
      * Run a tenant-scoped virtual SQL query
-     * @description Runs one read-only SELECT against the virtual catalog for the authenticated organization and project. DAL catalog restrictions and limits of 1,000 rows and 5 MiB apply.
+     * @description Runs one read-only SELECT against the virtual catalog for the authenticated organization and project. DAL catalog restrictions and limits of 10,000 rows and 25 MiB apply.
      */
     post: operations["postV1ProjectsByProjectIdSql"];
     delete?: never;

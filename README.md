@@ -75,8 +75,8 @@ console.log(result.rows);
 ```
 
 SQL execution requires organization viewer access and a resolved project. Results contain `catalog_version`,
-`columns`, `rows`, `row_count`, and `elapsed_ms`, with a maximum of 1,000 rows and
-5 MiB. Integers outside JavaScript's safe range remain exact decimal strings,
+`columns`, `rows`, `row_count`, and `elapsed_ms`, with a maximum of 10,000 rows and
+25 MiB. Integers outside JavaScript's safe range remain exact decimal strings,
 including nested values; use `BigInt(value)` when needed. Both methods accept
 `{ signal }` for cancellation and preserve `JudgevalAPIError` details.
 
