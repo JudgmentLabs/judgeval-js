@@ -12,7 +12,10 @@ export {
   wrapOpenAI,
 } from "../instrumentation";
 export { WorkerSpanExporter } from "./WorkerSpanExporter";
-export { JudgmentSpanProcessor } from "../trace/processors/JudgmentSpanProcessor";
+export {
+  JudgmentSpanProcessor,
+  type JudgmentSpanProcessorConfig,
+} from "../trace/processors/JudgmentSpanProcessor";
 export {
   ALLOW_ALL_BAGGAGE_KEYS,
   JudgmentBaggageSpanProcessor,
