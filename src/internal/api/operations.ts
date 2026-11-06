@@ -42,6 +42,18 @@ export class JudgmentApi {
     );
   }
 
+  /** Add trace tags (`POST /v1/projects/{projectId}/traces/{traceId}/tags`). */
+  addTraceTags(
+    ...init: Init<"/v1/projects/{projectId}/traces/{traceId}/tags", "post">
+  ) {
+    return ok(
+      this.client.POST(
+        "/v1/projects/{projectId}/traces/{traceId}/tags",
+        ...init,
+      ),
+    );
+  }
+
   /** Cancel test run (`POST /v1/projects/{projectId}/test-runs/{testRunId}/cancel`). */
   cancelTestRun(
     ...init: Init<
@@ -55,11 +67,6 @@ export class JudgmentApi {
         ...init,
       ),
     );
-  }
-
-  /** Create artifact (`POST /v1/projects/{projectId}/artifacts`). */
-  createArtifact(...init: Init<"/v1/projects/{projectId}/artifacts", "post">) {
-    return ok(this.client.POST("/v1/projects/{projectId}/artifacts", ...init));
   }
 
   /** Create offline-test dataset (`POST /v1/projects/{projectId}/datasets`). */
@@ -86,6 +93,28 @@ export class JudgmentApi {
     );
   }
 
+  /** Create artifact (`POST /v1/projects/{projectId}/artifacts`). */
+  createPreprocessingScript(
+    ...init: Init<"/v1/projects/{projectId}/artifacts", "post">
+  ) {
+    return ok(this.client.POST("/v1/projects/{projectId}/artifacts", ...init));
+  }
+
+  /** Create artifact revision (`POST /v1/projects/{projectId}/artifacts/{artifactId}/revisions`). */
+  createPreprocessingScriptVersion(
+    ...init: Init<
+      "/v1/projects/{projectId}/artifacts/{artifactId}/revisions",
+      "post"
+    >
+  ) {
+    return ok(
+      this.client.POST(
+        "/v1/projects/{projectId}/artifacts/{artifactId}/revisions",
+        ...init,
+      ),
+    );
+  }
+
   /** Add new project (`POST /v1/projects`). */
   createProject(...init: Init<"/v1/projects", "post">) {
     return ok(this.client.POST("/v1/projects", ...init));
@@ -97,21 +126,6 @@ export class JudgmentApi {
   ) {
     return ok(
       this.client.POST("/v1/projects/{projectId}/scheduled-tasks", ...init),
-    );
-  }
-
-  /** Create artifact revision (`POST /v1/projects/{projectId}/artifacts/{artifactId}/revisions`). */
-  createSupabaseArtifactRevision(
-    ...init: Init<
-      "/v1/projects/{projectId}/artifacts/{artifactId}/revisions",
-      "post"
-    >
-  ) {
-    return ok(
-      this.client.POST(
-        "/v1/projects/{projectId}/artifacts/{artifactId}/revisions",
-        ...init,
-      ),
     );
   }
 
@@ -255,15 +269,6 @@ export class JudgmentApi {
     );
   }
 
-  /** Get artifact revision (`GET /v1/projects/{projectId}/artifact-revisions`). */
-  getArtifactRevision(
-    ...init: Init<"/v1/projects/{projectId}/artifact-revisions", "get">
-  ) {
-    return ok(
-      this.client.GET("/v1/projects/{projectId}/artifact-revisions", ...init),
-    );
-  }
-
   /** Get conversation display rules (`GET /v1/projects/{projectId}/conversation-display-rules`). */
   getConversationDisplayRules(
     ...init: Init<"/v1/projects/{projectId}/conversation-display-rules", "get">
@@ -340,6 +345,15 @@ export class JudgmentApi {
     );
   }
 
+  /** Get artifact revision (`GET /v1/projects/{projectId}/artifact-revisions`). */
+  getPreprocessingScriptVersion(
+    ...init: Init<"/v1/projects/{projectId}/artifact-revisions", "get">
+  ) {
+    return ok(
+      this.client.GET("/v1/projects/{projectId}/artifact-revisions", ...init),
+    );
+  }
+
   /** Get a scheduled task (`GET /v1/projects/{projectId}/scheduled-tasks/{taskId}`). */
   getScheduledTask(
     ...init: Init<"/v1/projects/{projectId}/scheduled-tasks/{taskId}", "get">
@@ -371,6 +385,18 @@ export class JudgmentApi {
     return ok(
       this.client.GET(
         "/v1/projects/{projectId}/test-runs/{testRunId}/items",
+        ...init,
+      ),
+    );
+  }
+
+  /** Get a test run (`GET /v1/projects/{projectId}/test-suites/runs/{runId}`). */
+  getTestSuiteRun(
+    ...init: Init<"/v1/projects/{projectId}/test-suites/runs/{runId}", "get">
+  ) {
+    return ok(
+      this.client.GET(
+        "/v1/projects/{projectId}/test-suites/runs/{runId}",
         ...init,
       ),
     );
@@ -455,11 +481,6 @@ export class JudgmentApi {
     return ok(
       this.client.GET("/v1/projects/{projectId}/memory/entries", ...init),
     );
-  }
-
-  /** List organization memberships (`GET /v1/organizations/memberships`). */
-  listOrganizations(...init: Init<"/v1/organizations/memberships", "get">) {
-    return ok(this.client.GET("/v1/organizations/memberships", ...init));
   }
 
   /** List project summaries (`GET /v1/projects/summaries`). */
@@ -600,7 +621,7 @@ export class JudgmentApi {
   }
 
   /** Score a test run (`POST /v1/projects/{projectId}/test-suites/runs/{runId}/score`). */
-  scoreTestRun(
+  scoreTestSuiteRun(
     ...init: Init<
       "/v1/projects/{projectId}/test-suites/runs/{runId}/score",
       "post"
@@ -651,7 +672,7 @@ export class JudgmentApi {
   }
 
   /** Set judge version optimistic eval (`PUT /v1/projects/{projectId}/judges/{judgeId}/versions/{judgeVersionId}/optimistic-eval`). */
-  setJudgeOptimisticEvalEnabled(
+  setJudgeJevOptimizationEnabled(
     ...init: Init<
       "/v1/projects/{projectId}/judges/{judgeId}/versions/{judgeVersionId}/optimistic-eval",
       "put"
@@ -666,7 +687,7 @@ export class JudgmentApi {
   }
 
   /** Set judge version preprocessing artifact (`PUT /v1/projects/{projectId}/judges/{judgeId}/versions/{judgeVersionId}/preprocessor-artifact-revision`). */
-  setJudgePreprocessorArtifactRevision(
+  setJudgePreprocessingScript(
     ...init: Init<
       "/v1/projects/{projectId}/judges/{judgeId}/versions/{judgeVersionId}/preprocessor-artifact-revision",
       "put"
@@ -701,7 +722,7 @@ export class JudgmentApi {
   }
 
   /** Test optimistic eval candidate (`POST /v1/projects/{projectId}/artifacts/optimistic-eval-tests`). */
-  testOptimisticEvalCandidate(
+  testJevOptimizationCandidate(
     ...init: Init<
       "/v1/projects/{projectId}/artifacts/optimistic-eval-tests",
       "post"
@@ -716,7 +737,7 @@ export class JudgmentApi {
   }
 
   /** Test preprocessing candidate (`POST /v1/projects/{projectId}/artifacts/preprocessing-tests`). */
-  testPreprocessingCandidate(
+  testPreprocessingScriptCandidate(
     ...init: Init<
       "/v1/projects/{projectId}/artifacts/preprocessing-tests",
       "post"
