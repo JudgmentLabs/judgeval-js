@@ -93,12 +93,19 @@ interface TestClient {
     arguments?: Record<string, unknown>;
     _meta?: Record<string, unknown>;
   }): Promise<unknown>;
+  readResource(request: { uri: string }): Promise<unknown>;
   listTools(): Promise<{
     tools: readonly { name: string; inputSchema: { properties?: object } }[];
   }>;
 }
 
 interface Registrar {
+  registerResource(
+    name: string,
+    uri: string,
+    config: object,
+    handler: (uri: URL) => Promise<unknown>,
+  ): unknown;
   registerTool(
     name: string,
     config: {
@@ -111,9 +118,23 @@ interface Registrar {
 }
 
 const seenInputs: Record<string, unknown>[] = [];
+const SHARED_SCHEMA = z.strictObject({});
 
 function registerTools(server: object): void {
   const registrar = server as Registrar;
+  registrar.registerResource(
+    "report",
+    "report://latest?token=secret-token",
+    {},
+    (uri) => Promise.resolve({ contents: [{ uri: uri.href, text: "ok" }] }),
+  );
+  for (const name of ["shared_a", "shared_b"]) {
+    registrar.registerTool(
+      name,
+      { description: "Shares a schema", inputSchema: SHARED_SCHEMA },
+      () => Promise.resolve({ content: [{ type: "text", text: "ok" }] }),
+    );
+  }
   registrar.registerTool(
     "greet",
     {
@@ -153,6 +174,17 @@ function registerTools(server: object): void {
             type: "text",
             text: JSON.stringify({ error: `no access: ${SECRET}` }),
           },
+        ],
+      }),
+  );
+  registrar.registerTool(
+    "token_error",
+    { description: "Fails with a token", inputSchema: z.strictObject({}) },
+    () =>
+      Promise.resolve({
+        isError: true,
+        content: [
+          { type: "text", text: JSON.stringify({ error: "sk-abc123def456" }) },
         ],
       }),
   );
@@ -538,6 +570,57 @@ describe.each([
     expect(
       toolCallSpans(exporter)[0]?.attributes["judgment.mcp.failure.reason"],
     ).toEqual("unknown");
+  });
+
+  test("never records a token-shaped error code", async () => {
+    const exporter = useExporter();
+    const client = await connect({});
+    await client.callTool({ name: "token_error", arguments: {} });
+    expect(
+      toolCallSpans(exporter)[0]?.attributes["judgment.mcp.failure.reason"],
+    ).toEqual("unknown");
+  });
+
+  test("drops credentials from a resource URI", async () => {
+    const exporter = useExporter();
+    const client = await connect({});
+    await client.readResource({ uri: "report://latest?token=secret-token" });
+    const span = exporter
+      .getFinishedSpans()
+      .find((candidate) => candidate.name === "resources/read");
+    expect(span?.attributes["mcp.resource.uri"]).toEqual("report://latest");
+  });
+
+  test("gives tools sharing one schema their own contract hash", async () => {
+    const exporter = useExporter();
+    const client = await connect({});
+    await client.callTool({ name: "shared_a", arguments: {} });
+    await client.callTool({ name: "shared_b", arguments: {} });
+    const hashes = toolCallSpans(exporter).map(
+      (span) => span.attributes["judgment.mcp.contract_hash"],
+    );
+    expect(new Set(hashes).size).toEqual(2);
+  });
+
+  test("records a tool's own argument named like an injected one", async () => {
+    const exporter = useExporter();
+    const client = await connect({});
+    await client.callTool({
+      name: "structured",
+      arguments: { context: "theirs", llm_model: "model-1" },
+    });
+    expect(
+      toolCallSpans(exporter)[0]?.attributes["judgment.mcp.argument_keys"],
+    ).toEqual("context");
+  });
+
+  test("records every argument name when injection is off", async () => {
+    const exporter = useExporter();
+    const client = await connect({ injectAgentArguments: false });
+    await client.callTool({ name: "open", arguments: { context: "theirs" } });
+    expect(
+      toolCallSpans(exporter)[0]?.attributes["judgment.mcp.argument_keys"],
+    ).toEqual("context");
   });
 
   test("leaves a tool that accepts unknown keys alone", async () => {

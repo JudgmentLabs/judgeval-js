@@ -31,7 +31,8 @@ const PROTOCOL_VERSION_META_KEY = "io.modelcontextprotocol/protocolVersion";
 const INVALID_PARAMS_CODE = -32602;
 const UNKNOWN_TOOL = /^(?:MCP error -?\d+: )?Tool \S+ (not found|disabled)/;
 const INVALID_INPUT = /^(?:MCP error -?\d+: )?Input validation error/;
-const PUBLIC_ERROR_CODE = /^[\w.:-]{1,64}$/;
+// Words only: anything with digits could be a token rather than an error code.
+const PUBLIC_ERROR_CODE = /^[A-Za-z][A-Za-z_.:-]{0,39}$/;
 
 const propagator = new W3CTraceContextPropagator();
 
@@ -149,14 +150,11 @@ interface ToolContract {
   readonly open: boolean;
 }
 
-interface CachedContract {
-  readonly description: string | undefined;
-  readonly contract: ToolContract | null;
-}
-
 const records = new AsyncLocalStorage<CallRecord>();
 const instrumented = new WeakSet<object>();
-const contracts = new WeakMap<object, CachedContract>();
+// Keyed by schema because an update replaces it, then by tool, because two tools
+// can share one schema object.
+const contracts = new WeakMap<object, Map<string, ToolContract | null>>();
 
 /**
  * Records how far the current MCP call got. Optional: without it, a refused
@@ -362,7 +360,10 @@ function prepareCall(
         toolName === undefined ? undefined : "execute_tool",
       "gen_ai.tool.name": toolName,
       "gen_ai.prompt.name": method === "prompts/get" ? params?.name : undefined,
-      "mcp.resource.uri": method === "resources/read" ? params?.uri : undefined,
+      "mcp.resource.uri":
+        method === "resources/read" && params?.uri !== undefined
+          ? redacted(withoutUriSecrets(params.uri), options)
+          : undefined,
       "user_agent.original": headers["user-agent"],
       "judgment.mcp.server.name":
         options.serverName ?? protocol._serverInfo?.name,
@@ -372,7 +373,9 @@ function prepareCall(
       "judgment.mcp.client.version": client?.version,
       "judgment.mcp.contract_hash": contract?.hash,
       "judgment.mcp.argument_keys":
-        toolName === undefined ? undefined : recordedKeys(args),
+        toolName === undefined
+          ? undefined
+          : recordedKeys(args, injected ? contract.declared : undefined),
       "judgment.mcp.conversation_id":
         reported?.conversationId ?? mintedConversationId,
       "judgment.mcp.conversation_id_source":
@@ -465,8 +468,12 @@ function recordFailure(
     code === INVALID_PARAMS_CODE ||
     (message !== undefined && INVALID_INPUT.test(message));
   const errorName = error instanceof Error ? error.name : undefined;
+  const publicCode =
+    options.captureErrorMessages === false
+      ? undefined
+      : publicErrorCode(message);
   const reason =
-    publicErrorCode(message) ??
+    (publicCode === undefined ? undefined : redacted(publicCode, options)) ??
     (unknownTool === null
       ? undefined
       : unknownTool[1] === "disabled"
@@ -557,9 +564,9 @@ function toolContract(
     typeof schema === "object" && schema !== null
       ? contracts.get(schema)
       : undefined;
-  if (cached !== undefined && cached.description === tool.description) {
-    return cached.contract ?? undefined;
-  }
+  const cacheKey = `${name}\0${tool.description ?? ""}`;
+  const known = cached?.get(cacheKey);
+  if (known !== undefined) return known ?? undefined;
   const shape = readSchemaShape(tool.inputSchema);
   const contract =
     shape === undefined
@@ -577,7 +584,9 @@ function toolContract(
           open: shape.open,
         };
   if (typeof schema === "object" && schema !== null) {
-    contracts.set(schema, { description: tool.description, contract });
+    const entries = cached ?? new Map<string, ToolContract | null>();
+    entries.set(cacheKey, contract);
+    contracts.set(schema, entries);
   }
   return contract ?? undefined;
 }
@@ -622,11 +631,32 @@ function readSchemaShape(schema: unknown): SchemaShape | undefined {
     (typeof definition === "function" ? definition() : definition);
   if (typeof shape !== "object" || shape === null) return undefined;
   const keys = Object.keys(shape).sort();
+  const fields = keys.map((key) => [key, fieldType(shape, key)]);
   return {
     keys,
-    fingerprint: JSON.stringify(keys),
+    fingerprint: JSON.stringify(fields),
     open: candidate._def?.unknownKeys === "passthrough",
   };
+}
+
+/** Names a Zod field's type, so changing it changes the contract hash. */
+function fieldType(shape: object, key: string): string {
+  const field = (shape as Readonly<Record<string, unknown>>)[key] as
+    | {
+        readonly _def?: {
+          readonly typeName?: unknown;
+          readonly type?: unknown;
+        };
+      }
+    | undefined;
+  return String(field?._def?.typeName ?? field?._def?.type ?? "");
+}
+
+/** Drops URI parts that commonly carry credentials: user info, query and fragment. */
+function withoutUriSecrets(uri: string): string {
+  return uri
+    .replace(/^([a-z][a-z\d+.-]*:\/\/)[^/@?#]*@/i, "$1")
+    .replace(/[?#].*$/, "");
 }
 
 function readHeaders(
@@ -676,11 +706,19 @@ function publicErrorCode(message: string | undefined): string | undefined {
   return code !== undefined && PUBLIC_ERROR_CODE.test(code) ? code : undefined;
 }
 
+/**
+ * Lists a call's argument names. `declared` is set when arguments are injected, so
+ * an injected name is left out unless the tool has its own argument by that name.
+ */
 function recordedKeys(
   args: Readonly<Record<string, unknown>>,
+  declared: ReadonlySet<string> | undefined,
 ): string | undefined {
   const keys = Object.keys(args)
-    .filter((key) => !isAgentArgument(key))
+    .filter(
+      (key) =>
+        declared === undefined || !isAgentArgument(key) || declared.has(key),
+    )
     .slice(0, MAX_RECORDED_KEYS)
     .map((key) => key.slice(0, MAX_RECORDED_KEY_LENGTH));
   return keys.length === 0 ? undefined : keys.join(",");
