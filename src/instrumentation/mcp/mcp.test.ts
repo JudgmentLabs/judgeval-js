@@ -143,6 +143,28 @@ function registerTools(server: object): void {
     },
   );
   registrar.registerTool(
+    "wordy_error",
+    { description: "Fails with free text", inputSchema: z.strictObject({}) },
+    () =>
+      Promise.resolve({
+        isError: true,
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({ error: `no access: ${SECRET}` }),
+          },
+        ],
+      }),
+  );
+  registrar.registerTool(
+    "open",
+    { description: "Accepts anything", inputSchema: z.looseObject({}) },
+    (input) => {
+      seenInputs.push(input);
+      return Promise.resolve({ content: [{ type: "text", text: "ok" }] });
+    },
+  );
+  registrar.registerTool(
     "structured",
     {
       description: "Returns structured output",
@@ -476,6 +498,63 @@ describe.each([
     expect(textBlocks(result)).toEqual(["hello"]);
   });
 
+  test("a failing redact sends no text and never affects the call", async () => {
+    const exporter = useExporter();
+    const client = await connect({
+      redact: () => {
+        throw new Error("redact failed");
+      },
+    });
+    const result = await client.callTool({
+      name: "greet",
+      arguments: {
+        name: "a",
+        context: "why",
+        conversation_id: mintConversationId(),
+      },
+    });
+    await client.callTool({
+      name: "greet",
+      arguments: { name: "a", fail: true },
+    });
+    const [success, failure] = toolCallSpans(exporter);
+    expect({
+      blocks: textBlocks(result),
+      intent: success?.attributes["judgment.mcp.intent"],
+      failureEnded: failure?.status.code,
+      failureMessage: failure?.status.message,
+    }).toEqual({
+      blocks: ["hello"],
+      intent: undefined,
+      failureEnded: 2,
+      failureMessage: undefined,
+    });
+  });
+
+  test("never records free text a tool returned as a structured error", async () => {
+    const exporter = useExporter();
+    const client = await connect({ captureErrorMessages: false });
+    await client.callTool({ name: "wordy_error", arguments: {} });
+    expect(
+      toolCallSpans(exporter)[0]?.attributes["judgment.mcp.failure.reason"],
+    ).toEqual("unknown");
+  });
+
+  test("leaves a tool that accepts unknown keys alone", async () => {
+    useExporter();
+    seenInputs.length = 0;
+    const client = await connect({});
+    const { tools } = await client.listTools();
+    await client.callTool({ name: "open", arguments: { context: "theirs" } });
+    expect({
+      seen: seenInputs,
+      listed: Object.keys(
+        tools.find((tool) => tool.name === "open")?.inputSchema.properties ??
+          {},
+      ),
+    }).toEqual({ seen: [{ context: "theirs" }], listed: [] });
+  });
+
   test("redacts failure messages and honors turning them off", async () => {
     const exporter = useExporter();
     const redacting = await connect({ redact: () => "[redacted]" });
@@ -487,6 +566,34 @@ describe.each([
       "[redacted]",
       undefined,
     ]);
+  });
+});
+
+describe("tool updates", () => {
+  test("re-reads a tool's schema after it changes", async () => {
+    useExporter();
+    seenInputs.length = 0;
+    const server = new McpServerV1({ name: "greeter", version: "1.0.0" });
+    const tool = server.registerTool(
+      "changing",
+      { description: "Changes", inputSchema: z.strictObject({}) },
+      (input: Record<string, unknown>) => {
+        seenInputs.push(input);
+        return { content: [{ type: "text" as const, text: "ok" }] };
+      },
+    );
+    instrumentMcpServer(server, {});
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverSide);
+    const client = new ClientV1({ name: "test-client", version: "2.0.0" });
+    await client.connect(clientSide);
+    await client.callTool({ name: "changing", arguments: {} });
+    tool.update({ paramsSchema: { context: z.string() } });
+    await client.callTool({
+      name: "changing",
+      arguments: { context: "theirs" },
+    });
+    expect(seenInputs[seenInputs.length - 1]).toEqual({ context: "theirs" });
   });
 });
 

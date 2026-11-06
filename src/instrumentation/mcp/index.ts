@@ -31,6 +31,7 @@ const PROTOCOL_VERSION_META_KEY = "io.modelcontextprotocol/protocolVersion";
 const INVALID_PARAMS_CODE = -32602;
 const UNKNOWN_TOOL = /^(?:MCP error -?\d+: )?Tool \S+ (not found|disabled)/;
 const INVALID_INPUT = /^(?:MCP error -?\d+: )?Input validation error/;
+const PUBLIC_ERROR_CODE = /^[\w.:-]{1,64}$/;
 
 const propagator = new W3CTraceContextPropagator();
 
@@ -144,11 +145,18 @@ export type InstrumentableMcpServer = object;
 interface ToolContract {
   readonly declared: ReadonlySet<string>;
   readonly hash: string;
+  /** Accepts unknown keys, so an added argument could change what the tool receives. */
+  readonly open: boolean;
+}
+
+interface CachedContract {
+  readonly description: string | undefined;
+  readonly contract: ToolContract | null;
 }
 
 const records = new AsyncLocalStorage<CallRecord>();
 const instrumented = new WeakSet<object>();
-const contracts = new WeakMap<object, ToolContract | null>();
+const contracts = new WeakMap<object, CachedContract>();
 
 /**
  * Records how far the current MCP call got. Optional: without it, a refused
@@ -253,9 +261,12 @@ function traced(
       ),
     );
     if (prepared === undefined) {
-      const result = await handler(request, context);
+      const stripped =
+        attempt(() => withoutInjected(method, request, registry, inject)) ??
+        request;
+      const result = await handler(stripped, context);
       return method === "tools/list" && inject
-        ? listWithArguments(result)
+        ? listWithArguments(result, registry)
         : result;
     }
     const record: CallRecord = {
@@ -276,7 +287,9 @@ function traced(
       if (started !== undefined) {
         finish(started.span, record, result, context, options);
       }
-      if (method === "tools/list" && inject) return listWithArguments(result);
+      if (method === "tools/list" && inject) {
+        return listWithArguments(result, registry);
+      }
       return prepared.mintedConversationId === undefined
         ? result
         : withConversationIdPrompt(result, prepared.mintedConversationId);
@@ -312,7 +325,7 @@ function prepareCall(
   const tool = toolName === undefined ? undefined : registry?.[toolName];
   const contract =
     tool === undefined ? undefined : toolContract(toolName!, tool);
-  const injected = inject && contract !== undefined;
+  const injected = inject && contract !== undefined && !contract.open;
   const reported = injected
     ? readReportedArguments(args, contract.declared)
     : undefined;
@@ -369,7 +382,7 @@ function prepareCall(
             ? "minted"
             : undefined,
       "judgment.mcp.intent":
-        intent === undefined ? undefined : (options.redact?.(intent) ?? intent),
+        intent === undefined ? undefined : redacted(intent, options),
       "judgment.mcp.model": reported?.model,
       "judgment.mcp.sdk_version": VERSION,
     }),
@@ -429,6 +442,8 @@ function finish(
     } else if (result === undefined || result.isError === true) {
       recordFailure(span, record, result, options);
     }
+  });
+  attempt(() => {
     span.end();
   });
 }
@@ -462,10 +477,7 @@ function recordFailure(
   const recorded =
     options.captureErrorMessages === false || message === undefined
       ? undefined
-      : (options.redact?.(message) ?? message).slice(
-          0,
-          MAX_ERROR_MESSAGE_LENGTH,
-        );
+      : redacted(message, options)?.slice(0, MAX_ERROR_MESSAGE_LENGTH);
   span.setAttributes(
     definedAttributes({
       "error.type":
@@ -482,21 +494,72 @@ function recordFailure(
   span.setStatus({ code: SpanStatusCode.ERROR, message: recorded });
 }
 
-function listWithArguments(result: McpResult): McpResult {
+/** Applies the builder's redaction. If it fails, the text isn't sent at all. */
+function redacted(
+  text: string,
+  options: InstrumentMcpServerOptions,
+): string | undefined {
+  return attempt(() => options.redact?.(text) ?? text);
+}
+
+function listWithArguments(
+  result: McpResult,
+  registry: Readonly<Record<string, RegisteredTool>> | undefined,
+): McpResult {
   return (
     attempt(() => ({
       ...result,
-      tools: result.tools?.map(withAgentArguments),
+      tools: result.tools?.map((tool) => {
+        const name = tool["name"];
+        const registered =
+          typeof name === "string" ? registry?.[name] : undefined;
+        const contract =
+          registered === undefined
+            ? undefined
+            : toolContract(name as string, registered);
+        return contract === undefined || contract.open
+          ? tool
+          : withAgentArguments(tool);
+      }),
     })) ?? result
   );
+}
+
+function withoutInjected(
+  method: string,
+  request: McpRequest,
+  registry: Readonly<Record<string, RegisteredTool>> | undefined,
+  inject: boolean,
+): McpRequest {
+  const name = request.params?.name;
+  const tool = name === undefined ? undefined : registry?.[name];
+  if (method !== "tools/call" || !inject || tool === undefined) return request;
+  const contract = toolContract(name!, tool);
+  if (contract === undefined || contract.open) return request;
+  return {
+    ...request,
+    params: {
+      ...request.params,
+      arguments: withoutAgentArguments(
+        request.params?.arguments ?? {},
+        contract.declared,
+      ),
+    },
+  };
 }
 
 function toolContract(
   name: string,
   tool: RegisteredTool,
 ): ToolContract | undefined {
-  const cached = contracts.get(tool);
-  if (cached !== undefined) return cached ?? undefined;
+  const schema = tool.inputSchema;
+  const cached =
+    typeof schema === "object" && schema !== null
+      ? contracts.get(schema)
+      : undefined;
+  if (cached !== undefined && cached.description === tool.description) {
+    return cached.contract ?? undefined;
+  }
   const shape = readSchemaShape(tool.inputSchema);
   const contract =
     shape === undefined
@@ -511,19 +574,24 @@ function toolContract(
             .update(shape.fingerprint)
             .digest("hex")
             .slice(0, 16),
+          open: shape.open,
         };
-  contracts.set(tool, contract);
+  if (typeof schema === "object" && schema !== null) {
+    contracts.set(schema, { description: tool.description, contract });
+  }
   return contract ?? undefined;
 }
 
+interface SchemaShape {
+  readonly keys: readonly string[];
+  readonly fingerprint: string;
+  readonly open: boolean;
+}
+
 /** Reads a tool's input names from a Standard Schema or Zod object. */
-function readSchemaShape(
-  schema: unknown,
-):
-  | { readonly keys: readonly string[]; readonly fingerprint: string }
-  | undefined {
+function readSchemaShape(schema: unknown): SchemaShape | undefined {
   if (schema === undefined || schema === null)
-    return { keys: [], fingerprint: "" };
+    return { keys: [], fingerprint: "", open: false };
   const candidate = schema as {
     readonly "~standard"?: {
       readonly jsonSchema?: {
@@ -531,15 +599,21 @@ function readSchemaShape(
       };
     };
     readonly shape?: unknown;
-    readonly _def?: { readonly shape?: unknown };
+    readonly _def?: {
+      readonly shape?: unknown;
+      readonly unknownKeys?: unknown;
+    };
   };
   const json = attempt(() =>
     candidate["~standard"]?.jsonSchema?.input?.({ target: "draft-2020-12" }),
-  ) as { readonly properties?: object } | undefined;
+  ) as
+    | { readonly properties?: object; readonly additionalProperties?: unknown }
+    | undefined;
   if (json !== undefined) {
     return {
       keys: Object.keys(json.properties ?? {}),
       fingerprint: JSON.stringify(json),
+      open: Boolean(json.additionalProperties),
     };
   }
   const definition = candidate._def?.shape;
@@ -548,7 +622,11 @@ function readSchemaShape(
     (typeof definition === "function" ? definition() : definition);
   if (typeof shape !== "object" || shape === null) return undefined;
   const keys = Object.keys(shape).sort();
-  return { keys, fingerprint: JSON.stringify(keys) };
+  return {
+    keys,
+    fingerprint: JSON.stringify(keys),
+    open: candidate._def?.unknownKeys === "passthrough",
+  };
 }
 
 function readHeaders(
@@ -594,7 +672,8 @@ function publicErrorCode(message: string | undefined): string | undefined {
   if (message?.startsWith("{") !== true) return undefined;
   const parsed = attempt(() => JSON.parse(message) as unknown);
   if (typeof parsed !== "object" || parsed === null) return undefined;
-  return "error" in parsed ? stringOrUndefined(parsed.error) : undefined;
+  const code = "error" in parsed ? stringOrUndefined(parsed.error) : undefined;
+  return code !== undefined && PUBLIC_ERROR_CODE.test(code) ? code : undefined;
 }
 
 function recordedKeys(
