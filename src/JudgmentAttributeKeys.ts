@@ -28,6 +28,7 @@ export enum AttributeKeys {
   JUDGMENT_USAGE_TOTAL_COST_USD = "judgment.usage.total_cost_usd",
 
   JUDGMENT_SESSION_ID = "judgment.session_id",
+  JUDGMENT_CONVERSATION_OBSERVATION = "judgment.conversation.observation",
   JUDGMENT_PROJECT_ID_OVERRIDE = "judgment.project_id_override",
   JUDGMENT_LINK_SOURCE_TRACE_ID = "judgment.link.source_trace_id",
   JUDGMENT_LINK_SOURCE_SPAN_ID = "judgment.link.source_span_id",
