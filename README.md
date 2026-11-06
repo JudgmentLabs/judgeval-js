@@ -11,6 +11,30 @@ Find the latest version on [npm](https://www.npmjs.com/package/judgeval).
 npm install judgeval
 ```
 
+## Trace your MCP server
+
+If you build an MCP server, `instrumentMcpServer` shows you how agents use it: which tools they call, what fails and why, and how they move between tools. It works with `@modelcontextprotocol/sdk` 1.x and `@modelcontextprotocol/server` 2.x.
+
+```typescript
+import { Tracer, instrumentMcpServer } from "judgeval";
+
+await Tracer.init({ projectName: "my-mcp-server" });
+
+const server = new McpServer({ name: "orders", version: "1.0.0" });
+// Register your tools, then:
+instrumentMcpServer(server);
+```
+
+Argument values and tool results are never recorded, and tracing failures never affect a call.
+
+**What changes on your server:** by default, each tool gains optional `context`, `llm_model` and `conversation_id` arguments, which are removed before your handler runs. A call with no session gets a conversation ID in an extra text block in its result. This is how you get agent-reported intent and sessions from clients that send no ID. To leave your tools and results exactly as they are:
+
+```typescript
+instrumentMcpServer(server, { injectAgentArguments: false });
+```
+
+Use `identify` or `setMcpCaller` to attach your end user, `redact` to rewrite error text and intent before it's sent, and `markMcpCallStage` to record where a call failed.
+
 ## Usage
 
 ### Tracer
