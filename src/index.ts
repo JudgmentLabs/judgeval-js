@@ -31,11 +31,9 @@ export {
 export {
   instrumentMcpServer,
   markMcpCallError,
-  markMcpCallStage,
   setMcpCaller,
   type InstrumentMcpServerOptions,
   type InstrumentableMcpServer,
-  type McpCallStage,
   type McpCaller,
   type McpRequestInfo,
 } from "./instrumentation/mcp";

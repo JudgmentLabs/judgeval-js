@@ -33,7 +33,7 @@ Argument values and tool results are never recorded, and tracing failures never 
 instrumentMcpServer(server, { injectAgentArguments: false });
 ```
 
-Use `identify` or `setMcpCaller` to attach your end user, `redact` to rewrite error text and intent before it's sent, and `markMcpCallStage` to record where a call failed.
+Use `identify` or `setMcpCaller` to attach your end user, `redact` to rewrite error text and intent before it's sent, and `markMcpCallError` to record the original error before you turn it into a public tool error. A failed call's `error.type` is the original error's class name (or `unknown_tool`, `tool_disabled`, `invalid_input` for calls refused before your handler ran), so named error classes tell you why calls fail.
 
 ## Usage
 

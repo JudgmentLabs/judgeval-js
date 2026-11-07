@@ -36,14 +36,6 @@ const PUBLIC_ERROR_CODE = /^[A-Za-z][A-Za-z_.:-]{0,39}$/;
 
 const propagator = new W3CTraceContextPropagator();
 
-/** Where in the request path a failed call stopped. */
-export type McpCallStage =
-  | "validation"
-  | "authorization"
-  | "rate_limit"
-  | "handler"
-  | "upstream";
-
 /** Who a call acts for. Hash these if your identifiers are sensitive. */
 export interface McpCaller {
   readonly userId?: string | null;
@@ -82,7 +74,6 @@ export interface InstrumentMcpServerOptions {
 }
 
 interface CallRecord {
-  stage: McpCallStage | undefined;
   error: unknown;
   caller: McpCaller | undefined;
 }
@@ -157,15 +148,10 @@ const instrumented = new WeakSet<object>();
 const contracts = new WeakMap<object, Map<string, ToolContract | null>>();
 
 /**
- * Records how far the current MCP call got. Optional: without it, a refused
- * call counts as `validation` and any other failure as `handler`.
+ * Records the original error before you map it to a public tool error. Its
+ * class name becomes the call's `error.type`, so named error classes tell you
+ * why calls fail.
  */
-export function markMcpCallStage(stage: McpCallStage): void {
-  const record = records.getStore();
-  if (record !== undefined) record.stage = stage;
-}
-
-/** Records the original error before you map it to a public tool error. */
 export function markMcpCallError(error: unknown): void {
   const record = records.getStore();
   if (record !== undefined) record.error = error;
@@ -268,7 +254,6 @@ function traced(
         : result;
     }
     const record: CallRecord = {
-      stage: undefined,
       error: undefined,
       caller: undefined,
     };
@@ -461,44 +446,47 @@ function recordFailure(
   const message =
     result?.content?.[0]?.text ??
     (error instanceof Error ? error.message : undefined);
-  const code = (error as { readonly code?: unknown } | undefined)?.code;
-  const unknownTool = message === undefined ? null : UNKNOWN_TOOL.exec(message);
-  const refused =
-    unknownTool !== null ||
-    code === INVALID_PARAMS_CODE ||
-    (message !== undefined && INVALID_INPUT.test(message));
-  const errorName = error instanceof Error ? error.name : undefined;
-  const publicCode =
-    options.captureErrorMessages === false
-      ? undefined
-      : publicErrorCode(message);
-  const reason =
-    (publicCode === undefined ? undefined : redacted(publicCode, options)) ??
-    (unknownTool === null
-      ? undefined
-      : unknownTool[1] === "disabled"
-        ? "tool_disabled"
-        : "unknown_tool") ??
-    (refused ? "invalid_input" : errorName) ??
-    "unknown";
   const recorded =
     options.captureErrorMessages === false || message === undefined
       ? undefined
       : redacted(message, options)?.slice(0, MAX_ERROR_MESSAGE_LENGTH);
-  span.setAttributes(
-    definedAttributes({
-      "error.type":
-        result !== undefined
-          ? "tool_error"
-          : typeof code === "number"
-            ? String(code)
-            : (errorName ?? "_OTHER"),
-      "judgment.mcp.failure.stage":
-        record.stage ?? (refused ? "validation" : "handler"),
-      "judgment.mcp.failure.reason": reason,
-    }),
-  );
+  span.setAttribute("error.type", errorType(error, result, message, options));
   span.setStatus({ code: SpanStatusCode.ERROR, message: recorded });
+}
+
+/**
+ * A short, low-cardinality category for why a call failed: a refusal before
+ * the handler ran, else the original error's class, else a structured error
+ * code the tool returned, else the generic kind of failure.
+ */
+function errorType(
+  error: unknown,
+  result: McpResult | undefined,
+  message: string | undefined,
+  options: InstrumentMcpServerOptions,
+): string {
+  const code = (error as { readonly code?: unknown } | undefined)?.code;
+  const unknownTool = message === undefined ? null : UNKNOWN_TOOL.exec(message);
+  if (unknownTool !== null) {
+    return unknownTool[1] === "disabled" ? "tool_disabled" : "unknown_tool";
+  }
+  if (
+    code === INVALID_PARAMS_CODE ||
+    (message !== undefined && INVALID_INPUT.test(message))
+  ) {
+    return "invalid_input";
+  }
+  const errorName = error instanceof Error ? error.name : undefined;
+  if (errorName !== undefined && errorName !== "Error") return errorName;
+  const publicCode =
+    options.captureErrorMessages === false
+      ? undefined
+      : publicErrorCode(message);
+  const returned =
+    publicCode === undefined ? undefined : redacted(publicCode, options);
+  if (returned !== undefined) return returned;
+  if (result !== undefined) return "tool_error";
+  return typeof code === "number" ? String(code) : (errorName ?? "_OTHER");
 }
 
 /** Applies the builder's redaction. If it fails, the text isn't sent at all. */

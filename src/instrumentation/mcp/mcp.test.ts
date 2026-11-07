@@ -31,7 +31,7 @@ import {
 } from "./agent-arguments";
 import {
   instrumentMcpServer,
-  markMcpCallStage,
+  markMcpCallError,
   setMcpCaller,
   type InstrumentMcpServerOptions,
 } from "./index";
@@ -149,8 +149,10 @@ function registerTools(server: object): void {
       seenInputs.push(input);
       setMcpCaller({ customerId: "customer-1" });
       if (input["thrown"] === true) {
-        markMcpCallStage("upstream");
-        throw new Error("Upstream is down");
+        const error = new Error("Upstream is down");
+        error.name = "UpstreamError";
+        markMcpCallError(error);
+        throw error;
       }
       if (input["fail"] === true) {
         return Promise.resolve({
@@ -259,8 +261,6 @@ function textBlocks(result: unknown): string[] {
 function failureOf(span: ReadableSpan | undefined): unknown {
   return {
     errorType: span?.attributes["error.type"],
-    stage: span?.attributes["judgment.mcp.failure.stage"],
-    reason: span?.attributes["judgment.mcp.failure.reason"],
     status: span?.status.code,
   };
 }
@@ -309,7 +309,7 @@ describe.each([
     expect(recorded.includes(SECRET)).toEqual(false);
   });
 
-  test("records a tool that returns an error", async () => {
+  test("types a returned structured error by its code", async () => {
     const exporter = useExporter();
     const client = await connect({});
     await client.callTool({
@@ -317,14 +317,12 @@ describe.each([
       arguments: { name: "a", fail: true },
     });
     expect(failureOf(toolCallSpans(exporter)[0])).toEqual({
-      errorType: "tool_error",
-      stage: "handler",
-      reason: "CONFLICT",
+      errorType: "CONFLICT",
       status: 2,
     });
   });
 
-  test("keeps the stage a handler marked", async () => {
+  test("types a failure by the class of the error the handler recorded", async () => {
     const exporter = useExporter();
     const client = await connect({});
     await client.callTool({
@@ -332,41 +330,31 @@ describe.each([
       arguments: { name: "a", thrown: true },
     });
     expect(failureOf(toolCallSpans(exporter)[0])).toEqual({
-      errorType: "tool_error",
-      stage: "upstream",
-      reason: "unknown",
+      errorType: "UpstreamError",
       status: 2,
     });
   });
 
-  test("records invalid input as a validation failure", async () => {
+  test("types invalid input as invalid_input", async () => {
     const exporter = useExporter();
     const client = await connect({});
     await client.callTool({ name: "greet", arguments: { name: 1 } });
     expect(failureOf(toolCallSpans(exporter)[0])).toEqual({
-      errorType: "tool_error",
-      stage: "validation",
-      reason: "invalid_input",
+      errorType: "invalid_input",
       status: 2,
     });
   });
 
-  test("records an unknown tool as a validation failure", async () => {
+  test("types an unknown tool as unknown_tool", async () => {
     const exporter = useExporter();
     const client = await connect({});
     await client
       .callTool({ name: "missing", arguments: {} })
       .catch(() => undefined);
-    const failure = failureOf(toolCallSpans(exporter)[0]) as {
-      stage: unknown;
-      reason: unknown;
-      status: unknown;
-    };
-    expect({
-      stage: failure.stage,
-      reason: failure.reason,
-      status: failure.status,
-    }).toEqual({ stage: "validation", reason: "unknown_tool", status: 2 });
+    expect(failureOf(toolCallSpans(exporter)[0])).toEqual({
+      errorType: "unknown_tool",
+      status: 2,
+    });
   });
 
   test("joins the caller's trace when _meta carries one", async () => {
@@ -567,18 +555,18 @@ describe.each([
     const exporter = useExporter();
     const client = await connect({ captureErrorMessages: false });
     await client.callTool({ name: "wordy_error", arguments: {} });
-    expect(
-      toolCallSpans(exporter)[0]?.attributes["judgment.mcp.failure.reason"],
-    ).toEqual("unknown");
+    expect(toolCallSpans(exporter)[0]?.attributes["error.type"]).toEqual(
+      "tool_error",
+    );
   });
 
   test("never records a token-shaped error code", async () => {
     const exporter = useExporter();
     const client = await connect({});
     await client.callTool({ name: "token_error", arguments: {} });
-    expect(
-      toolCallSpans(exporter)[0]?.attributes["judgment.mcp.failure.reason"],
-    ).toEqual("unknown");
+    expect(toolCallSpans(exporter)[0]?.attributes["error.type"]).toEqual(
+      "tool_error",
+    );
   });
 
   test("drops credentials from a resource URI", async () => {
