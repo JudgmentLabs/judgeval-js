@@ -1,6 +1,6 @@
 import { describe, expect, test, mock } from "bun:test";
 import { ExternalJudgeFactory } from "./ExternalJudgeFactory";
-import type { JudgmentApiClient } from "../internal/api/client";
+import { JudgmentApiClient } from "../internal/api/client";
 
 interface FakeClient {
   postV1projectsJudges: ReturnType<typeof mock>;
@@ -24,9 +24,9 @@ describe("ExternalJudgeFactory.create", () => {
   test("returns an ExternalJudge on success", async () => {
     const { factory, client } = makeFactory();
     client.postV1projectsJudges.mockResolvedValueOnce({
-      judgeId: "judge-1",
-      judgeVersionId: "version-1",
-      implementationId: null,
+      judge_id: "judge-1",
+      judge_version_id: "version-1",
+      implementation_id: null,
     });
 
     const result = await factory.create({
@@ -41,9 +41,9 @@ describe("ExternalJudgeFactory.create", () => {
   test("sends the binary payload shape", async () => {
     const { factory, client } = makeFactory();
     client.postV1projectsJudges.mockResolvedValueOnce({
-      judgeId: "judge-1",
-      judgeVersionId: "version-1",
-      implementationId: null,
+      judge_id: "judge-1",
+      judge_version_id: "version-1",
+      implementation_id: null,
     });
 
     await factory.create({ name: "n", scoreType: "binary" });
@@ -51,18 +51,20 @@ describe("ExternalJudgeFactory.create", () => {
     const call = client.postV1projectsJudges.mock.calls[0];
     const payload = call[1] as Record<string, unknown>;
     expect(payload).toEqual({
-      name: "n",
-      judgeType: "external",
-      initialVersion: { scoreType: "binary" },
+      judge: {
+        name: "n",
+        executionMode: "submitted",
+        initialVersion: { scoreType: "binary" },
+      },
     });
   });
 
   test("includes categorical outputs in the payload", async () => {
     const { factory, client } = makeFactory();
     client.postV1projectsJudges.mockResolvedValueOnce({
-      judgeId: "judge-1",
-      judgeVersionId: "version-1",
-      implementationId: null,
+      judge_id: "judge-1",
+      judge_version_id: "version-1",
+      implementation_id: null,
     });
     const outputs = [
       { name: "good", description: "Good response" },
@@ -73,7 +75,7 @@ describe("ExternalJudgeFactory.create", () => {
 
     const call = client.postV1projectsJudges.mock.calls[0];
     const payload = call[1] as Record<string, unknown>;
-    expect(payload.initialVersion).toEqual({
+    expect((payload.judge as Record<string, unknown>).initialVersion).toEqual({
       scoreType: "categorical",
       outputs,
     });
@@ -180,5 +182,69 @@ describe("ExternalJudgeFactory.submitResult", () => {
     });
 
     expect(result).toBeNull();
+  });
+});
+
+test("numeric session feedback roundtrips through the HTTP client", async () => {
+  const requests: [string, string, unknown][] = [];
+  const client = new JudgmentApiClient("https://api.test", "key", "org");
+  client.api.use({
+    async onRequest({ request }) {
+      const path = new URL(request.url).pathname;
+      requests.push([request.method, path, await request.json()]);
+      return Response.json(
+        path.endsWith("/judges")
+          ? {
+              judge_id: "judge-1",
+              judge_version_id: "version-1",
+              implementation_id: null,
+            }
+          : { id: "result-1" },
+      );
+    },
+  });
+  const factory = new ExternalJudgeFactory(client, "proj-1", "test");
+  const judge = await factory.create({ name: "rating", scoreType: "numeric" });
+  const result = await factory.submitResult({
+    judgeId: "judge-1",
+    traceId: "trace-1",
+    sessionId: "session-1",
+    value: 4.5,
+  });
+  expect({ judge, result, requests }).toEqual({
+    judge: {
+      judgeId: "judge-1",
+      judgeVersionId: "version-1",
+      name: "rating",
+      scoreType: "numeric",
+      judgeDescription: null,
+      outputs: null,
+      majorVersion: 0,
+      minorVersion: 0,
+    },
+    result: "result-1",
+    requests: [
+      [
+        "POST",
+        "/v1/projects/proj-1/judges",
+        {
+          judge: {
+            name: "rating",
+            executionMode: "submitted",
+            initialVersion: { scoreType: "numeric" },
+          },
+        },
+      ],
+      [
+        "POST",
+        "/v1/projects/proj-1/judge-results",
+        {
+          judge_id: "judge-1",
+          trace_id: "trace-1",
+          session_id: "session-1",
+          value: 4.5,
+        },
+      ],
+    ],
   });
 });

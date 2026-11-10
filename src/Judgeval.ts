@@ -1,21 +1,17 @@
 import { JUDGMENT_API_KEY, JUDGMENT_API_URL, JUDGMENT_ORG_ID } from "./env";
 import { JudgmentApiClient } from "./internal/api";
+import { JudgmentApi } from "./internal/api/operations";
 import { resolveProjectId } from "./utils/resolve-project-id";
 import { Logger } from "./utils/logger";
 import { EvaluationFactory } from "./evaluation/EvaluationFactory";
 import { DatasetFactory } from "./datasets/DatasetFactory";
+import { AgentJudgeFactory } from "./agent-judges/AgentJudgeFactory";
 import { ExternalJudgeFactory } from "./external-judges/ExternalJudgeFactory";
 import { OfflineTestsFactory } from "./offline-tests/OfflineTestsFactory";
+import { warnOfflineTestsDeprecated } from "./offline-tests/deprecation";
+import { TestRunsFactory, TestSuitesFactory } from "./testing";
 import type { OfflineTracer, OfflineTracerConfig } from "./trace/OfflineTracer";
-import {
-  JudgevalJqlClient,
-  type JqlPresentationResponse,
-  type JqlQueryInput,
-  type JqlQueryResponse,
-  type JqlRequestOptions,
-} from "./jql/client";
-import type { DiscoveryKind, DiscoveryOptions } from "./jql/builder";
-import type { PresentationQuery } from "./jql/wire";
+import { JudgevalQueryClient, type SqlResponse } from "./sql/client";
 
 /**
  * Options for {@link Judgeval.offlineTracer}.
@@ -48,7 +44,7 @@ export interface JudgevalConfig {
  * The main entry point for interacting with the Judgment platform.
  *
  * `Judgeval` connects to your Judgment project and gives you access to
- * evaluation, datasets, and monitoring through the Judgment platform.
+ * SQL queries, evaluations, datasets, and monitoring.
  *
  * @example
  * ```typescript
@@ -126,6 +122,9 @@ export class Judgeval {
   /**
    * Create and activate an `OfflineTracer` for this project.
    *
+   * @deprecated Use the normal `Tracer` with `Tracer.testCase` and
+   *   {@link Judgeval.testRuns}.
+   *
    * Reuses the credentials supplied to this `Judgeval` instance. Each
    * completed root span appends an `Example` to `dataset`, carrying
    * the offline trace id and the static `exampleFields`.
@@ -153,42 +152,61 @@ export class Judgeval {
     });
   }
 
-  /** Run JQL for this project, optionally narrowed by trace or session IDs. */
-  query(
-    query: JqlQueryInput,
-    options?: JqlRequestOptions,
-  ): Promise<JqlQueryResponse> {
-    return this.jqlClient().query(query, options);
+  /**
+   * Returns the server's SQL reference as Markdown, matching MCP
+   * discover_schema: tables, columns, descriptions, examples, and limits.
+   * Requires organization viewer access, but no resolved project.
+   *
+   * @param options - Pass `signal` to cancel the request with an AbortSignal.
+   * @returns The virtual schema reference as a Markdown string; no project data.
+   *
+   * @example
+   * ```typescript
+   * console.log(await client.discoverSchema());
+   * ```
+   */
+  discoverSchema(options?: { signal?: AbortSignal }): Promise<string> {
+    return this.queryClient().discoverSchema(options);
   }
 
-  /** Run a chart or table JQL query, optionally narrowed by trace or session IDs. */
-  present(
-    query: PresentationQuery,
-    options?: JqlRequestOptions,
-  ): Promise<JqlPresentationResponse> {
-    return this.jqlClient().present(query, options);
+  /**
+   * Runs one read-only SQL SELECT for this organization and project.
+   *
+   * The server derives scope from the client's credentials and resolved project.
+   * Call `discoverSchema()` for supported tables and columns. Requires viewer
+   * access.
+   *
+   * Results are capped at 1,000 rows and 5 MiB; exceeding either cap returns an
+   * error. Use SQL predicates and LIMIT to narrow results. Integers outside
+   * JavaScript's safe range arrive as exact decimal strings.
+   *
+   * @param sql - One SELECT against the virtual schema, at most 50,000 characters.
+   * @param options - Pass `signal` to cancel the request with an AbortSignal.
+   * @returns An object with `catalog_version`, `columns` (name, type, nullable),
+   * `rows` (objects keyed by column name), `row_count`, and `elapsed_ms`.
+   *
+   * @example
+   * ```typescript
+   * const result = await client.sql("SELECT count() AS run_count FROM telemetry.traces");
+   * console.log(result.rows);
+   * ```
+   */
+  sql(sql: string, options?: { signal?: AbortSignal }): Promise<SqlResponse> {
+    return this.queryClient().sql(sql, options);
   }
 
-  /** Discover JQL catalog values, optionally narrowed by trace or session IDs. */
-  discover(
-    kind: DiscoveryKind,
-    options?: DiscoveryOptions & JqlRequestOptions,
-  ): Promise<JqlQueryResponse> {
-    return this.jqlClient().discover(kind, options);
-  }
-
-  private jqlClient(): JudgevalJqlClient {
-    if (!this._projectId) {
-      throw new Error(
-        `Project '${this._projectName}' must resolve before running JQL.`,
-      );
-    }
-    return new JudgevalJqlClient(
+  private queryClient(): JudgevalQueryClient {
+    return new JudgevalQueryClient(
       this._client.getBaseUrl(),
       this._client.getApiKey(),
       this._client.getOrganizationId(),
       this._projectId,
     );
+  }
+
+  /** Call any public API route; one method per MCP tool (e.g. `listJudges`). */
+  get api(): JudgmentApi {
+    return new JudgmentApi(this._client.api);
   }
 
   /** Access dataset management (create, get, list). */
@@ -205,7 +223,16 @@ export class Judgeval {
     );
   }
 
-  /** Create external judges and submit their results on the platform. */
+  /** Manage Agent judges (prompt-based scorers) on the platform. */
+  get agentJudges(): AgentJudgeFactory {
+    return new AgentJudgeFactory(
+      this._client,
+      this._projectId,
+      this._projectName,
+    );
+  }
+
+  /** Creates external judges and submits feedback from your application. */
   get externalJudges(): ExternalJudgeFactory {
     return new ExternalJudgeFactory(
       this._client,
@@ -214,8 +241,31 @@ export class Judgeval {
     );
   }
 
-  /** Create test configs and run offline tests (dataset + judges). */
+  /** Create test suites and edit their versioned cases. */
+  get testSuites(): TestSuitesFactory {
+    return new TestSuitesFactory(
+      this._client,
+      this._projectId,
+      this._projectName,
+    );
+  }
+
+  /** Run test suites and read their results. */
+  get testRuns(): TestRunsFactory {
+    return new TestRunsFactory(
+      this._client,
+      this._projectId,
+      this._projectName,
+    );
+  }
+
+  /**
+   * Create test configs and run offline tests (dataset + judges).
+   *
+   * @deprecated Use {@link Judgeval.testSuites} and {@link Judgeval.testRuns}.
+   */
   get offlineTests(): OfflineTestsFactory {
+    warnOfflineTestsDeprecated();
     return new OfflineTestsFactory(
       this._client,
       this._projectId,

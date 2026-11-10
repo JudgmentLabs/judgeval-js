@@ -1,7 +1,8 @@
 import type { OpenAI } from "openai";
+import { wrapAnthropicManagedAgents } from "./llm/anthropic-managed-agents";
 import { wrapOpenAI } from "./llm/openai";
 
-export { wrapOpenAI };
+export { wrapAnthropicManagedAgents, wrapOpenAI };
 
 /**
  * Wrap a supported LLM client to add automatic tracing.

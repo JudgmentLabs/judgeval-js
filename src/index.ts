@@ -22,10 +22,16 @@ export {
   propagation,
 } from "./trace";
 
-export { wrap, wrapOpenAI } from "./instrumentation";
+export {
+  wrap,
+  wrapAnthropicManagedAgents,
+  wrapOpenAI,
+} from "./instrumentation";
 
 export { Example } from "./data";
 export type { ScoringResult } from "./data";
+
+export type { JudgmentApi } from "./internal/api/operations";
 
 export { Judge } from "./judges";
 export type {
@@ -39,8 +45,8 @@ export type {
 export { Evaluation, type EvaluationRunOptions } from "./evaluation";
 
 export { Dataset } from "./datasets";
-export type { DatasetInfo } from "./internal/api/models/DatasetInfo";
-export type { ExperimentScorer } from "./internal/api/models/ExperimentScorer";
+export type { DatasetInfo } from "./internal/api/models";
+export type { ExperimentScorer } from "./internal/api/models";
 export {
   validateDatasetSchema,
   inferSchemaFromExamples,
@@ -49,8 +55,8 @@ export {
   type DatasetColumnType,
 } from "./datasets/schema";
 
-export { ExternalJudgeFactory } from "./external-judges";
-export type { ExternalJudge, ScoreType } from "./external-judges";
+export { AgentJudgeFactory } from "./agent-judges";
+export type { AgentJudge, ReasoningLevel, ScoreType } from "./agent-judges";
 
 export {
   OfflineTestsFactory,
@@ -66,10 +72,20 @@ export {
   type PassConditionFn,
 } from "./offline-tests";
 
-export { JudgevalAPIError } from "./jql/client";
-export type {
-  JqlPresentationResponse,
-  JqlQueryInput,
-  JqlQueryResponse,
-  JqlRequestOptions,
-} from "./jql/client";
+export { JudgevalAPIError, type SqlResponse } from "./sql/client";
+export {
+  TestRunsFactory,
+  TestSuitesFactory,
+  type CaseCheck,
+  type CaseFilter,
+  type CheckOp,
+  type StartedRun,
+  type TestSuite,
+  type TestCase,
+  type TestCaseInput,
+  type TestResults,
+  type TestRun,
+} from "./testing";
+
+export { ExternalJudgeFactory } from "./external-judges";
+export type { ExternalJudge } from "./external-judges";

@@ -1,6 +1,6 @@
 {
   "name": "judgeval",
-  "version": "1.3.3",
+  "version": "1.6.0",
   "description": "JavaScript/TypeScript client for Judgment evaluation platform",
   "main": "./dist/node/index.cjs",
   "module": "./dist/node/index.mjs",
@@ -15,12 +15,6 @@
       "types": "./dist/workers/index.d.ts",
       "import": "./dist/workers/index.mjs"
     },
-    "./jql": {
-      "types": "./dist/jql/index.d.ts",
-      "browser": "./dist/workers/jql.mjs",
-      "import": "./dist/node/jql.mjs",
-      "require": "./dist/node/jql.cjs"
-    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -29,15 +23,15 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "bun run generate-jql && bun run check && bun scripts/build.ts",
+    "build": "bun run check && bun scripts/build.ts",
     "build:dev": "bun scripts/build.ts --dev",
     "check": "tsc --noEmit && oxlint src/",
     "check-package": "bun scripts/check-package-contents.ts",
     "lint": "oxlint src/",
     "lint:fix": "oxlint --fix src/",
     "format": "prettier --write \"src/**/*.ts\"",
-    "generate-client": "bunx tsx scripts/generate-client.ts && bun run format",
-    "generate-jql": "bun scripts/generate-jql.ts",
+    "sync-openapi": "cp ${JUDGMENT_MONO:-../judgment-mono}/packages/shared/public-api/openapi.json openapi/public-api.json",
+    "generate-client": "openapi-typescript openapi/public-api.json -o src/internal/api/schema.ts && bun scripts/generate-client.ts && prettier --write src/internal/api/schema.ts src/internal/api/operations.ts",
     "test": "bun test --coverage",
     "clean": "rm -rf dist",
     "prepublishOnly": "bun run clean && bun run build",
@@ -68,17 +62,23 @@
     "@opentelemetry/sdk-trace-base": "^2.11.0",
     "@opentelemetry/sdk-trace-node": "^2.11.0",
     "@opentelemetry/sdk-trace-web": "^2.11.0",
+    "openapi-fetch": "^0.17.0",
     "picocolors": "^1.1.1"
   },
   "peerDependencies": {
+    "@anthropic-ai/sdk": ">=0.129.0",
     "openai": "^6.38.0"
   },
   "peerDependenciesMeta": {
+    "@anthropic-ai/sdk": {
+      "optional": true
+    },
     "openai": {
       "optional": true
     }
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.129.0",
     "@types/bun": "^1.3.12",
     "openai": "^6.38.0",
     "openapi-typescript": "^7.10.0",
@@ -89,8 +89,5 @@
   "engines": {
     "node": ">=18.0.0",
     "bun": ">=1.0.0"
-  },
-  "resolutions": {
-    "js-yaml": "^4.3.2"
   }
 }

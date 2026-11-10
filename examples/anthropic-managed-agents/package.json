@@ -1,0 +1,16 @@
+{
+  "name": "anthropic-managed-agents",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && node ./dist/index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.129.0",
+    "judgeval": "file:../.."
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
+  }
+}

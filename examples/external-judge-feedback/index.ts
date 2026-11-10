@@ -12,14 +12,15 @@ async function main() {
     scoreType: "binary",
     judgeDescription: "Whether a human reviewer approved the response.",
   });
-  console.log(`Created external judge: ${judge?.judgeId}`);
+  if (!judge) throw new Error("Project could not be resolved");
+  console.log(`Created external judge: ${judge.judgeId}`);
 
   // Replace with the id of a trace you've already ingested (e.g. from a
   // `Tracer`-instrumented run, or copied from the platform UI).
   const traceId = "<trace_id>";
 
   const resultId = await client.externalJudges.submitResult({
-    judgeId: judge?.judgeId,
+    judgeId: judge.judgeId,
     traceId,
     value: true,
     reason: "Reviewer approved the response.",
@@ -37,10 +38,24 @@ async function main() {
     ],
   });
 
+  if (!topicJudge) throw new Error("Project could not be resolved");
   await client.externalJudges.submitResult({
-    judgeName: topicJudge?.name,
+    judgeName: topicJudge.name,
     traceId,
     value: "billing",
+  });
+
+  const rating = await client.externalJudges.create({
+    name: "review-rating",
+    scoreType: "numeric",
+  });
+  if (!rating) throw new Error("Project could not be resolved");
+  // Use the stored session ID of this trace to attach session-level feedback.
+  await client.externalJudges.submitResult({
+    judgeId: rating.judgeId,
+    traceId,
+    sessionId: "<session_id>",
+    value: 4.5,
   });
 }
 

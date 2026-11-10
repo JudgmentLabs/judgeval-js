@@ -1,5 +1,5 @@
 import pc from "picocolors";
-import type { ExampleEvaluationRun } from "../internal/api/models/ExampleEvaluationRun";
+import type { ExampleEvaluationRun } from "../internal/api/models";
 import type { Example } from "../data/Example";
 import { EvaluatorRunner } from "./EvaluatorRunner";
 

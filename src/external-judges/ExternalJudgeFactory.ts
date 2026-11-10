@@ -1,6 +1,8 @@
 import type { JudgmentApiClient } from "../internal/api/client";
-import type { CreateExternalJudgeInput } from "../internal/api/models/CreateExternalJudgeInput";
-import type { SubmitExternalJudgeResult } from "../internal/api/models/SubmitExternalJudgeResult";
+import type {
+  CreateJudgeRequest,
+  SubmitExternalJudgeResult,
+} from "../internal/api/models";
 import { Logger } from "../utils/logger";
 import type { ExternalJudge, ScoreType } from "./ExternalJudge";
 
@@ -70,7 +72,10 @@ export class ExternalJudgeFactory {
     const projectId = this._expectProjectId();
     if (!projectId) return null;
 
-    let initialVersion: CreateExternalJudgeInput["initialVersion"];
+    let initialVersion: Extract<
+      CreateJudgeRequest["judge"],
+      { executionMode: "submitted" }
+    >["initialVersion"];
     if (options.scoreType === "categorical") {
       if (!options.outputs || options.outputs.length < 2) {
         throw new Error(
@@ -90,13 +95,11 @@ export class ExternalJudgeFactory {
       initialVersion = { scoreType: options.scoreType };
     }
 
-    const payload: CreateExternalJudgeInput = {
-      name: options.name,
-      judgeType: "external",
-      initialVersion,
+    const payload: CreateJudgeRequest = {
+      judge: { name: options.name, executionMode: "submitted", initialVersion },
     };
     if (options.judgeDescription !== undefined)
-      payload.judgeDescription = options.judgeDescription;
+      payload.judge.judgeDescription = options.judgeDescription;
 
     const response = await this._client.postV1projectsJudges(
       projectId,
@@ -104,8 +107,8 @@ export class ExternalJudgeFactory {
     );
 
     return {
-      judgeId: response.judgeId,
-      judgeVersionId: response.judgeVersionId,
+      judgeId: response.judge_id,
+      judgeVersionId: response.judge_version_id,
       name: options.name,
       scoreType: options.scoreType,
       judgeDescription: options.judgeDescription ?? null,
@@ -159,24 +162,23 @@ export class ExternalJudgeFactory {
     const projectId = this._expectProjectId();
     if (!projectId) return null;
 
-    const payload: Record<string, unknown> = {
+    // The validation above guarantees exactly one identifier is present.
+    const target =
+      options.judgeId !== undefined
+        ? { judge_id: options.judgeId }
+        : { judge_name: options.judgeName! };
+    const payload: SubmitExternalJudgeResult = {
       trace_id: options.traceId,
       value: options.value,
+      ...target,
+      ...(options.sessionId !== undefined
+        ? { session_id: options.sessionId }
+        : {}),
+      ...(options.reason !== undefined ? { reason: options.reason } : {}),
     };
-    if (options.judgeId !== undefined) payload.judge_id = options.judgeId;
-    else payload.judge_name = options.judgeName;
-    if (options.sessionId !== undefined) payload.session_id = options.sessionId;
-    if (options.reason !== undefined) payload.reason = options.reason;
-
     const response = await this._client.postV1projectsJudgeResults(
       projectId,
-      // SubmitExternalJudgeResult is a top-level discriminated union in the
-      // OpenAPI spec (judge_id XOR judge_name); the client generator can't
-      // expand top-level unions into a real interface (same limitation as
-      // the already-shipped ScoringResult model), so it generates an empty
-      // index-signature stub. The payload above is correct per the backend
-      // contract regardless.
-      payload as SubmitExternalJudgeResult,
+      payload,
     );
 
     return response.id;

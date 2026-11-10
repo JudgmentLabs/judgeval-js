@@ -11,7 +11,7 @@ export interface EvaluationRunOptions {
   examples: Example[];
   /**
    * Hosted scorer names (strings like `"faithfulness"`) **or**
-   * custom `Judge` instances. Cannot mix both.
+   * Code judge (`Judge`) instances. Cannot mix both.
    */
   scorers: string[] | Judge[];
   /** A name for this run, visible in the dashboard. */
@@ -29,14 +29,14 @@ export interface EvaluationRunOptions {
 }
 
 /**
- * Score a batch of examples using hosted scorers or custom judges.
+ * Score a batch of examples using hosted scorers or Code judges.
  *
  * Two modes are supported:
  *
  * - **Hosted scorers** — pass scorer names as strings (e.g.
  *   `"faithfulness"`, `"answer_relevancy"`). Evaluation runs server-side
  *   on the Judgment platform.
- * - **Custom judges** — pass {@link Judge} subclass instances for
+ * - **Code judges** — pass {@link Judge} subclass instances for
  *   in-process evaluation with your own scoring logic.
  *
  * Create an `Evaluation` via `client.evaluation.create()`, then call
@@ -68,7 +68,7 @@ export class Evaluation {
   /**
    * Run scorers against your examples and return results.
    *
-   * Pass **either** hosted scorer names (strings) **or** custom {@link Judge}
+   * Pass **either** hosted scorer names (strings) **or** Code judge ({@link Judge})
    * instances. Mixing both in one call is not supported.
    *
    * @param options - Evaluation configuration including examples, scorers, and run name.

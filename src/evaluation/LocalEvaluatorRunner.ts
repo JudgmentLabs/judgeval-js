@@ -1,6 +1,8 @@
 import pc from "picocolors";
-import type { ExampleEvaluationRun } from "../internal/api/models/ExampleEvaluationRun";
-import type { LocalScorerResult } from "../internal/api/models/LocalScorerResult";
+import type {
+  ExampleEvaluationRun,
+  LocalScorerResult,
+} from "../internal/api/models";
 import type { Example } from "../data/Example";
 import type { Judge } from "../judges/Judge";
 import type { BaseResponse } from "../judges/responses";
@@ -14,7 +16,7 @@ interface ScorerJobResult {
 }
 
 /**
- * Evaluation runner for custom (in-process) scorers.
+ * Evaluation runner for Code judges (in-process).
  *
  * Runs all {@link Judge} instances locally against the provided examples,
  * posts results to the Judgment platform, then polls for finalized scores.

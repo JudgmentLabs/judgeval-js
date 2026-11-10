@@ -12,7 +12,7 @@ export interface Citation {
 /**
  * Base fields shared by all scorer response types.
  *
- * Custom judges return one of the concrete subtypes
+ * Code judges return one of the concrete subtypes
  * (`BinaryResponse`, `NumericResponse`, or `CategoricalResponse`)
  * from their `score()` method.
  */
