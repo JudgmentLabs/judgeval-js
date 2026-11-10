@@ -248,3 +248,62 @@ test("numeric session feedback roundtrips through the HTTP client", async () => 
     ],
   });
 });
+
+test("created names can be used to submit categorical feedback", async () => {
+  const requests: unknown[] = [];
+  const client = new JudgmentApiClient("https://api.test", "key", "org");
+  client.api.use({
+    async onRequest({ request }) {
+      requests.push(await request.json());
+      return Response.json(
+        new URL(request.url).pathname.endsWith("/judges")
+          ? { judge_id: "j", judge_version_id: "v", implementation_id: null }
+          : { id: "feedback-1" },
+      );
+    },
+  });
+  const factory = new ExternalJudgeFactory(client, "project", "test");
+  const judge = await factory.create({
+    name: " topic ",
+    scoreType: "categorical",
+    outputs: [
+      { name: " good ", description: "Good" },
+      { name: " bad ", description: "Bad" },
+    ],
+  });
+  if (!judge?.outputs) throw new Error("Judge not created");
+  const result = await factory.submitResult({
+    judgeName: judge.name,
+    traceId: "trace",
+    value: judge.outputs[0].name,
+  });
+  expect({
+    name: judge.name,
+    outputs: judge.outputs,
+    result,
+    requests,
+  }).toEqual({
+    name: "topic",
+    outputs: [
+      { name: "good", description: "Good" },
+      { name: "bad", description: "Bad" },
+    ],
+    result: "feedback-1",
+    requests: [
+      {
+        judge: {
+          name: "topic",
+          executionMode: "submitted",
+          initialVersion: {
+            scoreType: "categorical",
+            outputs: [
+              { name: "good", description: "Good" },
+              { name: "bad", description: "Bad" },
+            ],
+          },
+        },
+      },
+      { judge_name: "topic", trace_id: "trace", value: "good" },
+    ],
+  });
+});

@@ -72,19 +72,24 @@ export class ExternalJudgeFactory {
     const projectId = this._expectProjectId();
     if (!projectId) return null;
 
+    const name = options.name.trim();
+    const outputs = options.outputs?.map((output) => ({
+      ...output,
+      name: output.name.trim(),
+    }));
     let initialVersion: Extract<
       CreateJudgeRequest["judge"],
       { executionMode: "submitted" }
     >["initialVersion"];
     if (options.scoreType === "categorical") {
-      if (!options.outputs || options.outputs.length < 2) {
+      if (!outputs || outputs.length < 2) {
         throw new Error(
           "outputs must have at least 2 entries for a 'categorical' judge",
         );
       }
       initialVersion = {
         scoreType: "categorical",
-        outputs: options.outputs,
+        outputs,
       };
     } else {
       if (options.outputs !== undefined) {
@@ -96,7 +101,7 @@ export class ExternalJudgeFactory {
     }
 
     const payload: CreateJudgeRequest = {
-      judge: { name: options.name, executionMode: "submitted", initialVersion },
+      judge: { name, executionMode: "submitted", initialVersion },
     };
     if (options.judgeDescription !== undefined)
       payload.judge.judgeDescription = options.judgeDescription;
@@ -109,10 +114,10 @@ export class ExternalJudgeFactory {
     return {
       judgeId: response.judge_id,
       judgeVersionId: response.judge_version_id,
-      name: options.name,
+      name,
       scoreType: options.scoreType,
       judgeDescription: options.judgeDescription ?? null,
-      outputs: options.outputs ?? null,
+      outputs: outputs ?? null,
       majorVersion: 0,
       minorVersion: 0,
     };

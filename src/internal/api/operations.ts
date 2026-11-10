@@ -665,8 +665,38 @@ export class JudgmentApi {
     );
   }
 
+  /** Set judge version optimistic eval (`PUT /v1/projects/{projectId}/judges/{judgeId}/versions/{judgeVersionId}/optimistic-eval`). */
+  setJudgeOptimisticEvalEnabled(
+    ...init: Init<
+      "/v1/projects/{projectId}/judges/{judgeId}/versions/{judgeVersionId}/optimistic-eval",
+      "put"
+    >
+  ) {
+    return ok(
+      this.client.PUT(
+        "/v1/projects/{projectId}/judges/{judgeId}/versions/{judgeVersionId}/optimistic-eval",
+        ...init,
+      ),
+    );
+  }
+
   /** Set judge version preprocessing artifact (`PUT /v1/projects/{projectId}/judges/{judgeId}/versions/{judgeVersionId}/preprocessor-artifact-revision`). */
   setJudgePreprocessingScript(
+    ...init: Init<
+      "/v1/projects/{projectId}/judges/{judgeId}/versions/{judgeVersionId}/preprocessor-artifact-revision",
+      "put"
+    >
+  ) {
+    return ok(
+      this.client.PUT(
+        "/v1/projects/{projectId}/judges/{judgeId}/versions/{judgeVersionId}/preprocessor-artifact-revision",
+        ...init,
+      ),
+    );
+  }
+
+  /** Set judge version preprocessing artifact (`PUT /v1/projects/{projectId}/judges/{judgeId}/versions/{judgeVersionId}/preprocessor-artifact-revision`). */
+  setJudgePreprocessorArtifactRevision(
     ...init: Init<
       "/v1/projects/{projectId}/judges/{judgeId}/versions/{judgeVersionId}/preprocessor-artifact-revision",
       "put"
