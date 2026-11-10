@@ -2957,6 +2957,8 @@ export interface components {
        * @enum {string}
        */
       trigger: "manual" | "ci" | "schedule" | "api";
+      /** @description Score each case's stored trace, named by its metadata.trace_id, instead of running the agent. Every published case needs a trace in this project. */
+      stored_traces?: boolean;
     };
     StartTestRunResponse: {
       /** Format: uuid */

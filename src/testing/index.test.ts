@@ -32,12 +32,13 @@ describe("TestRunsFactory", () => {
     const calls = stubFetch({ run_id: "r1", test_suite_version: 2, cases: [] });
     await new TestRunsFactory(client, "p1", "proj").start("t1", {
       candidate: "abc123",
+      stored_traces: true,
     });
     expect(calls).toEqual([
       {
         url: "https://api.example.com/v1/projects/p1/test-suites/t1/runs",
         method: "POST",
-        body: JSON.stringify({ candidate: "abc123" }),
+        body: JSON.stringify({ candidate: "abc123", stored_traces: true }),
       },
     ]);
   });
