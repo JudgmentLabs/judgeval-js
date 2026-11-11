@@ -2583,7 +2583,7 @@ export interface components {
           judge?: {
             id: string;
             name: string;
-            judge_type: string;
+            judge_type: string | null;
             score_type: string;
           };
         }[];
@@ -2622,7 +2622,7 @@ export interface components {
           judge?: {
             id: string;
             name: string;
-            judge_type: string;
+            judge_type: string | null;
             score_type: string;
           };
         }[];
@@ -4945,13 +4945,9 @@ export interface operations {
                   name: string;
                   /** @enum {string} */
                   execution_mode: "internal" | "external";
-                  /** @enum {string} */
                   judge_type:
-                    | "prompt"
-                    | "custom"
-                    | "agent"
-                    | "deterministic"
-                    | "unspecified";
+                    | ("prompt" | "custom" | "agent" | "deterministic")
+                    | null;
                   /** @enum {string} */
                   score_type: "numeric" | "binary" | "categorical";
                   judge_major_version: number;
@@ -4969,16 +4965,10 @@ export interface operations {
                   judge_description: string | null;
                   /** @enum {string} */
                   execution_mode: "internal" | "external";
-                  /**
-                   * @description Agent judge (wire value `prompt`); Code judge (wire value `custom`); legacy Agent judge (wire value `agent`); Condition judge (wire value `deterministic`)
-                   * @enum {string}
-                   */
+                  /** @description Agent judge (wire value `prompt`); Code judge (wire value `custom`); legacy Agent judge (wire value `agent`); Condition judge (wire value `deterministic`) */
                   judge_type:
-                    | "prompt"
-                    | "custom"
-                    | "agent"
-                    | "deterministic"
-                    | "unspecified";
+                    | ("prompt" | "custom" | "agent" | "deterministic")
+                    | null;
                   knowledge_file_id: string | null;
                   /**
                    * @description numeric, binary, or categorical. For binary judges, true means the judge applied its label, which the app shows under the judge's name. false means no label was applied. For classification judges, the value is the label, meaning the chosen option.
@@ -5554,13 +5544,6 @@ export interface operations {
                 judgeDescription?: string | null;
                 /** @constant */
                 executionMode: "external";
-                /** @enum {string} */
-                judgeType?:
-                  | "prompt"
-                  | "custom"
-                  | "agent"
-                  | "deterministic"
-                  | "unspecified";
                 initialVersion:
                   | {
                       /** @constant */
@@ -7697,13 +7680,7 @@ export interface operations {
                   session_evaluation_max_wait_minutes: number | null;
                   /** @constant */
                   execution_mode: "external";
-                  /** @enum {string} */
-                  judge_type:
-                    | "prompt"
-                    | "custom"
-                    | "agent"
-                    | "deterministic"
-                    | "unspecified";
+                  judge_type: null;
                   definition: null;
                 };
           };

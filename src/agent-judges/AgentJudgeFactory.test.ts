@@ -358,9 +358,13 @@ describe("AgentJudgeFactory.update", () => {
   });
 });
 
-test("rejects external judges even when classified as prompt", async () => {
+test("rejects external judges with no executable type", async () => {
   const { factory } = makeFactory("proj-1", [
-    judgeDetail({ execution_mode: "external", definition: null }),
+    judgeDetail({
+      execution_mode: "external",
+      judge_type: null,
+      definition: null,
+    }),
   ]);
   await expect(
     factory.update({ judgeId: "judge-1", prompt: "Updated rubric" }),
