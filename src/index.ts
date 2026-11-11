@@ -46,9 +46,10 @@ export { Evaluation, type EvaluationRunOptions } from "./evaluation";
 
 export { Dataset } from "./datasets";
 export {
-  ObservationsClient,
-  type RecordObservationOptions,
-} from "./observations";
+  Conversations,
+  type ConversationsConfig,
+  type RecordOptions,
+} from "./conversations";
 export type { DatasetInfo } from "./internal/api/models";
 export type {
   ConversationBase64Source,

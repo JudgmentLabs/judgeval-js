@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { JudgmentApiClient } from "../internal/api/client";
 import type { Observation } from "../internal/api/models";
-import { ObservationsClient } from "./ObservationsClient";
+import { ObservationSender } from "./ObservationSender";
 
 type Batch = {
   observation: Observation;
@@ -44,15 +44,18 @@ function call(conversationId = "ticket-1", text = "Hi"): Observation {
   };
 }
 
-describe("ObservationsClient", () => {
-  test("sends a recorded call with its time and environment", async () => {
+const now = new Date("2026-09-25T12:00:01Z");
+
+describe("ObservationSender", () => {
+  test("sends a call with its time and the configured environment", async () => {
     const fake = fakeClient();
-    const observations = new ObservationsClient(fake.client, "project-1");
-    observations.record(call(), {
-      observedAt: new Date("2026-09-25T12:00:01Z"),
-      environment: "production",
-    });
-    await observations.flush();
+    const sender = new ObservationSender(
+      fake.client,
+      "project-1",
+      "production",
+    );
+    sender.enqueue(call(), now);
+    await sender.flush();
     expect(fake.batches).toEqual([
       [
         {
@@ -66,11 +69,11 @@ describe("ObservationsClient", () => {
 
   test("sends at most one hundred calls per request", async () => {
     const fake = fakeClient();
-    const observations = new ObservationsClient(fake.client, "project-1");
+    const sender = new ObservationSender(fake.client, "project-1", undefined);
     for (let index = 0; index < 250; index++) {
-      observations.record(call("ticket-1", String(index)));
+      sender.enqueue(call("ticket-1", String(index)), now);
     }
-    await observations.flush();
+    await sender.flush();
     expect(fake.batches.map((batch) => batch.length)).toEqual([100, 100, 50]);
   });
 
@@ -79,17 +82,17 @@ describe("ObservationsClient", () => {
       postV1projectsObservations: () =>
         Promise.reject(new Error("network down")),
     } as unknown as JudgmentApiClient;
-    const observations = new ObservationsClient(client, "project-1");
-    observations.record(call());
-    await expect(observations.flush()).resolves.toBeUndefined();
+    const sender = new ObservationSender(client, "project-1", undefined);
+    sender.enqueue(call(), now);
+    await expect(sender.flush()).resolves.toBeUndefined();
   });
 
   test("retries a temporary failure", async () => {
     let failures = 1;
     const fake = fakeClient(() => (failures-- > 0 ? 503 : 200));
-    const observations = new ObservationsClient(fake.client, "project-1");
-    observations.record(call());
-    await observations.flush();
+    const sender = new ObservationSender(fake.client, "project-1", undefined);
+    sender.enqueue(call(), now);
+    await sender.flush();
     expect([fake.batches.length, fake.attempts()]).toEqual([1, 2]);
   });
 
@@ -99,11 +102,11 @@ describe("ObservationsClient", () => {
         ? 400
         : 200,
     );
-    const observations = new ObservationsClient(fake.client, "project-1");
+    const sender = new ObservationSender(fake.client, "project-1", undefined);
     for (const conversationId of ["a", "bad", "b", "c"]) {
-      observations.record(call(conversationId));
+      sender.enqueue(call(conversationId), now);
     }
-    await observations.flush();
+    await sender.flush();
     const sent = fake.batches
       .flat()
       .map((sent) => sent.observation.conversation_id)
@@ -111,46 +114,40 @@ describe("ObservationsClient", () => {
     expect(sent).toEqual(["a", "b", "c"]);
   });
 
-  test("drops calls without retrying when conversations are off", async () => {
-    const fake = fakeClient(() => 404);
-    const observations = new ObservationsClient(fake.client, "project-1");
-    observations.record(call());
-    await observations.flush();
-    expect(fake.attempts()).toBe(1);
-  });
+  for (const status of [402, 404]) {
+    test(`drops calls without retrying on ${status}`, async () => {
+      const fake = fakeClient(() => status);
+      const sender = new ObservationSender(fake.client, "project-1", undefined);
+      sender.enqueue(call(), now);
+      await sender.flush();
+      expect(fake.attempts()).toBe(1);
+    });
+  }
 
-  test("drops calls without retrying over the usage limit", async () => {
-    const fake = fakeClient(() => 402);
-    const observations = new ObservationsClient(fake.client, "project-1");
-    observations.record(call());
-    await observations.flush();
-    expect(fake.attempts()).toBe(1);
-  });
-
-  test("records nothing without a project", async () => {
+  test("sends nothing when recording is off", async () => {
     const fake = fakeClient();
-    const observations = new ObservationsClient(fake.client, null);
-    observations.record(call());
-    await observations.flush();
+    const sender = new ObservationSender(null, null, undefined);
+    sender.enqueue(call(), now);
+    await sender.flush();
     expect(fake.attempts()).toBe(0);
   });
 
   test("sends the call as it was when recorded", async () => {
     const fake = fakeClient();
-    const observations = new ObservationsClient(fake.client, "project-1");
+    const sender = new ObservationSender(fake.client, "project-1", undefined);
     const recorded = call();
-    observations.record(recorded);
+    sender.enqueue(recorded, now);
     recorded.conversation_id = "changed";
-    await observations.flush();
+    await sender.flush();
     expect(fake.batches[0]?.[0]?.observation.conversation_id).toBe("ticket-1");
   });
 
-  test("ignores calls recorded after shutdown", async () => {
+  test("ignores calls queued after it stops", async () => {
     const fake = fakeClient();
-    const observations = new ObservationsClient(fake.client, "project-1");
-    await observations.shutdown();
-    observations.record(call());
-    await observations.flush();
+    const sender = new ObservationSender(fake.client, "project-1", undefined);
+    await sender.stop();
+    sender.enqueue(call(), now);
+    await sender.flush();
     expect(fake.attempts()).toBe(0);
   });
 });
