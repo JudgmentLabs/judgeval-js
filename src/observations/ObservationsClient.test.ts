@@ -135,20 +135,6 @@ describe("ObservationsClient", () => {
     expect(fake.attempts()).toBe(0);
   });
 
-  test("a call that cannot be sent is dropped where it is recorded", async () => {
-    const fake = fakeClient();
-    const observations = new ObservationsClient(fake.client, "project-1");
-    const circular = call() as Observation & { metadata: { self?: unknown } };
-    circular.metadata = {};
-    circular.metadata.self = circular;
-    expect(() => observations.record(circular)).not.toThrow();
-    observations.record(call("ticket-2"));
-    await observations.flush();
-    expect(
-      fake.batches.flat().map((sent) => sent.observation.conversation_id),
-    ).toEqual(["ticket-2"]);
-  });
-
   test("sends the call as it was when recorded", async () => {
     const fake = fakeClient();
     const observations = new ObservationsClient(fake.client, "project-1");

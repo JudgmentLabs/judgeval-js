@@ -104,13 +104,11 @@ export class ObservationsClient {
         return;
       }
       this._queue.push({
-        // Copied now, as it will be sent, so a value that cannot be sent
-        // throws here and later changes to the caller's object are not sent.
-        observation: JSON.parse(JSON.stringify(observation)) as Observation,
+        // Sent later, so copy it: changes the caller makes afterwards, such
+        // as appending to a shared message history, are not sent.
+        observation: structuredClone(observation),
         observed_at: (options.observedAt ?? new Date()).toISOString(),
-        ...(options.environment === undefined
-          ? {}
-          : { environment: options.environment }),
+        environment: options.environment,
       });
       this._registerExitHook();
       if (this._queue.length >= MAX_BATCH_SIZE) void this._drain();
@@ -147,22 +145,24 @@ export class ObservationsClient {
     }, FLUSH_INTERVAL_MS);
     // Waiting to fill a batch must not keep the process alive; the exit hook
     // sends what is left.
-    this._timer.unref?.();
+    this._timer.unref();
   }
 
   private _registerExitHook(): void {
     if (this._exitHookRegistered || typeof process === "undefined") return;
     this._exitHookRegistered = true;
     // Work started here keeps the process alive until it is done.
-    process.on?.("beforeExit", () => {
+    process.on("beforeExit", () => {
       if (this._queue.length > 0) void this.flush();
     });
   }
 
   private _drain(): Promise<void> {
-    this._sending ??= this._sendQueued().finally(() => {
-      this._sending = undefined;
-    });
+    if (this._sending === undefined) {
+      this._sending = this._sendQueued().finally(() => {
+        this._sending = undefined;
+      });
+    }
     return this._sending;
   }
 
