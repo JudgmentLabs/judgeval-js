@@ -53,7 +53,7 @@ describe("ExternalJudgeFactory.create", () => {
     expect(payload).toEqual({
       judge: {
         name: "n",
-        executionMode: "submitted",
+        executionMode: "external",
         initialVersion: { scoreType: "binary" },
       },
     });
@@ -230,7 +230,7 @@ test("numeric session feedback roundtrips through the HTTP client", async () => 
         {
           judge: {
             name: "rating",
-            executionMode: "submitted",
+            executionMode: "external",
             initialVersion: { scoreType: "numeric" },
           },
         },
@@ -293,7 +293,7 @@ test("created names can be used to submit categorical feedback", async () => {
       {
         judge: {
           name: "topic",
-          executionMode: "submitted",
+          executionMode: "external",
           initialVersion: {
             scoreType: "categorical",
             outputs: [

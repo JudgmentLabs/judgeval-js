@@ -709,7 +709,7 @@ export interface paths {
     put?: never;
     /**
      * Create judge
-     * @description Create an Agent judge (wire value `prompt`), a Code judge (wire value `custom`), a deterministic judge with categorical outputs, or an external judge with executionMode submitted and binary, numeric, or categorical outputs, with its initial production version. Deterministic judges require two outputs ordered match, then miss. This call fixes the judge type for its lifetime. Agent judges require prompt configuration; Code judges require a base64-encoded tar.gz bundle and Python entrypoint metadata.
+     * @description Create an Agent judge (wire value `prompt`), a Code judge (wire value `custom`), a deterministic judge with categorical outputs, or an external judge with executionMode external and binary, numeric, or categorical outputs, with its initial production version. Deterministic judges require two outputs ordered match, then miss. This call fixes the judge type for its lifetime. Agent judges require prompt configuration; Code judges require a base64-encoded tar.gz bundle and Python entrypoint metadata.
      */
     post: operations["postV1ProjectsByProjectIdJudges"];
     delete?: never;
@@ -4944,7 +4944,7 @@ export interface operations {
                   id: string;
                   name: string;
                   /** @enum {string} */
-                  execution_mode: "managed" | "submitted";
+                  execution_mode: "internal" | "external";
                   /** @enum {string} */
                   judge_type:
                     | "prompt"
@@ -4968,7 +4968,7 @@ export interface operations {
                   name: string;
                   judge_description: string | null;
                   /** @enum {string} */
-                  execution_mode: "managed" | "submitted";
+                  execution_mode: "internal" | "external";
                   /**
                    * @description Agent judge (wire value `prompt`); Code judge (wire value `custom`); legacy Agent judge (wire value `agent`); Condition judge (wire value `deterministic`)
                    * @enum {string}
@@ -5125,7 +5125,7 @@ export interface operations {
                 /** @description Human-readable description shown in the UI */
                 judgeDescription?: string | null;
                 /** @constant */
-                executionMode?: "managed";
+                executionMode?: "internal";
                 /**
                  * @description Agent judge (wire value `prompt`)
                  * @constant
@@ -5275,7 +5275,7 @@ export interface operations {
                 /** @description Human-readable description shown in the UI */
                 judgeDescription?: string | null;
                 /** @constant */
-                executionMode?: "managed";
+                executionMode?: "internal";
                 /**
                  * @description Code judge (wire value `custom`)
                  * @constant
@@ -5423,7 +5423,7 @@ export interface operations {
                 name: string;
                 judgeDescription?: string | null;
                 /** @constant */
-                executionMode?: "managed";
+                executionMode?: "internal";
                 /** @constant */
                 judgeType: "deterministic";
                 initialVersion: {
@@ -5553,7 +5553,7 @@ export interface operations {
                 name: string;
                 judgeDescription?: string | null;
                 /** @constant */
-                executionMode: "submitted";
+                executionMode: "external";
                 /** @enum {string} */
                 judgeType?:
                   | "prompt"
@@ -7253,7 +7253,7 @@ export interface operations {
                   session_evaluation_min_candidate_traces: number | null;
                   session_evaluation_max_wait_minutes: number | null;
                   /** @constant */
-                  execution_mode?: "managed";
+                  execution_mode?: "internal";
                   /**
                    * @description Agent judge (wire value `prompt`)
                    * @constant
@@ -7402,7 +7402,7 @@ export interface operations {
                   session_evaluation_min_candidate_traces: number | null;
                   session_evaluation_max_wait_minutes: number | null;
                   /** @constant */
-                  execution_mode?: "managed";
+                  execution_mode?: "internal";
                   /**
                    * @description Code judge (wire value `custom`)
                    * @constant
@@ -7554,7 +7554,7 @@ export interface operations {
                   session_evaluation_min_candidate_traces: number | null;
                   session_evaluation_max_wait_minutes: number | null;
                   /** @constant */
-                  execution_mode?: "managed";
+                  execution_mode?: "internal";
                   /**
                    * @description Condition judge (wire value `deterministic`)
                    * @constant
@@ -7696,7 +7696,7 @@ export interface operations {
                   session_evaluation_min_candidate_traces: number | null;
                   session_evaluation_max_wait_minutes: number | null;
                   /** @constant */
-                  execution_mode: "submitted";
+                  execution_mode: "external";
                   /** @enum {string} */
                   judge_type:
                     | "prompt"

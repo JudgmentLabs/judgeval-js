@@ -79,7 +79,7 @@ export class ExternalJudgeFactory {
     }));
     let initialVersion: Extract<
       CreateJudgeRequest["judge"],
-      { executionMode: "submitted" }
+      { executionMode: "external" }
     >["initialVersion"];
     if (options.scoreType === "categorical") {
       if (!outputs || outputs.length < 2) {
@@ -101,7 +101,7 @@ export class ExternalJudgeFactory {
     }
 
     const payload: CreateJudgeRequest = {
-      judge: { name, executionMode: "submitted", initialVersion },
+      judge: { name, executionMode: "external", initialVersion },
     };
     if (options.judgeDescription !== undefined)
       payload.judge.judgeDescription = options.judgeDescription;
