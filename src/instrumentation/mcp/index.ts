@@ -27,7 +27,6 @@ import {
   withConversationOutputSchema,
   withoutAgentArguments,
 } from "./agent-arguments";
-import { argumentValues, scrubErrorMessage } from "./scrub";
 
 const TRACER_NAME = "judgeval-mcp";
 const MAX_ERROR_MESSAGE_LENGTH = 1_000;
@@ -61,7 +60,7 @@ export interface McpRequestInfo {
 export interface InstrumentMcpServerOptions {
   /** Also create OTel request spans. Native call events are always exported. Default false. */
   readonly recordSpans?: boolean;
-  /** Capture business arguments/results. Both default false. */
+  /** Capture business arguments/results as-is unless redactPayload transforms them. Both default false. */
   readonly captureInput?: boolean;
   readonly captureOutput?: boolean;
   /** Receives a detached JSON snapshot. Throw or return undefined to omit it. */
@@ -81,19 +80,19 @@ export interface InstrumentMcpServerOptions {
    * a conversation ID in tool results when the call has no session. Set to false
    * to leave your tools and their results exactly as they are, at the cost of
    * agent-reported intent and model, and sessions for clients that send no ID.
+   * Intent is sent as-is unless transformed by redact.
    * @defaultValue true
    */
   readonly injectAgentArguments?: boolean;
   /** Attaches the end user or customer once a call finishes. */
   readonly identify?: (info: McpRequestInfo) => McpCaller | undefined;
-  /** Records the text of a failure. Off keeps only its type. @defaultValue true */
+  /** Opt in to failure text, sent as-is unless transformed by redact. Default false. */
   readonly captureErrorMessages?: boolean;
-  /** Rewrites failure messages and reported intent before they leave the process. */
+  /** Rewrites failure messages and reported intent. No automatic PII scrubbing is applied. */
   readonly redact?: (text: string) => string;
 }
 
 interface CallRecord {
-  argumentValues?: readonly string[];
   error: unknown;
   caller: McpCaller | undefined;
   identified?: boolean;
@@ -307,11 +306,12 @@ function traced(
         request;
       const result = await handler(stripped, context);
       return method === "tools/list" && inject
-        ? listWithArguments(result, registry, structuredTools)
+        ? (attempt(() =>
+            listWithArguments(result, registry, structuredTools),
+          ) ?? result)
         : result;
     }
     const record: CallRecord = {
-      argumentValues: attempt(() => argumentValues(request.params)),
       error: undefined,
       caller: undefined,
     };
@@ -331,10 +331,13 @@ function traced(
           ));
       attempt(() => complete?.(result, context, started?.span));
       if (started !== undefined) {
-        finish(started.span, record, result, context, options);
+        attempt(() => finish(started.span, record, result, context, options));
       }
       if (method === "tools/list" && inject) {
-        return listWithArguments(result, registry, structuredTools);
+        return (
+          attempt(() => listWithArguments(result, registry, structuredTools)) ??
+          result
+        );
       }
       // Stateless HTTP servers may create a fresh server for each request.
       // Read that instance's published schema before annotating its result.
@@ -343,25 +346,30 @@ function traced(
         result.structuredContent !== undefined &&
         listTools !== undefined
       ) {
-        const listed = await listTools({ method: "tools/list" }, context).catch(
-          () => undefined,
-        );
+        const listed = await Promise.resolve()
+          .then(() => listTools({ method: "tools/list" }, context))
+          .catch(() => undefined);
         if (listed !== undefined)
-          listWithArguments(listed, registry, structuredTools);
+          attempt(() => listWithArguments(listed, registry, structuredTools));
       }
-      return prepared.mintedConversationId === undefined
+      const conversationId = prepared.mintedConversationId;
+      return conversationId === undefined
         ? result
-        : withConversationIdPrompt(
-            result,
-            prepared.mintedConversationId,
-            structuredTools,
-            request.params?.name ?? "",
-          );
+        : (attempt(() =>
+            withConversationIdPrompt(
+              result,
+              conversationId,
+              structuredTools,
+              request.params?.name ?? "",
+            ),
+          ) ?? result);
     } catch (error) {
       record.error ??= error;
       attempt(() => complete?.(undefined, context, started?.span));
       if (started !== undefined) {
-        finish(started.span, record, undefined, context, options);
+        attempt(() =>
+          finish(started.span, record, undefined, context, options),
+        );
       }
       throw error;
     }
@@ -461,7 +469,10 @@ function captureCall(
       argument_keys: argumentKeys,
       input,
       output,
-      error_type: failure?.type.slice(0, 256),
+      error_type:
+        failure === undefined
+          ? undefined
+          : failure.type.slice(0, 256) || "tool_error",
       error_message: failure?.message,
       trace_id:
         span !== undefined && isSpanContextValid(span)
@@ -614,7 +625,7 @@ function activeExporter(): McpCallExporter | undefined {
     exporters.set(tracer, exporter);
     provider.addBackgroundExporter(exporter);
   }
-  return exporter;
+  return exporter.isClosed ? undefined : exporter;
 }
 
 function finish(
@@ -681,14 +692,9 @@ function failureOf(
     result?.content?.[0]?.text ??
     (error instanceof Error ? error.message : undefined);
   const recorded =
-    options.captureErrorMessages === false ||
-    message === undefined ||
-    record.argumentValues === undefined
-      ? undefined
-      : redacted(
-          scrubErrorMessage(message, record.argumentValues ?? []),
-          options,
-        )?.slice(0, MAX_ERROR_MESSAGE_LENGTH);
+    options.captureErrorMessages === true && message !== undefined
+      ? redacted(message, options)?.slice(0, MAX_ERROR_MESSAGE_LENGTH)
+      : undefined;
   record.failure = {
     type: errorType(error, result, message, options),
     message: recorded,
@@ -721,9 +727,9 @@ function errorType(
   const errorName = error instanceof Error ? error.name : undefined;
   if (errorName !== undefined && errorName !== "Error") return errorName;
   const publicCode =
-    options.captureErrorMessages === false
-      ? undefined
-      : publicErrorCode(message);
+    options.captureErrorMessages === true
+      ? publicErrorCode(message)
+      : undefined;
   const returned =
     publicCode === undefined ? undefined : redacted(publicCode, options);
   if (returned !== undefined) return returned;
@@ -867,9 +873,9 @@ function readSchemaShape(schema: unknown): SchemaShape | undefined {
     return {
       keys: declaredArguments(json),
       fingerprint: JSON.stringify(json),
-      open: Boolean(
-        json["additionalProperties"] || json["unevaluatedProperties"],
-      ),
+      open:
+        json["additionalProperties"] !== false &&
+        json["unevaluatedProperties"] !== false,
     };
   }
   const definition = candidate._def?.shape;

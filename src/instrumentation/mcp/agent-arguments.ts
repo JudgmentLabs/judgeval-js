@@ -5,7 +5,6 @@ const MODEL_ARGUMENT = "llm_model";
 const CONVERSATION_ARGUMENT = "conversation_id";
 const RESPONSE_CONTEXT = "_judgment";
 const MAX_INTENT_LENGTH = 500;
-const MAX_SCANNED_LENGTH = 4_000;
 const UUID_V7 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -60,44 +59,6 @@ export function mintConversationId(now = Date.now()): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-/**
- * Removes well-defined personal identifiers from free text. It can't recognize
- * free-form data such as names, so the argument's description also tells agents
- * not to send them.
- */
-export function sanitizeIntent(text: string): string {
-  return scrubIdentifiers(text).slice(0, MAX_INTENT_LENGTH);
-}
-
-export function scrubIdentifiers(text: string): string {
-  return text
-    .slice(0, MAX_SCANNED_LENGTH)
-    .replace(/(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, "[email]")
-    .replace(/\b\d{3}-\d{2}-\d{4}\b/g, "[ssn]")
-    .replace(/(?:\d[ -]?){13,19}/g, (match) =>
-      isLuhnValid(match.replace(/[ -]/g, "")) ? "[card]" : match,
-    )
-    .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[ip]")
-    .replace(
-      /(?<![\w:])(?:(?:[0-9a-f]{1,4}:){7}[0-9a-f]{1,4}|(?=[0-9a-f:]*[0-9a-f])(?:[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){0,6})?::(?:[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){0,6})?)(?![\w:])/gi,
-      "[ip]",
-    )
-    .replace(
-      /(?<![\w.-])(?!\d{4}-\d{2}-\d{2}(?!\d))\+?\d[\d ().-]{7,}\d\b/g,
-      "[phone]",
-    );
-}
-
-function isLuhnValid(digits: string): boolean {
-  let sum = 0;
-  for (let index = 0; index < digits.length; index++) {
-    const digit = Number(digits[digits.length - 1 - index]);
-    if (index % 2 === 0) sum += digit;
-    else sum += digit > 4 ? digit * 2 - 9 : digit * 2;
-  }
-  return sum % 10 === 0;
-}
-
 /** Reads agent-reported values, skipping any name the tool itself declares. */
 export function readReportedArguments(
   args: Readonly<Record<string, unknown>>,
@@ -113,7 +74,8 @@ export function readReportedArguments(
   const conversationId = read(CONVERSATION_ARGUMENT);
   const intent = read(INTENT_ARGUMENT);
   return {
-    intent: intent === undefined ? undefined : sanitizeIntent(intent),
+    intent:
+      intent === undefined ? undefined : intent.slice(0, MAX_INTENT_LENGTH),
     model: model?.toLowerCase() === "unknown" ? undefined : model,
     conversationId:
       conversationId !== undefined && UUID_V7.test(conversationId)

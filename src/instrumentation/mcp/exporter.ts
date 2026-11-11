@@ -19,6 +19,7 @@ const FLUSH_INTERVAL_MS = 1_000;
 const REQUEST_TIMEOUT_MS = 5_000;
 const MAX_ATTEMPTS = 3;
 const FLUSH_TIMEOUT_MS = 30_000;
+const WARNING_INTERVAL_MS = 60_000;
 
 /** Owns delivery only: records are serialized once, before entering the queue. */
 export class McpCallExporter {
@@ -27,6 +28,7 @@ export class McpCallExporter {
   private timer?: ReturnType<typeof setTimeout>;
   private pending?: Promise<void>;
   private closed = false;
+  private nextWarning = 0;
   private batch?: { body: string; attempts: number; retryAt: number };
   private readonly client: JudgmentApiClient;
 
@@ -39,14 +41,18 @@ export class McpCallExporter {
   }
 
   enqueue(call: McpCall): void {
-    const serialized = JSON.stringify(call);
+    if (this.closed) return;
+    const serialized = JSON.stringify(call, finiteNumbers);
+    if (!validCall(JSON.parse(serialized) as McpCall)) {
+      this.warn("Invalid MCP event; dropping call");
+      return;
+    }
     const bytes = Buffer.byteLength(serialized);
     if (
-      this.closed ||
       this.queue.length >= MAX_QUEUE ||
       this.queuedBytes + bytes > MAX_QUEUE_BYTES
     ) {
-      Logger.warning("MCP export queue unavailable; dropping call");
+      this.warn("MCP export queue unavailable; dropping call");
       return;
     }
     this.queue.push(serialized);
@@ -54,7 +60,28 @@ export class McpCallExporter {
     this.schedule();
   }
 
+  get isClosed(): boolean {
+    return this.closed;
+  }
+
+  private warn(message: string): void {
+    const now = performance.now();
+    if (now < this.nextWarning) return;
+    this.nextWarning = now + WARNING_INTERVAL_MS;
+    Logger.warning(message);
+  }
+
   async forceFlush(): Promise<void> {
+    // An explicit flush keeps deferred retries alive until its deadline.
+    const keepAlive = setTimeout(() => {}, FLUSH_TIMEOUT_MS);
+    try {
+      await this.flush();
+    } finally {
+      clearTimeout(keepAlive);
+    }
+  }
+
+  private async flush(): Promise<void> {
     const deadline = performance.now() + FLUSH_TIMEOUT_MS;
     clearTimeout(this.timer);
     this.timer = undefined;
@@ -85,7 +112,7 @@ export class McpCallExporter {
       (this.batch?.retryAt ?? 0) - Date.now(),
     );
     this.timer = setTimeout(
-      () => void this.forceFlush(),
+      () => void this.flush(),
       Math.min(delay, 2_147_483_647),
     );
     this.timer.unref();
@@ -124,7 +151,8 @@ export class McpCallExporter {
     while (batch.attempts < MAX_ATTEMPTS) {
       const delay = Math.max(0, batch.retryAt - Date.now());
       if (performance.now() + delay >= deadline) return false;
-      if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+      if (delay > 0)
+        await new Promise((resolve) => setTimeout(resolve, delay).unref());
       const remaining = deadline - performance.now();
       if (remaining <= 0) return false;
       batch.attempts++;
@@ -154,9 +182,98 @@ export class McpCallExporter {
       batch.retryAt =
         Date.now() + Math.max(retryAfter, 250 * 2 ** (batch.attempts - 1));
     }
-    Logger.warning("MCP export failed; dropping batch");
+    this.warn("MCP export failed; dropping batch");
     return true;
   }
+}
+
+const STRING_LIMITS: Record<string, readonly [number, number]> = {
+  call_id: [1, 512],
+  session_id: [1, 512],
+  user_id: [1, 512],
+  server_name: [1, 256],
+  tool_name: [1, 256],
+  client_name: [1, 256],
+  environment_name: [1, 256],
+  model: [1, 256],
+  error_type: [1, 256],
+  intent: [0, 2048],
+  error_message: [0, 8192],
+  trace_id: [0, 512],
+  span_id: [0, 512],
+};
+
+/** Rejects individual malformed events before they can poison a delivery batch. */
+function validCall(call: McpCall): boolean {
+  const required = [
+    "call_id",
+    "timestamp",
+    "duration_ms",
+    "outcome",
+    "server_name",
+    "tool_name",
+  ];
+  if (
+    required.some((key) => !(key in call)) ||
+    typeof call.timestamp !== "string"
+  )
+    return false;
+  if (
+    Object.entries(call).some(([key, value]) => {
+      const limit = Object.prototype.hasOwnProperty.call(STRING_LIMITS, key)
+        ? STRING_LIMITS[key]
+        : undefined;
+      if (limit !== undefined)
+        return (
+          typeof value !== "string" ||
+          value.length < limit[0] ||
+          value.length > limit[1]
+        );
+      return ![
+        "timestamp",
+        "duration_ms",
+        "outcome",
+        "argument_keys",
+        "input",
+        "output",
+        "metadata",
+      ].includes(key);
+    })
+  )
+    return false;
+  const timestamp = Date.parse(call.timestamp);
+  const date = call.timestamp.slice(0, 10);
+  const calendarDate = new Date(`${date}T00:00:00Z`);
+  return (
+    /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|[+-]\d\d:\d\d)$/.test(
+      call.timestamp,
+    ) &&
+    timestamp >= 0 &&
+    timestamp < Date.UTC(2100, 0, 1) &&
+    Number.isFinite(calendarDate.getTime()) &&
+    calendarDate.toISOString().startsWith(date) &&
+    typeof call.duration_ms === "number" &&
+    Number.isFinite(call.duration_ms) &&
+    call.duration_ms >= 0 &&
+    ["success", "error", "cancelled"].includes(call.outcome) &&
+    (call.argument_keys === undefined ||
+      (Array.isArray(call.argument_keys) &&
+        call.argument_keys.length <= 100 &&
+        call.argument_keys.every(
+          (key) =>
+            typeof key === "string" && key.length > 0 && key.length <= 256,
+        ))) &&
+    [call.input, call.output].every(
+      (value) =>
+        value === undefined ||
+        Buffer.byteLength(JSON.stringify(value)) <= 128 * 1024,
+    ) &&
+    (call.metadata === undefined ||
+      (call.metadata !== null &&
+        typeof call.metadata === "object" &&
+        !Array.isArray(call.metadata) &&
+        Buffer.byteLength(JSON.stringify(call.metadata)) <= 16 * 1024))
+  );
 }
 
 function retryDelay(value: string | null): number {

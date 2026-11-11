@@ -9,13 +9,12 @@ import { McpServer as McpServerV1 } from "@modelcontextprotocol/sdk/server/mcp.j
 import {
   McpServer as McpServerV2,
   createMcpHandler,
+  fromJsonSchema,
 } from "@modelcontextprotocol/server";
-import { SpanKind } from "@opentelemetry/api";
 import {
   BasicTracerProvider,
   InMemorySpanExporter,
   SimpleSpanProcessor,
-  type ReadableSpan,
 } from "@opentelemetry/sdk-trace-base";
 import { z } from "zod/v4";
 import { BaseTracer } from "../../trace/BaseTracer";
@@ -25,9 +24,8 @@ import { NoOpSpanProcessor } from "../../trace/processors/NoOpSpanProcessor";
 import type { JudgmentSpanExporter } from "../../trace/exporters/JudgmentSpanExporter";
 import type { JudgmentSpanProcessor } from "../../trace/processors/JudgmentSpanProcessor";
 import {
-  mintConversationId,
   declaredArguments,
-  sanitizeIntent,
+  readReportedArguments,
   withAgentArguments,
   withConversationIdPrompt,
   withConversationOutputSchema,
@@ -40,12 +38,10 @@ import {
   type InstrumentMcpServerOptions,
 } from "./index";
 import { capturePayload, McpCallExporter, type McpCall } from "./exporter";
-import { argumentValues, scrubErrorMessage } from "./scrub";
 import { Logger } from "../../utils/logger";
 
 const SECRET = "super-secret-value";
 const TRACE_ID = "0af7651916cd43dd8448eb211c80319c";
-
 const completedCall: McpCall = {
   call_id: "stable",
   timestamp: "2026-11-10T00:00:00Z",
@@ -57,22 +53,362 @@ const completedCall: McpCall = {
   metadata: {},
 };
 
-test("errors scrub nested argument echoes and identifiers without changing input", () => {
-  const params = { arguments: { nested: ["secret-token", "open"] } };
-  const values = argumentValues(params);
-  params.arguments.nested[0] = "changed";
-  expect({
-    message: scrubErrorMessage(
-      "secret-token rejected for audit@example.com; reopen open",
-      values,
+class TestTracer extends BaseTracer {
+  constructor(provider: BasicTracerProvider) {
+    super(
+      "project",
+      "project-id",
+      "key",
+      "org",
+      "https://example.com",
+      null,
+      String,
+      provider,
+      null,
+      false,
+    );
+  }
+  getSpanProcessor(): JudgmentSpanProcessor {
+    return new NoOpSpanProcessor() as unknown as JudgmentSpanProcessor;
+  }
+  getSpanExporter(): JudgmentSpanExporter {
+    return new NoOpSpanExporter();
+  }
+}
+
+const cleanups: (() => void | Promise<void>)[] = [];
+afterEach(async () => {
+  for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
+});
+
+function useExporter() {
+  const spans = new InMemorySpanExporter();
+  const tracer = new TestTracer(
+    new BasicTracerProvider({
+      spanProcessors: [new SimpleSpanProcessor(spans)],
+    }),
+  );
+  const provider = JudgmentTracerProvider.getInstance();
+  provider.register(tracer);
+  provider.setActive(tracer);
+  cleanups.push(() => provider.deregister(tracer));
+  return spans;
+}
+
+function requestBody(url: string | URL | Request, init?: RequestInit) {
+  return url instanceof Request ? url.text() : String(init?.body);
+}
+
+function captureNativeRequests(statuses = [200]) {
+  const provider = JudgmentTracerProvider.getInstance();
+  provider.getActiveTracer()!._enableMonitoring = true;
+  const bodies: string[] = [];
+  const sending = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (url: string | URL | Request, init?: RequestInit) => {
+        bodies.push(await requestBody(url, init));
+        return new Response(null, { status: statuses.shift() ?? 200 });
+      },
+      { preconnect: globalThis.fetch.preconnect },
     ),
-    intent: sanitizeIntent("a".repeat(64_000)),
-    params,
-  }).toEqual({
-    message: "[argument] rejected for [email]; reopen [argument]",
-    intent: "a".repeat(500),
-    params: { arguments: { nested: ["changed", "open"] } },
+  );
+  cleanups.push(() => {
+    sending.mockRestore();
   });
+  cleanups.push(() => provider.shutdown());
+  return { provider, bodies };
+}
+
+type Result = {
+  structuredContent?: { ok: boolean; _judgment?: { conversation_id: string } };
+};
+
+function registerTools(server: object) {
+  (server as McpServerV1).registerTool(
+    "greet",
+    {
+      inputSchema: z.strictObject({
+        name: z.string(),
+        fail: z.boolean().optional(),
+      }),
+      outputSchema: z.strictObject({ ok: z.boolean() }),
+    },
+    ({ fail }) => {
+      setMcpCaller({ customerId: "customer-1" });
+      if (fail) {
+        const message = `declined ${SECRET} for a@b.co`;
+        markMcpCallError(new Error(message));
+        return { isError: true, content: [{ type: "text", text: message }] };
+      }
+      return {
+        content: [{ type: "text", text: "ok" }],
+        structuredContent: { ok: true },
+      };
+    },
+  );
+}
+
+async function connectV1(options: InstrumentMcpServerOptions) {
+  const server = new McpServerV1({ name: "greeter", version: "1" });
+  registerTools(server);
+  instrumentMcpServer(server, options);
+  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+  await server.connect(serverSide);
+  const client = new ClientV1({ name: "test-client", version: "1" });
+  await client.connect(clientSide);
+  return client;
+}
+
+test("schema discovery failures never turn a successful tool call into an error", async () => {
+  const server = new McpServerV1({ name: "greeter", version: "1" });
+  registerTools(server);
+  server.registerTool(
+    "unsupported",
+    { inputSchema: z.object({ when: z.date() }) },
+    () => ({ content: [] }),
+  );
+  instrumentMcpServer(server);
+  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+  await server.connect(serverSide);
+  const client = new ClientV1({ name: "test", version: "1" });
+  await client.connect(clientSide);
+  cleanups.push(() => client.close());
+  const result = await client.callTool({
+    name: "greet",
+    arguments: { name: "Alice" },
+  });
+  expect(result.structuredContent).toEqual({ ok: true });
+});
+
+test("open JSON schemas preserve undeclared business arguments", async () => {
+  let received: unknown;
+  const handler = createMcpHandler(() => {
+    const server = new McpServerV2({ name: "custom", version: "1" });
+    server.registerTool(
+      "lookup",
+      {
+        inputSchema: fromJsonSchema({
+          type: "object",
+          properties: { name: { type: "string" } },
+        }),
+      },
+      (args) => {
+        received = args;
+        return { content: [] };
+      },
+    );
+    instrumentMcpServer(server);
+    return server;
+  });
+  const client = new ClientV2({ name: "test", version: "1" });
+  await client.connect(
+    new StreamableHTTPClientTransport(new URL("http://test.local/mcp"), {
+      fetch: (url, init) => handler.fetch(new Request(String(url), init)),
+    }),
+  );
+  cleanups.push(() => client.close());
+  await client.callTool({
+    name: "lookup",
+    arguments: { name: "Alice", context: "business-owned" },
+  });
+  expect(received).toEqual({ name: "Alice", context: "business-owned" });
+});
+
+async function connectV2(options: InstrumentMcpServerOptions) {
+  const handler = createMcpHandler(() => {
+    const server = new McpServerV2({ name: "greeter", version: "1" });
+    registerTools(server);
+    instrumentMcpServer(server, options);
+    return server;
+  });
+  const client = new ClientV2({ name: "test-client", version: "1" });
+  await client.connect(
+    new StreamableHTTPClientTransport(new URL("http://test.local/mcp"), {
+      fetch: (url, init) => handler.fetch(new Request(String(url), init)),
+    }),
+  );
+  return client;
+}
+
+describe.each([
+  ["MCP 1.x", connectV1],
+  ["MCP 2.x", connectV2],
+] as const)("%s adapter", (_label, connect) => {
+  test("uses explicit sessions with injection disabled and payload capture off", async () => {
+    useExporter();
+    const { provider, bodies } = captureNativeRequests();
+    const client = await connect({
+      sessionId: () => "application-session",
+      injectAgentArguments: false,
+    });
+    const result = (await client.callTool({
+      name: "greet",
+      arguments: { name: SECRET },
+    })) as Result;
+    captureMcpCall({ ...completedCall, input: null });
+    await provider.forceFlush();
+    const calls = (JSON.parse(bodies[0]!) as { calls: McpCall[] }).calls;
+    expect({
+      result: result.structuredContent,
+      calls: calls.map((call) => [call.session_id, call.input, call.output]),
+    }).toEqual({
+      result: { ok: true },
+      calls: [
+        ["application-session", undefined, undefined],
+        [undefined, null, undefined],
+      ],
+    });
+  });
+
+  test("captures redacted calls and hands off a server-generated session in structured output", async () => {
+    const spans = useExporter();
+    const { provider, bodies } = captureNativeRequests([503, 200]);
+    const client = await connect({
+      captureInput: true,
+      captureOutput: true,
+      identify: () => ({ userId: "user-1" }),
+      redactPayload: (value, field) =>
+        field === "input"
+          ? { ...(value as object), name: "[redacted]" }
+          : value,
+    });
+    const first = (await client.callTool({
+      name: "greet",
+      arguments: {
+        name: SECRET,
+        context: "Contacting a@b.co",
+        llm_model: "model-1",
+        conversation_id: "invented",
+      },
+    })) as Result;
+    const session = first.structuredContent?._judgment?.conversation_id;
+    await client.callTool({
+      name: "greet",
+      arguments: { name: SECRET, fail: true, conversation_id: session },
+    });
+    await provider.forceFlush();
+    const calls = (JSON.parse(bodies[0]!) as { calls: McpCall[] }).calls;
+    expect({
+      retryIdentical: bodies[0] === bodies[1],
+      distinctIds: calls[0]!.call_id !== calls[1]!.call_id,
+      validSession:
+        /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+          session ?? "",
+        ),
+      calls: calls.map((call) => ({
+        session: call.session_id,
+        outcome: call.outcome,
+        input: call.input,
+        keys: call.argument_keys,
+        user: call.user_id,
+        customer: call.metadata["customer_id"],
+        output: call.output !== undefined,
+        duration: call.duration_ms >= 0,
+      })),
+      intent: calls[0]!.intent,
+      model: calls[0]!.model,
+      spans: spans.getFinishedSpans().length,
+    }).toEqual({
+      retryIdentical: true,
+      distinctIds: true,
+      validSession: true,
+      calls: ([false, true] as const).map((fail) => ({
+        session,
+        outcome: fail ? "error" : "success",
+        input: fail
+          ? { name: "[redacted]", fail: true }
+          : { name: "[redacted]" },
+        keys: fail ? ["name", "fail"] : ["name"],
+        user: "user-1",
+        customer: "customer-1",
+        output: true,
+        duration: true,
+      })),
+      intent: "Contacting a@b.co",
+      model: "model-1",
+      spans: 0,
+    });
+  });
+
+  test.each([
+    [{}, undefined],
+    [{ captureErrorMessages: true }, `declined ${SECRET} for a@b.co`],
+    [{ captureErrorMessages: true, redact: () => "[redacted]" }, "[redacted]"],
+    [
+      {
+        captureErrorMessages: true,
+        redact: () => {
+          throw new Error("redaction failed");
+        },
+      },
+      undefined,
+    ],
+  ] satisfies [InstrumentMcpServerOptions, string | undefined][])(
+    "error text follows explicit capture and redaction options: %j",
+    async (options, expected) => {
+      const spans = useExporter();
+      const { provider, bodies } = captureNativeRequests();
+      const client = await connect({ ...options, recordSpans: true });
+      await client.callTool({
+        name: "greet",
+        arguments: { name: SECRET, fail: true },
+      });
+      await provider.forceFlush();
+      const call = (JSON.parse(bodies[0]!) as { calls: McpCall[] }).calls[0]!;
+      const span = spans
+        .getFinishedSpans()
+        .find((span) => span.name === "tools/call greet")!;
+      expect([
+        call.outcome,
+        call.error_type,
+        call.error_message,
+        span.status.message,
+      ]).toEqual(["error", "tool_error", expected, expected]);
+    },
+  );
+
+  test("callback failures do not change business results", async () => {
+    useExporter();
+    const { provider, bodies } = captureNativeRequests();
+    const fail = () => {
+      throw new Error("unavailable");
+    };
+    const client = await connect({
+      identify: fail,
+      redact: fail,
+      sessionId: fail,
+    });
+    await client.callTool({
+      name: "greet",
+      arguments: { name: "a", context: "private" },
+    });
+    await provider.forceFlush();
+    const call = (JSON.parse(bodies[0]!) as { calls: McpCall[] }).calls[0]!;
+    expect([call.outcome, call.user_id, call.intent]).toEqual([
+      "success",
+      undefined,
+      undefined,
+    ]);
+  });
+});
+
+test("optional OTel spans link native calls to remote context", async () => {
+  const spans = useExporter();
+  const { provider, bodies } = captureNativeRequests();
+  const client = await connectV1({ recordSpans: true });
+  await client.callTool({
+    name: "greet",
+    arguments: { name: "a" },
+    _meta: { traceparent: `00-${TRACE_ID}-b7ad6b7169203331-01` },
+  });
+  await provider.forceFlush();
+  const span = spans
+    .getFinishedSpans()
+    .find((span) => span.name === "tools/call greet")!;
+  const call = (JSON.parse(bodies[0]!) as { calls: McpCall[] }).calls[0]!;
+  expect([call.trace_id, call.span_id, span.parentSpanContext?.spanId]).toEqual(
+    [TRACE_ID, span.spanContext().spanId, "b7ad6b7169203331"],
+  );
 });
 
 test("required and pattern-owned telemetry names retain their business schema", () => {
@@ -135,6 +471,7 @@ test.each(["deadline", "cooldown"])(
       projectId: "project",
     });
     try {
+      exporter.enqueue({ ...completedCall, error_type: "" });
       for (let n = 0; n < 101; n++)
         exporter.enqueue({ ...completedCall, call_id: String(n) });
       await exporter.forceFlush();
@@ -161,799 +498,6 @@ test.each(["deadline", "cooldown"])(
   },
 );
 
-function requestBody(
-  url: string | URL | Request,
-  init?: RequestInit,
-): Promise<string> {
-  return url instanceof Request
-    ? url.text()
-    : Promise.resolve(String(init?.body));
-}
-
-class TestTracer extends BaseTracer {
-  constructor(provider: BasicTracerProvider) {
-    super(
-      "project",
-      "project-id",
-      "key",
-      "org",
-      "https://example.com",
-      null,
-      String,
-      provider,
-      null,
-      false,
-    );
-  }
-  getSpanProcessor(): JudgmentSpanProcessor {
-    return new NoOpSpanProcessor() as unknown as JudgmentSpanProcessor;
-  }
-  getSpanExporter(): JudgmentSpanExporter {
-    return new NoOpSpanExporter();
-  }
-}
-
-const cleanups: (() => void)[] = [];
-afterEach(() => {
-  for (const cleanup of cleanups.splice(0)) cleanup();
-});
-
-function useExporter(): InMemorySpanExporter {
-  const exporter = new InMemorySpanExporter();
-  const tracer = new TestTracer(
-    new BasicTracerProvider({
-      spanProcessors: [new SimpleSpanProcessor(exporter)],
-    }),
-  );
-  const proxy = JudgmentTracerProvider.getInstance();
-  proxy.register(tracer);
-  proxy.setActive(tracer);
-  cleanups.push(() => proxy.deregister(tracer));
-  return exporter;
-}
-
-interface ToolResult {
-  readonly isError?: boolean;
-  readonly content?: unknown;
-  readonly structuredContent?: unknown;
-}
-
-interface TestClient {
-  callTool(request: {
-    name: string;
-    arguments?: Record<string, unknown>;
-    _meta?: Record<string, unknown>;
-  }): Promise<unknown>;
-  readResource(request: { uri: string }): Promise<unknown>;
-  listTools(): Promise<{
-    tools: readonly { name: string; inputSchema: { properties?: object } }[];
-  }>;
-}
-
-interface Registrar {
-  registerResource(
-    name: string,
-    uri: string,
-    config: object,
-    handler: (uri: URL) => Promise<unknown>,
-  ): unknown;
-  registerTool(
-    name: string,
-    config: {
-      description: string;
-      inputSchema: unknown;
-      outputSchema?: unknown;
-    },
-    handler: (input: Record<string, unknown>) => Promise<unknown>,
-  ): unknown;
-}
-
-const seenInputs: Record<string, unknown>[] = [];
-const SHARED_SCHEMA = z.strictObject({});
-
-function registerTools(server: object): void {
-  const registrar = server as Registrar;
-  registrar.registerResource(
-    "report",
-    "report://latest?token=secret-token",
-    {},
-    (uri) => Promise.resolve({ contents: [{ uri: uri.href, text: "ok" }] }),
-  );
-  for (const name of ["shared_a", "shared_b"]) {
-    registrar.registerTool(
-      name,
-      { description: "Shares a schema", inputSchema: SHARED_SCHEMA },
-      () => Promise.resolve({ content: [{ type: "text", text: "ok" }] }),
-    );
-  }
-  registrar.registerTool(
-    "greet",
-    {
-      description: "Greets someone",
-      inputSchema: z.strictObject({
-        name: z.string(),
-        fail: z.boolean().optional(),
-        thrown: z.boolean().optional(),
-      }),
-    },
-    (input) => {
-      seenInputs.push(input);
-      setMcpCaller({ customerId: "customer-1" });
-      if (input["thrown"] === true) {
-        const error = new Error("Upstream is down");
-        error.name = "UpstreamError";
-        markMcpCallError(error);
-        throw error;
-      }
-      if (input["fail"] === true) {
-        return Promise.resolve({
-          isError: true,
-          content: [
-            { type: "text", text: JSON.stringify({ error: "CONFLICT" }) },
-          ],
-        });
-      }
-      return Promise.resolve({ content: [{ type: "text", text: "hello" }] });
-    },
-  );
-  registrar.registerTool(
-    "wordy_error",
-    { description: "Fails with free text", inputSchema: z.strictObject({}) },
-    () =>
-      Promise.resolve({
-        isError: true,
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({ error: `no access: ${SECRET}` }),
-          },
-        ],
-      }),
-  );
-  registrar.registerTool(
-    "token_error",
-    { description: "Fails with a token", inputSchema: z.strictObject({}) },
-    () =>
-      Promise.resolve({
-        isError: true,
-        content: [
-          { type: "text", text: JSON.stringify({ error: "sk-abc123def456" }) },
-        ],
-      }),
-  );
-  registrar.registerTool(
-    "open",
-    { description: "Accepts anything", inputSchema: z.looseObject({}) },
-    (input) => {
-      seenInputs.push(input);
-      return Promise.resolve({ content: [{ type: "text", text: "ok" }] });
-    },
-  );
-  registrar.registerTool(
-    "structured",
-    {
-      description: "Returns structured output",
-      inputSchema: z.strictObject({ context: z.string().optional() }),
-      outputSchema: z.strictObject({ ok: z.boolean() }),
-    },
-    (input) => {
-      seenInputs.push(input);
-      return Promise.resolve({
-        content: [{ type: "text", text: '{"ok":true}' }],
-        structuredContent: { ok: true },
-      });
-    },
-  );
-}
-
-async function connectV1(
-  options: InstrumentMcpServerOptions | null,
-): Promise<TestClient> {
-  const server = new McpServerV1({ name: "greeter", version: "1.0.0" });
-  registerTools(server);
-  if (options !== null)
-    instrumentMcpServer(server, { recordSpans: true, ...options });
-  const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
-  await server.connect(serverSide);
-  const client = new ClientV1({ name: "test-client", version: "2.0.0" });
-  await client.connect(clientSide);
-  return client as unknown as TestClient;
-}
-
-async function connectV2(
-  options: InstrumentMcpServerOptions | null,
-): Promise<TestClient> {
-  const handler = createMcpHandler(() => {
-    const server = new McpServerV2({ name: "greeter", version: "1.0.0" });
-    registerTools(server);
-    if (options !== null)
-      instrumentMcpServer(server, { recordSpans: true, ...options });
-    return server;
-  });
-  const client = new ClientV2({ name: "test-client", version: "2.0.0" });
-  await client.connect(
-    new StreamableHTTPClientTransport(new URL("http://test.local/mcp"), {
-      fetch: async (url, init) =>
-        await handler.fetch(new Request(String(url), init)),
-    }),
-  );
-  return client as unknown as TestClient;
-}
-
-function toolCallSpans(exporter: InMemorySpanExporter): ReadableSpan[] {
-  return exporter
-    .getFinishedSpans()
-    .filter((span) => span.attributes["mcp.method.name"] === "tools/call");
-}
-
-function textBlocks(result: unknown): string[] {
-  const content = (result as ToolResult).content as { text: string }[];
-  return content.map((block) => block.text);
-}
-
-function failureOf(span: ReadableSpan | undefined): unknown {
-  return {
-    errorType: span?.attributes["error.type"],
-    status: span?.status.code,
-  };
-}
-
-describe.each([
-  ["@modelcontextprotocol/sdk 1.x", connectV1],
-  ["@modelcontextprotocol/server 2.x", connectV2],
-] as const)("instrumentMcpServer with %s", (_label, connect) => {
-  test("uses explicit sessions and leaves payload capture off by default", async () => {
-    useExporter();
-    const provider = JudgmentTracerProvider.getInstance();
-    provider.getActiveTracer()!._enableMonitoring = true;
-    const events: McpCall[] = [];
-    const sending = spyOn(globalThis, "fetch").mockImplementation(
-      Object.assign(
-        async (_url: string | URL | Request, init?: RequestInit) => {
-          events.push(
-            ...(
-              JSON.parse(await requestBody(_url, init)) as { calls: McpCall[] }
-            ).calls,
-          );
-          return Promise.resolve(new Response(null, { status: 200 }));
-        },
-        { preconnect: globalThis.fetch.preconnect },
-      ),
-    );
-    try {
-      const client = await connect({
-        recordSpans: false,
-        sessionId: () => "application-session",
-      });
-      const result = await client.callTool({
-        name: "greet",
-        arguments: { name: SECRET },
-      });
-      captureMcpCall({
-        timestamp: new Date().toISOString(),
-        duration_ms: 1,
-        outcome: "success",
-        server_name: "custom",
-        tool_name: "manual",
-        argument_keys: [],
-        metadata: {},
-        input: null,
-      });
-      await provider.forceFlush();
-      expect({
-        events: events.map((call) => ({
-          tool: call.tool_name,
-          session: call.session_id,
-          input: call.input,
-          output: call.output,
-        })),
-        prompts: textBlocks(result).filter((text) =>
-          text.includes("conversation_id"),
-        ),
-      }).toEqual({
-        events: [
-          {
-            tool: "greet",
-            session: "application-session",
-            input: undefined,
-            output: undefined,
-          },
-          {
-            tool: "manual",
-            session: undefined,
-            input: null,
-            output: undefined,
-          },
-        ],
-        prompts: [],
-      });
-    } finally {
-      await provider.shutdown();
-      sending.mockRestore();
-    }
-  });
-
-  test("exports native calls without OTel spans and preserves retry identity", async () => {
-    const spans = useExporter();
-    const provider = JudgmentTracerProvider.getInstance();
-    const tracer = provider.getActiveTracer()!;
-    tracer._enableMonitoring = true;
-    tracer.environment = "test";
-    const bodies: string[] = [];
-    const sending = spyOn(globalThis, "fetch").mockImplementation(
-      Object.assign(
-        async (_url: string | URL | Request, init?: RequestInit) => {
-          bodies.push(await requestBody(_url, init));
-          return Promise.resolve(
-            new Response(null, {
-              status: bodies.length === 1 ? 503 : 200,
-            }),
-          );
-        },
-        { preconnect: globalThis.fetch.preconnect },
-      ),
-    );
-    try {
-      const client = await connect({
-        recordSpans: false,
-        captureInput: true,
-        captureOutput: true,
-        identify: () => ({ userId: "user-1" }),
-        redactPayload: (value, field) =>
-          field === "input"
-            ? { ...(value as object), name: "[redacted]" }
-            : value,
-      });
-      await client.callTool({ name: "greet", arguments: { name: SECRET } });
-      await client.callTool({
-        name: "greet",
-        arguments: { name: "other", fail: true },
-      });
-      await provider.forceFlush();
-      const calls = (JSON.parse(bodies[0]!) as { calls: McpCall[] }).calls;
-      expect({
-        retriesIdentical: bodies[0] === bodies[1],
-        distinctIds: calls[0]?.call_id !== calls[1]?.call_id,
-        events: calls.map((call) => ({
-          tool: call.tool_name,
-          outcome: call.outcome,
-          input: call.input,
-          keys: call.argument_keys,
-          user: call.user_id,
-          environment: call.environment_name,
-          session: typeof call.session_id,
-          trace: call.trace_id,
-          output: call.output !== undefined,
-          duration: call.duration_ms >= 0,
-        })),
-        spans: spans.getFinishedSpans().length,
-      }).toEqual({
-        retriesIdentical: true,
-        distinctIds: true,
-        events: [
-          {
-            tool: "greet",
-            outcome: "success",
-            input: { name: "[redacted]" },
-            keys: ["name"],
-            user: "user-1",
-            environment: "test",
-            session: "string",
-            trace: undefined,
-            output: true,
-            duration: true,
-          },
-          {
-            tool: "greet",
-            outcome: "error",
-            input: { name: "[redacted]", fail: true },
-            keys: ["name", "fail"],
-            user: "user-1",
-            environment: "test",
-            session: "string",
-            trace: undefined,
-            output: true,
-            duration: true,
-          },
-        ],
-        spans: 0,
-      });
-    } finally {
-      await provider.shutdown();
-      sending.mockRestore();
-    }
-  });
-
-  test("records a successful call as a standard server span", async () => {
-    const exporter = useExporter();
-    const client = await connect({});
-    await client.callTool({ name: "greet", arguments: { name: SECRET } });
-    const span = toolCallSpans(exporter)[0];
-    expect({
-      name: span?.name,
-      kind: span?.kind,
-      method: span?.attributes["mcp.method.name"],
-      tool: span?.attributes["gen_ai.tool.name"],
-      operation: span?.attributes["gen_ai.operation.name"],
-      server: span?.attributes["judgment.mcp.server.name"],
-      errorType: span?.attributes["error.type"],
-      keys: span?.attributes["judgment.mcp.argument_keys"],
-    }).toEqual({
-      name: "tools/call greet",
-      kind: SpanKind.SERVER,
-      method: "tools/call",
-      tool: "greet",
-      operation: "execute_tool",
-      server: "greeter",
-      errorType: undefined,
-      keys: "name",
-    });
-  });
-
-  test("never records argument values", async () => {
-    const exporter = useExporter();
-    const client = await connect({});
-    await client.callTool({ name: "greet", arguments: { name: SECRET } });
-    await client.callTool({
-      name: "greet",
-      arguments: { name: SECRET, extra: SECRET },
-    });
-    const recorded = JSON.stringify(
-      toolCallSpans(exporter).map((span) => span.attributes),
-    );
-    expect(recorded.includes(SECRET)).toEqual(false);
-  });
-
-  test("types a returned structured error by its code", async () => {
-    const exporter = useExporter();
-    const client = await connect({});
-    await client.callTool({
-      name: "greet",
-      arguments: { name: "a", fail: true },
-    });
-    expect(failureOf(toolCallSpans(exporter)[0])).toEqual({
-      errorType: "CONFLICT",
-      status: 2,
-    });
-  });
-
-  test("types a failure by the class of the error the handler recorded", async () => {
-    const exporter = useExporter();
-    const client = await connect({});
-    await client.callTool({
-      name: "greet",
-      arguments: { name: "a", thrown: true },
-    });
-    expect(failureOf(toolCallSpans(exporter)[0])).toEqual({
-      errorType: "UpstreamError",
-      status: 2,
-    });
-  });
-
-  test("types invalid input as invalid_input", async () => {
-    const exporter = useExporter();
-    const client = await connect({});
-    await client.callTool({ name: "greet", arguments: { name: 1 } });
-    expect(failureOf(toolCallSpans(exporter)[0])).toEqual({
-      errorType: "invalid_input",
-      status: 2,
-    });
-  });
-
-  test("types an unknown tool as unknown_tool", async () => {
-    const exporter = useExporter();
-    const client = await connect({});
-    await client
-      .callTool({ name: "missing", arguments: {} })
-      .catch(() => undefined);
-    expect(failureOf(toolCallSpans(exporter)[0])).toEqual({
-      errorType: "unknown_tool",
-      status: 2,
-    });
-  });
-
-  test("joins the caller's trace when _meta carries one", async () => {
-    const exporter = useExporter();
-    const client = await connect({});
-    await client.callTool({
-      name: "greet",
-      arguments: { name: "a" },
-      _meta: { traceparent: `00-${TRACE_ID}-b7ad6b7169203331-01` },
-    });
-    const span = toolCallSpans(exporter)[0];
-    expect({
-      traceId: span?.spanContext().traceId,
-      parentSpanId: span?.parentSpanContext?.spanId,
-    }).toEqual({ traceId: TRACE_ID, parentSpanId: "b7ad6b7169203331" });
-  });
-
-  test("starts its own trace when the caller sends none", async () => {
-    const exporter = useExporter();
-    const client = await connect({});
-    await client.callTool({ name: "greet", arguments: { name: "a" } });
-    expect(toolCallSpans(exporter)[0]?.parentSpanContext).toEqual(undefined);
-  });
-
-  test("adds optional arguments to listed tools by default", async () => {
-    useExporter();
-    const client = await connect({});
-    const { tools } = await client.listTools();
-    const greet = tools.find((tool) => tool.name === "greet");
-    expect(Object.keys(greet?.inputSchema.properties ?? {}).sort()).toEqual([
-      "context",
-      "conversation_id",
-      "fail",
-      "llm_model",
-      "name",
-      "thrown",
-    ]);
-  });
-
-  test("records reported values and hides them from the handler", async () => {
-    const exporter = useExporter();
-    seenInputs.length = 0;
-    const client = await connect({});
-    await client.callTool({
-      name: "greet",
-      arguments: {
-        name: "a",
-        context: "Contacting ana@example.com about billing",
-        llm_model: "model-1",
-      },
-    });
-    const span = toolCallSpans(exporter)[0];
-    expect({
-      seen: seenInputs,
-      intent: span?.attributes["judgment.mcp.intent"],
-      model: span?.attributes["judgment.mcp.model"],
-    }).toEqual({
-      seen: [{ name: "a" }],
-      intent: "Contacting [email] about billing",
-      model: "model-1",
-    });
-  });
-
-  test("leaves a tool's own argument of the same name alone", async () => {
-    const exporter = useExporter();
-    seenInputs.length = 0;
-    const client = await connect({});
-    await client.callTool({
-      name: "structured",
-      arguments: { context: "the tool's own value" },
-    });
-    expect({
-      seen: seenInputs,
-      intent: toolCallSpans(exporter)[0]?.attributes["judgment.mcp.intent"],
-    }).toEqual({
-      seen: [{ context: "the tool's own value" }],
-      intent: undefined,
-    });
-  });
-
-  test("ignores an invented conversation ID and mints its own", async () => {
-    const exporter = useExporter();
-    const client = await connect({});
-    await client.callTool({
-      name: "greet",
-      arguments: { name: "a", conversation_id: "made-up-by-agent" },
-    });
-    const attributes = toolCallSpans(exporter)[0]?.attributes;
-    expect({
-      source: attributes?.["judgment.mcp.conversation_id_source"],
-      invented:
-        attributes?.["judgment.mcp.conversation_id"] === "made-up-by-agent",
-    }).toEqual({ source: "minted", invented: false });
-  });
-
-  test("keeps an echoed conversation ID", async () => {
-    const exporter = useExporter();
-    const client = await connect({});
-    const id = mintConversationId();
-    const result = await client.callTool({
-      name: "greet",
-      arguments: { name: "a", conversation_id: id },
-    });
-    const attributes = toolCallSpans(exporter)[0]?.attributes;
-    expect({
-      id: attributes?.["judgment.mcp.conversation_id"],
-      source: attributes?.["judgment.mcp.conversation_id_source"],
-      blocks: textBlocks(result).length,
-    }).toEqual({ id, source: "echoed", blocks: 1 });
-  });
-
-  test("hands off the same ID to structured-only clients with a strict output schema", async () => {
-    const exporter = useExporter();
-    const client = await connect({});
-    await client.listTools();
-    const result = (await client.callTool({
-      name: "structured",
-      arguments: {},
-    })) as ToolResult;
-    const blocks = textBlocks(result);
-    const prompt = JSON.parse(blocks[blocks.length - 1]!);
-    const structured = result.structuredContent as {
-      _judgment: { conversation_id: string };
-    };
-    const echoed = (await client.callTool({
-      name: "structured",
-      arguments: { conversation_id: structured._judgment.conversation_id },
-    })) as ToolResult;
-    expect({
-      blocks: textBlocks(result).length,
-      structured: result.structuredContent,
-      echoed: echoed.structuredContent,
-      ids: toolCallSpans(exporter).map(
-        (span) => span.attributes["judgment.mcp.conversation_id"],
-      ),
-    }).toEqual({
-      blocks: 2,
-      structured: { ok: true, _judgment: prompt },
-      echoed: { ok: true },
-      ids: [prompt.conversation_id, prompt.conversation_id],
-    });
-  });
-
-  test("leaves tools and results unchanged when injection is off", async () => {
-    useExporter();
-    const plain = await connect(null);
-    const traced = await connect({ injectAgentArguments: false });
-    const call = { name: "greet", arguments: { name: "a" } };
-    expect({
-      tools: (await traced.listTools()).tools,
-      result: await traced.callTool(call),
-    }).toEqual({
-      tools: (await plain.listTools()).tools,
-      result: await plain.callTool(call),
-    });
-  });
-
-  test("records who the call was for", async () => {
-    const exporter = useExporter();
-    const client = await connect({ identify: () => ({ userId: "user-1" }) });
-    await client.callTool({ name: "greet", arguments: { name: "a" } });
-    const attributes = toolCallSpans(exporter)[0]?.attributes;
-    expect({
-      user: attributes?.["enduser.id"],
-      customer: attributes?.["judgment.customer_id"],
-    }).toEqual({ user: "user-1", customer: "customer-1" });
-  });
-
-  test("a failing identify callback never affects the call", async () => {
-    useExporter();
-    const client = await connect({
-      identify: () => {
-        throw new Error("identify failed");
-      },
-    });
-    const result = await client.callTool({
-      name: "greet",
-      arguments: { name: "a", conversation_id: mintConversationId() },
-    });
-    expect(textBlocks(result)).toEqual(["hello"]);
-  });
-
-  test("a failing redact sends no text and never affects the call", async () => {
-    const exporter = useExporter();
-    const client = await connect({
-      redact: () => {
-        throw new Error("redact failed");
-      },
-    });
-    const result = await client.callTool({
-      name: "greet",
-      arguments: {
-        name: "a",
-        context: "why",
-        conversation_id: mintConversationId(),
-      },
-    });
-    await client.callTool({
-      name: "greet",
-      arguments: { name: "a", fail: true },
-    });
-    const [success, failure] = toolCallSpans(exporter);
-    expect({
-      blocks: textBlocks(result),
-      intent: success?.attributes["judgment.mcp.intent"],
-      failureEnded: failure?.status.code,
-      failureMessage: failure?.status.message,
-    }).toEqual({
-      blocks: ["hello"],
-      intent: undefined,
-      failureEnded: 2,
-      failureMessage: undefined,
-    });
-  });
-
-  test("never records free text a tool returned as a structured error", async () => {
-    const exporter = useExporter();
-    const client = await connect({ captureErrorMessages: false });
-    await client.callTool({ name: "wordy_error", arguments: {} });
-    expect(toolCallSpans(exporter)[0]?.attributes["error.type"]).toEqual(
-      "tool_error",
-    );
-  });
-
-  test("never records a token-shaped error code", async () => {
-    const exporter = useExporter();
-    const client = await connect({});
-    await client.callTool({ name: "token_error", arguments: {} });
-    expect(toolCallSpans(exporter)[0]?.attributes["error.type"]).toEqual(
-      "tool_error",
-    );
-  });
-
-  test("drops credentials from a resource URI", async () => {
-    const exporter = useExporter();
-    const client = await connect({});
-    await client.readResource({ uri: "report://latest?token=secret-token" });
-    const span = exporter
-      .getFinishedSpans()
-      .find((candidate) => candidate.name === "resources/read");
-    expect(span?.attributes["mcp.resource.uri"]).toEqual("report://latest");
-  });
-
-  test("gives tools sharing one schema their own contract hash", async () => {
-    const exporter = useExporter();
-    const client = await connect({});
-    await client.callTool({ name: "shared_a", arguments: {} });
-    await client.callTool({ name: "shared_b", arguments: {} });
-    const hashes = toolCallSpans(exporter).map(
-      (span) => span.attributes["judgment.mcp.contract_hash"],
-    );
-    expect(new Set(hashes).size).toEqual(2);
-  });
-
-  test("records a tool's own argument named like an injected one", async () => {
-    const exporter = useExporter();
-    const client = await connect({});
-    await client.callTool({
-      name: "structured",
-      arguments: { context: "theirs", llm_model: "model-1" },
-    });
-    expect(
-      toolCallSpans(exporter)[0]?.attributes["judgment.mcp.argument_keys"],
-    ).toEqual("context");
-  });
-
-  test("records every argument name when injection is off", async () => {
-    const exporter = useExporter();
-    const client = await connect({ injectAgentArguments: false });
-    await client.callTool({ name: "open", arguments: { context: "theirs" } });
-    expect(
-      toolCallSpans(exporter)[0]?.attributes["judgment.mcp.argument_keys"],
-    ).toEqual("context");
-  });
-
-  test("leaves a tool that accepts unknown keys alone", async () => {
-    useExporter();
-    seenInputs.length = 0;
-    const client = await connect({});
-    const { tools } = await client.listTools();
-    await client.callTool({ name: "open", arguments: { context: "theirs" } });
-    expect({
-      seen: seenInputs,
-      listed: Object.keys(
-        tools.find((tool) => tool.name === "open")?.inputSchema.properties ??
-          {},
-      ),
-    }).toEqual({ seen: [{ context: "theirs" }], listed: [] });
-  });
-
-  test("redacts failure messages and honors turning them off", async () => {
-    const exporter = useExporter();
-    const redacting = await connect({ redact: () => "[redacted]" });
-    const silent = await connect({ captureErrorMessages: false });
-    const call = { name: "greet", arguments: { name: "a", fail: true } };
-    await redacting.callTool(call);
-    await silent.callTool(call);
-    expect(toolCallSpans(exporter).map((span) => span.status.message)).toEqual([
-      "[redacted]",
-      undefined,
-    ]);
-  });
-});
-
 test("payload capture detaches values and omits unsafe data without changing the source", () => {
   const original = { token: SECRET };
   const captured = capturePayload(original, "input", (value) => {
@@ -977,78 +521,33 @@ test("payload capture detaches values and omits unsafe data without changing the
   });
 });
 
-test("native delivery bounds batches and queue and does not retry permanent errors", async () => {
-  const sizes: number[] = [];
-  const sending = spyOn(globalThis, "fetch").mockImplementation(
-    Object.assign(
-      async (_url: string | URL | Request, init?: RequestInit) => {
-        sizes.push(
-          (JSON.parse(await requestBody(_url, init)) as { calls: McpCall[] })
-            .calls.length,
-        );
-        return Promise.resolve(
-          new Response(null, { status: sizes.length === 1 ? 400 : 200 }),
-        );
-      },
-      { preconnect: globalThis.fetch.preconnect },
-    ),
-  );
+test("delivery bounds the queue, batches calls and stops retrying permanent errors", async () => {
+  useExporter();
+  const { bodies } = captureNativeRequests([403, 403]);
+  const warnings = spyOn(Logger, "warning").mockImplementation(() => {});
+  cleanups.push(() => {
+    warnings.mockRestore();
+  });
   const exporter = new McpCallExporter({
     apiUrl: "http://localhost",
     apiKey: "key",
     organizationId: "org",
     projectId: "project",
   });
-  try {
-    for (let index = 0; index < 1001; index++)
-      exporter.enqueue({
-        call_id: String(index),
-        timestamp: "2026-11-10T00:00:00Z",
-        duration_ms: 0,
-        outcome: "success",
-        server_name: "server",
-        tool_name: "tool",
-        argument_keys: [],
-        metadata: {},
-      });
-    await exporter.shutdown();
-    expect(sizes).toEqual(Array(10).fill(100));
-  } finally {
-    sending.mockRestore();
-  }
-});
-
-describe("tool updates", () => {
-  test("re-reads a tool's schema after it changes", async () => {
-    useExporter();
-    seenInputs.length = 0;
-    const server = new McpServerV1({ name: "greeter", version: "1.0.0" });
-    const tool = server.registerTool(
-      "changing",
-      { description: "Changes", inputSchema: z.strictObject({}) },
-      (input: Record<string, unknown>) => {
-        seenInputs.push(input);
-        return { content: [{ type: "text" as const, text: "ok" }] };
-      },
-    );
-    instrumentMcpServer(server, { recordSpans: true });
-    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
-    await server.connect(serverSide);
-    const client = new ClientV1({ name: "test-client", version: "2.0.0" });
-    await client.connect(clientSide);
-    await client.callTool({ name: "changing", arguments: {} });
-    tool.update({ paramsSchema: { context: z.string() } });
-    await client.callTool({
-      name: "changing",
-      arguments: { context: "theirs" },
-    });
-    expect(seenInputs[seenInputs.length - 1]).toEqual({ context: "theirs" });
-  });
+  for (let n = 0; n < 1010; n++)
+    exporter.enqueue({ ...completedCall, call_id: String(n) });
+  await exporter.shutdown();
+  exporter.enqueue(completedCall);
+  expect({
+    sizes: bodies.map((body) => JSON.parse(body).calls.length),
+    warnings: warnings.mock.calls.length,
+  }).toEqual({ sizes: Array(10).fill(100), warnings: 1 });
 });
 
 describe("cancelled calls", () => {
   test("records a cancelled call as neither success nor failure", async () => {
     const exporter = useExporter();
+    const { provider, bodies } = captureNativeRequests();
     const server = new McpServerV1({ name: "greeter", version: "1.0.0" });
     let release = (): void => undefined;
     let started = (): void => undefined;
@@ -1084,11 +583,22 @@ describe("cancelled calls", () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
     release();
     await new Promise((resolve) => setTimeout(resolve, 10));
-    const attributes = toolCallSpans(exporter)[0]?.attributes;
+    const attributes = exporter
+      .getFinishedSpans()
+      .find((span) => span.name === "tools/call slow")?.attributes;
+    await provider.forceFlush();
+    const calls = bodies.flatMap(
+      (body) => (JSON.parse(body) as { calls: McpCall[] }).calls,
+    );
     expect({
       cancelled: attributes?.["judgment.mcp.cancelled"],
       errorType: attributes?.["error.type"],
-    }).toEqual({ cancelled: "true", errorType: undefined });
+      native: calls.map((call) => [call.outcome, call.error_type]),
+    }).toEqual({
+      cancelled: "true",
+      errorType: undefined,
+      native: [["cancelled", undefined]],
+    });
   });
 });
 
@@ -1139,14 +649,9 @@ describe("structured conversation handoff", () => {
   );
 });
 
-describe("sanitizeIntent", () => {
-  test("removes well-defined identifiers and leaves ordinary text", () => {
-    expect(
-      sanitizeIntent(
-        "Email a@b.co, call +1 415 555 0100, card 4242 4242 4242 4242, ssn 123-45-6789, ip 10.1.2.3, about 2 invoices",
-      ),
-    ).toEqual(
-      "Email [email], call [phone], card [card], ssn [ssn], ip [ip], about 2 invoices",
-    );
-  });
+test("reported intent preserves text and remains length-bounded", () => {
+  expect([
+    readReportedArguments({ context: "Email a@b.co" }, new Set()).intent,
+    readReportedArguments({ context: "a".repeat(1000) }, new Set()).intent,
+  ]).toEqual(["Email a@b.co", "a".repeat(500)]);
 });

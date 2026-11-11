@@ -35,7 +35,9 @@ Call `await Tracer.forceFlush()` before a serverless invocation ends, or `await 
 instrumentMcpServer(server, { injectAgentArguments: false });
 ```
 
-Use `identify` or `setMcpCaller` to attach your end user, `redact` to rewrite error text and intent before it's sent, and `markMcpCallError` to record the original error before you turn it into a public tool error. A failed call's `error.type` is the original error's class name (or `unknown_tool`, `tool_disabled`, `invalid_input` for calls refused before your handler ran), so named error classes tell you why calls fail.
+Error-message capture defaults off; outcome and error type are still recorded. Set `captureErrorMessages: true` to capture failure text. There is no automatic PII or argument-value scrubbing: enabled payload/error capture and agent-reported intent are sent as-is unless transformed by `redactPayload` or `redact`. Intent remains enabled by default; use `redact` to remove sensitive values or `injectAgentArguments: false` to disable agent-reported fields and session handoff.
+
+Use `identify` or `setMcpCaller` to attach your end user, and `markMcpCallError` to record the original error before you turn it into a public tool error. A failed call's `error.type` is the original error's class name (or `unknown_tool`, `tool_disabled`, `invalid_input` for calls refused before your handler ran), so named error classes tell you why calls fail.
 
 ## Usage
 
