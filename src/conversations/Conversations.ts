@@ -4,7 +4,8 @@ import type { Observation } from "../internal/api/models";
 import { dontThrow } from "../utils/dont-throw";
 import { Logger } from "../utils/logger";
 import { resolveProjectId } from "../utils/resolve-project-id";
-import { ObservationSender } from "./ObservationSender";
+import { BatchObservationProcessor } from "./BatchObservationProcessor";
+import { ObservationExporter } from "./ObservationExporter";
 
 /** Where {@link Conversations.record} sends calls. */
 export interface ConversationsConfig {
@@ -61,7 +62,9 @@ export interface RecordOptions {
  * ```
  */
 export class Conversations {
-  private static _active: ObservationSender | undefined;
+  private static _initialized = false;
+  private static _processor: BatchObservationProcessor | null = null;
+  private static _environment: string | undefined;
   private static _notInitializedReported = false;
 
   private constructor() {}
@@ -78,16 +81,19 @@ export class Conversations {
       const apiKey = config.apiKey ?? JUDGMENT_API_KEY;
       const organizationId = config.organizationId ?? JUDGMENT_ORG_ID;
       const apiUrl = config.apiUrl ?? JUDGMENT_API_URL;
-      let client: JudgmentApiClient | null = null;
-      let projectId: string | null = null;
+      let processor: BatchObservationProcessor | null = null;
       if (projectName && apiKey && organizationId && apiUrl) {
-        client = new JudgmentApiClient(apiUrl, apiKey, organizationId);
-        projectId = await resolveProjectId(client, projectName).catch(
+        const client = new JudgmentApiClient(apiUrl, apiKey, organizationId);
+        const projectId = await resolveProjectId(client, projectName).catch(
           () => null,
         );
         if (projectId === null) {
           Logger.warning(
             `Project '${projectName}' not found. Conversations will not record observations.`,
+          );
+        } else {
+          processor = new BatchObservationProcessor(
+            new ObservationExporter(client, projectId),
           );
         }
       } else {
@@ -103,13 +109,11 @@ export class Conversations {
           `${missing.join(", ")} not provided. Conversations will not record observations.`,
         );
       }
-      const previous = Conversations._active;
-      Conversations._active = new ObservationSender(
-        client,
-        projectId,
-        config.environment,
-      );
-      await previous?.stop();
+      const previous = Conversations._processor;
+      Conversations._initialized = true;
+      Conversations._processor = processor;
+      Conversations._environment = config.environment;
+      await previous?.shutdown();
     } catch (error) {
       Logger.error(`[Conversations] init failed: ${String(error)}`);
     }
@@ -126,8 +130,7 @@ export class Conversations {
    */
   static record(observation: Observation, options: RecordOptions = {}): void {
     dontThrow("Conversations.record", () => {
-      const active = Conversations._active;
-      if (active === undefined) {
+      if (!Conversations._initialized) {
         if (!Conversations._notInitializedReported) {
           Conversations._notInitializedReported = true;
           Logger.warning(
@@ -136,7 +139,13 @@ export class Conversations {
         }
         return;
       }
-      active.enqueue(observation, options.observedAt ?? new Date());
+      Conversations._processor?.emit({
+        // Sent later, so copy it: changes the caller makes afterwards, such
+        // as appending to a shared message history, are not sent.
+        observation: structuredClone(observation),
+        observed_at: (options.observedAt ?? new Date()).toISOString(),
+        environment: Conversations._environment,
+      });
     });
   }
 
@@ -147,7 +156,7 @@ export class Conversations {
    *   rejects.
    */
   static async flush(): Promise<void> {
-    await Conversations._active?.flush();
+    await Conversations._processor?.forceFlush();
   }
 
   /**
@@ -155,6 +164,6 @@ export class Conversations {
    * ignored until `init` is called again.
    */
   static async shutdown(): Promise<void> {
-    await Conversations._active?.stop();
+    await Conversations._processor?.shutdown();
   }
 }
