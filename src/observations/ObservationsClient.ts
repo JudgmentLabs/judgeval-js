@@ -206,6 +206,13 @@ export class ObservationsClient {
         await this._send(batch.slice(middle));
         return;
       }
+      if (status === 402) {
+        this._reportOnce(
+          "usage",
+          "Observations are not stored: the organization is over its ingestion usage limit",
+        );
+        return;
+      }
       if (status === 404) {
         this._reportOnce(
           "disabled",

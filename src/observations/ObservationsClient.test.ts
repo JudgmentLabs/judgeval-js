@@ -119,6 +119,14 @@ describe("ObservationsClient", () => {
     expect(fake.attempts()).toBe(1);
   });
 
+  test("drops calls without retrying over the usage limit", async () => {
+    const fake = fakeClient(() => 402);
+    const observations = new ObservationsClient(fake.client, "project-1");
+    observations.record(call());
+    await observations.flush();
+    expect(fake.attempts()).toBe(1);
+  });
+
   test("records nothing without a project", async () => {
     const fake = fakeClient();
     const observations = new ObservationsClient(fake.client, null);
