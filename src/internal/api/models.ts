@@ -21,6 +21,41 @@ export type OkResponse<
 >;
 
 export type PendingEvalPayload = components["schemas"]["PendingEvalPayload"];
+
+/** The conversation format: one model call, as `Tracer.setConversationObservation` records it. */
+export type ConversationJson = components["schemas"]["ConversationJson"];
+export type ConversationError = components["schemas"]["ConversationError"];
+export type ConversationUrlSource =
+  components["schemas"]["ConversationUrlSource"];
+export type ConversationBase64Source =
+  components["schemas"]["ConversationBase64Source"];
+export type ConversationMediaSource =
+  components["schemas"]["ConversationMediaSource"];
+export type ConversationTextPart =
+  components["schemas"]["ConversationTextPart"];
+export type ConversationMediaPart =
+  components["schemas"]["ConversationMediaPart"];
+export type ConversationJsonPart =
+  components["schemas"]["ConversationJsonPart"];
+export type ConversationCustomPart =
+  components["schemas"]["ConversationCustomPart"];
+export type ConversationPart = components["schemas"]["ConversationPart"];
+export type ConversationMessage = components["schemas"]["ConversationMessage"];
+export type ConversationToolCall =
+  components["schemas"]["ConversationToolCall"];
+export type ConversationToolResult =
+  components["schemas"]["ConversationToolResult"];
+export type ConversationReasoning =
+  components["schemas"]["ConversationReasoning"];
+export type ConversationCustomItem =
+  components["schemas"]["ConversationCustomItem"];
+export type ConversationItem = components["schemas"]["ConversationItem"];
+export type ConversationTool = components["schemas"]["ConversationTool"];
+export type ConversationUsage = components["schemas"]["ConversationUsage"];
+export type ConversationObservation =
+  components["schemas"]["ConversationObservation"];
+/** One model call in the conversation format, as `client.observations.record` sends it. */
+export type Observation = components["schemas"]["Observation"];
 export type PullAllOfflineDatasetsResponse = OkResponse<
   "/v1/projects/{projectId}/datasets",
   "get"

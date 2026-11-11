@@ -5,6 +5,7 @@ import { resolveProjectId } from "./utils/resolve-project-id";
 import { Logger } from "./utils/logger";
 import { EvaluationFactory } from "./evaluation/EvaluationFactory";
 import { DatasetFactory } from "./datasets/DatasetFactory";
+import { ObservationsClient } from "./observations";
 import { AgentJudgeFactory } from "./agent-judges/AgentJudgeFactory";
 import { OfflineTestsFactory } from "./offline-tests/OfflineTestsFactory";
 import { warnOfflineTestsDeprecated } from "./offline-tests/deprecation";
@@ -58,6 +59,7 @@ export class Judgeval {
   private readonly _client: JudgmentApiClient;
   private readonly _projectName: string;
   private readonly _projectId: string | null;
+  private _observations: ObservationsClient | undefined;
 
   private constructor(
     client: JudgmentApiClient,
@@ -206,6 +208,20 @@ export class Judgeval {
   /** Call any public API route; one method per MCP tool (e.g. `listJudges`). */
   get api(): JudgmentApi {
     return new JudgmentApi(this._client.api);
+  }
+
+  /**
+   * Send model calls to Judgment without traces. `record()` queues a call in
+   * the conversation format; calls are sent in the background, in batches,
+   * and stored and evaluated as calls recorded from traces are. The same
+   * client is returned every time.
+   */
+  get observations(): ObservationsClient {
+    this._observations ??= new ObservationsClient(
+      this._client,
+      this._projectId,
+    );
+    return this._observations;
   }
 
   /** Access dataset management (create, get, list). */

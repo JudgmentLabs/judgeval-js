@@ -45,7 +45,33 @@ export type {
 export { Evaluation, type EvaluationRunOptions } from "./evaluation";
 
 export { Dataset } from "./datasets";
+export {
+  ObservationsClient,
+  type RecordObservationOptions,
+} from "./observations";
 export type { DatasetInfo } from "./internal/api/models";
+export type {
+  ConversationBase64Source,
+  ConversationCustomItem,
+  ConversationCustomPart,
+  ConversationError,
+  ConversationItem,
+  ConversationJson,
+  ConversationJsonPart,
+  ConversationMediaPart,
+  ConversationMediaSource,
+  ConversationMessage,
+  ConversationObservation,
+  ConversationPart,
+  ConversationReasoning,
+  ConversationTextPart,
+  ConversationTool,
+  ConversationToolCall,
+  ConversationToolResult,
+  ConversationUrlSource,
+  ConversationUsage,
+  Observation,
+} from "./internal/api/models";
 export type { ExperimentScorer } from "./internal/api/models";
 export {
   validateDatasetSchema,

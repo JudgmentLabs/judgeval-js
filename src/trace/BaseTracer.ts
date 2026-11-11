@@ -17,7 +17,10 @@ import type { OpenAI } from "openai";
 import { AttributeKeys, InternalAttributeKeys } from "../JudgmentAttributeKeys";
 import { wrap } from "../instrumentation";
 import { JudgmentApiClient } from "../internal/api";
-import type { PendingEvalPayload } from "../internal/api/models";
+import type {
+  ConversationObservation,
+  PendingEvalPayload,
+} from "../internal/api/models";
 import { parseFunctionArgs } from "../utils/annotate";
 import { dontThrow } from "../utils/dont-throw";
 import { Logger } from "../utils/logger";
@@ -841,6 +844,52 @@ export abstract class BaseTracer {
       target.setAttribute(
         key,
         serializeAttribute(value, BaseTracer._getSerializer()),
+      );
+    });
+  }
+
+  /**
+   * Record a model call in the conversation format.
+   *
+   * Writes `observation` as JSON to the span's
+   * `judgment.conversation.observation` attribute, which the Conversation
+   * view reads. Use it for model calls no integration records.
+   * `conversation_id`, `customer_id`, `user_id`, and `usage` default to the
+   * span's session, customer, customer user, and `judgment.usage.*`
+   * attributes. One span holds one observation; calling this again replaces
+   * it.
+   *
+   * Judgment does not store an observation that does not fit the format; it
+   * sets `judgment.conversation.warnings` on the span instead.
+   *
+   * @example
+   * ```ts
+   * Tracer.setConversationObservation({
+   *   model: "my-model-v2",
+   *   input: [{ type: "message", role: "user", content: [{ type: "text", text: question }] }],
+   *   output: [{ type: "message", role: "assistant", content: [{ type: "text", text: answer }] }],
+   * });
+   * ```
+   *
+   * @param observation - The model call.
+   * @param span - Target span. Defaults to the current active span.
+   */
+  static setConversationObservation(observation: ConversationObservation): void;
+  static setConversationObservation(
+    observation: ConversationObservation,
+    span: Span,
+  ): void;
+  static setConversationObservation(
+    observation: ConversationObservation,
+    span?: Span,
+  ): void {
+    dontThrow("BaseTracer.setConversationObservation", () => {
+      const target = BaseTracer._resolveSpan(span);
+      if (!target?.isRecording()) return;
+      // Always JSON: the server parses it, whatever serializer the tracer uses.
+      target.setAttribute(
+        AttributeKeys.JUDGMENT_CONVERSATION_OBSERVATION,
+        JSON.stringify(observation),
       );
     });
   }

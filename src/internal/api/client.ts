@@ -248,6 +248,20 @@ export class JudgmentApiClient {
     );
   }
 
+  /**
+   * Returns the raw result rather than throwing, so the caller can read the
+   * status and `Retry-After` of a failed request to decide whether to retry.
+   */
+  postV1projectsObservations(
+    projectId: string,
+    payload: RequestBody<"/v1/projects/{projectId}/observations", "post">,
+  ) {
+    return this.api.POST("/v1/projects/{projectId}/observations", {
+      params: { path: { projectId } },
+      body: payload,
+    });
+  }
+
   postV1projectsTracesByTraceIdTags(
     projectId: string,
     traceId: string,
