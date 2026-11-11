@@ -30,6 +30,8 @@ export {
 
 export {
   instrumentMcpServer,
+  captureMcpCall,
+  type McpCall,
   markMcpCallError,
   setMcpCaller,
   type InstrumentMcpServerOptions,

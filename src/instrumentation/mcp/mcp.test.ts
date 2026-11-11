@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import {
   Client as ClientV2,
   StreamableHTTPClientTransport,
@@ -28,13 +28,17 @@ import {
   mintConversationId,
   sanitizeIntent,
   withAgentArguments,
+  withConversationIdPrompt,
+  withConversationOutputSchema,
 } from "./agent-arguments";
 import {
   instrumentMcpServer,
+  captureMcpCall,
   markMcpCallError,
   setMcpCaller,
   type InstrumentMcpServerOptions,
 } from "./index";
+import { capturePayload, McpCallExporter, type McpCall } from "./exporter";
 
 const SECRET = "super-secret-value";
 const TRACE_ID = "0af7651916cd43dd8448eb211c80319c";
@@ -220,7 +224,8 @@ async function connectV1(
 ): Promise<TestClient> {
   const server = new McpServerV1({ name: "greeter", version: "1.0.0" });
   registerTools(server);
-  if (options !== null) instrumentMcpServer(server, options);
+  if (options !== null)
+    instrumentMcpServer(server, { recordSpans: true, ...options });
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   await server.connect(serverSide);
   const client = new ClientV1({ name: "test-client", version: "2.0.0" });
@@ -234,7 +239,8 @@ async function connectV2(
   const handler = createMcpHandler(() => {
     const server = new McpServerV2({ name: "greeter", version: "1.0.0" });
     registerTools(server);
-    if (options !== null) instrumentMcpServer(server, options);
+    if (options !== null)
+      instrumentMcpServer(server, { recordSpans: true, ...options });
     return server;
   });
   const client = new ClientV2({ name: "test-client", version: "2.0.0" });
@@ -269,6 +275,166 @@ describe.each([
   ["@modelcontextprotocol/sdk 1.x", connectV1],
   ["@modelcontextprotocol/server 2.x", connectV2],
 ] as const)("instrumentMcpServer with %s", (_label, connect) => {
+  test("uses explicit sessions and leaves payload capture off by default", async () => {
+    useExporter();
+    const provider = JudgmentTracerProvider.getInstance();
+    provider.getActiveTracer()!._enableMonitoring = true;
+    const events: McpCall[] = [];
+    const sending = spyOn(globalThis, "fetch").mockImplementation(
+      Object.assign(
+        (_url: string | URL | Request, init?: RequestInit) => {
+          events.push(
+            ...(JSON.parse(String(init?.body)) as { calls: McpCall[] }).calls,
+          );
+          return Promise.resolve(new Response(null, { status: 200 }));
+        },
+        { preconnect: globalThis.fetch.preconnect },
+      ),
+    );
+    try {
+      const client = await connect({
+        recordSpans: false,
+        sessionId: () => "application-session",
+      });
+      const result = await client.callTool({
+        name: "greet",
+        arguments: { name: SECRET },
+      });
+      captureMcpCall({
+        timestamp: new Date().toISOString(),
+        duration_ms: 1,
+        outcome: "success",
+        server_name: "custom",
+        tool_name: "manual",
+        argument_keys: [],
+        metadata: {},
+        input: null,
+      });
+      await provider.forceFlush();
+      expect({
+        events: events.map((call) => ({
+          tool: call.tool_name,
+          session: call.session_id,
+          input: call.input,
+          output: call.output,
+        })),
+        prompts: textBlocks(result).filter((text) =>
+          text.includes("conversation_id"),
+        ),
+      }).toEqual({
+        events: [
+          {
+            tool: "greet",
+            session: "application-session",
+            input: undefined,
+            output: undefined,
+          },
+          {
+            tool: "manual",
+            session: undefined,
+            input: null,
+            output: undefined,
+          },
+        ],
+        prompts: [],
+      });
+    } finally {
+      await provider.shutdown();
+      sending.mockRestore();
+    }
+  });
+
+  test("exports native calls without OTel spans and preserves retry identity", async () => {
+    const spans = useExporter();
+    const provider = JudgmentTracerProvider.getInstance();
+    const tracer = provider.getActiveTracer()!;
+    tracer._enableMonitoring = true;
+    tracer.environment = "test";
+    const bodies: string[] = [];
+    const sending = spyOn(globalThis, "fetch").mockImplementation(
+      Object.assign(
+        (_url: string | URL | Request, init?: RequestInit) => {
+          bodies.push(String(init?.body));
+          return Promise.resolve(
+            new Response(null, {
+              status: bodies.length === 1 ? 503 : 200,
+            }),
+          );
+        },
+        { preconnect: globalThis.fetch.preconnect },
+      ),
+    );
+    try {
+      const client = await connect({
+        recordSpans: false,
+        captureInput: true,
+        captureOutput: true,
+        identify: () => ({ userId: "user-1" }),
+        redactPayload: (value, field) =>
+          field === "input"
+            ? { ...(value as object), name: "[redacted]" }
+            : value,
+      });
+      await client.callTool({ name: "greet", arguments: { name: SECRET } });
+      await client.callTool({
+        name: "greet",
+        arguments: { name: "other", fail: true },
+      });
+      await provider.forceFlush();
+      const calls = (JSON.parse(bodies[0]!) as { calls: McpCall[] }).calls;
+      expect({
+        retriesIdentical: bodies[0] === bodies[1],
+        distinctIds: calls[0]?.call_id !== calls[1]?.call_id,
+        events: calls.map((call) => ({
+          tool: call.tool_name,
+          outcome: call.outcome,
+          input: call.input,
+          keys: call.argument_keys,
+          user: call.user_id,
+          environment: call.environment_name,
+          session: typeof call.session_id,
+          trace: call.trace_id,
+          output: call.output !== undefined,
+          duration: call.duration_ms >= 0,
+        })),
+        spans: spans.getFinishedSpans().length,
+      }).toEqual({
+        retriesIdentical: true,
+        distinctIds: true,
+        events: [
+          {
+            tool: "greet",
+            outcome: "success",
+            input: { name: "[redacted]" },
+            keys: ["name"],
+            user: "user-1",
+            environment: "test",
+            session: "string",
+            trace: undefined,
+            output: true,
+            duration: true,
+          },
+          {
+            tool: "greet",
+            outcome: "error",
+            input: { name: "[redacted]", fail: true },
+            keys: ["name", "fail"],
+            user: "user-1",
+            environment: "test",
+            session: "string",
+            trace: undefined,
+            output: true,
+            duration: true,
+          },
+        ],
+        spans: 0,
+      });
+    } finally {
+      await provider.shutdown();
+      sending.mockRestore();
+    }
+  });
+
   test("records a successful call as a standard server span", async () => {
     const exporter = useExporter();
     const client = await connect({});
@@ -466,17 +632,36 @@ describe.each([
     }).toEqual({ id, source: "echoed", blocks: 1 });
   });
 
-  test("returns a new ID in content without touching structured output", async () => {
-    useExporter();
+  test("hands off the same ID to structured-only clients with a strict output schema", async () => {
+    const exporter = useExporter();
     const client = await connect({});
+    await client.listTools();
     const result = (await client.callTool({
       name: "structured",
       arguments: {},
     })) as ToolResult;
+    const blocks = textBlocks(result);
+    const prompt = JSON.parse(blocks[blocks.length - 1]!);
+    const structured = result.structuredContent as {
+      _judgment: { conversation_id: string };
+    };
+    const echoed = (await client.callTool({
+      name: "structured",
+      arguments: { conversation_id: structured._judgment.conversation_id },
+    })) as ToolResult;
     expect({
       blocks: textBlocks(result).length,
       structured: result.structuredContent,
-    }).toEqual({ blocks: 2, structured: { ok: true } });
+      echoed: echoed.structuredContent,
+      ids: toolCallSpans(exporter).map(
+        (span) => span.attributes["judgment.mcp.conversation_id"],
+      ),
+    }).toEqual({
+      blocks: 2,
+      structured: { ok: true, _judgment: prompt },
+      echoed: { ok: true },
+      ids: [prompt.conversation_id, prompt.conversation_id],
+    });
   });
 
   test("leaves tools and results unchanged when injection is off", async () => {
@@ -640,6 +825,69 @@ describe.each([
   });
 });
 
+test("payload capture detaches values and omits unsafe data without changing the source", () => {
+  const original = { token: SECRET };
+  const captured = capturePayload(original, "input", (value) => {
+    (value as { token: string }).token = "safe";
+    return value;
+  });
+  expect({
+    original,
+    captured,
+    failure: capturePayload(original, "output", () => {
+      throw new Error(SECRET);
+    }),
+    oversized: capturePayload("x".repeat(128 * 1024), "output"),
+    null: capturePayload(null, "output"),
+  }).toEqual({
+    original: { token: SECRET },
+    captured: { token: "safe" },
+    failure: undefined,
+    oversized: undefined,
+    null: null,
+  });
+});
+
+test("native delivery bounds batches and queue and does not retry permanent errors", async () => {
+  const sizes: number[] = [];
+  const sending = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      (_url: string | URL | Request, init?: RequestInit) => {
+        sizes.push(
+          (JSON.parse(String(init?.body)) as { calls: McpCall[] }).calls.length,
+        );
+        return Promise.resolve(
+          new Response(null, { status: sizes.length === 1 ? 400 : 200 }),
+        );
+      },
+      { preconnect: globalThis.fetch.preconnect },
+    ),
+  );
+  const exporter = new McpCallExporter({
+    apiUrl: "http://localhost",
+    apiKey: "key",
+    organizationId: "org",
+    projectId: "project",
+  });
+  try {
+    for (let index = 0; index < 1001; index++)
+      exporter.enqueue({
+        call_id: String(index),
+        timestamp: "2026-11-10T00:00:00Z",
+        duration_ms: 0,
+        outcome: "success",
+        server_name: "server",
+        tool_name: "tool",
+        argument_keys: [],
+        metadata: {},
+      });
+    await exporter.shutdown();
+    expect(sizes).toEqual(Array(10).fill(100));
+  } finally {
+    sending.mockRestore();
+  }
+});
+
 describe("tool updates", () => {
   test("re-reads a tool's schema after it changes", async () => {
     useExporter();
@@ -653,7 +901,7 @@ describe("tool updates", () => {
         return { content: [{ type: "text" as const, text: "ok" }] };
       },
     );
-    instrumentMcpServer(server, {});
+    instrumentMcpServer(server, { recordSpans: true });
     const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
     await server.connect(serverSide);
     const client = new ClientV1({ name: "test-client", version: "2.0.0" });
@@ -689,7 +937,7 @@ describe("cancelled calls", () => {
         return { content: [{ type: "text" as const, text: "done" }] };
       },
     );
-    instrumentMcpServer(server, {});
+    instrumentMcpServer(server, { recordSpans: true });
     const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
     await server.connect(serverSide);
     const client = new ClientV1({ name: "test-client", version: "2.0.0" });
@@ -723,6 +971,40 @@ describe("withAgentArguments", () => {
         inputSchema: { type: "object", [keyword]: [] },
       };
       expect(withAgentArguments(tool)).toEqual(tool);
+    },
+  );
+});
+
+describe("structured conversation handoff", () => {
+  test.each([
+    { properties: { _judgment: { type: "string" } } },
+    { oneOf: [] },
+    { maxProperties: 1 },
+    { const: { ok: true } },
+    { enum: [{ ok: true }] },
+  ])("leaves incompatible output schemas alone: %j", (constraints) => {
+    expect(
+      withConversationOutputSchema({ type: "object", ...constraints }),
+    ).toBeUndefined();
+  });
+
+  test.each([undefined, { _judgment: "developer-owned" }])(
+    "never replaces text-only output or developer fields: %j",
+    (structuredContent) => {
+      const result = {
+        content: [{ type: "text", text: "original" }],
+        structuredContent,
+        isError: true,
+      };
+      const updated = withConversationIdPrompt(
+        result,
+        "id",
+        new Set(["tool"]),
+        "tool",
+      );
+      expect({ ...updated, content: updated.content.slice(0, -1) }).toEqual(
+        result,
+      );
     },
   );
 });

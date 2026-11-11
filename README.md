@@ -25,9 +25,11 @@ const server = new McpServer({ name: "orders", version: "1.0.0" });
 instrumentMcpServer(server);
 ```
 
-Argument values and tool results are never recorded, and tracing failures never affect a call.
+Completed tool calls go directly to the native MCP endpoint, independently of OTel sampling. Arguments/results are opt-in (`captureInput`, `captureOutput`); `redactPayload(value, field)` transforms a detached JSON snapshot before export. Throw or return `undefined` to omit a payload. Non-JSON or oversized payloads (128 KiB) are omitted. Telemetry failures never affect a call.
 
-**What changes on your server:** by default, each tool gains optional `context`, `llm_model` and `conversation_id` arguments, which are removed before your handler runs. A call with no session gets a conversation ID in an extra text block in its result. This is how you get agent-reported intent and sessions from clients that send no ID. To leave your tools and results exactly as they are:
+Call `await Tracer.forceFlush()` before a serverless invocation ends, or `await Tracer.shutdown()` when stopping. Delivery is best-effort: bounded queues retry transient errors three times with unchanged event IDs/data. Only completed calls are captured; process termination or permanently hung tools may leave no event. Set `recordSpans: true` only if you also want OTel request spans; do not map those spans back into MCP calls, which would duplicate native events.
+
+**What changes on your server:** compatible tools gain optional `context`, `llm_model` and `conversation_id` arguments, stripped before execution. A missing logical session gets an ID in supplemental text and compatible existing `structuredContent._judgment`, with a matching optional output-schema property. Text-only results stay text-only; schema collisions/unsupported compositions keep text handoff. Transport sessions do not define logical sessions. Use `sessionId: info => yourSessionId` for authoritative application IDs without agent echo. To leave your tools and results unchanged:
 
 ```typescript
 instrumentMcpServer(server, { injectAgentArguments: false });

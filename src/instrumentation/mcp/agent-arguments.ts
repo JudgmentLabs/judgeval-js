@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 const INTENT_ARGUMENT = "context";
 const MODEL_ARGUMENT = "llm_model";
 const CONVERSATION_ARGUMENT = "conversation_id";
+const RESPONSE_CONTEXT = "_judgment";
 const MAX_INTENT_LENGTH = 500;
 const UUID_V7 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -13,7 +14,7 @@ const AGENT_ARGUMENT_DESCRIPTIONS: Readonly<Record<string, string>> = {
   [MODEL_ARGUMENT]:
     'Optional, for analytics only. The exact model identifier you are running as. Pass "unknown" if you are not certain.',
   [CONVERSATION_ARGUMENT]:
-    "Optional, for analytics only. Pass the conversation_id from the server's earlier response, unchanged, on later calls in this conversation. Omit it on the first call, and do not invent one.",
+    "Optional, for analytics only. Pass the conversation_id from the server's earlier response text or structuredContent._judgment, unchanged, on later calls in this conversation. Omit it on the first call, and do not invent one.",
 };
 
 const AGENT_ARGUMENTS: ReadonlySet<string> = new Set(
@@ -144,25 +145,83 @@ function canExtendSchema(schema: Readonly<Record<string, unknown>>): boolean {
   );
 }
 
-/**
- * Tells the agent which ID to send next. It goes in `content` only: changing
- * `structuredContent` could break a client validating against an output schema
- * it listed earlier, so clients reading only structured output won't echo it.
- */
+/** Extends simple object outputs without taking over a developer's field. */
+export function withConversationOutputSchema(
+  schema: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> | undefined {
+  if (
+    !canExtendSchema(schema) ||
+    [
+      "not",
+      "if",
+      "then",
+      "else",
+      "dependentSchemas",
+      "dependentRequired",
+      "dependencies",
+      "propertyNames",
+      "patternProperties",
+      "maxProperties",
+      "const",
+      "enum",
+    ].some((keyword) => keyword in schema) ||
+    RESPONSE_CONTEXT in ((schema["properties"] as object) ?? {}) ||
+    (schema["required"] as readonly unknown[] | undefined)?.includes(
+      RESPONSE_CONTEXT,
+    )
+  )
+    return undefined;
+  return {
+    ...schema,
+    properties: {
+      ...(schema["properties"] as object),
+      [RESPONSE_CONTEXT]: {
+        type: "object",
+        properties: {
+          conversation_id: { type: "string" },
+          note: { type: "string" },
+        },
+        required: ["conversation_id", "note"],
+        additionalProperties: false,
+      },
+    },
+  };
+}
+
+/** Gives text-only and structured-only clients the same ID without replacing output. */
 export function withConversationIdPrompt<
-  Result extends { readonly content?: readonly unknown[] },
->(result: Result, conversationId: string): Result {
+  Result extends {
+    readonly content?: readonly unknown[];
+    readonly structuredContent?: unknown;
+  },
+>(
+  result: Result,
+  conversationId: string,
+  structuredTools: ReadonlySet<string>,
+  toolName: string,
+): Result {
   if (!Array.isArray(result.content)) return result;
+  const prompt = {
+    [CONVERSATION_ARGUMENT]: conversationId,
+    note: `Pass this ${CONVERSATION_ARGUMENT} on later tool calls in this conversation.`,
+  };
+  const structured = result.structuredContent;
+  const structuredUpdate =
+    structuredTools.has(toolName) &&
+    typeof structured === "object" &&
+    structured !== null &&
+    !Array.isArray(structured) &&
+    !(RESPONSE_CONTEXT in structured)
+      ? { structuredContent: { ...structured, [RESPONSE_CONTEXT]: prompt } }
+      : {};
   return {
     ...result,
+    ...structuredUpdate,
     content: [
       ...result.content,
       {
         type: "text",
-        text: JSON.stringify({
-          [CONVERSATION_ARGUMENT]: conversationId,
-          note: `Pass this ${CONVERSATION_ARGUMENT} on later tool calls in this conversation.`,
-        }),
+        text: JSON.stringify(prompt),
       },
     ],
   };

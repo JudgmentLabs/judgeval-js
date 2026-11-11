@@ -94,6 +94,17 @@ export class JudgmentTracerProvider implements TracerProvider {
   private _instrumentations: Instrumentation[] = [];
   private _proxyTracer: ProxyTracer;
   private _tracers = new Set<BaseTracer>();
+  private _backgroundExporters = new Set<{
+    forceFlush(): Promise<void>;
+    shutdown(): Promise<void>;
+  }>();
+
+  addBackgroundExporter(exporter: {
+    forceFlush(): Promise<void>;
+    shutdown(): Promise<void>;
+  }): void {
+    this._backgroundExporters.add(exporter);
+  }
 
   private constructor() {
     this._proxyTracer = new ProxyTracer(this);
@@ -328,9 +339,12 @@ export class JudgmentTracerProvider implements TracerProvider {
    * Flush all registered tracers.
    */
   async forceFlush(): Promise<void> {
-    const results = await Promise.allSettled(
-      Array.from(this._tracers).map((t) => t._tracerProvider.forceFlush()),
-    );
+    const results = await Promise.allSettled([
+      ...Array.from(this._tracers).map((t) => t._tracerProvider.forceFlush()),
+      ...Array.from(this._backgroundExporters).map((exporter) =>
+        exporter.forceFlush(),
+      ),
+    ]);
     for (const r of results) {
       if (r.status === "rejected") {
         Logger.error(`forceFlush failed: ${String(r.reason)}`);
@@ -342,9 +356,12 @@ export class JudgmentTracerProvider implements TracerProvider {
    * Shut down all registered tracers and clear state.
    */
   async shutdown(): Promise<void> {
-    const results = await Promise.allSettled(
-      Array.from(this._tracers).map((t) => t._tracerProvider.shutdown()),
-    );
+    const results = await Promise.allSettled([
+      ...Array.from(this._tracers).map((t) => t._tracerProvider.shutdown()),
+      ...Array.from(this._backgroundExporters).map((exporter) =>
+        exporter.shutdown(),
+      ),
+    ]);
     for (const r of results) {
       if (r.status === "rejected") {
         Logger.error(`shutdown failed: ${String(r.reason)}`);
@@ -352,5 +369,6 @@ export class JudgmentTracerProvider implements TracerProvider {
     }
     this._activeTracer = null;
     this._tracers.clear();
+    this._backgroundExporters.clear();
   }
 }
