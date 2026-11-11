@@ -335,6 +335,14 @@ describe.each([
     [{ captureErrorMessages: true }, `declined ${SECRET} for a@b.co`],
     [{ captureErrorMessages: true, redact: () => "[redacted]" }, "[redacted]"],
     [
+      { captureErrorMessages: true, redact: () => JSON.parse("null") },
+      undefined,
+    ],
+    [
+      { captureErrorMessages: true, redact: () => Reflect.get({}, "missing") },
+      undefined,
+    ],
+    [
       {
         captureErrorMessages: true,
         redact: () => {
@@ -616,6 +624,34 @@ describe("withAgentArguments", () => {
 });
 
 describe("structured conversation handoff", () => {
+  test("annotates structured-only responses without requiring content", () => {
+    const expected = {
+      structuredContent: {
+        ok: true,
+        _judgment: {
+          conversation_id: "id",
+          note: "Pass this conversation_id on later tool calls in this conversation.",
+        },
+      },
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            conversation_id: "id",
+            note: "Pass this conversation_id on later tool calls in this conversation.",
+          }),
+        },
+      ],
+    };
+    expect(
+      withConversationIdPrompt(
+        { structuredContent: { ok: true } },
+        "id",
+        new Set(["tool"]),
+        "tool",
+      ),
+    ).toEqual(expected);
+  });
   test.each([
     { properties: { _judgment: { type: "string" } } },
     { oneOf: [] },

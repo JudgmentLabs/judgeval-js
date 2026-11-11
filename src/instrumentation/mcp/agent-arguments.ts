@@ -209,7 +209,6 @@ export function withConversationIdPrompt<
   structuredTools: ReadonlySet<string>,
   toolName: string,
 ): Result {
-  if (!Array.isArray(result.content)) return result;
   const prompt = {
     [CONVERSATION_ARGUMENT]: conversationId,
     note: `Pass this ${CONVERSATION_ARGUMENT} on later tool calls in this conversation.`,
@@ -227,7 +226,7 @@ export function withConversationIdPrompt<
     ...result,
     ...structuredUpdate,
     content: [
-      ...result.content,
+      ...(Array.isArray(result.content) ? result.content : []),
       {
         type: "text",
         text: JSON.stringify(prompt),

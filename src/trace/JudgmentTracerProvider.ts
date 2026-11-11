@@ -27,6 +27,11 @@ const TRACER_NAME = "judgeval";
 
 const _contextStorage = new AsyncLocalStorage<Context>();
 
+interface BackgroundExporter {
+  forceFlush(): Promise<void>;
+  shutdown(): Promise<void>;
+}
+
 class ProxyTracer implements Tracer {
   private _provider: JudgmentTracerProvider;
 
@@ -94,16 +99,12 @@ export class JudgmentTracerProvider implements TracerProvider {
   private _instrumentations: Instrumentation[] = [];
   private _proxyTracer: ProxyTracer;
   private _tracers = new Set<BaseTracer>();
-  private _backgroundExporters = new Set<{
-    forceFlush(): Promise<void>;
-    shutdown(): Promise<void>;
-  }>();
+  private _backgroundExporters = new Map<BaseTracer, Set<BackgroundExporter>>();
 
-  addBackgroundExporter(exporter: {
-    forceFlush(): Promise<void>;
-    shutdown(): Promise<void>;
-  }): void {
-    this._backgroundExporters.add(exporter);
+  addBackgroundExporter(exporter: BackgroundExporter, owner: BaseTracer): void {
+    const exporters = this._backgroundExporters.get(owner) ?? new Set();
+    exporters.add(exporter);
+    this._backgroundExporters.set(owner, exporters);
   }
 
   private constructor() {
@@ -149,6 +150,13 @@ export class JudgmentTracerProvider implements TracerProvider {
    */
   deregister(tracer: BaseTracer): void {
     this._tracers.delete(tracer);
+    const exporters = this._backgroundExporters.get(tracer);
+    this._backgroundExporters.delete(tracer);
+    for (const exporter of exporters ?? []) {
+      void exporter.shutdown().catch(() => {
+        Logger.error("Background exporter shutdown failed");
+      });
+    }
   }
 
   /**
@@ -341,8 +349,8 @@ export class JudgmentTracerProvider implements TracerProvider {
   async forceFlush(): Promise<void> {
     const results = await Promise.allSettled([
       ...Array.from(this._tracers).map((t) => t._tracerProvider.forceFlush()),
-      ...Array.from(this._backgroundExporters).map((exporter) =>
-        exporter.forceFlush(),
+      ...Array.from(this._backgroundExporters.values()).flatMap((exporters) =>
+        Array.from(exporters).map((exporter) => exporter.forceFlush()),
       ),
     ]);
     for (const r of results) {
@@ -358,8 +366,8 @@ export class JudgmentTracerProvider implements TracerProvider {
   async shutdown(): Promise<void> {
     const results = await Promise.allSettled([
       ...Array.from(this._tracers).map((t) => t._tracerProvider.shutdown()),
-      ...Array.from(this._backgroundExporters).map((exporter) =>
-        exporter.shutdown(),
+      ...Array.from(this._backgroundExporters.values()).flatMap((exporters) =>
+        Array.from(exporters).map((exporter) => exporter.shutdown()),
       ),
     ]);
     for (const r of results) {

@@ -623,7 +623,7 @@ function activeExporter(): McpCallExporter | undefined {
       projectId: tracer.projectId,
     });
     exporters.set(tracer, exporter);
-    provider.addBackgroundExporter(exporter);
+    provider.addBackgroundExporter(exporter, tracer);
   }
   return exporter.isClosed ? undefined : exporter;
 }
@@ -742,7 +742,10 @@ function redacted(
   text: string,
   options: InstrumentMcpServerOptions,
 ): string | undefined {
-  return attempt(() => options.redact?.(text) ?? text);
+  const redact = options.redact;
+  if (redact === undefined) return text;
+  const value = attempt(() => redact(text));
+  return typeof value === "string" ? value : undefined;
 }
 
 function listWithArguments(
