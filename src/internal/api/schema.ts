@@ -1972,6 +1972,8 @@ export interface components {
       usage?: components["schemas"]["ConversationUsage"];
       /** @description A recorded model-call failure */
       error?: components["schemas"]["ConversationError"];
+      /** @description Whether the source cut the recorded content short, so the input or output is not all of the call */
+      truncated?: boolean;
       /** @description Any other facts about this call */
       metadata?: {
         [key: string]: components["schemas"]["ConversationJson"];
@@ -2581,6 +2583,8 @@ export interface components {
         message?: string;
         stacktrace?: string;
       };
+      /** @description Whether the source cut the recorded content short, so the input or output is not all of the call */
+      truncated?: boolean;
       /** @description Any other facts about this call */
       metadata?: {
         [key: string]: unknown;
