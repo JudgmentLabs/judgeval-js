@@ -2591,7 +2591,7 @@ export interface components {
         observation: components["schemas"]["Observation"];
         /**
          * Format: date-time
-         * @description When the call completed. Send the same value when retrying, so the call is stored once.
+         * @description When the call completed, within the last 26 weeks, to the millisecond. Send the same value when retrying, so the call is stored once.
          */
         observed_at: string;
         /** @description The deployment environment the call ran in, which judges can be scoped to */
