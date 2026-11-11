@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+  "/v1/projects/{projectId}/mcp/calls": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Record completed MCP tool calls
+     * @description Retries must preserve every field and call ID. Re-execution requires a new ID.
+     */
+    post: operations["postV1ProjectsByProjectIdMcpCalls"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/otel/v1/offline-traces": {
     parameters: {
       query?: never;
@@ -1810,6 +1830,43 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
+    IngestMcpCallsRequest: {
+      calls: {
+        /** @description Opaque invocation ID, not a content hash */
+        call_id: string;
+        /** @description Logical session within the project; absent means standalone, with no fallback */
+        session_id?: string;
+        /**
+         * Format: date-time
+         * @description Invocation start in RFC 3339; storage retains microsecond precision
+         */
+        timestamp: string;
+        /** @description Monotonic elapsed milliseconds */
+        duration_ms: number;
+        /** @enum {string} */
+        outcome: "success" | "error" | "cancelled";
+        server_name: string;
+        tool_name: string;
+        environment_name?: string;
+        client_name?: string;
+        user_id?: string;
+        intent?: string;
+        /** @description Unverified client/agent-reported model */
+        model?: string;
+        /** @default [] */
+        argument_keys: string[];
+        error_type?: string;
+        error_message?: string;
+        input?: unknown;
+        output?: unknown;
+        trace_id?: string;
+        span_id?: string;
+        /** @default {} */
+        metadata: {
+          [key: string]: unknown;
+        };
+      }[];
+    };
     PendingEvalPayload: {
       project_id: string;
       eval_name: string;
@@ -3087,6 +3144,36 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+  postV1ProjectsByProjectIdMcpCalls: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @example YOUR_PROJECT_ID */
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["IngestMcpCallsRequest"];
+      };
+    };
+    responses: {
+      /** @description Response for status 200 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** @constant */
+            status: "success";
+          };
+        };
+      };
+    };
+  };
   "postOtelV1Offline-traces": {
     parameters: {
       query?: never;

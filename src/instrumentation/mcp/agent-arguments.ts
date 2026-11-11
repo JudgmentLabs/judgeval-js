@@ -5,6 +5,7 @@ const MODEL_ARGUMENT = "llm_model";
 const CONVERSATION_ARGUMENT = "conversation_id";
 const RESPONSE_CONTEXT = "_judgment";
 const MAX_INTENT_LENGTH = 500;
+const MAX_SCANNED_LENGTH = 4_000;
 const UUID_V7 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -22,7 +23,20 @@ const AGENT_ARGUMENTS: ReadonlySet<string> = new Set(
 );
 
 /** Schema keywords whose meaning could change if a property were added. */
-const COMPOSITION_KEYWORDS = ["oneOf", "anyOf", "allOf", "$ref"] as const;
+const COMPOSITION_KEYWORDS = [
+  "oneOf",
+  "anyOf",
+  "allOf",
+  "$ref",
+  "not",
+  "if",
+  "then",
+  "else",
+  "dependentSchemas",
+  "dependentRequired",
+  "dependencies",
+  "propertyNames",
+] as const;
 
 /** Values an agent reported on a call, kept apart from the tool's own input. */
 export interface ReportedArguments {
@@ -52,16 +66,26 @@ export function mintConversationId(now = Date.now()): string {
  * not to send them.
  */
 export function sanitizeIntent(text: string): string {
+  return scrubIdentifiers(text).slice(0, MAX_INTENT_LENGTH);
+}
+
+export function scrubIdentifiers(text: string): string {
   return text
-    .replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, "[email]")
+    .slice(0, MAX_SCANNED_LENGTH)
+    .replace(/(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, "[email]")
     .replace(/\b\d{3}-\d{2}-\d{4}\b/g, "[ssn]")
     .replace(/(?:\d[ -]?){13,19}/g, (match) =>
       isLuhnValid(match.replace(/[ -]/g, "")) ? "[card]" : match,
     )
     .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[ip]")
-    .replace(/\b(?:[0-9a-f]{1,4}:){2,7}[0-9a-f]{0,4}\b/gi, "[ip]")
-    .replace(/(?<![\w.])\+?\d[\d ().-]{7,}\d\b/g, "[phone]")
-    .slice(0, MAX_INTENT_LENGTH);
+    .replace(
+      /(?<![\w:])(?:(?:[0-9a-f]{1,4}:){7}[0-9a-f]{1,4}|(?=[0-9a-f:]*[0-9a-f])(?:[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){0,6})?::(?:[0-9a-f]{1,4}(?::[0-9a-f]{1,4}){0,6})?)(?![\w:])/gi,
+      "[ip]",
+    )
+    .replace(
+      /(?<![\w.-])(?!\d{4}-\d{2}-\d{2}(?!\d))\+?\d[\d ().-]{7,}\d\b/g,
+      "[phone]",
+    );
 }
 
 function isLuhnValid(digits: string): boolean {
@@ -122,15 +146,19 @@ export function isAgentArgument(name: string): boolean {
 export function withAgentArguments<Tool extends ListedTool>(tool: Tool): Tool {
   const schema = tool.inputSchema;
   if (schema === undefined || !canExtendSchema(schema)) return tool;
+  const declared = new Set(declaredArguments(schema));
   return {
     ...tool,
     inputSchema: {
       ...schema,
       properties: {
         ...Object.fromEntries(
-          Object.entries(AGENT_ARGUMENT_DESCRIPTIONS).map(
-            ([name, description]) => [name, { type: "string", description }],
-          ),
+          Object.entries(AGENT_ARGUMENT_DESCRIPTIONS)
+            .filter(([name]) => !declared.has(name))
+            .map(([name, description]) => [
+              name,
+              { type: "string", description },
+            ]),
         ),
         ...(schema["properties"] as Record<string, unknown> | undefined),
       },
@@ -138,11 +166,30 @@ export function withAgentArguments<Tool extends ListedTool>(tool: Tool): Tool {
   };
 }
 
-function canExtendSchema(schema: Readonly<Record<string, unknown>>): boolean {
+export function canExtendSchema(
+  schema: Readonly<Record<string, unknown>>,
+): boolean {
   return (
     schema["type"] === "object" &&
     COMPOSITION_KEYWORDS.every((keyword) => !(keyword in schema))
   );
+}
+
+/** Names owned by the tool must never be removed as telemetry arguments. */
+export function declaredArguments(
+  schema: Readonly<Record<string, unknown>>,
+): string[] {
+  const keys = new Set(Object.keys((schema["properties"] as object) ?? {}));
+  for (const key of (schema["required"] as unknown[] | undefined) ?? [])
+    if (typeof key === "string") keys.add(key);
+  for (const pattern of Object.keys(
+    (schema["patternProperties"] as object) ?? {},
+  )) {
+    const expression = new RegExp(pattern);
+    for (const name of AGENT_ARGUMENTS)
+      if (expression.test(name)) keys.add(name);
+  }
+  return [...keys];
 }
 
 /** Extends simple object outputs without taking over a developer's field. */

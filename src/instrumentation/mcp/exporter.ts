@@ -1,27 +1,9 @@
 import { Logger } from "../../utils/logger";
+import { JudgmentApiClient } from "../../internal/api/client";
+import type { RequestBody } from "../../internal/api/models";
 
-export interface McpCall {
-  call_id: string;
-  session_id?: string;
-  timestamp: string;
-  duration_ms: number;
-  outcome: "success" | "error" | "cancelled";
-  server_name: string;
-  tool_name: string;
-  environment_name?: string;
-  client_name?: string;
-  user_id?: string;
-  intent?: string;
-  model?: string;
-  argument_keys: string[];
-  error_type?: string;
-  error_message?: string;
-  input?: unknown;
-  output?: unknown;
-  trace_id?: string;
-  span_id?: string;
-  metadata: Record<string, unknown>;
-}
+type IngestRequest = RequestBody<"/v1/projects/{projectId}/mcp/calls", "post">;
+export type McpCall = IngestRequest["calls"][number];
 
 interface Destination {
   apiUrl: string;
@@ -45,8 +27,16 @@ export class McpCallExporter {
   private timer?: ReturnType<typeof setTimeout>;
   private pending?: Promise<void>;
   private closed = false;
+  private batch?: { body: string; attempts: number; retryAt: number };
+  private readonly client: JudgmentApiClient;
 
-  constructor(private readonly destination: Destination) {}
+  constructor(private readonly destination: Destination) {
+    this.client = new JudgmentApiClient(
+      destination.apiUrl,
+      destination.apiKey,
+      destination.organizationId,
+    );
+  }
 
   enqueue(call: McpCall): void {
     const serialized = JSON.stringify(call);
@@ -61,10 +51,7 @@ export class McpCallExporter {
     }
     this.queue.push(serialized);
     this.queuedBytes += bytes;
-    if (this.timer === undefined) {
-      this.timer = setTimeout(() => void this.forceFlush(), FLUSH_INTERVAL_MS);
-      this.timer.unref();
-    }
+    this.schedule();
   }
 
   async forceFlush(): Promise<void> {
@@ -72,15 +59,12 @@ export class McpCallExporter {
     clearTimeout(this.timer);
     this.timer = undefined;
     while (this.pending !== undefined) await this.pending;
-    if (this.queue.length === 0) return;
-    // Snapshot the current queue so a busy producer cannot prevent a flush ending.
-    const calls = this.queue.splice(0);
-    this.queuedBytes = 0;
-    this.pending = this.send(calls, deadline);
+    this.pending = this.send(this.queue.length, deadline);
     try {
       await this.pending;
     } finally {
       this.pending = undefined;
+      this.schedule();
     }
   }
 
@@ -89,48 +73,99 @@ export class McpCallExporter {
     await this.forceFlush();
   }
 
-  private async send(calls: string[], deadline: number): Promise<void> {
-    for (let offset = 0; offset < calls.length; offset += BATCH_SIZE) {
-      const body = `{"calls":[${calls.slice(offset, offset + BATCH_SIZE).join(",")}]}`;
-      await this.sendBatch(body, deadline);
+  private schedule(): void {
+    if (
+      this.closed ||
+      this.timer !== undefined ||
+      (this.queue.length === 0 && this.batch === undefined)
+    )
+      return;
+    const delay = Math.max(
+      FLUSH_INTERVAL_MS,
+      (this.batch?.retryAt ?? 0) - Date.now(),
+    );
+    this.timer = setTimeout(
+      () => void this.forceFlush(),
+      Math.min(delay, 2_147_483_647),
+    );
+    this.timer.unref();
+  }
+
+  private async send(remainingCalls: number, deadline: number): Promise<void> {
+    while (
+      (remainingCalls > 0 || this.batch !== undefined) &&
+      performance.now() < deadline
+    ) {
+      if (this.batch === undefined) {
+        const calls = this.queue.splice(
+          0,
+          Math.min(BATCH_SIZE, remainingCalls),
+        );
+        remainingCalls -= calls.length;
+        this.queuedBytes -= calls.reduce(
+          (total, call) => total + Buffer.byteLength(call),
+          0,
+        );
+        this.batch = {
+          body: `{"calls":[${calls.join(",")}]}`,
+          attempts: 0,
+          retryAt: 0,
+        };
+      }
+      if (!(await this.sendBatch(this.batch, deadline))) return;
+      this.batch = undefined;
     }
   }
 
-  private async sendBatch(body: string, deadline: number): Promise<void> {
-    const { apiUrl, apiKey, organizationId, projectId } = this.destination;
-    const url = `${apiUrl.replace(/\/$/, "")}/v1/projects/${encodeURIComponent(projectId)}/mcp/calls`;
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+  private async sendBatch(
+    batch: { body: string; attempts: number; retryAt: number },
+    deadline: number,
+  ): Promise<boolean> {
+    while (batch.attempts < MAX_ATTEMPTS) {
+      const delay = Math.max(0, batch.retryAt - Date.now());
+      if (performance.now() + delay >= deadline) return false;
+      if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
       const remaining = deadline - performance.now();
-      if (remaining <= 0) break;
+      if (remaining <= 0) return false;
+      batch.attempts++;
+      let retryAfter = 0;
       try {
-        const response = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-            "X-Organization-Id": organizationId,
+        const response = await this.client.postV1projectsMcpCalls(
+          this.destination.projectId,
+          JSON.parse(batch.body) as IngestRequest,
+          {
+            bodySerializer: () => batch.body,
+            signal: AbortSignal.timeout(
+              Math.ceil(Math.min(REQUEST_TIMEOUT_MS, remaining)),
+            ),
           },
-          body,
-          signal: AbortSignal.timeout(
-            Math.ceil(Math.min(REQUEST_TIMEOUT_MS, remaining)),
-          ),
-        });
-        await response.body?.cancel();
-        if (response.ok) return;
+        );
+        if (response.ok) return true;
         if (
           response.status !== 408 &&
           response.status !== 429 &&
           response.status < 500
         )
           break;
+        retryAfter = retryDelay(response.headers.get("Retry-After"));
       } catch {
         // Network failures retry the exact same immutable batch.
       }
-      if (attempt + 1 < MAX_ATTEMPTS)
-        await new Promise((resolve) => setTimeout(resolve, 250 * 2 ** attempt));
+      batch.retryAt =
+        Date.now() + Math.max(retryAfter, 250 * 2 ** (batch.attempts - 1));
     }
     Logger.warning("MCP export failed; dropping batch");
+    return true;
   }
+}
+
+function retryDelay(value: string | null): number {
+  if (value === null) return 0;
+  const seconds = Number(value);
+  const delay = Number.isFinite(seconds)
+    ? seconds * 1_000
+    : Date.parse(value) - Date.now();
+  return Number.isFinite(delay) ? Math.max(0, delay) : 0;
 }
 
 /** Redact a detached snapshot; failures and oversized payloads omit the field. */

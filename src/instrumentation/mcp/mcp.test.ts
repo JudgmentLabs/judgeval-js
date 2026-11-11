@@ -26,6 +26,7 @@ import type { JudgmentSpanExporter } from "../../trace/exporters/JudgmentSpanExp
 import type { JudgmentSpanProcessor } from "../../trace/processors/JudgmentSpanProcessor";
 import {
   mintConversationId,
+  declaredArguments,
   sanitizeIntent,
   withAgentArguments,
   withConversationIdPrompt,
@@ -39,9 +40,135 @@ import {
   type InstrumentMcpServerOptions,
 } from "./index";
 import { capturePayload, McpCallExporter, type McpCall } from "./exporter";
+import { argumentValues, scrubErrorMessage } from "./scrub";
+import { Logger } from "../../utils/logger";
 
 const SECRET = "super-secret-value";
 const TRACE_ID = "0af7651916cd43dd8448eb211c80319c";
+
+const completedCall: McpCall = {
+  call_id: "stable",
+  timestamp: "2026-11-10T00:00:00Z",
+  duration_ms: 1,
+  outcome: "success",
+  server_name: "custom",
+  tool_name: "lookup",
+  argument_keys: [],
+  metadata: {},
+};
+
+test("errors scrub nested argument echoes and identifiers without changing input", () => {
+  const params = { arguments: { nested: ["secret-token", "open"] } };
+  const values = argumentValues(params);
+  params.arguments.nested[0] = "changed";
+  expect({
+    message: scrubErrorMessage(
+      "secret-token rejected for audit@example.com; reopen open",
+      values,
+    ),
+    intent: sanitizeIntent("a".repeat(64_000)),
+    params,
+  }).toEqual({
+    message: "[argument] rejected for [email]; reopen [argument]",
+    intent: "a".repeat(500),
+    params: { arguments: { nested: ["changed", "open"] } },
+  });
+});
+
+test("required and pattern-owned telemetry names retain their business schema", () => {
+  const schema = {
+    type: "object",
+    properties: {} as Record<string, unknown>,
+    required: ["context"],
+    patternProperties: { "^llm_": { type: "number" } },
+  };
+  const tool = withAgentArguments({ name: "lookup", inputSchema: schema });
+  expect({
+    owned: declaredArguments(schema),
+    added: Object.keys(tool.inputSchema.properties ?? {}),
+  }).toEqual({
+    owned: ["context", "llm_model"],
+    added: ["conversation_id"],
+  });
+});
+
+test("SDK diagnostics leave MCP stdout untouched", () => {
+  const stdout = spyOn(process.stdout, "write").mockReturnValue(true);
+  const stderr = spyOn(process.stderr, "write").mockReturnValue(true);
+  try {
+    Logger.warning("MCP delivery unavailable");
+    expect({
+      stdout: stdout.mock.calls.length,
+      stderr: stderr.mock.calls.length,
+    }).toEqual({ stdout: 0, stderr: 1 });
+  } finally {
+    stdout.mockRestore();
+    stderr.mockRestore();
+  }
+});
+
+test.each(["deadline", "cooldown"])(
+  "native delivery retains calls across %s",
+  async (mode) => {
+    let monotonic = 0;
+    let wall = Date.now();
+    const clock = spyOn(performance, "now").mockImplementation(() => monotonic);
+    const date = spyOn(Date, "now").mockImplementation(() => wall);
+    const bodies: string[] = [];
+    const sending = spyOn(globalThis, "fetch").mockImplementation(
+      Object.assign(
+        async (request: string | URL | Request, init?: RequestInit) => {
+          bodies.push(await requestBody(request, init));
+          if (bodies.length === 1 && mode === "deadline") monotonic = 30_001;
+          return new Response(null, {
+            status: bodies.length === 1 && mode === "cooldown" ? 429 : 200,
+            headers: { "Retry-After": "120" },
+          });
+        },
+        { preconnect: globalThis.fetch.preconnect },
+      ),
+    );
+    const exporter = new McpCallExporter({
+      apiUrl: "http://localhost",
+      apiKey: "key",
+      organizationId: "org",
+      projectId: "project",
+    });
+    try {
+      for (let n = 0; n < 101; n++)
+        exporter.enqueue({ ...completedCall, call_id: String(n) });
+      await exporter.forceFlush();
+      const firstFlush = bodies.length;
+      monotonic = 0;
+      wall += 120_001;
+      await exporter.shutdown();
+      expect({
+        firstFlush,
+        sizes: bodies.map(
+          (body) => (JSON.parse(body) as { calls: McpCall[] }).calls.length,
+        ),
+        identical: mode === "deadline" || bodies[0] === bodies[1],
+      }).toEqual({
+        firstFlush: 1,
+        sizes: mode === "deadline" ? [100, 1] : [100, 100, 1],
+        identical: true,
+      });
+    } finally {
+      sending.mockRestore();
+      clock.mockRestore();
+      date.mockRestore();
+    }
+  },
+);
+
+function requestBody(
+  url: string | URL | Request,
+  init?: RequestInit,
+): Promise<string> {
+  return url instanceof Request
+    ? url.text()
+    : Promise.resolve(String(init?.body));
+}
 
 class TestTracer extends BaseTracer {
   constructor(provider: BasicTracerProvider) {
@@ -282,9 +409,11 @@ describe.each([
     const events: McpCall[] = [];
     const sending = spyOn(globalThis, "fetch").mockImplementation(
       Object.assign(
-        (_url: string | URL | Request, init?: RequestInit) => {
+        async (_url: string | URL | Request, init?: RequestInit) => {
           events.push(
-            ...(JSON.parse(String(init?.body)) as { calls: McpCall[] }).calls,
+            ...(
+              JSON.parse(await requestBody(_url, init)) as { calls: McpCall[] }
+            ).calls,
           );
           return Promise.resolve(new Response(null, { status: 200 }));
         },
@@ -353,8 +482,8 @@ describe.each([
     const bodies: string[] = [];
     const sending = spyOn(globalThis, "fetch").mockImplementation(
       Object.assign(
-        (_url: string | URL | Request, init?: RequestInit) => {
-          bodies.push(String(init?.body));
+        async (_url: string | URL | Request, init?: RequestInit) => {
+          bodies.push(await requestBody(_url, init));
           return Promise.resolve(
             new Response(null, {
               status: bodies.length === 1 ? 503 : 200,
@@ -852,9 +981,10 @@ test("native delivery bounds batches and queue and does not retry permanent erro
   const sizes: number[] = [];
   const sending = spyOn(globalThis, "fetch").mockImplementation(
     Object.assign(
-      (_url: string | URL | Request, init?: RequestInit) => {
+      async (_url: string | URL | Request, init?: RequestInit) => {
         sizes.push(
-          (JSON.parse(String(init?.body)) as { calls: McpCall[] }).calls.length,
+          (JSON.parse(await requestBody(_url, init)) as { calls: McpCall[] })
+            .calls.length,
         );
         return Promise.resolve(
           new Response(null, { status: sizes.length === 1 ? 400 : 200 }),

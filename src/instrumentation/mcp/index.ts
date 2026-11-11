@@ -18,6 +18,8 @@ import { capturePayload, McpCallExporter, type McpCall } from "./exporter";
 export type { McpCall } from "./exporter";
 import {
   isAgentArgument,
+  canExtendSchema,
+  declaredArguments,
   mintConversationId,
   readReportedArguments,
   withAgentArguments,
@@ -25,6 +27,7 @@ import {
   withConversationOutputSchema,
   withoutAgentArguments,
 } from "./agent-arguments";
+import { argumentValues, scrubErrorMessage } from "./scrub";
 
 const TRACER_NAME = "judgeval-mcp";
 const MAX_ERROR_MESSAGE_LENGTH = 1_000;
@@ -90,6 +93,7 @@ export interface InstrumentMcpServerOptions {
 }
 
 interface CallRecord {
+  argumentValues?: readonly string[];
   error: unknown;
   caller: McpCaller | undefined;
   identified?: boolean;
@@ -307,6 +311,7 @@ function traced(
         : result;
     }
     const record: CallRecord = {
+      argumentValues: attempt(() => argumentValues(request.params)),
       error: undefined,
       caller: undefined,
     };
@@ -676,9 +681,14 @@ function failureOf(
     result?.content?.[0]?.text ??
     (error instanceof Error ? error.message : undefined);
   const recorded =
-    options.captureErrorMessages === false || message === undefined
+    options.captureErrorMessages === false ||
+    message === undefined ||
+    record.argumentValues === undefined
       ? undefined
-      : redacted(message, options)?.slice(0, MAX_ERROR_MESSAGE_LENGTH);
+      : redacted(
+          scrubErrorMessage(message, record.argumentValues ?? []),
+          options,
+        )?.slice(0, MAX_ERROR_MESSAGE_LENGTH);
   record.failure = {
     type: errorType(error, result, message, options),
     message: recorded,
@@ -844,18 +854,22 @@ function readSchemaShape(schema: unknown): SchemaShape | undefined {
     readonly _def?: {
       readonly shape?: unknown;
       readonly unknownKeys?: unknown;
+      readonly catchall?: {
+        readonly _def?: { readonly type?: string; readonly typeName?: string };
+      };
     };
   };
   const json = attempt(() =>
     candidate["~standard"]?.jsonSchema?.input?.({ target: "draft-2020-12" }),
-  ) as
-    | { readonly properties?: object; readonly additionalProperties?: unknown }
-    | undefined;
+  ) as Readonly<Record<string, unknown>> | undefined;
   if (json !== undefined) {
+    if (!canExtendSchema(json)) return undefined;
     return {
-      keys: Object.keys(json.properties ?? {}),
+      keys: declaredArguments(json),
       fingerprint: JSON.stringify(json),
-      open: Boolean(json.additionalProperties),
+      open: Boolean(
+        json["additionalProperties"] || json["unevaluatedProperties"],
+      ),
     };
   }
   const definition = candidate._def?.shape;
@@ -868,7 +882,15 @@ function readSchemaShape(schema: unknown): SchemaShape | undefined {
   return {
     keys,
     fingerprint: JSON.stringify(fields),
-    open: candidate._def?.unknownKeys === "passthrough",
+    open:
+      candidate._def?.unknownKeys === "passthrough" ||
+      (candidate._def?.catchall !== undefined &&
+        !["never", "ZodNever"].includes(
+          String(
+            candidate._def.catchall._def?.type ??
+              candidate._def.catchall._def?.typeName,
+          ),
+        )),
   };
 }
 
