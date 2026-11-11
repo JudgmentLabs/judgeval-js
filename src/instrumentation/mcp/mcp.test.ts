@@ -354,24 +354,20 @@ describe.each([
   ] satisfies [InstrumentMcpServerOptions, string | undefined][])(
     "error text follows explicit capture and redaction options: %j",
     async (options, expected) => {
-      const spans = useExporter();
+      useExporter();
       const { provider, bodies } = captureNativeRequests();
-      const client = await connect({ ...options, recordSpans: true });
+      const client = await connect(options);
       await client.callTool({
         name: "greet",
         arguments: { name: SECRET, fail: true },
       });
       await provider.forceFlush();
       const call = (JSON.parse(bodies[0]!) as { calls: McpCall[] }).calls[0]!;
-      const span = spans
-        .getFinishedSpans()
-        .find((span) => span.name === "tools/call greet")!;
-      expect([
-        call.outcome,
-        call.error_type,
-        call.error_message,
-        span.status.message,
-      ]).toEqual(["error", "tool_error", expected, expected]);
+      expect([call.outcome, call.error_type, call.error_message]).toEqual([
+        "error",
+        "tool_error",
+        expected,
+      ]);
     },
   );
 
@@ -400,23 +396,22 @@ describe.each([
   });
 });
 
-test("optional OTel spans link native calls to remote context", async () => {
+test("remote context does not create spans or native backlinks", async () => {
   const spans = useExporter();
   const { provider, bodies } = captureNativeRequests();
-  const client = await connectV1({ recordSpans: true });
+  const client = await connectV1({});
   await client.callTool({
     name: "greet",
     arguments: { name: "a" },
     _meta: { traceparent: `00-${TRACE_ID}-b7ad6b7169203331-01` },
   });
   await provider.forceFlush();
-  const span = spans
-    .getFinishedSpans()
-    .find((span) => span.name === "tools/call greet")!;
   const call = (JSON.parse(bodies[0]!) as { calls: McpCall[] }).calls[0]!;
-  expect([call.trace_id, call.span_id, span.parentSpanContext?.spanId]).toEqual(
-    [TRACE_ID, span.spanContext().spanId, "b7ad6b7169203331"],
-  );
+  expect([call.trace_id, call.span_id, spans.getFinishedSpans()]).toEqual([
+    undefined,
+    undefined,
+    [],
+  ]);
 });
 
 test("required and pattern-owned telemetry names retain their business schema", () => {
@@ -574,7 +569,7 @@ describe("cancelled calls", () => {
         return { content: [{ type: "text" as const, text: "done" }] };
       },
     );
-    instrumentMcpServer(server, { recordSpans: true });
+    instrumentMcpServer(server);
     const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
     await server.connect(serverSide);
     const client = new ClientV1({ name: "test-client", version: "2.0.0" });
@@ -591,20 +586,15 @@ describe("cancelled calls", () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
     release();
     await new Promise((resolve) => setTimeout(resolve, 10));
-    const attributes = exporter
-      .getFinishedSpans()
-      .find((span) => span.name === "tools/call slow")?.attributes;
     await provider.forceFlush();
     const calls = bodies.flatMap(
       (body) => (JSON.parse(body) as { calls: McpCall[] }).calls,
     );
     expect({
-      cancelled: attributes?.["judgment.mcp.cancelled"],
-      errorType: attributes?.["error.type"],
+      spans: exporter.getFinishedSpans(),
       native: calls.map((call) => [call.outcome, call.error_type]),
     }).toEqual({
-      cancelled: "true",
-      errorType: undefined,
+      spans: [],
       native: [["cancelled", undefined]],
     });
   });

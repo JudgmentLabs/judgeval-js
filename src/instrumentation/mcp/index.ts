@@ -1,16 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
-import {
-  SpanKind,
-  SpanStatusCode,
-  defaultTextMapGetter,
-  isSpanContextValid,
-  trace,
-  type Attributes,
-  type Context,
-  type Span,
-} from "@opentelemetry/api";
-import { W3CTraceContextPropagator } from "@opentelemetry/core";
 import { JudgmentTracerProvider } from "../../trace/JudgmentTracerProvider";
 import { Logger } from "../../utils/logger";
 import { VERSION } from "../../version";
@@ -28,7 +17,6 @@ import {
   withoutAgentArguments,
 } from "./agent-arguments";
 
-const TRACER_NAME = "judgeval-mcp";
 const MAX_ERROR_MESSAGE_LENGTH = 1_000;
 const MAX_RECORDED_KEYS = 30;
 const MAX_RECORDED_KEY_LENGTH = 64;
@@ -39,8 +27,6 @@ const UNKNOWN_TOOL = /^(?:MCP error -?\d+: )?Tool \S+ (not found|disabled)/;
 const INVALID_INPUT = /^(?:MCP error -?\d+: )?Input validation error/;
 // Words only: anything with digits could be a token rather than an error code.
 const PUBLIC_ERROR_CODE = /^[A-Za-z][A-Za-z_.:-]{0,39}$/;
-
-const propagator = new W3CTraceContextPropagator();
 
 /** Who a call acts for. Hash these if your identifiers are sensitive. */
 export interface McpCaller {
@@ -58,8 +44,6 @@ export interface McpRequestInfo {
 
 /** Options for {@link instrumentMcpServer}. */
 export interface InstrumentMcpServerOptions {
-  /** Also create OTel request spans. Native call events are always exported. Default false. */
-  readonly recordSpans?: boolean;
   /** Capture business arguments/results as-is unless redactPayload transforms them. Both default false. */
   readonly captureInput?: boolean;
   readonly captureOutput?: boolean;
@@ -207,7 +191,7 @@ export function captureMcpCall(
 
 /**
  * Exports completed tool calls as native MCP events using the active tracer's
- * configuration. Optional OTel spans join the caller's `_meta` trace context.
+ * configuration without creating OTel spans.
  *
  * Call it once per server, after `Tracer.init()`. Supports
  * `@modelcontextprotocol/sdk` 1.x and `@modelcontextprotocol/server` 2.x. Those
@@ -315,24 +299,12 @@ function traced(
       error: undefined,
       caller: undefined,
     };
-    const started =
-      options.recordSpans === true
-        ? attempt(() => startCallSpan(method, request, prepared))
-        : undefined;
     const complete = attempt(() => captureCall(prepared, record, options));
-    const run = () =>
-      records.run(record, () => handler(prepared.request, context));
     try {
-      const result = await (started === undefined
-        ? run()
-        : JudgmentTracerProvider.getInstance().withContext(
-            trace.setSpan(started.parent, started.span),
-            run,
-          ));
-      attempt(() => complete?.(result, context, started?.span));
-      if (started !== undefined) {
-        attempt(() => finish(started.span, record, result, context, options));
-      }
+      const result = await records.run(record, () =>
+        handler(prepared.request, context),
+      );
+      attempt(() => complete?.(result, context));
       if (method === "tools/list" && inject) {
         return (
           attempt(() => listWithArguments(result, registry, structuredTools)) ??
@@ -365,12 +337,7 @@ function traced(
           ) ?? result);
     } catch (error) {
       record.error ??= error;
-      attempt(() => complete?.(undefined, context, started?.span));
-      if (started !== undefined) {
-        attempt(() =>
-          finish(started.span, record, undefined, context, options),
-        );
-      }
+      attempt(() => complete?.(undefined, context));
       throw error;
     }
   };
@@ -378,7 +345,7 @@ function traced(
 
 interface PreparedCall {
   readonly request: McpRequest;
-  readonly attributes: Attributes;
+  readonly attributes: Record<string, string>;
   readonly mintedConversationId: string | undefined;
 }
 
@@ -405,11 +372,7 @@ function captureCall(
   const timestamp = new Date().toISOString();
   const start = performance.now();
   let completed = false;
-  return (
-    result: McpResult | undefined,
-    context: HandlerContext,
-    source?: Span,
-  ): void => {
+  return (result: McpResult | undefined, context: HandlerContext): void => {
     if (completed) return;
     completed = true;
     const duration = Math.max(0, performance.now() - start);
@@ -417,7 +380,6 @@ function captureCall(
     const cancelled =
       (context.signal ?? context.mcpReq?.signal)?.aborted === true;
     const failed = result === undefined || result.isError === true;
-    const span = source?.spanContext();
     const failure =
       failed && !cancelled ? failureOf(record, result, options) : undefined;
     const text = (key: string, limit = 256) =>
@@ -474,14 +436,6 @@ function captureCall(
           ? undefined
           : failure.type.slice(0, 256) || "tool_error",
       error_message: failure?.message,
-      trace_id:
-        span !== undefined && isSpanContextValid(span)
-          ? span.traceId
-          : undefined,
-      span_id:
-        span !== undefined && isSpanContextValid(span)
-          ? span.spanId
-          : undefined,
       metadata,
     });
   };
@@ -577,32 +531,6 @@ function prepareCall(
   };
 }
 
-function startCallSpan(
-  method: string,
-  request: McpRequest,
-  prepared: PreparedCall,
-): { span: Span; parent: Context } {
-  const target =
-    method === "tools/call" || method === "prompts/get"
-      ? request.params?.name
-      : undefined;
-  const provider = JudgmentTracerProvider.getInstance();
-  const meta = request.params?._meta ?? {};
-  const current = trace.deleteSpan(provider.getCurrentContext());
-  const parent =
-    typeof meta["traceparent"] === "string"
-      ? propagator.extract(current, meta, defaultTextMapGetter)
-      : current;
-  const span = provider
-    .getTracer(TRACER_NAME)
-    .startSpan(
-      target === undefined ? method : `${method} ${target}`,
-      { kind: SpanKind.SERVER, attributes: prepared.attributes },
-      parent,
-    );
-  return { span, parent };
-}
-
 function activeExporter(): McpCallExporter | undefined {
   const provider = JudgmentTracerProvider.getInstance();
   const tracer = provider.getActiveTracer();
@@ -626,44 +554,6 @@ function activeExporter(): McpCallExporter | undefined {
     provider.addBackgroundExporter(exporter, tracer);
   }
   return exporter.isClosed ? undefined : exporter;
-}
-
-function finish(
-  span: Span,
-  record: CallRecord,
-  result: McpResult | undefined,
-  context: HandlerContext,
-  options: InstrumentMcpServerOptions,
-): void {
-  attempt(() => {
-    const caller = identifyCaller(record, context, options);
-    span.setAttributes(
-      definedAttributes({
-        "enduser.id": caller.userId ?? undefined,
-        "judgment.customer_id": caller.customerId ?? undefined,
-      }),
-    );
-    const signal = context.signal ?? context.mcpReq?.signal;
-    if (signal?.aborted === true) {
-      span.setAttribute("judgment.mcp.cancelled", "true");
-    } else if (result === undefined || result.isError === true) {
-      recordFailure(span, record, result, options);
-    }
-  });
-  attempt(() => {
-    span.end();
-  });
-}
-
-function recordFailure(
-  span: Span,
-  record: CallRecord,
-  result: McpResult | undefined,
-  options: InstrumentMcpServerOptions,
-): void {
-  const failure = failureOf(record, result, options);
-  span.setAttribute("error.type", failure.type);
-  span.setStatus({ code: SpanStatusCode.ERROR, message: failure.message });
 }
 
 function identifyCaller(
@@ -994,10 +884,12 @@ function stringOrUndefined(value: unknown): string | undefined {
 
 function definedAttributes(
   attributes: Readonly<Record<string, string | undefined>>,
-): Attributes {
+): Record<string, string> {
   return Object.fromEntries(
-    Object.entries(attributes).filter(([, value]) => value !== undefined),
-  ) as Attributes;
+    Object.entries(attributes).filter(
+      (entry): entry is [string, string] => entry[1] !== undefined,
+    ),
+  );
 }
 
 /** Runs tracing work so that a failure in it never reaches the MCP call. */
