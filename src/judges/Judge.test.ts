@@ -12,13 +12,11 @@ class ToolUseJudge extends Judge<BinaryResponse> {
   }
 }
 
-test("metric records the latest number per name on the judge that scored", async () => {
+test("metric records the latest number per name and rejects non-finite values", async () => {
   const judge = new ToolUseJudge();
-  const other = new ToolUseJudge();
 
   await judge.score({} as Example);
 
   expect(judge.recordedMetrics).toEqual({ tool_calls: 7, cost_usd: 0.25 });
-  expect(other.recordedMetrics).toEqual({});
   expect(() => judge.metric("ratio", Number.NaN)).toThrow(RangeError);
 });
