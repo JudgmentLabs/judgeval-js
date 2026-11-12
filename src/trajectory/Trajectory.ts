@@ -7,8 +7,8 @@ import { resolveProjectId } from "../utils/resolve-project-id";
 import { BatchObservationProcessor } from "./BatchObservationProcessor";
 import { ObservationExporter } from "./ObservationExporter";
 
-/** Where {@link Conversations.record} sends calls. */
-export interface ConversationsConfig {
+/** Where {@link Trajectory.record} sends calls. */
+export interface TrajectoryConfig {
   /** The Judgment project to record into. */
   projectName?: string;
   /** Your Judgment API key. Defaults to `JUDGMENT_API_KEY`. */
@@ -24,7 +24,7 @@ export interface ConversationsConfig {
   environment?: string;
 }
 
-/** Options for {@link Conversations.record}. */
+/** Options for {@link Trajectory.record}. */
 export interface RecordOptions {
   /**
    * When the call completed; defaults to now. Two identical calls at
@@ -36,7 +36,7 @@ export interface RecordOptions {
 /**
  * Records model calls in the conversation format, without traces.
  *
- * Call `Conversations.init` once at startup, then `Conversations.record`
+ * Call `Trajectory.init` once at startup, then `Trajectory.record`
  * from anywhere. Each call is stored in its conversation and evaluated by
  * the project's conversation judges, as model calls recorded from traces
  * are. Nothing here throws into your code: `init` logs a warning and leaves
@@ -44,16 +44,16 @@ export interface RecordOptions {
  * and `record` queues the call and returns at once.
  *
  * Calls are sent in the background, in batches. Await
- * `Conversations.flush()` before a serverless handler returns, and
- * `Conversations.shutdown()` before the process exits.
+ * `Trajectory.flush()` before a serverless handler returns, and
+ * `Trajectory.shutdown()` before the process exits.
  *
  * @example
  * ```typescript
- * import { Conversations } from "judgeval";
+ * import { Trajectory } from "judgeval";
  *
- * await Conversations.init({ projectName: "support-bot", environment: "production" });
+ * await Trajectory.init({ projectName: "support-bot", environment: "production" });
  *
- * Conversations.record({
+ * Trajectory.record({
  *   conversation_id: "ticket-4812",
  *   model: "my-model-v2",
  *   input: [{ type: "message", role: "user", content: [{ type: "text", text: "Where is my order?" }] }],
@@ -61,7 +61,7 @@ export interface RecordOptions {
  * });
  * ```
  */
-export class Conversations {
+export class Trajectory {
   private static _initialized = false;
   private static _processor: BatchObservationProcessor | null = null;
   private static _environment: string | undefined;
@@ -75,7 +75,7 @@ export class Conversations {
    *
    * @returns Resolves once configured; never rejects.
    */
-  static async init(config: ConversationsConfig = {}): Promise<void> {
+  static async init(config: TrajectoryConfig = {}): Promise<void> {
     try {
       const projectName = config.projectName;
       const apiKey = config.apiKey ?? JUDGMENT_API_KEY;
@@ -89,7 +89,7 @@ export class Conversations {
         );
         if (projectId === null) {
           Logger.warning(
-            `Project '${projectName}' not found. Conversations will not record observations.`,
+            `Project '${projectName}' not found. Trajectory will not record observations.`,
           );
         } else {
           processor = new BatchObservationProcessor(
@@ -106,16 +106,16 @@ export class Conversations {
           .filter(([, value]) => !value)
           .map(([name]) => name);
         Logger.warning(
-          `${missing.join(", ")} not provided. Conversations will not record observations.`,
+          `${missing.join(", ")} not provided. Trajectory will not record observations.`,
         );
       }
-      const previous = Conversations._processor;
-      Conversations._initialized = true;
-      Conversations._processor = processor;
-      Conversations._environment = config.environment;
+      const previous = Trajectory._processor;
+      Trajectory._initialized = true;
+      Trajectory._processor = processor;
+      Trajectory._environment = config.environment;
       await previous?.shutdown();
     } catch (error) {
-      Logger.error(`[Conversations] init failed: ${String(error)}`);
+      Logger.error(`[Trajectory] init failed: ${String(error)}`);
     }
   }
 
@@ -129,22 +129,22 @@ export class Conversations {
    * @param options - When the call was observed.
    */
   static record(observation: Observation, options: RecordOptions = {}): void {
-    dontThrow("Conversations.record", () => {
-      if (!Conversations._initialized) {
-        if (!Conversations._notInitializedReported) {
-          Conversations._notInitializedReported = true;
+    dontThrow("Trajectory.record", () => {
+      if (!Trajectory._initialized) {
+        if (!Trajectory._notInitializedReported) {
+          Trajectory._notInitializedReported = true;
           Logger.warning(
-            "[Conversations] Conversations.init() was not called; observations are not recorded",
+            "[Trajectory] Trajectory.init() was not called; observations are not recorded",
           );
         }
         return;
       }
-      Conversations._processor?.emit({
+      Trajectory._processor?.emit({
         // Sent later, so copy it: changes the caller makes afterwards, such
         // as appending to a shared message history, are not sent.
         observation: structuredClone(observation),
         observed_at: (options.observedAt ?? new Date()).toISOString(),
-        environment: Conversations._environment,
+        environment: Trajectory._environment,
       });
     });
   }
@@ -156,7 +156,7 @@ export class Conversations {
    *   rejects.
    */
   static async flush(): Promise<void> {
-    await Conversations._processor?.forceFlush();
+    await Trajectory._processor?.forceFlush();
   }
 
   /**
@@ -164,6 +164,6 @@ export class Conversations {
    * ignored until `init` is called again.
    */
   static async shutdown(): Promise<void> {
-    await Conversations._processor?.shutdown();
+    await Trajectory._processor?.shutdown();
   }
 }

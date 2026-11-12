@@ -79,7 +79,7 @@ export class ObservationExporter {
         attempt === MAX_ATTEMPTS - 1
       ) {
         Logger.error(
-          `[Conversations] Dropped ${batch.length} observations: ${status ?? "network error"} ${detail}`,
+          `[Trajectory] Dropped ${batch.length} observations: ${status ?? "network error"} ${detail}`,
         );
         return;
       }
@@ -94,6 +94,6 @@ export class ObservationExporter {
       status === 402
         ? "the organization is over its ingestion usage limit"
         : "conversations are not enabled for this organization";
-    Logger.warn(`[Conversations] Observations are not stored: ${reason}`);
+    Logger.warn(`[Trajectory] Observations are not stored: ${reason}`);
   }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Conversations } from "./Conversations";
+import { Trajectory } from "./Trajectory";
 
 const call = {
   conversation_id: "ticket-1",
@@ -12,22 +12,22 @@ const call = {
   ],
 };
 
-describe("Conversations", () => {
+describe("Trajectory", () => {
   test("recording before init does nothing and never throws", async () => {
-    expect(() => Conversations.record(call)).not.toThrow();
-    await expect(Conversations.flush()).resolves.toBeUndefined();
+    expect(() => Trajectory.record(call)).not.toThrow();
+    await expect(Trajectory.flush()).resolves.toBeUndefined();
   });
 
   test("init without credentials leaves recording off and never rejects", async () => {
     await expect(
-      Conversations.init({
+      Trajectory.init({
         projectName: "support-bot",
         apiKey: "",
         organizationId: "",
         apiUrl: "",
       }),
     ).resolves.toBeUndefined();
-    expect(() => Conversations.record(call)).not.toThrow();
-    await expect(Conversations.shutdown()).resolves.toBeUndefined();
+    expect(() => Trajectory.record(call)).not.toThrow();
+    await expect(Trajectory.shutdown()).resolves.toBeUndefined();
   });
 });

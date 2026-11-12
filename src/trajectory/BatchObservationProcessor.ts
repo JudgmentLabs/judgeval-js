@@ -43,14 +43,14 @@ export class BatchObservationProcessor {
     if (this._shutdownOnce.isCalled) return;
     if (this._queue.length >= MAX_QUEUE_SIZE) {
       if (this._droppedCount === 0) {
-        Logger.warn("[Conversations] Queue full, dropping observations");
+        Logger.warn("[Trajectory] Queue full, dropping observations");
       }
       this._droppedCount++;
       return;
     }
     if (this._droppedCount > 0) {
       Logger.warn(
-        `[Conversations] Dropped ${this._droppedCount} observations because the queue was full`,
+        `[Trajectory] Dropped ${this._droppedCount} observations because the queue was full`,
       );
       this._droppedCount = 0;
     }
@@ -89,7 +89,7 @@ export class BatchObservationProcessor {
         new Promise<void>((resolve) => {
           timeout = setTimeout(() => {
             Logger.error(
-              `[Conversations] Exporting ${batch.length} observations timed out`,
+              `[Trajectory] Exporting ${batch.length} observations timed out`,
             );
             resolve();
           }, EXPORT_TIMEOUT_MILLIS);

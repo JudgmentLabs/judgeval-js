@@ -46,10 +46,10 @@ export { Evaluation, type EvaluationRunOptions } from "./evaluation";
 
 export { Dataset } from "./datasets";
 export {
-  Conversations,
-  type ConversationsConfig,
+  Trajectory,
+  type TrajectoryConfig,
   type RecordOptions,
-} from "./conversations";
+} from "./trajectory";
 export type { DatasetInfo } from "./internal/api/models";
 export type {
   ConversationBase64Source,
