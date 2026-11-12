@@ -119,7 +119,7 @@ describe("ExternalJudgeFactory.submitResult", () => {
 
     const result = await factory.submitResult({
       judgeId: "judge-1",
-      traceId: "trace-1",
+      target: { type: "trace", traceId: "trace-1" },
       value: true,
     });
 
@@ -134,19 +134,17 @@ describe("ExternalJudgeFactory.submitResult", () => {
 
     await factory.submitResult({
       judgeName: "human-thumbs-up",
-      traceId: "trace-1",
+      target: { type: "session", sessionId: "session-1" },
       value: true,
-      sessionId: "session-1",
       reason: "Looked correct.",
     });
 
     const call = client.postV1projectsJudgeResults.mock.calls[0];
     const payload = call[1] as Record<string, unknown>;
     expect(payload).toEqual({
-      trace_id: "trace-1",
+      target: { type: "session", session_id: "session-1" },
       value: true,
       judge_name: "human-thumbs-up",
-      session_id: "session-1",
       reason: "Looked correct.",
     });
   });
@@ -155,7 +153,10 @@ describe("ExternalJudgeFactory.submitResult", () => {
     const { factory } = makeFactory();
 
     await expect(
-      factory.submitResult({ traceId: "trace-1", value: true }),
+      factory.submitResult({
+        target: { type: "trace", traceId: "trace-1" },
+        value: true,
+      }),
     ).rejects.toThrow(/Exactly one/);
   });
 
@@ -166,7 +167,7 @@ describe("ExternalJudgeFactory.submitResult", () => {
       factory.submitResult({
         judgeId: "judge-1",
         judgeName: "human-thumbs-up",
-        traceId: "trace-1",
+        target: { type: "trace", traceId: "trace-1" },
         value: true,
       }),
     ).rejects.toThrow(/Exactly one/);
@@ -177,7 +178,7 @@ describe("ExternalJudgeFactory.submitResult", () => {
 
     const result = await factory.submitResult({
       judgeId: "judge-1",
-      traceId: "trace-1",
+      target: { type: "trace", traceId: "trace-1" },
       value: true,
     });
 
@@ -185,7 +186,7 @@ describe("ExternalJudgeFactory.submitResult", () => {
   });
 });
 
-test("numeric session feedback roundtrips through the HTTP client", async () => {
+test("session scores can be resubmitted without a trace", async () => {
   const requests: [string, string, unknown][] = [];
   const client = new JudgmentApiClient("https://api.test", "key", "org");
   client.api.use({
@@ -207,11 +208,15 @@ test("numeric session feedback roundtrips through the HTTP client", async () => 
   const judge = await factory.create({ name: "rating", scoreType: "numeric" });
   const result = await factory.submitResult({
     judgeId: "judge-1",
-    traceId: "trace-1",
-    sessionId: "session-1",
+    target: { type: "session", sessionId: "session-1" },
     value: 4.5,
   });
-  expect({ judge, result, requests }).toEqual({
+  const updated = await factory.submitResult({
+    judgeId: "judge-1",
+    target: { type: "session", sessionId: "session-1" },
+    value: 3,
+  });
+  expect({ judge, result, updated, requests }).toEqual({
     judge: {
       judgeId: "judge-1",
       judgeVersionId: "version-1",
@@ -223,6 +228,7 @@ test("numeric session feedback roundtrips through the HTTP client", async () => 
       minorVersion: 0,
     },
     result: "result-1",
+    updated: "result-1",
     requests: [
       [
         "POST",
@@ -240,9 +246,17 @@ test("numeric session feedback roundtrips through the HTTP client", async () => 
         "/v1/projects/proj-1/judge-results",
         {
           judge_id: "judge-1",
-          trace_id: "trace-1",
-          session_id: "session-1",
+          target: { type: "session", session_id: "session-1" },
           value: 4.5,
+        },
+      ],
+      [
+        "POST",
+        "/v1/projects/proj-1/judge-results",
+        {
+          judge_id: "judge-1",
+          target: { type: "session", session_id: "session-1" },
+          value: 3,
         },
       ],
     ],
@@ -274,7 +288,7 @@ test("created names can be used to submit categorical feedback", async () => {
   if (!judge?.outputs) throw new Error("Judge not created");
   const result = await factory.submitResult({
     judgeName: judge.name,
-    traceId: "trace",
+    target: { type: "trace", traceId: "trace" },
     value: judge.outputs[0].name,
   });
   expect({
@@ -303,7 +317,41 @@ test("created names can be used to submit categorical feedback", async () => {
           },
         },
       },
-      { judge_name: "topic", trace_id: "trace", value: "good" },
+      {
+        judge_name: "topic",
+        target: { type: "trace", trace_id: "trace" },
+        value: "good",
+      },
     ],
   });
+});
+
+test("rejects ambiguous targets before sending feedback", async () => {
+  const { factory } = makeFactory();
+  const target = {
+    type: "session" as const,
+    sessionId: "session",
+    traceId: "trace",
+  };
+  await expect(
+    // @ts-expect-error Exercise untyped callers passing both target IDs.
+    factory.submitResult({ judgeId: "judge", target, value: true }),
+  ).rejects.toThrow(/target/);
+});
+
+test("surfaces a rejected session score from the server", async () => {
+  const client = new JudgmentApiClient("https://api.test", "key", "org");
+  client.api.use({
+    onRequest() {
+      return Response.json({ message: "Session not found" }, { status: 404 });
+    },
+  });
+  const factory = new ExternalJudgeFactory(client, "project", "test");
+  await expect(
+    factory.submitResult({
+      judgeName: "rating",
+      target: { type: "session", sessionId: "missing" },
+      value: 3,
+    }),
+  ).rejects.toThrow('HTTP 404: {"message":"Session not found"}');
 });

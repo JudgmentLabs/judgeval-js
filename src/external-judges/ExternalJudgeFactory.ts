@@ -6,6 +6,11 @@ import type {
 import { Logger } from "../utils/logger";
 import type { ExternalJudge, ScoreType } from "./ExternalJudge";
 
+/** Identifies the trace or session whose current score will be replaced. */
+export type ExternalJudgeTarget =
+  | { type: "trace"; traceId: string; sessionId?: never }
+  | { type: "session"; sessionId: string; traceId?: never };
+
 /**
  * Create external judges and submit their results on the Judgment platform.
  *
@@ -20,7 +25,7 @@ import type { ExternalJudge, ScoreType } from "./ExternalJudge";
  *
  * await client.externalJudges.submitResult({
  *   judgeId: judge.judgeId,
- *   traceId: "<trace_id>",
+ *   target: { type: "trace", traceId: "<trace_id>" },
  *   value: true,
  * });
  * ```
@@ -124,7 +129,9 @@ export class ExternalJudgeFactory {
   }
 
   /**
-   * Submit an externally computed score to a trace or session.
+   * Sets the current externally computed score for a trace or session.
+   *
+   * Resubmitting for the same judge and target replaces its current score.
    *
    * Exactly one of `judgeId` or `judgeName` must be provided; the score
    * is attached to that judge's production version. `value` must match
@@ -132,12 +139,10 @@ export class ExternalJudgeFactory {
    * `numeric`, or one of the judge's configured outputs' names for
    * `categorical`).
    *
-   * @param options.traceId - ID of the trace to score.
+   * @param options.target - A trace or session target with its corresponding ID.
    * @param options.value - The externally computed score.
    * @param options.judgeId - ID of the judge to submit under.
    * @param options.judgeName - Name of the judge to submit under.
-   * @param options.sessionId - If provided, scopes the result to this
-   *   session (must match the trace's session) instead of the trace alone.
    * @param options.reason - Optional free-text explanation for the score.
    * @returns The id of the persisted score result, or `null` if the
    *   project is unresolved.
@@ -146,39 +151,50 @@ export class ExternalJudgeFactory {
    * ```typescript
    * await client.externalJudges.submitResult({
    *   judgeName: "human-thumbs-up",
-   *   traceId: "<trace_id>",
+   *   target: { type: "trace", traceId: "<trace_id>" },
    *   value: true,
    *   reason: "Reviewer approved the response.",
    * });
    * ```
    */
   async submitResult(options: {
-    traceId: string;
+    target: ExternalJudgeTarget;
     value: boolean | number | string;
     judgeId?: string;
     judgeName?: string;
-    sessionId?: string;
     reason?: string;
   }): Promise<string | null> {
     if ((options.judgeId === undefined) === (options.judgeName === undefined)) {
       throw new Error("Exactly one of judgeId or judgeName must be provided");
     }
 
+    const targetKey =
+      options.target?.type === "trace" ? "traceId" : "sessionId";
+    if (
+      !options.target ||
+      !["trace", "session"].includes(options.target.type) ||
+      Object.keys(options.target).length !== 2 ||
+      typeof options.target[targetKey] !== "string" ||
+      !options.target[targetKey]
+    ) {
+      throw new Error("target must contain exactly one trace or session ID");
+    }
+
     const projectId = this._expectProjectId();
     if (!projectId) return null;
 
     // The validation above guarantees exactly one identifier is present.
-    const target =
+    const judge =
       options.judgeId !== undefined
         ? { judge_id: options.judgeId }
         : { judge_name: options.judgeName! };
     const payload: SubmitExternalJudgeResult = {
-      trace_id: options.traceId,
+      target:
+        options.target.type === "trace"
+          ? { type: "trace", trace_id: options.target.traceId }
+          : { type: "session", session_id: options.target.sessionId },
       value: options.value,
-      ...target,
-      ...(options.sessionId !== undefined
-        ? { session_id: options.sessionId }
-        : {}),
+      ...judge,
       ...(options.reason !== undefined ? { reason: options.reason } : {}),
     };
     const response = await this._client.postV1projectsJudgeResults(

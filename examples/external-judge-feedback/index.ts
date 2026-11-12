@@ -6,7 +6,8 @@ async function main() {
   // External judges don't run on the Judgment platform -- you register the
   // judge's name and score shape once, then submit as many results as you
   // like from your own evaluation code (a human review queue, an offline
-  // eval job, another LLM judge you already run elsewhere, etc.).
+  // eval job, another LLM judge you already run elsewhere, etc.). Each judge
+  // keeps one current score per trace or session; resubmitting replaces it.
   const judge = await client.externalJudges.create({
     name: "human-thumbs-up",
     scoreType: "binary",
@@ -21,7 +22,7 @@ async function main() {
 
   const resultId = await client.externalJudges.submitResult({
     judgeId: judge.judgeId,
-    traceId,
+    target: { type: "trace", traceId },
     value: true,
     reason: "Reviewer approved the response.",
   });
@@ -41,7 +42,7 @@ async function main() {
   if (!topicJudge) throw new Error("Project could not be resolved");
   await client.externalJudges.submitResult({
     judgeName: topicJudge.name,
-    traceId,
+    target: { type: "trace", traceId },
     value: "billing",
   });
 
@@ -50,11 +51,10 @@ async function main() {
     scoreType: "numeric",
   });
   if (!rating) throw new Error("Project could not be resolved");
-  // Use the stored session ID of this trace to attach session-level feedback.
+  // Session feedback needs only the session ID. Resubmitting replaces its current score.
   await client.externalJudges.submitResult({
     judgeId: rating.judgeId,
-    traceId,
-    sessionId: "<session_id>",
+    target: { type: "session", sessionId: "<session_id>" },
     value: 4.5,
   });
 }

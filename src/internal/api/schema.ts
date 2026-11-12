@@ -1817,7 +1817,7 @@ export interface paths {
     put?: never;
     /**
      * Submit an external judge result
-     * @description Submit feedback by judge ID or name. A trace ID is required; its optional session ID marks session feedback. Uses the production judge version and stored trace environment and customer metadata.
+     * @description Set the current score for one explicit trace or session target by judge ID or name. Resubmitting the same judge and target replaces its score. Session targets require only a session ID. Validates against the production judge version and derives attribution from the target.
      */
     post: operations["postV1ProjectsByProjectIdJudge-results"];
     delete?: never;
@@ -10875,16 +10875,34 @@ export interface operations {
       content: {
         "application/json":
           | {
-              trace_id: string;
-              session_id?: string;
+              target:
+                | {
+                    /** @constant */
+                    type: "trace";
+                    trace_id: string;
+                  }
+                | {
+                    /** @constant */
+                    type: "session";
+                    session_id: string;
+                  };
               value: boolean | number | string;
               reason?: string;
               /** Format: uuid */
               judge_id: string;
             }
           | {
-              trace_id: string;
-              session_id?: string;
+              target:
+                | {
+                    /** @constant */
+                    type: "trace";
+                    trace_id: string;
+                  }
+                | {
+                    /** @constant */
+                    type: "session";
+                    session_id: string;
+                  };
               value: boolean | number | string;
               reason?: string;
               judge_name: string;

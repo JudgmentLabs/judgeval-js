@@ -89,3 +89,5 @@ export {
 
 export { ExternalJudgeFactory } from "./external-judges";
 export type { ExternalJudge } from "./external-judges";
+
+export type { ExternalJudgeTarget } from "./external-judges";
