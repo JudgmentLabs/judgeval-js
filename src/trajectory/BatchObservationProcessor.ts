@@ -4,6 +4,7 @@ import {
   suppressTracing,
   unrefTimer,
 } from "@opentelemetry/core";
+import { runWithOtelBridgeGate } from "../trace/instrumentation/OtelContextBridge";
 import { Logger } from "../utils/logger";
 import type {
   ObservationExporter,
@@ -32,6 +33,7 @@ export class BatchObservationProcessor {
   private _queue: SentObservation[] = [];
   private _timer: ReturnType<typeof setTimeout> | undefined;
   private _isExporting = false;
+  private _exporting: Promise<void> = Promise.resolve();
   private _droppedCount = 0;
 
   constructor(exporter: ObservationExporter) {
@@ -70,6 +72,8 @@ export class BatchObservationProcessor {
   }
 
   private async _flushAll(): Promise<void> {
+    // A batch the timer already took off the queue counts as queued.
+    await this._exporting;
     const batches = Math.ceil(this._queue.length / MAX_EXPORT_BATCH_SIZE);
     await Promise.all(
       Array.from({ length: batches }, () => this._flushOneBatch()),
@@ -83,18 +87,23 @@ export class BatchObservationProcessor {
     let timeout: ReturnType<typeof setTimeout> | undefined;
     // The export's own HTTP request must not be recorded as a span of the
     // user's app.
-    await context.with(suppressTracing(context.active()), () =>
-      Promise.race([
-        this._exporter.export(batch),
-        new Promise<void>((resolve) => {
-          timeout = setTimeout(() => {
-            Logger.error(
-              `[Trajectory] Exporting ${batch.length} observations timed out`,
-            );
-            resolve();
-          }, EXPORT_TIMEOUT_MILLIS);
-        }),
-      ]).finally(() => clearTimeout(timeout)),
+    // This SDK's tracer keeps its own context, which reaches OpenTelemetry
+    // only through the bridge.
+    const suppressed = suppressTracing(context.active());
+    await context.with(suppressed, () =>
+      runWithOtelBridgeGate(suppressed, () =>
+        Promise.race([
+          this._exporter.export(batch),
+          new Promise<void>((resolve) => {
+            timeout = setTimeout(() => {
+              Logger.error(
+                `[Trajectory] Exporting ${batch.length} observations timed out`,
+              );
+              resolve();
+            }, EXPORT_TIMEOUT_MILLIS);
+          }),
+        ]).finally(() => clearTimeout(timeout)),
+      ),
     );
   }
 
@@ -102,7 +111,7 @@ export class BatchObservationProcessor {
     if (this._isExporting) return;
     const flush = () => {
       this._isExporting = true;
-      void this._flushOneBatch().finally(() => {
+      this._exporting = this._flushOneBatch().finally(() => {
         this._isExporting = false;
         if (this._queue.length > 0) {
           this._clearTimer();

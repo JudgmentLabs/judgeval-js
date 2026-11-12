@@ -1,7 +1,7 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { context } from "@opentelemetry/api";
-import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
+import { beforeAll, describe, expect, test } from "bun:test";
+import { context, ROOT_CONTEXT } from "@opentelemetry/api";
 import { isTracingSuppressed } from "@opentelemetry/core";
+import { installOtelContextBridge } from "../trace/instrumentation/OtelContextBridge";
 import { BatchObservationProcessor } from "./BatchObservationProcessor";
 import type {
   ObservationExporter,
@@ -33,14 +33,8 @@ function item(index: number): SentObservation {
   };
 }
 
-// OpenTelemetry carries context only through a registered context manager.
-// An app whose instrumentation could record the export's request has one.
-beforeAll(() => {
-  context.setGlobalContextManager(
-    new AsyncLocalStorageContextManager().enable(),
-  );
-});
-afterAll(() => context.disable());
+// As the tracer does; OpenTelemetry has no context manager of its own here.
+beforeAll(() => installOtelContextBridge(() => ROOT_CONTEXT));
 
 describe("BatchObservationProcessor", () => {
   test("flush exports everything in batches of at most one hundred", async () => {
@@ -52,6 +46,22 @@ describe("BatchObservationProcessor", () => {
     expect(Math.max(...recorded.batches.map((batch) => batch.length))).toBe(
       100,
     );
+  });
+
+  test("flush waits for a batch that is already being sent", async () => {
+    const stored: SentObservation[] = [];
+    const exporter = {
+      // Stores the batch only after a later turn of the event loop.
+      export: async (batch: SentObservation[]) => {
+        await new Promise((resolve) => setImmediate(resolve));
+        stored.push(...batch);
+      },
+    } as unknown as ObservationExporter;
+    const processor = new BatchObservationProcessor(exporter);
+    // A full batch is sent at once, before flush is called.
+    for (let index = 0; index < 100; index++) processor.emit(item(index));
+    await processor.forceFlush();
+    expect(stored.length).toBe(100);
   });
 
   test("exports with tracing suppressed", async () => {
