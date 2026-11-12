@@ -19,6 +19,7 @@
       },
       "devDependencies": {
         "@anthropic-ai/sdk": "^0.129.0",
+        "@opentelemetry/context-async-hooks": "^2.11.0",
         "@types/bun": "^1.3.12",
         "openai": "^6.38.0",
         "openapi-typescript": "^7.10.0",

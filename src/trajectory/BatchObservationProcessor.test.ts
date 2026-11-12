@@ -1,5 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { context } from "@opentelemetry/api";
+import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
 import { isTracingSuppressed } from "@opentelemetry/core";
 import { BatchObservationProcessor } from "./BatchObservationProcessor";
 import type {
@@ -31,6 +32,15 @@ function item(index: number): SentObservation {
     observed_at: "2026-11-11T00:00:00.000Z",
   };
 }
+
+// OpenTelemetry carries context only through a registered context manager.
+// An app whose instrumentation could record the export's request has one.
+beforeAll(() => {
+  context.setGlobalContextManager(
+    new AsyncLocalStorageContextManager().enable(),
+  );
+});
+afterAll(() => context.disable());
 
 describe("BatchObservationProcessor", () => {
   test("flush exports everything in batches of at most one hundred", async () => {
