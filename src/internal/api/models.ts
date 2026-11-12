@@ -54,7 +54,7 @@ export type ConversationTool = components["schemas"]["ConversationTool"];
 export type ConversationUsage = components["schemas"]["ConversationUsage"];
 export type ConversationObservation =
   components["schemas"]["ConversationObservation"];
-/** One model call in the conversation format, as `client.observations.record` sends it. */
+/** One model call in the conversation format, as `Trajectory.record` sends it. */
 export type Observation = components["schemas"]["Observation"];
 export type PullAllOfflineDatasetsResponse = OkResponse<
   "/v1/projects/{projectId}/datasets",
