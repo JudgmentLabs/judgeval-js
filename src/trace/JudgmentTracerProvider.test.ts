@@ -59,36 +59,6 @@ function setupProxy(): {
   };
 }
 
-test("deregister closes only the owner's exporters and removes them from later lifecycle calls", async () => {
-  const proxy = JudgmentTracerProvider.getInstance();
-  const owners = [0, 1].map(() => new FakeTracer(new BasicTracerProvider()));
-  const events: string[] = [];
-  for (const [index, owner] of owners.entries()) {
-    proxy.register(owner);
-    proxy.addBackgroundExporter(
-      {
-        forceFlush() {
-          events.push(`flush-${index}`);
-          return Promise.resolve();
-        },
-        shutdown() {
-          events.push(`shutdown-${index}`);
-          return Promise.resolve();
-        },
-      },
-      owner,
-    );
-  }
-  try {
-    proxy.deregister(owners[0]!);
-    await proxy.forceFlush();
-    await proxy.shutdown();
-    expect(events).toEqual(["shutdown-0", "flush-1", "shutdown-1"]);
-  } finally {
-    for (const owner of owners) proxy.deregister(owner);
-  }
-});
-
 describe("ProxyTracer.startActiveSpan", () => {
   test("does not end the span when the callback returns", () => {
     const { proxy, exporter, cleanup } = setupProxy();

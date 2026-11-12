@@ -30,23 +30,6 @@ export class JudgmentApiClient {
     return this.organizationId;
   }
 
-  async postV1projectsMcpCalls(
-    projectId: string,
-    payload: RequestBody<"/v1/projects/{projectId}/mcp/calls", "post">,
-    options: { signal: AbortSignal; bodySerializer: () => string },
-  ): Promise<Response> {
-    const { response } = await this.api.POST(
-      "/v1/projects/{projectId}/mcp/calls",
-      {
-        params: { path: { projectId } },
-        body: payload,
-        ...options,
-        parseAs: "text",
-      },
-    );
-    return response;
-  }
-
   postV1projectsResolve(payload: RequestBody<"/v1/projects/resolve/", "post">) {
     return ok(this.api.POST("/v1/projects/resolve/", { body: payload }));
   }

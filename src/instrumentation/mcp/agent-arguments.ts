@@ -105,7 +105,10 @@ export function isAgentArgument(name: string): boolean {
  * Adds the optional arguments to a listed tool. Schemas we can't safely extend
  * are returned unchanged, and a tool's own property of the same name wins.
  */
-export function withAgentArguments<Tool extends ListedTool>(tool: Tool): Tool {
+export function withAgentArguments<Tool extends ListedTool>(
+  tool: Tool,
+  injectConversationId = true,
+): Tool {
   const schema = tool.inputSchema;
   if (schema === undefined || !canExtendSchema(schema)) return tool;
   const declared = new Set(declaredArguments(schema));
@@ -116,7 +119,11 @@ export function withAgentArguments<Tool extends ListedTool>(tool: Tool): Tool {
       properties: {
         ...Object.fromEntries(
           Object.entries(AGENT_ARGUMENT_DESCRIPTIONS)
-            .filter(([name]) => !declared.has(name))
+            .filter(
+              ([name]) =>
+                !declared.has(name) &&
+                (injectConversationId || name !== CONVERSATION_ARGUMENT),
+            )
             .map(([name, description]) => [
               name,
               { type: "string", description },

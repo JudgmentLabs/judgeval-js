@@ -27,11 +27,6 @@ const TRACER_NAME = "judgeval";
 
 const _contextStorage = new AsyncLocalStorage<Context>();
 
-interface BackgroundExporter {
-  forceFlush(): Promise<void>;
-  shutdown(): Promise<void>;
-}
-
 class ProxyTracer implements Tracer {
   private _provider: JudgmentTracerProvider;
 
@@ -99,13 +94,6 @@ export class JudgmentTracerProvider implements TracerProvider {
   private _instrumentations: Instrumentation[] = [];
   private _proxyTracer: ProxyTracer;
   private _tracers = new Set<BaseTracer>();
-  private _backgroundExporters = new Map<BaseTracer, Set<BackgroundExporter>>();
-
-  addBackgroundExporter(exporter: BackgroundExporter, owner: BaseTracer): void {
-    const exporters = this._backgroundExporters.get(owner) ?? new Set();
-    exporters.add(exporter);
-    this._backgroundExporters.set(owner, exporters);
-  }
 
   private constructor() {
     this._proxyTracer = new ProxyTracer(this);
@@ -150,13 +138,6 @@ export class JudgmentTracerProvider implements TracerProvider {
    */
   deregister(tracer: BaseTracer): void {
     this._tracers.delete(tracer);
-    const exporters = this._backgroundExporters.get(tracer);
-    this._backgroundExporters.delete(tracer);
-    for (const exporter of exporters ?? []) {
-      void exporter.shutdown().catch(() => {
-        Logger.error("Background exporter shutdown failed");
-      });
-    }
   }
 
   /**
@@ -347,12 +328,9 @@ export class JudgmentTracerProvider implements TracerProvider {
    * Flush all registered tracers.
    */
   async forceFlush(): Promise<void> {
-    const results = await Promise.allSettled([
-      ...Array.from(this._tracers).map((t) => t._tracerProvider.forceFlush()),
-      ...Array.from(this._backgroundExporters.values()).flatMap((exporters) =>
-        Array.from(exporters).map((exporter) => exporter.forceFlush()),
-      ),
-    ]);
+    const results = await Promise.allSettled(
+      Array.from(this._tracers).map((t) => t._tracerProvider.forceFlush()),
+    );
     for (const r of results) {
       if (r.status === "rejected") {
         Logger.error(`forceFlush failed: ${String(r.reason)}`);
@@ -364,12 +342,9 @@ export class JudgmentTracerProvider implements TracerProvider {
    * Shut down all registered tracers and clear state.
    */
   async shutdown(): Promise<void> {
-    const results = await Promise.allSettled([
-      ...Array.from(this._tracers).map((t) => t._tracerProvider.shutdown()),
-      ...Array.from(this._backgroundExporters.values()).flatMap((exporters) =>
-        Array.from(exporters).map((exporter) => exporter.shutdown()),
-      ),
-    ]);
+    const results = await Promise.allSettled(
+      Array.from(this._tracers).map((t) => t._tracerProvider.shutdown()),
+    );
     for (const r of results) {
       if (r.status === "rejected") {
         Logger.error(`shutdown failed: ${String(r.reason)}`);
@@ -377,6 +352,5 @@ export class JudgmentTracerProvider implements TracerProvider {
     }
     this._activeTracer = null;
     this._tracers.clear();
-    this._backgroundExporters.clear();
   }
 }

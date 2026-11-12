@@ -1,10 +1,17 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { createHash, randomUUID } from "node:crypto";
 import { JudgmentTracerProvider } from "../../trace/JudgmentTracerProvider";
 import { Logger } from "../../utils/logger";
 import { VERSION } from "../../version";
-import { capturePayload, McpCallExporter, type McpCall } from "./exporter";
-export type { McpCall } from "./exporter";
+import {
+  SpanKind,
+  SpanStatusCode,
+  defaultTextMapGetter,
+  trace,
+  type Span,
+} from "@opentelemetry/api";
+import { W3CTraceContextPropagator } from "@opentelemetry/core";
+import { getBaggage, setBaggage, createBaggage } from "../../trace/baggage";
+import { capturePayload } from "./payload";
 import {
   isAgentArgument,
   canExtendSchema,
@@ -17,6 +24,7 @@ import {
   withoutAgentArguments,
 } from "./agent-arguments";
 
+const propagator = new W3CTraceContextPropagator();
 const MAX_ERROR_MESSAGE_LENGTH = 1_000;
 const MAX_RECORDED_KEYS = 30;
 const MAX_RECORDED_KEY_LENGTH = 64;
@@ -52,7 +60,11 @@ export interface InstrumentMcpServerOptions {
     value: unknown,
     field: "input" | "output",
   ) => unknown;
-  /** Authoritative logical session from your application, independent of transport. */
+  /**
+   * Authoritative application session, independent of transport. Existing
+   * setSessionId baggage is also authoritative; scope it to each request,
+   * not the lifetime of the server.
+   */
   readonly sessionId?: (info: McpRequestInfo) => string | undefined;
   /** Defaults to the name the server advertises. */
   readonly serverName?: string;
@@ -68,6 +80,8 @@ export interface InstrumentMcpServerOptions {
    * @defaultValue true
    */
   readonly injectAgentArguments?: boolean;
+  /** Disable only conversation-ID schema injection and handoff. Defaults true. */
+  readonly injectConversationId?: boolean;
   /** Attaches the end user or customer once a call finishes. */
   readonly identify?: (info: McpRequestInfo) => McpCaller | undefined;
   /** Opt in to failure text, sent as-is unless transformed by redact. Default false. */
@@ -133,7 +147,6 @@ interface ProtocolServer {
 }
 
 interface RegisteredTool {
-  readonly description?: string;
   readonly inputSchema?: unknown;
 }
 
@@ -142,17 +155,14 @@ export type InstrumentableMcpServer = object;
 
 interface ToolContract {
   readonly declared: ReadonlySet<string>;
-  readonly hash: string;
   /** Accepts unknown keys, so an added argument could change what the tool receives. */
   readonly open: boolean;
 }
 
 const records = new AsyncLocalStorage<CallRecord>();
 const instrumented = new WeakSet<object>();
-const exporters = new WeakMap<object, McpCallExporter>();
-// Keyed by schema because an update replaces it, then by tool, because two tools
-// can share one schema object.
-const contracts = new WeakMap<object, Map<string, ToolContract | null>>();
+// Updating a tool replaces its schema, invalidating its cached contract.
+const contracts = new WeakMap<object, ToolContract | null>();
 
 /**
  * Records the original error before you map it to a public tool error. Its
@@ -170,28 +180,9 @@ export function setMcpCaller(caller: McpCaller): void {
   if (record !== undefined) record.caller = { ...record.caller, ...caller };
 }
 
-/** Capture an already-completed call from a custom server. Supplied payloads opt in to capture. */
-export function captureMcpCall(
-  call: Omit<McpCall, "call_id"> & { call_id?: string },
-  redactPayload?: InstrumentMcpServerOptions["redactPayload"],
-): void {
-  attempt(() =>
-    activeExporter()?.enqueue({
-      ...call,
-      call_id: call.call_id ?? randomUUID(),
-      environment_name:
-        call.environment_name ??
-        JudgmentTracerProvider.getInstance().getActiveTracer()?.environment ??
-        undefined,
-      input: capturePayload(call.input, "input", redactPayload),
-      output: capturePayload(call.output, "output", redactPayload),
-    }),
-  );
-}
-
 /**
- * Exports completed tool calls as native MCP events using the active tracer's
- * configuration without creating OTel spans.
+ * Traces MCP tool calls using the active Judgment tracer. Explicit incoming trace
+ * context is honored; otherwise a request starts a new trace.
  *
  * Call it once per server, after `Tracer.init()`. Supports
  * `@modelcontextprotocol/sdk` 1.x and `@modelcontextprotocol/server` 2.x. Those
@@ -273,6 +264,19 @@ function traced(
   listTools: RequestHandler | undefined,
 ): RequestHandler {
   return async (request, context) => {
+    if (method !== "tools/call") {
+      const result = await handler(request, context);
+      return method === "tools/list" && inject
+        ? (attempt(() =>
+            listWithArguments(
+              result,
+              registry,
+              structuredTools,
+              options.injectConversationId !== false,
+            ),
+          ) ?? result)
+        : result;
+    }
     const prepared = attempt(() =>
       prepareCall(
         method,
@@ -289,28 +293,23 @@ function traced(
         attempt(() => withoutInjected(method, request, registry, inject)) ??
         request;
       const result = await handler(stripped, context);
-      return method === "tools/list" && inject
-        ? (attempt(() =>
-            listWithArguments(result, registry, structuredTools),
-          ) ?? result)
-        : result;
+      return result;
     }
     const record: CallRecord = {
       error: undefined,
       caller: undefined,
     };
-    const complete = attempt(() => captureCall(prepared, record, options));
+    const provider = JudgmentTracerProvider.getInstance();
+    const started = attempt(() => startCallSpan(prepared, options));
+    const run = () =>
+      records.run(record, () => handler(prepared.request, context));
     try {
-      const result = await records.run(record, () =>
-        handler(prepared.request, context),
-      );
-      attempt(() => complete?.(result, context));
-      if (method === "tools/list" && inject) {
-        return (
-          attempt(() => listWithArguments(result, registry, structuredTools)) ??
-          result
-        );
-      }
+      const result =
+        started === undefined
+          ? await run()
+          : await provider.withContext(started.context, run);
+      if (started !== undefined)
+        finishCall(started.span, record, result, context, options);
       // Stateless HTTP servers may create a fresh server for each request.
       // Read that instance's published schema before annotating its result.
       if (
@@ -322,7 +321,14 @@ function traced(
           .then(() => listTools({ method: "tools/list" }, context))
           .catch(() => undefined);
         if (listed !== undefined)
-          attempt(() => listWithArguments(listed, registry, structuredTools));
+          attempt(() =>
+            listWithArguments(
+              listed,
+              registry,
+              structuredTools,
+              options.injectConversationId !== false,
+            ),
+          );
       }
       const conversationId = prepared.mintedConversationId;
       return conversationId === undefined
@@ -337,7 +343,8 @@ function traced(
           ) ?? result);
     } catch (error) {
       record.error ??= error;
-      attempt(() => complete?.(undefined, context));
+      if (started !== undefined)
+        finishCall(started.span, record, undefined, context, options);
       throw error;
     }
   };
@@ -349,96 +356,99 @@ interface PreparedCall {
   readonly mintedConversationId: string | undefined;
 }
 
-function captureCall(
+function startCallSpan(
   prepared: PreparedCall,
-  record: CallRecord,
   options: InstrumentMcpServerOptions,
 ) {
-  const { attributes, request } = prepared;
-  if (attributes["mcp.method.name"] !== "tools/call") return undefined;
-  const exporter = activeExporter();
-  if (exporter === undefined) return undefined;
-  const args = request.params?.arguments ?? {};
-  const argumentKeys = Object.keys(args)
-    .filter(Boolean)
-    .slice(0, 100)
-    .map((key) => key.slice(0, 256));
-  const input =
-    options.captureInput === true
-      ? capturePayload(args, "input", options.redactPayload)
-      : undefined;
-  const environment =
-    JudgmentTracerProvider.getInstance().getActiveTracer()?.environment;
-  const timestamp = new Date().toISOString();
-  const start = performance.now();
-  let completed = false;
-  return (result: McpResult | undefined, context: HandlerContext): void => {
-    if (completed) return;
-    completed = true;
-    const duration = Math.max(0, performance.now() - start);
-    const caller = identifyCaller(record, context, options);
-    const cancelled =
-      (context.signal ?? context.mcpReq?.signal)?.aborted === true;
-    const failed = result === undefined || result.isError === true;
-    const failure =
-      failed && !cancelled ? failureOf(record, result, options) : undefined;
-    const text = (key: string, limit = 256) =>
-      stringOrUndefined(attributes[key])?.slice(0, limit);
-    const output =
-      options.captureOutput === true && result !== undefined
-        ? capturePayload(result, "output", options.redactPayload)
-        : undefined;
-    const metadata: Record<string, unknown> = Object.fromEntries(
-      Object.entries(attributes)
-        .filter(([key]) =>
-          [
-            "mcp.session.id",
-            "mcp.protocol.version",
-            "jsonrpc.request.id",
-            "judgment.mcp.server.version",
-            "judgment.mcp.server.build",
-            "judgment.mcp.client.version",
-            "judgment.mcp.contract_hash",
-            "judgment.mcp.sdk_version",
-            "judgment.mcp.conversation_id_source",
-          ].includes(key),
-        )
-        .map(([key, value]) => [key, String(value).slice(0, 512)]),
+  const provider = JudgmentTracerProvider.getInstance();
+  const meta = prepared.request.params?._meta ?? {};
+  // A long-lived server/HTTP span must not accidentally parent every tool call.
+  const current = trace.deleteSpan(provider.getCurrentContext());
+  let parent =
+    typeof meta["traceparent"] === "string"
+      ? propagator.extract(current, meta, defaultTextMapGetter)
+      : current;
+  const session = prepared.attributes["judgment.session_id"];
+  if (session !== undefined) {
+    parent = setBaggage(
+      parent,
+      (getBaggage(parent) ?? createBaggage()).setEntry("judgment.session_id", {
+        value: session,
+      }),
     );
+  }
+  const method =
+    prepared.request.method ?? prepared.attributes["mcp.method.name"] ?? "mcp";
+  const name = prepared.request.params?.name;
+  const span = provider
+    .getTracer("judgeval-mcp")
+    .startSpan(
+      name === undefined ? method : `${method} ${name}`,
+      { kind: SpanKind.SERVER, attributes: prepared.attributes },
+      parent,
+    );
+  if (options.captureInput === true && method === "tools/call")
+    attempt(() =>
+      captureSpanPayload(
+        span,
+        prepared.request.params?.arguments ?? {},
+        "input",
+        options,
+      ),
+    );
+  return { span, context: trace.setSpan(parent, span) };
+}
+
+function captureSpanPayload(
+  span: Span,
+  value: unknown,
+  field: "input" | "output",
+  options: InstrumentMcpServerOptions,
+): void {
+  const payload = capturePayload(value, field, options.redactPayload);
+  if (payload === undefined)
+    span.setAttribute(`judgment.mcp.${field}_omitted`, "true");
+  else span.setAttribute(`judgment.${field}`, JSON.stringify(payload));
+}
+
+function finishCall(
+  span: Span,
+  record: CallRecord,
+  result: McpResult | undefined,
+  context: HandlerContext,
+  options: InstrumentMcpServerOptions,
+): void {
+  const outcome =
+    attempt(() =>
+      (context.signal ?? context.mcpReq?.signal)?.aborted === true
+        ? "cancelled"
+        : record.error !== undefined ||
+            result === undefined ||
+            result.isError === true
+          ? "error"
+          : "success",
+    ) ?? "error";
+  attempt(() => span.setAttribute("judgment.mcp.outcome", outcome));
+  if (outcome === "error")
+    attempt(() => span.setStatus({ code: SpanStatusCode.ERROR }));
+  attempt(() => {
+    const caller = identifyCaller(record, context, options);
+    if (caller.userId)
+      span.setAttribute("judgment.customer_user_id", caller.userId);
     if (caller.customerId)
-      metadata["customer_id"] = caller.customerId.slice(0, 512);
-    if (options.captureInput === true && input === undefined)
-      metadata["input_omitted"] = true;
-    if (
-      options.captureOutput === true &&
-      result !== undefined &&
-      output === undefined
-    )
-      metadata["output_omitted"] = true;
-    exporter.enqueue({
-      call_id: randomUUID(),
-      timestamp,
-      duration_ms: duration,
-      outcome: cancelled ? "cancelled" : failed ? "error" : "success",
-      server_name: text("judgment.mcp.server.name") ?? "mcp",
-      tool_name: (request.params?.name || "unknown").slice(0, 256),
-      session_id: text("judgment.mcp.conversation_id", 512),
-      client_name: text("judgment.mcp.client.name"),
-      intent: text("judgment.mcp.intent", 2048),
-      model: text("judgment.mcp.model"),
-      user_id: caller.userId?.slice(0, 512) || undefined,
-      environment_name: environment?.slice(0, 256) || undefined,
-      argument_keys: argumentKeys,
-      input,
-      output,
-      error_type:
-        failure === undefined
-          ? undefined
-          : failure.type.slice(0, 256) || "tool_error",
-      error_message: failure?.message,
-      metadata,
-    });
-  };
+      span.setAttribute("judgment.customer_id", caller.customerId);
+    if (outcome === "error") {
+      const failure = failureOf(record, result, options);
+      span.setAttribute("error.type", failure.type);
+      span.setAttribute("judgment.mcp.error_type", failure.type);
+      if (failure.message !== undefined)
+        span.setAttribute("judgment.mcp.error_message", failure.message);
+      span.setStatus({ code: SpanStatusCode.ERROR, message: failure.message });
+    }
+    if (options.captureOutput === true && result !== undefined)
+      captureSpanPayload(span, result, "output", options);
+  });
+  attempt(() => span.end());
 }
 
 function prepareCall(
@@ -455,22 +465,33 @@ function prepareCall(
   const args = params?.arguments ?? {};
   const toolName = method === "tools/call" ? params?.name : undefined;
   const tool = toolName === undefined ? undefined : registry?.[toolName];
-  const contract =
-    tool === undefined ? undefined : toolContract(toolName!, tool);
+  const contract = tool === undefined ? undefined : toolContract(tool);
   const injected = inject && contract !== undefined && !contract.open;
   const reported = injected
     ? readReportedArguments(args, contract.declared)
     : undefined;
   const headers = readHeaders(context);
-  const transportSessionId =
-    context.sessionId ?? headers["mcp-session-id"] ?? undefined;
-  const logicalSessionId =
-    attempt(() => options.sessionId?.(requestInfo(context))) ||
-    reported?.conversationId;
+  const transportSessionId = transportSession(context, headers);
+  const configuredSessionId =
+    stringOrUndefined(
+      attempt(() => options.sessionId?.(requestInfo(context))),
+    ) ??
+    stringOrUndefined(
+      getBaggage(
+        JudgmentTracerProvider.getInstance().getCurrentContext(),
+      )?.getEntry("judgment.session_id")?.value,
+    );
+  const conversationId =
+    options.injectConversationId === false
+      ? undefined
+      : reported?.conversationId;
+  const logicalSessionId = configuredSessionId ?? conversationId;
+  const sessionId = logicalSessionId ?? transportSessionId;
   const mintedConversationId =
     injected &&
+    options.injectConversationId !== false &&
     !contract.declared.has("conversation_id") &&
-    logicalSessionId === undefined
+    sessionId === undefined
       ? mintConversationId()
       : undefined;
   const client = protocol.getClientVersion?.() ?? readClientInfo(meta);
@@ -502,58 +523,35 @@ function prepareCall(
           ? redacted(withoutUriSecrets(params.uri), options)
           : undefined,
       "user_agent.original": headers["user-agent"],
-      "judgment.mcp.server.name":
-        options.serverName ?? protocol._serverInfo?.name,
+      "judgment.mcp.server_name":
+        options.serverName ?? protocol._serverInfo?.name ?? "mcp",
+      "judgment.mcp.tool_name": toolName,
+      "judgment.session_id": sessionId ?? mintedConversationId,
       "judgment.mcp.server.version": protocol._serverInfo?.version,
       "judgment.mcp.server.build": options.serverBuild,
-      "judgment.mcp.client.name": client?.name,
+      "judgment.mcp.client_name": client?.name,
       "judgment.mcp.client.version": client?.version,
-      "judgment.mcp.contract_hash": contract?.hash,
       "judgment.mcp.argument_keys":
         toolName === undefined
           ? undefined
           : recordedKeys(args, injected ? contract.declared : undefined),
       "judgment.mcp.conversation_id": logicalSessionId ?? mintedConversationId,
       "judgment.mcp.conversation_id_source":
-        logicalSessionId !== undefined &&
-        logicalSessionId !== reported?.conversationId
+        configuredSessionId !== undefined
           ? "provided"
-          : reported?.conversationId !== undefined
+          : conversationId !== undefined
             ? "echoed"
-            : mintedConversationId !== undefined
-              ? "minted"
-              : undefined,
+            : transportSessionId !== undefined
+              ? "transport"
+              : mintedConversationId !== undefined
+                ? "minted"
+                : undefined,
       "judgment.mcp.intent":
         intent === undefined ? undefined : redacted(intent, options),
-      "judgment.mcp.model": reported?.model,
+      "judgment.llm.model": reported?.model,
       "judgment.mcp.sdk_version": VERSION,
     }),
   };
-}
-
-function activeExporter(): McpCallExporter | undefined {
-  const provider = JudgmentTracerProvider.getInstance();
-  const tracer = provider.getActiveTracer();
-  if (
-    !tracer?._enableMonitoring ||
-    !tracer.apiUrl ||
-    !tracer.apiKey ||
-    !tracer.organizationId ||
-    !tracer.projectId
-  )
-    return undefined;
-  let exporter = exporters.get(tracer);
-  if (exporter === undefined) {
-    exporter = new McpCallExporter({
-      apiUrl: tracer.apiUrl,
-      apiKey: tracer.apiKey,
-      organizationId: tracer.organizationId,
-      projectId: tracer.projectId,
-    });
-    exporters.set(tracer, exporter);
-    provider.addBackgroundExporter(exporter, tracer);
-  }
-  return exporter.isClosed ? undefined : exporter;
 }
 
 function identifyCaller(
@@ -642,6 +640,7 @@ function listWithArguments(
   result: McpResult,
   registry: Readonly<Record<string, RegisteredTool>> | undefined,
   structuredTools: Set<string>,
+  injectConversationId: boolean,
 ): McpResult {
   return (
     attempt(() => ({
@@ -651,11 +650,10 @@ function listWithArguments(
         const registered =
           typeof name === "string" ? registry?.[name] : undefined;
         const contract =
-          registered === undefined
-            ? undefined
-            : toolContract(name as string, registered);
+          registered === undefined ? undefined : toolContract(registered);
         if (contract === undefined || contract.open) return tool;
-        const updated = withAgentArguments(tool);
+        const updated = withAgentArguments(tool, injectConversationId);
+        if (!injectConversationId) return updated;
         const output = tool["outputSchema"] as
           | Readonly<Record<string, unknown>>
           | undefined;
@@ -683,7 +681,7 @@ function withoutInjected(
   const name = request.params?.name;
   const tool = name === undefined ? undefined : registry?.[name];
   if (method !== "tools/call" || !inject || tool === undefined) return request;
-  const contract = toolContract(name!, tool);
+  const contract = toolContract(tool);
   if (contract === undefined || contract.open) return request;
   return {
     ...request,
@@ -697,52 +695,35 @@ function withoutInjected(
   };
 }
 
-function toolContract(
-  name: string,
-  tool: RegisteredTool,
-): ToolContract | undefined {
+function toolContract(tool: RegisteredTool): ToolContract | undefined {
   const schema = tool.inputSchema;
   const cached =
     typeof schema === "object" && schema !== null
       ? contracts.get(schema)
       : undefined;
-  const cacheKey = `${name}\0${tool.description ?? ""}`;
-  const known = cached?.get(cacheKey);
-  if (known !== undefined) return known ?? undefined;
+  if (cached !== undefined) return cached ?? undefined;
   const shape = readSchemaShape(tool.inputSchema);
   const contract =
     shape === undefined
       ? null
       : {
           declared: new Set(shape.keys),
-          hash: createHash("sha256")
-            .update(name)
-            .update("\0")
-            .update(tool.description ?? "")
-            .update("\0")
-            .update(shape.fingerprint)
-            .digest("hex")
-            .slice(0, 16),
           open: shape.open,
         };
   if (typeof schema === "object" && schema !== null) {
-    const entries = cached ?? new Map<string, ToolContract | null>();
-    entries.set(cacheKey, contract);
-    contracts.set(schema, entries);
+    contracts.set(schema, contract);
   }
   return contract ?? undefined;
 }
 
 interface SchemaShape {
   readonly keys: readonly string[];
-  readonly fingerprint: string;
   readonly open: boolean;
 }
 
 /** Reads a tool's input names from a Standard Schema or Zod object. */
 function readSchemaShape(schema: unknown): SchemaShape | undefined {
-  if (schema === undefined || schema === null)
-    return { keys: [], fingerprint: "", open: false };
+  if (schema === undefined || schema === null) return { keys: [], open: false };
   const candidate = schema as {
     readonly "~standard"?: {
       readonly jsonSchema?: {
@@ -765,7 +746,6 @@ function readSchemaShape(schema: unknown): SchemaShape | undefined {
     if (!canExtendSchema(json)) return undefined;
     return {
       keys: declaredArguments(json),
-      fingerprint: JSON.stringify(json),
       open:
         json["additionalProperties"] !== false &&
         json["unevaluatedProperties"] !== false,
@@ -777,10 +757,8 @@ function readSchemaShape(schema: unknown): SchemaShape | undefined {
     (typeof definition === "function" ? definition() : definition);
   if (typeof shape !== "object" || shape === null) return undefined;
   const keys = Object.keys(shape).sort();
-  const fields = keys.map((key) => [key, fieldType(shape, key)]);
   return {
     keys,
-    fingerprint: JSON.stringify(fields),
     open:
       candidate._def?.unknownKeys === "passthrough" ||
       (candidate._def?.catchall !== undefined &&
@@ -791,19 +769,6 @@ function readSchemaShape(schema: unknown): SchemaShape | undefined {
           ),
         )),
   };
-}
-
-/** Names a Zod field's type, so changing it changes the contract hash. */
-function fieldType(shape: object, key: string): string {
-  const field = (shape as Readonly<Record<string, unknown>>)[key] as
-    | {
-        readonly _def?: {
-          readonly typeName?: unknown;
-          readonly type?: unknown;
-        };
-      }
-    | undefined;
-  return String(field?._def?.typeName ?? field?._def?.type ?? "");
 }
 
 /** Drops URI parts that commonly carry credentials: user info, query and fragment. */
@@ -829,11 +794,22 @@ function readHeaders(
 }
 
 function requestInfo(context: HandlerContext): McpRequestInfo {
+  const headers = readHeaders(context);
   return {
-    sessionId: context.sessionId,
-    headers: readHeaders(context),
+    sessionId: transportSession(context, headers),
+    headers,
     authInfo: context.authInfo ?? context.http?.authInfo,
   };
+}
+
+function transportSession(
+  context: HandlerContext,
+  headers: Readonly<Record<string, string>>,
+): string | undefined {
+  return (
+    stringOrUndefined(context.sessionId) ??
+    stringOrUndefined(headers["mcp-session-id"])
+  );
 }
 
 function requestIdOf(
@@ -875,7 +851,7 @@ function recordedKeys(
     )
     .slice(0, MAX_RECORDED_KEYS)
     .map((key) => key.slice(0, MAX_RECORDED_KEY_LENGTH));
-  return keys.length === 0 ? undefined : keys.join(",");
+  return keys.length === 0 ? undefined : JSON.stringify(keys);
 }
 
 function stringOrUndefined(value: unknown): string | undefined {
