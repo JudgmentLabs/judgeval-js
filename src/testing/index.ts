@@ -232,7 +232,13 @@ export class TestSuitesFactory extends ProjectTestSuitesClient {
  * ```
  */
 export class TestRunsFactory extends ProjectTestSuitesClient {
-  /** Start a run of the test suite's latest published version. */
+  /**
+   * Start a run of the test suite's latest published version.
+   *
+   * With `stored_traces: true` each case's stored trace, named by its
+   * `metadata.trace_id`, is scored instead of running the agent. Every
+   * published case needs a trace in this project.
+   */
   start(
     testSuiteId: string,
     options: {
@@ -240,6 +246,7 @@ export class TestRunsFactory extends ProjectTestSuitesClient {
       candidate?: string;
       candidate_meta?: Record<string, unknown>;
       trigger?: "manual" | "ci" | "schedule" | "api";
+      stored_traces?: boolean;
     } = {},
   ): Promise<StartedRun> {
     return this.call("POST", `/${testSuiteId}/runs`, { body: options });
