@@ -36,6 +36,7 @@ export {
   type InstrumentableMcpServer,
   type McpCaller,
   type McpRequestInfo,
+  type McpToolDescriptor,
 } from "./instrumentation/mcp";
 
 export { Example } from "./data";

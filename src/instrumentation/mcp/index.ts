@@ -52,8 +52,21 @@ export interface McpRequestInfo {
   readonly authInfo: unknown;
 }
 
+/** Original wire schemas, before Judgment adds telemetry arguments. */
+export interface McpToolDescriptor {
+  readonly inputSchema: Readonly<Record<string, unknown>>;
+  readonly outputSchema?: Readonly<Record<string, unknown>>;
+}
+
 /** Options for {@link instrumentMcpServer}. */
 export interface InstrumentMcpServerOptions {
+  /** Low-level per-tool lookup in the current request context, instead of full
+   * tools/list discovery. Return original wire schemas, scoped to this caller.
+   * Undefined/throwing lookups leave arguments and results unchanged.
+   * High-level servers continue to use their native registry. */
+  readonly resolveOriginalTool?: (
+    name: string,
+  ) => McpToolDescriptor | undefined | Promise<McpToolDescriptor | undefined>;
   /** Explicit name to reuse when declared, or inject when absent. Defaults to intent.
    * Existing fields are preserved; missing/non-string values are omitted.
    * Explicit names are also read with injection disabled. */
@@ -114,6 +127,7 @@ interface McpRequest {
   readonly params?: {
     readonly name?: string;
     readonly uri?: string;
+    readonly cursor?: string;
     readonly arguments?: Readonly<Record<string, unknown>>;
     readonly _meta?: Readonly<Record<string, unknown>>;
   };
@@ -142,6 +156,7 @@ interface McpResult {
   readonly content?: readonly { readonly text?: string }[];
   readonly structuredContent?: unknown;
   readonly tools?: readonly Readonly<Record<string, unknown>>[];
+  readonly nextCursor?: string;
 }
 
 type RequestHandler = (
@@ -239,14 +254,13 @@ function instrument(
   }
   instrumented.add(protocol);
 
-  // Stripping needs proof of what a tool declares, which only `McpServer` has.
   const registry =
     highLevel.server === undefined ? undefined : highLevel._registeredTools;
-  const inject =
-    (options.injectAgentArguments ?? true) && registry !== undefined;
+  const inject = options.injectAgentArguments ?? true;
   const structuredTools = new Set<string>();
-  const wrap = (method: string, handler: RequestHandler): RequestHandler =>
-    traced(
+  const originals = new WeakMap<RequestHandler, RequestHandler>();
+  const wrap = (method: string, handler: RequestHandler): RequestHandler => {
+    const wrapped = traced(
       method,
       handler,
       protocol,
@@ -254,7 +268,11 @@ function instrument(
       options,
       inject,
       structuredTools,
+      originals,
     );
+    originals.set(wrapped, handler);
+    return wrapped;
+  };
 
   for (const [method, handler] of handlers) {
     handlers.set(method, wrap(method, handler));
@@ -272,6 +290,7 @@ function traced(
   options: InstrumentMcpServerOptions,
   inject: boolean,
   structuredTools: Set<string>,
+  originals: WeakMap<RequestHandler, RequestHandler>,
 ): RequestHandler {
   return async (request, context) => {
     if (method !== "tools/call") {
@@ -282,13 +301,33 @@ function traced(
           ) ?? result)
         : result;
     }
+    // Never share caller-specific low-level contracts or output eligibility.
+    const listed = protocol._requestHandlers?.get("tools/list");
+    const tool =
+      registry === undefined
+        ? await resolveLowlevelTool(
+            request,
+            context,
+            listed === undefined ? undefined : originals.get(listed),
+            options,
+          )
+        : undefined;
+    const callRegistry =
+      registry ??
+      (tool === undefined
+        ? undefined
+        : {
+            [request.params?.name ?? ""]: tool,
+          });
+    const callStructuredTools =
+      registry === undefined ? new Set<string>() : structuredTools;
     const prepared = attempt(() =>
       prepareCall(
         method,
         request,
         context,
         protocol,
-        registry,
+        callRegistry,
         options,
         inject,
       ),
@@ -296,7 +335,7 @@ function traced(
     if (prepared === undefined) {
       const stripped =
         attempt(() =>
-          withoutInjected(method, request, registry, inject, options),
+          withoutInjected(method, request, callRegistry, inject, options),
         ) ?? request;
       const result = await handler(stripped, context);
       return result;
@@ -323,8 +362,8 @@ function traced(
         attempt(() =>
           rememberStructuredOutput(
             request.params?.name ?? "",
-            registry,
-            structuredTools,
+            callRegistry,
+            callStructuredTools,
           ),
         );
       }
@@ -338,7 +377,7 @@ function traced(
             withConversationIdPrompt(
               result,
               conversationId,
-              structuredTools,
+              callStructuredTools,
               request.params?.name ?? "",
               argumentNames(configuredArguments(options))[2],
             ),
@@ -350,6 +389,57 @@ function traced(
       throw error;
     }
   };
+}
+
+async function resolveLowlevelTool(
+  request: McpRequest,
+  context: HandlerContext,
+  list: RequestHandler | undefined,
+  options: InstrumentMcpServerOptions,
+): Promise<RegisteredTool | undefined> {
+  const name = request.params?.name;
+  if (name === undefined) return undefined;
+  if (
+    options.injectAgentArguments === false &&
+    options.intentArgument === undefined &&
+    options.modelArgument === undefined &&
+    options.conversationIdArgument === undefined
+  )
+    return undefined;
+  try {
+    if (options.resolveOriginalTool !== undefined)
+      return originalTool(await options.resolveOriginalTool(name));
+    if (list === undefined) return undefined;
+    let cursor: string | undefined;
+    const seen = new Set<string>();
+    do {
+      // Keep caller metadata, but do not reuse the tool call's progress token.
+      const { progressToken: _, ...meta } = request.params?._meta ?? {};
+      const result = await list(
+        {
+          method: "tools/list",
+          params: { cursor, _meta: meta },
+        },
+        context,
+      );
+      const tool = result.tools?.find((tool) => tool["name"] === name);
+      if (tool !== undefined) return originalTool(tool);
+      cursor = result.nextCursor;
+      if (cursor === undefined || seen.has(cursor)) return undefined;
+      seen.add(cursor);
+    } while (cursor !== undefined);
+    return undefined;
+  } catch {
+    Logger.debug("MCP tool resolution failed");
+    return undefined;
+  }
+}
+
+function originalTool(tool: unknown): RegisteredTool | undefined {
+  if (typeof tool !== "object" || tool === null || !("inputSchema" in tool))
+    return undefined;
+  const schema = tool.inputSchema;
+  return typeof schema === "object" && schema !== null ? tool : undefined;
 }
 
 interface PreparedCall {
@@ -668,7 +758,9 @@ function listWithArguments(
         const names = configuredArguments(options);
         const contract =
           registered === undefined
-            ? undefined
+            ? registry === undefined && originalTool(tool) !== undefined
+              ? toolContract(tool, names)
+              : undefined
             : toolContract(registered, names);
         if (contract === undefined || contract.open) return tool;
         const injectConversationId = options.injectConversationId !== false;
@@ -718,6 +810,11 @@ function rememberStructuredOutput(
       };
     };
   };
+  if (isJsonSchema(schema)) {
+    if (withConversationOutputSchema(schema) !== undefined)
+      structuredTools.add(name);
+    return;
+  }
   const output = schema["~standard"]?.jsonSchema?.output?.({
     target: "draft-2020-12",
   });
@@ -785,7 +882,7 @@ function toolContract(
   const schema = tool.inputSchema;
   const cacheKey = JSON.stringify(argumentNames(names));
   const cached =
-    typeof schema === "object" && schema !== null
+    typeof schema === "object" && schema !== null && !isJsonSchema(schema)
       ? contracts.get(schema)?.get(cacheKey)
       : undefined;
   if (cached !== undefined) return cached ?? undefined;
@@ -797,7 +894,8 @@ function toolContract(
           declared: new Set(shape.keys),
           open: shape.open,
         };
-  if (typeof schema === "object" && schema !== null) {
+  // Raw resolver/listing schemas may be mutated in place between calls.
+  if (typeof schema === "object" && schema !== null && !isJsonSchema(schema)) {
     const entries = contracts.get(schema) ?? new Map();
     entries.set(cacheKey, contract);
     contracts.set(schema, entries);
@@ -810,12 +908,27 @@ interface SchemaShape {
   readonly open: boolean;
 }
 
+function isJsonSchema(schema: object): boolean {
+  return "type" in schema && !("~standard" in schema);
+}
+
 /** Reads a tool's input names from a Standard Schema or Zod object. */
 function readSchemaShape(
   schema: unknown,
   names: ArgumentNames,
 ): SchemaShape | undefined {
   if (schema === undefined || schema === null) return { keys: [], open: false };
+  if (typeof schema !== "object") return undefined;
+  if (isJsonSchema(schema)) {
+    const json = schema as Readonly<Record<string, unknown>>;
+    if (!canExtendSchema(json)) return undefined;
+    return {
+      keys: declaredArguments(json, names),
+      open:
+        json["additionalProperties"] !== false &&
+        json["unevaluatedProperties"] !== false,
+    };
+  }
   const candidate = schema as {
     readonly "~standard"?: {
       readonly jsonSchema?: {

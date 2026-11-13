@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { AsyncLocalStorage } from "node:async_hooks";
 import {
   Client as ClientV2,
   StreamableHTTPClientTransport,
@@ -6,10 +7,16 @@ import {
 import { Client as ClientV1 } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer as McpServerV1 } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { Server as ServerV1 } from "@modelcontextprotocol/sdk/server/index.js";
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
 import {
   McpServer as McpServerV2,
   createMcpHandler,
   fromJsonSchema,
+  Server as ServerV2,
 } from "@modelcontextprotocol/server";
 import {
   BasicTracerProvider,
@@ -132,6 +139,257 @@ async function connectV1(
   await client.connect(clientSide);
   return client;
 }
+
+test("low-level resolvers isolate caller contracts and never fall back to discovery", async () => {
+  useExporter();
+  const caller = new AsyncLocalStorage<string>();
+  const server = new ServerV1(
+    { name: "low", version: "1" },
+    { capabilities: { tools: {} } },
+  );
+  let listings = 0;
+  server.setRequestHandler(ListToolsRequestSchema, () => {
+    listings++;
+    return { tools: [] };
+  });
+  server.setRequestHandler(CallToolRequestSchema, (request) => ({
+    content: [],
+    structuredContent: { arguments: request.params.arguments },
+  }));
+  instrumentMcpServer(server, {
+    resolveOriginalTool: async () => {
+      await Promise.resolve();
+      const scope = caller.getStore();
+      if (scope === "error") throw new Error("unavailable");
+      if (scope === "missing") return undefined;
+      return {
+        inputSchema: {
+          type: "object",
+          additionalProperties: scope === "open",
+          properties: scope === "owned" ? { intent: { type: "string" } } : {},
+        },
+        outputSchema: {
+          type: "object",
+          additionalProperties: { type: "string" },
+        },
+      };
+    },
+  });
+  const call = Reflect.get(server, "_requestHandlers").get("tools/call");
+  const results = await Promise.all(
+    ["closed", "owned", "open", "error", "missing"].map((scope) =>
+      caller.run(
+        scope,
+        async () =>
+          await call(
+            {
+              method: "tools/call",
+              params: {
+                name: "lookup",
+                arguments: { intent: "business", llm_model: "model" },
+              },
+            },
+            {},
+          ),
+      ),
+    ),
+  );
+  expect({
+    listings,
+    results: results.map((result) => ({
+      structured: result.structuredContent,
+      handoff: result.content.length,
+    })),
+  }).toEqual({
+    listings: 0,
+    results: [
+      { structured: { arguments: {} }, handoff: 1 },
+      { structured: { arguments: { intent: "business" } }, handoff: 1 },
+      ...Array.from({ length: 3 }, () => ({
+        structured: { arguments: { intent: "business", llm_model: "model" } },
+        handoff: 0,
+      })),
+    ],
+  });
+});
+
+test("low-level resolver re-reads a wire schema mutated between calls", async () => {
+  const server = new ServerV1(
+    { name: "low", version: "1" },
+    { capabilities: { tools: {} } },
+  );
+  const schema = {
+    type: "object",
+    additionalProperties: false,
+    properties: {} as Record<string, unknown>,
+  };
+  server.setRequestHandler(CallToolRequestSchema, (request) => ({
+    content: [],
+    structuredContent: { arguments: request.params.arguments },
+  }));
+  instrumentMcpServer(server, {
+    resolveOriginalTool: () => ({ inputSchema: schema }),
+  });
+  const call = Reflect.get(server, "_requestHandlers").get("tools/call");
+  const request = {
+    method: "tools/call",
+    params: { name: "lookup", arguments: { intent: "business" } },
+  };
+  const first = await call(request, {});
+  schema.properties["intent"] = { type: "string" };
+  const second = await call(request, {});
+  expect([
+    first.structuredContent.arguments,
+    second.structuredContent.arguments,
+  ]).toEqual([{}, { intent: "business" }]);
+});
+
+test.each([false, true])(
+  "low-level discovery handles late pages and repeated cursors (repeat=%s)",
+  async (repeat) => {
+    const server = new ServerV1(
+      { name: "low", version: "1" },
+      { capabilities: { tools: {} } },
+    );
+    let pages = 0;
+    server.setRequestHandler(ListToolsRequestSchema, (request) => {
+      pages++;
+      const page = Number(request.params?.cursor ?? 0);
+      return {
+        tools: [
+          {
+            name: page === 21 ? "lookup" : "other",
+            inputSchema: { type: "object", additionalProperties: false },
+          },
+        ],
+        nextCursor: repeat ? "1" : String(page + 1),
+      };
+    });
+    server.setRequestHandler(CallToolRequestSchema, (request) => ({
+      content: [],
+      structuredContent: { arguments: request.params.arguments },
+    }));
+    instrumentMcpServer(server);
+    const call = Reflect.get(server, "_requestHandlers").get("tools/call");
+    const result = await call(
+      {
+        method: "tools/call",
+        params: { name: "lookup", arguments: { intent: "search" } },
+      },
+      {},
+    );
+    expect({ pages, arguments: result.structuredContent.arguments }).toEqual({
+      pages: repeat ? 2 : 22,
+      arguments: repeat ? { intent: "search" } : {},
+    });
+  },
+);
+
+describe.each(["1", "2"])("low-level MCP %s", (version) => {
+  test.each(["discovery", "sync", "async"])(
+    "injects safely with %s lookup",
+    async (lookup) => {
+      const exporter = useExporter();
+      const tool = {
+        name: "lookup",
+        inputSchema: {
+          type: "object" as const,
+          properties: { intent: { type: "string" } },
+          additionalProperties: false,
+        },
+        outputSchema: {
+          type: "object" as const,
+          properties: { ok: { type: "boolean" } },
+          additionalProperties: false,
+        },
+      };
+      const received: unknown[] = [];
+      const resolved: string[] = [];
+      const resolve = (name: string) => {
+        resolved.push(name);
+        return tool;
+      };
+      const options: InstrumentMcpServerOptions = {
+        intentArgument: "intent",
+        resolveOriginalTool:
+          lookup === "discovery"
+            ? undefined
+            : lookup === "sync"
+              ? resolve
+              : async (name) => await Promise.resolve(resolve(name)),
+      };
+      const call = (request: { params: { arguments?: unknown } }) => {
+        received.push(request.params.arguments);
+        return { content: [], structuredContent: { ok: true } };
+      };
+      let client: ClientV1 | ClientV2;
+      if (version === "1") {
+        const server = new ServerV1(
+          { name: "low", version: "1" },
+          { capabilities: { tools: {} } },
+        );
+        instrumentMcpServer(server, options);
+        server.setRequestHandler(ListToolsRequestSchema, () => ({
+          tools: [tool],
+        }));
+        server.setRequestHandler(CallToolRequestSchema, call);
+        const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+        await server.connect(serverSide);
+        client = new ClientV1({ name: "test", version: "1" });
+        await client.connect(clientSide);
+        cleanups.push(() => server.close());
+      } else {
+        const handler = createMcpHandler(() => {
+          const server = new ServerV2(
+            { name: "low", version: "1" },
+            { capabilities: { tools: {} } },
+          );
+          instrumentMcpServer(server, options);
+          server.setRequestHandler("tools/list", () => ({
+            tools: [tool],
+          }));
+          server.setRequestHandler("tools/call", call);
+          return server;
+        });
+        client = new ClientV2({ name: "test", version: "1" });
+        await client.connect(
+          new StreamableHTTPClientTransport(new URL("http://test.local/mcp"), {
+            fetch: (url, init) => handler.fetch(new Request(String(url), init)),
+          }),
+        );
+      }
+      cleanups.push(() => client.close());
+      const listed = await client.listTools();
+      const result = (await client.callTool({
+        name: "lookup",
+        arguments: { intent: "business", llm_model: "model" },
+      })) as Result;
+      const id = result.structuredContent?._judgment?.conversation_id;
+      await client.callTool({
+        name: "lookup",
+        arguments: { intent: "business", conversation_id: id },
+      });
+      expect({
+        properties: Object.keys(
+          listed.tools[0]!.inputSchema.properties ?? {},
+        ).sort(),
+        original: Object.keys(tool.inputSchema.properties),
+        received,
+        resolved,
+        handoff: typeof id,
+        intent:
+          exporter.getFinishedSpans()[0]?.attributes["judgment.mcp.intent"],
+      }).toEqual({
+        properties: ["conversation_id", "intent", "llm_model"],
+        original: ["intent"],
+        received: [{ intent: "business" }, { intent: "business" }],
+        resolved: lookup === "discovery" ? [] : ["lookup", "lookup"],
+        handoff: "string",
+        intent: "business",
+      });
+    },
+  );
+});
 
 test.each([
   { sessionId: "transport-session" },

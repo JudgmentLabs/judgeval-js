@@ -53,6 +53,16 @@ instrumentMcpServer(server, {
 
 Explicit names opt existing fields into telemetry without changing their schemas or removing them from handler inputs. When absent from a compatible tool's schema, the SDK injects and strips the chosen name instead. Without explicit configuration, existing same-name fields are preserved but not interpreted as telemetry. Explicit fields can also be read with injection disabled; missing/non-string values are omitted. Existing conversation arguments supply application session IDs after callback/baggage resolution; injected conversation arguments use UUIDv7 echo handles. Names must be non-empty and distinct.
 
+Low-level `Server` instances support the same injection and handoff as `McpServer`. High-level servers use their native registry; low-level calls use fresh caller-scoped, paginated `tools/list` discovery. To avoid that cost, provide a sync or async per-tool lookup:
+
+```typescript
+instrumentMcpServer(server, {
+  resolveOriginalTool: (name) => originalTools.get(name),
+});
+```
+
+Return the original wire descriptor (`inputSchema` and optional `outputSchema`), before Judgment injection, using the same schemas as your `tools/list` handler. Keep it scoped to the current caller if tools vary by authorization or request. Resolver results are not cached across calls. When configured, the resolver replaces discovery: returning `undefined`, throwing, or returning an unsupported schema leaves arguments untouched and omits generated handoff. Open/composed schemas are not injected, and customer-owned arguments are never stripped.
+
 Error-message capture defaults off; outcome and error type are still recorded. Set `captureErrorMessages: true` to capture failure text. There is no automatic PII or argument-value scrubbing: enabled payload/error capture and agent-reported intent are sent as-is unless transformed by `redactPayload` or `redact`. Intent remains enabled by default; use `redact` to remove sensitive values or `injectAgentArguments: false` to disable agent-reported fields and session handoff.
 
 Use `identify` or `setMcpCaller` to attach your end user, and `markMcpCallError` to record the original error before you turn it into a public tool error. The SDK can record the original exception type when the exception reaches its wrapper or is supplied through `markMcpCallError`. MCP frameworks may instead convert exceptions into `isError` results before the wrapper sees them; these generally use `error.type = "tool_error"`, since the original exception type is no longer available. Recognized refusals use `unknown_tool`, `tool_disabled`, or `invalid_input`; a structured public error code may also be used when error-message capture is enabled.
