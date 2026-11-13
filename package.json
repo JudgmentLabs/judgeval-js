@@ -67,10 +67,14 @@
   },
   "peerDependencies": {
     "@anthropic-ai/sdk": ">=0.129.0",
+    "@earendil-works/pi-ai": "^1.0.0",
     "openai": "^6.38.0"
   },
   "peerDependenciesMeta": {
     "@anthropic-ai/sdk": {
+      "optional": true
+    },
+    "@earendil-works/pi-ai": {
       "optional": true
     },
     "openai": {
@@ -79,6 +83,8 @@
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.129.0",
+    "@earendil-works/pi-agent-core": "^1.5.2",
+    "@earendil-works/pi-ai": "^1.5.2",
     "@types/bun": "^1.3.12",
     "openai": "^6.38.0",
     "openapi-typescript": "^7.10.0",

@@ -3,6 +3,7 @@ import { wrapAnthropicManagedAgents } from "./llm/anthropic-managed-agents";
 import { wrapOpenAI } from "./llm/openai";
 
 export { wrapAnthropicManagedAgents, wrapOpenAI };
+export { wrapPi, type PiStreamFn } from "./llm/pi";
 
 /**
  * Wrap a supported LLM client to add automatic tracing.
