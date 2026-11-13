@@ -37,6 +37,10 @@ Successful calls without an application or echoed conversation session offer a n
 instrumentMcpServer(server, { injectAgentArguments: false });
 ```
 
+Injection changes the advertised tool contract, including an optional `_judgment` property on compatible output schemas. During a mixed instrumented/uninstrumented rollout, strict clients holding an older output schema may reject structured results containing this property. Keep replica schemas consistent and refresh client tool discovery after rollout; gateways caching tool lists must refresh too.
+
+Injection is independent of telemetry availability: installing instrumentation before `Tracer.init()`, or disabling export, does not disable schema changes or conversation handoff. Injected fields and descriptions add model-context overhead per tool when clients expose the listing to an agent. Set `injectAgentArguments: false` to disable automatic argument injection and handoff while retaining tracing, or `injectConversationId: false` to disable only conversation-ID injection and handoff.
+
 Use `intentArgument`, `modelArgument`, and `conversationIdArgument` to choose names across all tools:
 
 ```typescript
@@ -51,7 +55,7 @@ Explicit names opt existing fields into telemetry without changing their schemas
 
 Error-message capture defaults off; outcome and error type are still recorded. Set `captureErrorMessages: true` to capture failure text. There is no automatic PII or argument-value scrubbing: enabled payload/error capture and agent-reported intent are sent as-is unless transformed by `redactPayload` or `redact`. Intent remains enabled by default; use `redact` to remove sensitive values or `injectAgentArguments: false` to disable agent-reported fields and session handoff.
 
-Use `identify` or `setMcpCaller` to attach your end user, and `markMcpCallError` to record the original error before you turn it into a public tool error. A failed call's `error.type` is the original error's class name (or `unknown_tool`, `tool_disabled`, `invalid_input` for calls refused before your handler ran), so named error classes tell you why calls fail.
+Use `identify` or `setMcpCaller` to attach your end user, and `markMcpCallError` to record the original error before you turn it into a public tool error. The SDK can record the original exception type when the exception reaches its wrapper or is supplied through `markMcpCallError`. MCP frameworks may instead convert exceptions into `isError` results before the wrapper sees them; these generally use `error.type = "tool_error"`, since the original exception type is no longer available. Recognized refusals use `unknown_tool`, `tool_disabled`, or `invalid_input`; a structured public error code may also be used when error-message capture is enabled.
 
 ## Usage
 
