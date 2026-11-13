@@ -119,4 +119,14 @@ describe("ObservationExporter", () => {
       .sort();
     expect(stored).toEqual(["a", "b", "c"]);
   });
+
+  test("a request the server rejects whole is dropped after one split", async () => {
+    // For example, a clock more than five minutes fast.
+    const fake = fakeClient(() => 400);
+    await exportTo(
+      fake.client,
+      Array.from({ length: 100 }, (_, index) => sent(String(index))),
+    );
+    expect([fake.attempts(), fake.stored]).toEqual([3, []]);
+  });
 });

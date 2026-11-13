@@ -12,6 +12,8 @@ export type SentObservation = RequestBody<
 const MAX_ATTEMPTS = 3;
 /** The longest wait between attempts, whatever the server's Retry-After says. */
 const MAX_BACKOFF_SECONDS = 30;
+/** How long one request may take before it is abandoned and retried. */
+const REQUEST_TIMEOUT_MILLIS = 30000;
 
 /**
  * Server errors, timeouts, and rate limits may pass on retry; other client
@@ -46,45 +48,83 @@ export class ObservationExporter {
   ) {}
 
   async export(batch: SentObservation[]): Promise<void> {
+    const rejection = await this._send(batch);
+    if (rejection === undefined) return;
+    if (batch.length > 1) await this._dropInvalid(batch);
+    else this._logDropped(1, rejection);
+  }
+
+  /**
+   * The server rejects a request when any observation in it does not fit the
+   * format; this finds which by halving the batch. When both halves are
+   * rejected, the fault is most likely in the request as a whole, such as a
+   * clock more than five minutes fast, so the batch is dropped rather than
+   * split further.
+   */
+  private async _dropInvalid(batch: SentObservation[]): Promise<void> {
+    const middle = Math.floor(batch.length / 2);
+    const halves = [batch.slice(0, middle), batch.slice(middle)];
+    const rejections = [
+      await this._send(halves[0]),
+      await this._send(halves[1]),
+    ];
+    if (rejections[0] !== undefined && rejections[1] !== undefined) {
+      this._logDropped(batch.length, rejections[0]);
+      return;
+    }
+    for (const [index, half] of halves.entries()) {
+      const rejection = rejections[index];
+      if (rejection === undefined) continue;
+      if (half.length > 1) await this._dropInvalid(half);
+      else this._logDropped(1, rejection);
+    }
+  }
+
+  /**
+   * Sends a batch, retrying temporary failures. Returns the server's reason
+   * when it rejects the batch as invalid (400); handles every other outcome.
+   */
+  private async _send(batch: SentObservation[]): Promise<string | undefined> {
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       let status: number | undefined;
       let retryAfterSeconds = 0;
       let detail: string;
       try {
         const { response, error } =
-          await this._client.postV1projectsObservations(this._projectId, {
-            observations: batch,
-          });
-        if (response.ok) return;
+          await this._client.postV1projectsObservations(
+            this._projectId,
+            { observations: batch },
+            AbortSignal.timeout(REQUEST_TIMEOUT_MILLIS),
+          );
+        if (response.ok) return undefined;
         status = response.status;
         retryAfterSeconds = Number(response.headers.get("Retry-After")) || 0;
         detail = JSON.stringify(error);
       } catch (error) {
         detail = String(error);
       }
-      if (status === 400 && batch.length > 1) {
-        // The server rejects a request when any observation in it does not
-        // fit the format; find which by halving it.
-        const middle = Math.floor(batch.length / 2);
-        await this.export(batch.slice(0, middle));
-        await this.export(batch.slice(middle));
-        return;
-      }
+      if (status === 400) return detail;
       if (status === 402 || status === 404) {
         this._reportOnce(status);
-        return;
+        return undefined;
       }
       if (
         (status !== undefined && !isRetryable(status)) ||
         attempt === MAX_ATTEMPTS - 1
       ) {
-        Logger.error(
-          `[Trajectory] Dropped ${batch.length} observations: ${status ?? "network error"} ${detail}`,
+        this._logDropped(
+          batch.length,
+          `${status ?? "network error"} ${detail}`,
         );
-        return;
+        return undefined;
       }
       await backoff(attempt, retryAfterSeconds);
     }
+    return undefined;
+  }
+
+  private _logDropped(count: number, reason: string): void {
+    Logger.error(`[Trajectory] Dropped ${count} observations: ${reason}`);
   }
 
   private _reportOnce(status: number): void {

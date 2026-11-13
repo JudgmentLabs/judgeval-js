@@ -141,8 +141,10 @@ export class Trajectory {
       }
       Trajectory._processor?.emit({
         // Sent later, so copy it: changes the caller makes afterwards, such
-        // as appending to a shared message history, are not sent.
-        observation: structuredClone(observation),
+        // as appending to a shared message history, are not sent. Encoding it
+        // now also rejects here, alone, a value JSON cannot hold, such as a
+        // BigInt, rather than failing its whole batch at send time.
+        observation: JSON.parse(JSON.stringify(observation)) as Observation,
         observed_at: (options.observedAt ?? new Date()).toISOString(),
         environment: Trajectory._environment,
       });

@@ -17,7 +17,6 @@ const MAX_EXPORT_BATCH_SIZE = 100;
 // are held and sent alike.
 const MAX_QUEUE_SIZE = 2048;
 const SCHEDULED_DELAY_MILLIS = 5000;
-const EXPORT_TIMEOUT_MILLIS = 30000;
 
 /**
  * Queues observations and exports them in batches.
@@ -74,36 +73,22 @@ export class BatchObservationProcessor {
   private async _flushAll(): Promise<void> {
     // A batch the timer already took off the queue counts as queued.
     await this._exporting;
+    // One at a time, so that retries after a 429 do not multiply.
     const batches = Math.ceil(this._queue.length / MAX_EXPORT_BATCH_SIZE);
-    await Promise.all(
-      Array.from({ length: batches }, () => this._flushOneBatch()),
-    );
+    for (let index = 0; index < batches; index++) await this._flushOneBatch();
   }
 
   private async _flushOneBatch(): Promise<void> {
     this._clearTimer();
     if (this._queue.length === 0) return;
     const batch = this._queue.splice(0, MAX_EXPORT_BATCH_SIZE);
-    let timeout: ReturnType<typeof setTimeout> | undefined;
     // The export's own HTTP request must not be recorded as a span of the
     // user's app.
     // This SDK's tracer keeps its own context, which reaches OpenTelemetry
     // only through the bridge.
     const suppressed = suppressTracing(context.active());
     await context.with(suppressed, () =>
-      runWithOtelBridgeGate(suppressed, () =>
-        Promise.race([
-          this._exporter.export(batch),
-          new Promise<void>((resolve) => {
-            timeout = setTimeout(() => {
-              Logger.error(
-                `[Trajectory] Exporting ${batch.length} observations timed out`,
-              );
-              resolve();
-            }, EXPORT_TIMEOUT_MILLIS);
-          }),
-        ]).finally(() => clearTimeout(timeout)),
-      ),
+      runWithOtelBridgeGate(suppressed, () => this._exporter.export(batch)),
     );
   }
 

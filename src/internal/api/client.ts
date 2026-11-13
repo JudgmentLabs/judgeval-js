@@ -255,10 +255,12 @@ export class JudgmentApiClient {
   postV1projectsObservations(
     projectId: string,
     payload: RequestBody<"/v1/projects/{projectId}/observations", "post">,
+    signal?: AbortSignal,
   ) {
     return this.api.POST("/v1/projects/{projectId}/observations", {
       params: { path: { projectId } },
       body: payload,
+      signal,
     });
   }
 
