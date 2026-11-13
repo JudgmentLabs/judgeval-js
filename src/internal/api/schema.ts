@@ -1816,8 +1816,8 @@ export interface paths {
     get?: never;
     put?: never;
     /**
-     * Submit an external judge result
-     * @description Set the current score for one explicit trace or session target by judge ID or name. Resubmitting the same judge and target replaces its score. Session targets require only a session ID. Validates against the production judge version and derives attribution from the target.
+     * Submit a customer judge result
+     * @description Submit a customer score for one trace or session under any judge. Reuse idempotency_key to retry the same request. Supply result_id with a new key to correct a result; otherwise create an independent result. The latest accepted result is current for that judge and target. Hosted results are preserved. Validates against the production version and derives attribution from the target.
      */
     post: operations["postV1ProjectsByProjectIdJudge-results"];
     delete?: never;
@@ -10877,6 +10877,10 @@ export interface operations {
       content: {
         "application/json":
           | {
+              /** Format: uuid */
+              idempotency_key?: string;
+              /** Format: uuid */
+              result_id?: string;
               target:
                 | {
                     /** @constant */
@@ -10894,6 +10898,10 @@ export interface operations {
               judge_id: string;
             }
           | {
+              /** Format: uuid */
+              idempotency_key?: string;
+              /** Format: uuid */
+              result_id?: string;
               target:
                 | {
                     /** @constant */
