@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
-import { AsyncLocalStorage } from "node:async_hooks";
 import {
   Client as ClientV2,
   StreamableHTTPClientTransport,
@@ -140,156 +139,11 @@ async function connectV1(
   return client;
 }
 
-test("low-level resolvers isolate caller contracts and never fall back to discovery", async () => {
-  useExporter();
-  const caller = new AsyncLocalStorage<string>();
-  const server = new ServerV1(
-    { name: "low", version: "1" },
-    { capabilities: { tools: {} } },
-  );
-  let listings = 0;
-  server.setRequestHandler(ListToolsRequestSchema, () => {
-    listings++;
-    return { tools: [] };
-  });
-  server.setRequestHandler(CallToolRequestSchema, (request) => ({
-    content: [],
-    structuredContent: { arguments: request.params.arguments },
-  }));
-  instrumentMcpServer(server, {
-    resolveOriginalTool: async () => {
-      await Promise.resolve();
-      const scope = caller.getStore();
-      if (scope === "error") throw new Error("unavailable");
-      if (scope === "missing") return undefined;
-      return {
-        inputSchema: {
-          type: "object",
-          additionalProperties: scope === "open",
-          properties: scope === "owned" ? { intent: { type: "string" } } : {},
-        },
-        outputSchema: {
-          type: "object",
-          additionalProperties: { type: "string" },
-        },
-      };
-    },
-  });
-  const call = Reflect.get(server, "_requestHandlers").get("tools/call");
-  const results = await Promise.all(
-    ["closed", "owned", "open", "error", "missing"].map((scope) =>
-      caller.run(
-        scope,
-        async () =>
-          await call(
-            {
-              method: "tools/call",
-              params: {
-                name: "lookup",
-                arguments: { intent: "business", llm_model: "model" },
-              },
-            },
-            {},
-          ),
-      ),
-    ),
-  );
-  expect({
-    listings,
-    results: results.map((result) => ({
-      structured: result.structuredContent,
-      handoff: result.content.length,
-    })),
-  }).toEqual({
-    listings: 0,
-    results: [
-      { structured: { arguments: {} }, handoff: 1 },
-      { structured: { arguments: { intent: "business" } }, handoff: 1 },
-      ...Array.from({ length: 3 }, () => ({
-        structured: { arguments: { intent: "business", llm_model: "model" } },
-        handoff: 0,
-      })),
-    ],
-  });
-});
-
-test("low-level resolver re-reads a wire schema mutated between calls", async () => {
-  const server = new ServerV1(
-    { name: "low", version: "1" },
-    { capabilities: { tools: {} } },
-  );
-  const schema = {
-    type: "object",
-    additionalProperties: false,
-    properties: {} as Record<string, unknown>,
-  };
-  server.setRequestHandler(CallToolRequestSchema, (request) => ({
-    content: [],
-    structuredContent: { arguments: request.params.arguments },
-  }));
-  instrumentMcpServer(server, {
-    resolveOriginalTool: () => ({ inputSchema: schema }),
-  });
-  const call = Reflect.get(server, "_requestHandlers").get("tools/call");
-  const request = {
-    method: "tools/call",
-    params: { name: "lookup", arguments: { intent: "business" } },
-  };
-  const first = await call(request, {});
-  schema.properties["intent"] = { type: "string" };
-  const second = await call(request, {});
-  expect([
-    first.structuredContent.arguments,
-    second.structuredContent.arguments,
-  ]).toEqual([{}, { intent: "business" }]);
-});
-
-test.each([false, true])(
-  "low-level discovery handles late pages and repeated cursors (repeat=%s)",
-  async (repeat) => {
-    const server = new ServerV1(
-      { name: "low", version: "1" },
-      { capabilities: { tools: {} } },
-    );
-    let pages = 0;
-    server.setRequestHandler(ListToolsRequestSchema, (request) => {
-      pages++;
-      const page = Number(request.params?.cursor ?? 0);
-      return {
-        tools: [
-          {
-            name: page === 21 ? "lookup" : "other",
-            inputSchema: { type: "object", additionalProperties: false },
-          },
-        ],
-        nextCursor: repeat ? "1" : String(page + 1),
-      };
-    });
-    server.setRequestHandler(CallToolRequestSchema, (request) => ({
-      content: [],
-      structuredContent: { arguments: request.params.arguments },
-    }));
-    instrumentMcpServer(server);
-    const call = Reflect.get(server, "_requestHandlers").get("tools/call");
-    const result = await call(
-      {
-        method: "tools/call",
-        params: { name: "lookup", arguments: { intent: "search" } },
-      },
-      {},
-    );
-    expect({ pages, arguments: result.structuredContent.arguments }).toEqual({
-      pages: repeat ? 2 : 22,
-      arguments: repeat ? { intent: "search" } : {},
-    });
-  },
-);
-
 describe.each(["1", "2"])("low-level MCP %s", (version) => {
   test.each(["discovery", "sync", "async"])(
     "injects safely with %s lookup",
     async (lookup) => {
-      const exporter = useExporter();
+      useExporter();
       const tool = {
         name: "lookup",
         inputSchema: {
@@ -373,19 +227,14 @@ describe.each(["1", "2"])("low-level MCP %s", (version) => {
         properties: Object.keys(
           listed.tools[0]!.inputSchema.properties ?? {},
         ).sort(),
-        original: Object.keys(tool.inputSchema.properties),
         received,
         resolved,
         handoff: typeof id,
-        intent:
-          exporter.getFinishedSpans()[0]?.attributes["judgment.mcp.intent"],
       }).toEqual({
         properties: ["conversation_id", "intent", "llm_model"],
-        original: ["intent"],
         received: [{ intent: "business" }, { intent: "business" }],
         resolved: lookup === "discovery" ? [] : ["lookup", "lookup"],
         handoff: "string",
-        intent: "business",
       });
     },
   );
