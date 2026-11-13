@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { JudgmentApiClient } from "../internal/api/client";
 import type {
   CreateJudgeRequest,
@@ -132,8 +131,9 @@ export class ExternalJudgeFactory {
   /**
    * Submits a customer score under any judge for a trace or session.
    *
-   * Each call retains an independent result; the newest result is current.
-   * Supply resultId to correct a result and reuse idempotencyKey to retry.
+   * Resubmitting for the same judge and target replaces its current customer
+   * score. To correct a value, submit again for that judge and target.
+   * Each submission, including a retry, writes a new result row.
    *
    * Exactly one of `judgeId` or `judgeName` must be provided; the score
    * is attached to that judge's production version. `value` must match
@@ -146,8 +146,6 @@ export class ExternalJudgeFactory {
    * @param options.judgeId - ID of the judge to submit under.
    * @param options.judgeName - Name of the judge to submit under.
    * @param options.reason - Optional free-text explanation for the score.
-   * @param options.idempotencyKey - Reuse this UUID when retrying the same request.
-   * @param options.resultId - Correct an existing result using a new request key.
    * @returns The id of the persisted score result, or `null` if the
    *   project is unresolved.
    *
@@ -167,8 +165,6 @@ export class ExternalJudgeFactory {
     judgeId?: string;
     judgeName?: string;
     reason?: string;
-    idempotencyKey?: string;
-    resultId?: string;
   }): Promise<string | null> {
     if ((options.judgeId === undefined) === (options.judgeName === undefined)) {
       throw new Error("Exactly one of judgeId or judgeName must be provided");
@@ -195,10 +191,6 @@ export class ExternalJudgeFactory {
         ? { judge_id: options.judgeId }
         : { judge_name: options.judgeName! };
     const payload: SubmitExternalJudgeResult = {
-      idempotency_key: options.idempotencyKey ?? randomUUID(),
-      ...(options.resultId !== undefined
-        ? { result_id: options.resultId }
-        : {}),
       target:
         options.target.type === "trace"
           ? { type: "trace", trace_id: options.target.traceId }

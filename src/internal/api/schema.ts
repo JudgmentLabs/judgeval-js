@@ -1817,7 +1817,7 @@ export interface paths {
     put?: never;
     /**
      * Submit a customer judge result
-     * @description Submit a customer score for one trace or session under any judge. Reuse idempotency_key to retry the same request. Supply result_id with a new key to correct a result; otherwise create an independent result. The latest accepted result is current for that judge and target. Hosted results are preserved. Validates against the production version and derives attribution from the target.
+     * @description Submit a customer score for one trace or session under any judge. Resubmitting for the same judge and target replaces its current customer score. Each submission, including a retry, writes a new result row. Hosted results are preserved. Validates against the production version and derives attribution from the target.
      */
     post: operations["postV1ProjectsByProjectIdJudge-results"];
     delete?: never;
@@ -10877,10 +10877,6 @@ export interface operations {
       content: {
         "application/json":
           | {
-              /** Format: uuid */
-              idempotency_key?: string;
-              /** Format: uuid */
-              result_id?: string;
               target:
                 | {
                     /** @constant */
@@ -10898,10 +10894,6 @@ export interface operations {
               judge_id: string;
             }
           | {
-              /** Format: uuid */
-              idempotency_key?: string;
-              /** Format: uuid */
-              result_id?: string;
               target:
                 | {
                     /** @constant */

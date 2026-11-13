@@ -177,7 +177,7 @@ test("session scores can be resubmitted without a trace", async () => {
               judge_version_id: "version-1",
               implementation_id: null,
             }
-          : { id: "result-1" },
+          : { id: `result-${requests.length}` },
       );
     },
   });
@@ -187,13 +187,11 @@ test("session scores can be resubmitted without a trace", async () => {
     judgeId: "judge-1",
     target: { type: "session", sessionId: "session-1" },
     value: 4.5,
-    idempotencyKey: "fa000000-0000-0000-0000-000000000011",
   });
   const updated = await factory.submitResult({
     judgeId: "judge-1",
     target: { type: "session", sessionId: "session-1" },
     value: 3,
-    idempotencyKey: "fa000000-0000-0000-0000-000000000012",
   });
   expect({ judge, result, updated, requests }).toEqual({
     judge: {
@@ -206,8 +204,8 @@ test("session scores can be resubmitted without a trace", async () => {
       majorVersion: 0,
       minorVersion: 0,
     },
-    result: "result-1",
-    updated: "result-1",
+    result: "result-2",
+    updated: "result-3",
     requests: [
       [
         "POST",
@@ -227,7 +225,6 @@ test("session scores can be resubmitted without a trace", async () => {
           judge_id: "judge-1",
           target: { type: "session", session_id: "session-1" },
           value: 4.5,
-          idempotency_key: "fa000000-0000-0000-0000-000000000011",
         },
       ],
       [
@@ -237,7 +234,6 @@ test("session scores can be resubmitted without a trace", async () => {
           judge_id: "judge-1",
           target: { type: "session", session_id: "session-1" },
           value: 3,
-          idempotency_key: "fa000000-0000-0000-0000-000000000012",
         },
       ],
     ],
@@ -271,7 +267,6 @@ test("created names can be used to submit categorical feedback", async () => {
     judgeName: judge.name,
     target: { type: "trace", traceId: "trace" },
     value: judge.outputs[0].name,
-    idempotencyKey: "fa000000-0000-0000-0000-000000000013",
   });
   expect({
     name: judge.name,
@@ -303,7 +298,6 @@ test("created names can be used to submit categorical feedback", async () => {
         judge_name: "topic",
         target: { type: "trace", trace_id: "trace" },
         value: "good",
-        idempotency_key: "fa000000-0000-0000-0000-000000000013",
       },
     ],
   });
@@ -337,46 +331,4 @@ test("surfaces a rejected session score from the server", async () => {
       value: 3,
     }),
   ).rejects.toThrow('HTTP 404: {"message":"Session not found"}');
-});
-
-test("reuses caller submission identity when retrying a correction", async () => {
-  const requestKey = "fa000000-0000-0000-0000-000000000001";
-  const resultId = "fa000000-0000-0000-0000-000000000002";
-  const accepted = new Map<string, string>();
-  const client = new JudgmentApiClient("https://api.test", "key", "org");
-  client.api.use({
-    async onRequest({ request }) {
-      const body = await request.json();
-      if (
-        typeof body !== "object" ||
-        body === null ||
-        !("idempotency_key" in body) ||
-        typeof body.idempotency_key !== "string" ||
-        !("result_id" in body) ||
-        body.result_id !== resultId
-      ) {
-        return Response.json(
-          { error: "Missing submission identity" },
-          { status: 409 },
-        );
-      }
-      accepted.set(body.idempotency_key, body.result_id);
-      return Response.json({ id: accepted.get(body.idempotency_key) });
-    },
-  });
-  const factory = new ExternalJudgeFactory(client, "proj-1", "test");
-  const correction = {
-    judgeId: "judge-1",
-    target: { type: "session" as const, sessionId: "session-1" },
-    value: false,
-    idempotencyKey: requestKey,
-    resultId,
-  };
-  const first = await factory.submitResult(correction);
-  const retry = await factory.submitResult(correction);
-  expect({ first, retry, accepted: [...accepted] }).toEqual({
-    first: resultId,
-    retry: resultId,
-    accepted: [[requestKey, resultId]],
-  });
 });
