@@ -14,7 +14,7 @@
     "sourceMap": true,
     "experimentalDecorators": true,
     "ignoreDeprecations": "6.0",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
     "isolatedModules": true,

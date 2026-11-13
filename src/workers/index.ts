@@ -10,6 +10,8 @@ export {
   wrap,
   wrapAnthropicManagedAgents,
   wrapOpenAI,
+  wrapPi,
+  type PiStreamFn,
 } from "../instrumentation";
 export { WorkerSpanExporter } from "./WorkerSpanExporter";
 export { JudgmentSpanProcessor } from "../trace/processors/JudgmentSpanProcessor";

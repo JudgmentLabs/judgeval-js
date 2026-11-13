@@ -26,6 +26,8 @@ export {
   wrap,
   wrapAnthropicManagedAgents,
   wrapOpenAI,
+  wrapPi,
+  type PiStreamFn,
 } from "./instrumentation";
 
 export { Example } from "./data";

@@ -57,6 +57,34 @@ const tracedChat = Tracer.observe(async (userMessage: string) => {
 await tracedChat("What is the capital of France?");
 ```
 
+### pi agents
+
+Wrap the stream function of a [pi](https://github.com/earendil-works/pi) agent
+(`@earendil-works/pi-ai` and `@earendil-works/pi-agent-core` 1.x) to record
+each model call as an LLM span:
+
+```typescript
+import { Agent } from "@earendil-works/pi-agent-core";
+import { streamSimple } from "@earendil-works/pi-ai/compat";
+import { wrapPi } from "judgeval";
+
+const agent = new Agent({
+  initialState: { model, systemPrompt, tools },
+  streamFn: wrapPi(streamSimple),
+  sessionId: conversationId,
+});
+```
+
+Each span's input is the provider request body exactly as pi sends it. Its
+output is the provider's response: an Anthropic Message
+(`anthropic-messages`), a `chat.completion` (`openai-completions`), or a
+Responses API Response (`openai-responses`, `azure-openai-responses`). Calls to
+other pi APIs record their request, model and token usage, without an output.
+The agent's `sessionId` becomes the span's session ID unless the trace already
+has one from `Tracer.setSessionId`. Call the agent inside `Tracer.observe` or
+`Tracer.with` to group a run's calls into one trace. pi 0.x (`@mariozechner/pi-*`) is not
+supported: it does not expose raw provider stream events.
+
 ### SQL
 
 Use `sql()` for read-only queries against Judgment's virtual schema, which
