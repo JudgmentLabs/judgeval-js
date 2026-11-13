@@ -709,7 +709,7 @@ export interface paths {
     put?: never;
     /**
      * Create judge
-     * @description Create an Agent judge (wire value `prompt`), a Code judge (wire value `custom`), or a deterministic judge with categorical outputs and its initial production version. Deterministic judges require two outputs ordered match, then miss. This call fixes the judge type for its lifetime. Agent judges require prompt configuration; Code judges require a base64-encoded tar.gz bundle and Python entrypoint metadata.
+     * @description Create an Agent judge (wire value `prompt`), a Code judge (wire value `custom`), a deterministic judge with categorical outputs, or an external judge with executionMode external and binary, numeric, or categorical outputs, with its initial production version. Deterministic judges require two outputs ordered match, then miss. This call fixes the judge type for its lifetime. Agent judges require prompt configuration; Code judges require a base64-encoded tar.gz bundle and Python entrypoint metadata.
      */
     post: operations["postV1ProjectsByProjectIdJudges"];
     delete?: never;
@@ -737,7 +737,7 @@ export interface paths {
     head?: never;
     /**
      * Update judge
-     * @description Update a judge description and/or create one complete immutable judge version. A new version requires an explicit target version, the existing judge and score types, a complete implementation config, outputs, and monitoring-settings snapshot. Categorical outputs may reference existing labels by ID or define new labels. Code judge versions take a base64-encoded tar.gz bundle, or a sourceVersion whose stored code to reuse. Set promoteToProduction to make the new version production; latest is inferred automatically. Judge and score types cannot change.
+     * @description Update a judge description and/or create one complete immutable judge version. A new version requires an explicit target version, the existing judge and score types, a complete implementation config, outputs, and monitoring-settings snapshot. Categorical outputs may reference existing labels by ID or define new labels. Code judge versions take a base64-encoded tar.gz bundle, or a sourceVersion whose stored code to reuse. Alternatively, newVersionFromSource copies sourceVersion and changes only the fields you set. Set promoteToProduction to make the new version production; latest is inferred automatically. Judge and score types cannot change.
      */
     patch: operations["patchV1ProjectsByProjectIdJudgesByJudgeId"];
     trace?: never;
@@ -1806,6 +1806,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/projects/{projectId}/judge-results": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Submit a customer judge result
+     * @description Submit a customer score for one trace or session under any judge. Resubmitting for the same judge and target replaces its current customer score. Each submission, including a retry, writes a new result row. Hosted results are preserved. Validates against the production version and derives attribution from the target.
+     */
+    post: operations["postV1ProjectsByProjectIdJudge-results"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2563,7 +2583,7 @@ export interface components {
           judge?: {
             id: string;
             name: string;
-            judge_type: string;
+            judge_type: string | null;
             score_type: string;
           };
         }[];
@@ -2602,7 +2622,7 @@ export interface components {
           judge?: {
             id: string;
             name: string;
-            judge_type: string;
+            judge_type: string | null;
             score_type: string;
           };
         }[];
@@ -4903,9 +4923,11 @@ export interface operations {
     parameters: {
       query?: {
         version?: "latest" | "production";
+        summary?: boolean;
       };
       header?: never;
       path: {
+        /** @example YOUR_PROJECT_ID */
         projectId: string;
       };
       cookie?: never;
@@ -4919,160 +4941,64 @@ export interface operations {
         };
         content: {
           "application/json": {
-            judges: {
-              id: string;
-              name: string;
-              judge_description: string | null;
-              /**
-               * @description Agent judge (wire value `prompt`); Code judge (wire value `custom`); legacy Agent judge (wire value `agent`); Condition judge (wire value `deterministic`)
-               * @enum {string}
-               */
-              judge_type: "prompt" | "custom" | "agent" | "deterministic";
-              knowledge_file_id: string | null;
-              /**
-               * @description numeric, binary, or categorical. For binary judges, true means the judge applied its label, which the app shows under the judge's name. false means no label was applied. For classification judges, the value is the label, meaning the chosen option.
-               * @enum {string}
-               */
-              score_type: "numeric" | "binary" | "categorical";
-              updated_at: string;
-              judge_version_id: string;
-              judge_major_version: number;
-              judge_minor_version: number;
-              is_latest: boolean;
-              is_production: boolean;
-              optimistic_eval_enabled: boolean;
-              reasoning_level: ("lite" | "normal" | "high") | null;
-              /** @description Labels this judge can apply. For binary judges, true means the judge applied its label, which the app shows under the judge's name. false means no label was applied. For classification judges, the value is the label, meaning the chosen option. */
-              outputs: {
-                behavior_id: string;
-                name: string;
-                description: string;
-              }[];
-              online_environment_names: string[] | null;
-              /** @enum {string} */
-              online_evaluation_mode: "continuous" | "on_demand";
-              action_config?: {
-                action_groups: {
+            judges:
+              | {
                   id: string;
-                  /** @description Shown as the alert title */
                   name: string;
-                  enabled: boolean;
-                  /** @description Empty runs the group in every environment */
-                  environment_names: string[];
-                  /** @description Judge result that runs the group. Categorical groups run when the result is any listed output name. */
-                  when:
-                    | {
-                        /** @constant */
-                        kind: "any";
-                      }
-                    | {
-                        /** @constant */
-                        kind: "binary";
-                        value: boolean;
-                      }
-                    | {
-                        /** @constant */
-                        kind: "categorical";
-                        values: string[];
-                      }
-                    | {
-                        /** @constant */
-                        kind: "numeric";
-                        /** @enum {string} */
-                        operator: "lt" | "lte" | "eq" | "gte" | "gt";
-                        value: number;
-                      };
-                  frequency: {
-                    count: number;
-                    window_seconds: number;
-                  };
-                  cooldown_seconds: number;
-                  actions: (
-                    | {
-                        id: string;
-                        enabled: boolean;
-                        /** @constant */
-                        type: "email";
-                        config: {
-                          email_address: string;
-                        };
-                      }
-                    | {
-                        id: string;
-                        enabled: boolean;
-                        /** @constant */
-                        type: "slack";
-                        config: {
-                          team_id?: string;
-                          channel_id?: string;
-                          message?: string;
-                          custom_attribute_keys?: string[];
-                        };
-                      }
-                    | {
-                        id: string;
-                        enabled: boolean;
-                        /** @constant */
-                        type: "dataset";
-                        config: {
-                          dataset_id: string;
-                        };
-                      }
-                    | {
-                        id: string;
-                        enabled: boolean;
-                        /** @constant */
-                        type: "run_behavior";
-                        config: {
-                          judge_ids: string[];
-                        };
-                      }
-                  )[];
-                }[];
-              } | null;
-              online_sampling_rate: number;
-              online_span_triggers:
-                | unknown
-                | {
-                    /** @enum {string} */
-                    kind: "and" | "or";
-                    conditions: unknown[];
-                  };
-              online_session_scoring: boolean;
-            }[];
-          };
-        };
-      };
-    };
-  };
-  postV1ProjectsByProjectIdJudges: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        projectId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": {
-          judge:
-            | {
-                /** @description Unique judge name within the project */
-                name: string;
-                /** @description Human-readable description shown in the UI */
-                judgeDescription?: string | null;
-                /**
-                 * @description Agent judge (wire value `prompt`)
-                 * @constant
-                 */
-                judgeType: "prompt";
-                initialVersion: {
-                  actionConfig?: {
+                  /** @enum {string} */
+                  execution_mode: "internal" | "external";
+                  judge_type:
+                    | ("prompt" | "custom" | "agent" | "deterministic")
+                    | null;
+                  /** @enum {string} */
+                  score_type: "numeric" | "binary" | "categorical";
+                  judge_major_version: number;
+                  judge_minor_version: number;
+                  is_production: boolean;
+                  /** @enum {string} */
+                  online_evaluation_mode: "continuous" | "on_demand";
+                  /** @description Environments it scores. An empty list means all environments; null means none set. */
+                  online_environment_names: string[] | null;
+                  online_sampling_rate: number;
+                }[]
+              | {
+                  id: string;
+                  name: string;
+                  judge_description: string | null;
+                  /** @enum {string} */
+                  execution_mode: "internal" | "external";
+                  /** @description Agent judge (wire value `prompt`); Code judge (wire value `custom`); legacy Agent judge (wire value `agent`); Condition judge (wire value `deterministic`) */
+                  judge_type:
+                    | ("prompt" | "custom" | "agent" | "deterministic")
+                    | null;
+                  knowledge_file_id: string | null;
+                  /**
+                   * @description numeric, binary, or categorical. For binary judges, true means the judge applied its label, which the app shows under the judge's name. false means no label was applied. For classification judges, the value is the label, meaning the chosen option.
+                   * @enum {string}
+                   */
+                  score_type: "numeric" | "binary" | "categorical";
+                  updated_at: string;
+                  judge_version_id: string;
+                  judge_major_version: number;
+                  judge_minor_version: number;
+                  is_latest: boolean;
+                  is_production: boolean;
+                  optimistic_eval_enabled: boolean;
+                  reasoning_level: ("lite" | "normal" | "high") | null;
+                  /** @description Labels this judge can apply. For binary judges, true means the judge applied its label, which the app shows under the judge's name. false means no label was applied. For classification judges, the value is the label, meaning the chosen option. */
+                  outputs: {
+                    behavior_id: string;
+                    name: string;
+                    description: string;
+                  }[];
+                  /** @description Environments it scores. An empty list means all environments; null means none set. */
+                  online_environment_names: string[] | null;
+                  /** @enum {string} */
+                  online_evaluation_mode: "continuous" | "on_demand";
+                  action_config?: {
                     action_groups: {
                       id: string;
-                      /** @description Shown as the alert title */
+                      /** @description Action group display name; an empty string uses Action group 1, 2, etc. */
                       name: string;
                       enabled: boolean;
                       /** @description Empty runs the group in every environment */
@@ -5106,6 +5032,145 @@ export interface operations {
                       };
                       cooldown_seconds: number;
                       actions: (
+                        | {
+                            id: string;
+                            enabled: boolean;
+                            /** @constant */
+                            type: "webhook";
+                            config: {
+                              url: string;
+                              secret: string;
+                            };
+                          }
+                        | {
+                            id: string;
+                            enabled: boolean;
+                            /** @constant */
+                            type: "email";
+                            config: {
+                              email_address: string;
+                            };
+                          }
+                        | {
+                            id: string;
+                            enabled: boolean;
+                            /** @constant */
+                            type: "slack";
+                            config: {
+                              team_id?: string;
+                              channel_id?: string;
+                              message?: string;
+                              custom_attribute_keys?: string[];
+                            };
+                          }
+                        | {
+                            id: string;
+                            enabled: boolean;
+                            /** @constant */
+                            type: "dataset";
+                            config: {
+                              dataset_id: string;
+                            };
+                          }
+                        | {
+                            id: string;
+                            enabled: boolean;
+                            /** @constant */
+                            type: "run_behavior";
+                            config: {
+                              judge_ids: string[];
+                            };
+                          }
+                      )[];
+                    }[];
+                  } | null;
+                  online_sampling_rate: number;
+                  online_span_triggers: {
+                    /** @enum {string} */
+                    kind: "and" | "or";
+                    conditions: unknown[];
+                  };
+                  online_session_scoring: boolean;
+                }[];
+          };
+        };
+      };
+    };
+  };
+  postV1ProjectsByProjectIdJudges: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @example YOUR_PROJECT_ID */
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          judge:
+            | {
+                /** @description Unique judge name within the project */
+                name: string;
+                /** @description Human-readable description shown in the UI */
+                judgeDescription?: string | null;
+                /** @constant */
+                executionMode?: "internal";
+                /**
+                 * @description Agent judge (wire value `prompt`)
+                 * @constant
+                 */
+                judgeType: "prompt";
+                initialVersion: {
+                  actionConfig?: {
+                    action_groups: {
+                      id: string;
+                      /** @description Action group display name; an empty string uses Action group 1, 2, etc. */
+                      name: string;
+                      enabled: boolean;
+                      /** @description Empty runs the group in every environment */
+                      environment_names: string[];
+                      /** @description Judge result that runs the group. Categorical groups run when the result is any listed output name. */
+                      when:
+                        | {
+                            /** @constant */
+                            kind: "any";
+                          }
+                        | {
+                            /** @constant */
+                            kind: "binary";
+                            value: boolean;
+                          }
+                        | {
+                            /** @constant */
+                            kind: "categorical";
+                            values: string[];
+                          }
+                        | {
+                            /** @constant */
+                            kind: "numeric";
+                            /** @enum {string} */
+                            operator: "lt" | "lte" | "eq" | "gte" | "gt";
+                            value: number;
+                          };
+                      frequency: {
+                        count: number;
+                        window_seconds: number;
+                      };
+                      cooldown_seconds: number;
+                      actions: (
+                        | {
+                            id: string;
+                            enabled: boolean;
+                            /** @constant */
+                            type: "webhook";
+                            config: {
+                              url: string;
+                              secret: string;
+                            };
+                          }
                         | {
                             id: string;
                             enabled: boolean;
@@ -5157,16 +5222,18 @@ export interface operations {
                   advancedSettings?: {
                     /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
                     online_environment_names: string[] | null;
-                    /** @enum {string} */
+                    /**
+                     * @description continuous checks new traces; on_demand checks only traces evaluations are requested on. Both apply environments, run conditions, and sampling.
+                     * @enum {string}
+                     */
                     online_evaluation_mode: "continuous" | "on_demand";
+                    /** @description Percent of matching traces (or sessions, with session scoring on) scored, including evaluations requested on traces. */
                     online_sampling_rate: number;
-                    online_span_triggers:
-                      | unknown
-                      | {
-                          /** @enum {string} */
-                          kind: "and" | "or";
-                          conditions: unknown[];
-                        };
+                    online_span_triggers: {
+                      /** @enum {string} */
+                      kind: "and" | "or";
+                      conditions: unknown[];
+                    };
                     online_session_scoring: boolean;
                     session_evaluation_count_enabled?: boolean | null;
                     session_evaluation_idle_enabled?: boolean | null;
@@ -5199,6 +5266,8 @@ export interface operations {
                 name: string;
                 /** @description Human-readable description shown in the UI */
                 judgeDescription?: string | null;
+                /** @constant */
+                executionMode?: "internal";
                 /**
                  * @description Code judge (wire value `custom`)
                  * @constant
@@ -5208,7 +5277,7 @@ export interface operations {
                   actionConfig?: {
                     action_groups: {
                       id: string;
-                      /** @description Shown as the alert title */
+                      /** @description Action group display name; an empty string uses Action group 1, 2, etc. */
                       name: string;
                       enabled: boolean;
                       /** @description Empty runs the group in every environment */
@@ -5242,6 +5311,16 @@ export interface operations {
                       };
                       cooldown_seconds: number;
                       actions: (
+                        | {
+                            id: string;
+                            enabled: boolean;
+                            /** @constant */
+                            type: "webhook";
+                            config: {
+                              url: string;
+                              secret: string;
+                            };
+                          }
                         | {
                             id: string;
                             enabled: boolean;
@@ -5293,16 +5372,18 @@ export interface operations {
                   advancedSettings?: {
                     /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
                     online_environment_names: string[] | null;
-                    /** @enum {string} */
+                    /**
+                     * @description continuous checks new traces; on_demand checks only traces evaluations are requested on. Both apply environments, run conditions, and sampling.
+                     * @enum {string}
+                     */
                     online_evaluation_mode: "continuous" | "on_demand";
+                    /** @description Percent of matching traces (or sessions, with session scoring on) scored, including evaluations requested on traces. */
                     online_sampling_rate: number;
-                    online_span_triggers:
-                      | unknown
-                      | {
-                          /** @enum {string} */
-                          kind: "and" | "or";
-                          conditions: unknown[];
-                        };
+                    online_span_triggers: {
+                      /** @enum {string} */
+                      kind: "and" | "or";
+                      conditions: unknown[];
+                    };
                     online_session_scoring: boolean;
                     session_evaluation_count_enabled?: boolean | null;
                     session_evaluation_idle_enabled?: boolean | null;
@@ -5334,12 +5415,14 @@ export interface operations {
                 name: string;
                 judgeDescription?: string | null;
                 /** @constant */
+                executionMode?: "internal";
+                /** @constant */
                 judgeType: "deterministic";
                 initialVersion: {
                   actionConfig?: {
                     action_groups: {
                       id: string;
-                      /** @description Shown as the alert title */
+                      /** @description Action group display name; an empty string uses Action group 1, 2, etc. */
                       name: string;
                       enabled: boolean;
                       /** @description Empty runs the group in every environment */
@@ -5373,6 +5456,16 @@ export interface operations {
                       };
                       cooldown_seconds: number;
                       actions: (
+                        | {
+                            id: string;
+                            enabled: boolean;
+                            /** @constant */
+                            type: "webhook";
+                            config: {
+                              url: string;
+                              secret: string;
+                            };
+                          }
                         | {
                             id: string;
                             enabled: boolean;
@@ -5425,16 +5518,18 @@ export interface operations {
                   advancedSettings?: {
                     /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
                     online_environment_names: string[] | null;
-                    /** @enum {string} */
+                    /**
+                     * @description continuous checks new traces; on_demand checks only traces evaluations are requested on. Both apply environments, run conditions, and sampling.
+                     * @enum {string}
+                     */
                     online_evaluation_mode: "continuous" | "on_demand";
+                    /** @description Percent of matching traces (or sessions, with session scoring on) scored, including evaluations requested on traces. */
                     online_sampling_rate: number;
-                    online_span_triggers:
-                      | unknown
-                      | {
-                          /** @enum {string} */
-                          kind: "and" | "or";
-                          conditions: unknown[];
-                        };
+                    online_span_triggers: {
+                      /** @enum {string} */
+                      kind: "and" | "or";
+                      conditions: unknown[];
+                    };
                     online_session_scoring: boolean;
                     session_evaluation_count_enabled?: boolean | null;
                     session_evaluation_idle_enabled?: boolean | null;
@@ -5445,6 +5540,29 @@ export interface operations {
                 config: {
                   expression: unknown;
                 };
+              }
+            | {
+                name: string;
+                judgeDescription?: string | null;
+                /** @constant */
+                executionMode: "external";
+                initialVersion:
+                  | {
+                      /** @constant */
+                      scoreType: "binary";
+                    }
+                  | {
+                      /** @constant */
+                      scoreType: "numeric";
+                    }
+                  | {
+                      /** @constant */
+                      scoreType: "categorical";
+                      outputs: {
+                        name: string;
+                        description: string;
+                      }[];
+                    };
               };
         };
       };
@@ -5459,7 +5577,7 @@ export interface operations {
           "application/json": {
             judge_id: string;
             judge_version_id: string;
-            implementation_id: string;
+            implementation_id: string | null;
           };
         };
       };
@@ -5470,7 +5588,9 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @example YOUR_PROJECT_ID */
         projectId: string;
+        /** @example YOUR_JUDGE_ID */
         judgeId: string;
       };
       cookie?: never;
@@ -5495,7 +5615,9 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @example YOUR_PROJECT_ID */
         projectId: string;
+        /** @example YOUR_JUDGE_ID */
         judgeId: string;
       };
       cookie?: never;
@@ -5514,7 +5636,7 @@ export interface operations {
                       actionConfig?: {
                         action_groups: {
                           id: string;
-                          /** @description Shown as the alert title */
+                          /** @description Action group display name; an empty string uses Action group 1, 2, etc. */
                           name: string;
                           enabled: boolean;
                           /** @description Empty runs the group in every environment */
@@ -5548,6 +5670,16 @@ export interface operations {
                           };
                           cooldown_seconds: number;
                           actions: (
+                            | {
+                                id: string;
+                                enabled: boolean;
+                                /** @constant */
+                                type: "webhook";
+                                config: {
+                                  url: string;
+                                  secret: string;
+                                };
+                              }
                             | {
                                 id: string;
                                 enabled: boolean;
@@ -5600,16 +5732,18 @@ export interface operations {
                       advancedSettings: {
                         /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
                         online_environment_names: string[] | null;
-                        /** @enum {string} */
+                        /**
+                         * @description continuous checks new traces; on_demand checks only traces evaluations are requested on. Both apply environments, run conditions, and sampling.
+                         * @enum {string}
+                         */
                         online_evaluation_mode: "continuous" | "on_demand";
+                        /** @description Percent of matching traces (or sessions, with session scoring on) scored, including evaluations requested on traces. */
                         online_sampling_rate: number;
-                        online_span_triggers:
-                          | unknown
-                          | {
-                              /** @enum {string} */
-                              kind: "and" | "or";
-                              conditions: unknown[];
-                            };
+                        online_span_triggers: {
+                          /** @enum {string} */
+                          kind: "and" | "or";
+                          conditions: unknown[];
+                        };
                         online_session_scoring: boolean;
                         session_evaluation_count_enabled: boolean | null;
                         session_evaluation_idle_enabled: boolean | null;
@@ -5644,7 +5778,7 @@ export interface operations {
                       actionConfig?: {
                         action_groups: {
                           id: string;
-                          /** @description Shown as the alert title */
+                          /** @description Action group display name; an empty string uses Action group 1, 2, etc. */
                           name: string;
                           enabled: boolean;
                           /** @description Empty runs the group in every environment */
@@ -5678,6 +5812,16 @@ export interface operations {
                           };
                           cooldown_seconds: number;
                           actions: (
+                            | {
+                                id: string;
+                                enabled: boolean;
+                                /** @constant */
+                                type: "webhook";
+                                config: {
+                                  url: string;
+                                  secret: string;
+                                };
+                              }
                             | {
                                 id: string;
                                 enabled: boolean;
@@ -5730,16 +5874,18 @@ export interface operations {
                       advancedSettings: {
                         /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
                         online_environment_names: string[] | null;
-                        /** @enum {string} */
+                        /**
+                         * @description continuous checks new traces; on_demand checks only traces evaluations are requested on. Both apply environments, run conditions, and sampling.
+                         * @enum {string}
+                         */
                         online_evaluation_mode: "continuous" | "on_demand";
+                        /** @description Percent of matching traces (or sessions, with session scoring on) scored, including evaluations requested on traces. */
                         online_sampling_rate: number;
-                        online_span_triggers:
-                          | unknown
-                          | {
-                              /** @enum {string} */
-                              kind: "and" | "or";
-                              conditions: unknown[];
-                            };
+                        online_span_triggers: {
+                          /** @enum {string} */
+                          kind: "and" | "or";
+                          conditions: unknown[];
+                        };
                         online_session_scoring: boolean;
                         session_evaluation_count_enabled: boolean | null;
                         session_evaluation_idle_enabled: boolean | null;
@@ -5774,7 +5920,7 @@ export interface operations {
                       actionConfig?: {
                         action_groups: {
                           id: string;
-                          /** @description Shown as the alert title */
+                          /** @description Action group display name; an empty string uses Action group 1, 2, etc. */
                           name: string;
                           enabled: boolean;
                           /** @description Empty runs the group in every environment */
@@ -5808,6 +5954,16 @@ export interface operations {
                           };
                           cooldown_seconds: number;
                           actions: (
+                            | {
+                                id: string;
+                                enabled: boolean;
+                                /** @constant */
+                                type: "webhook";
+                                config: {
+                                  url: string;
+                                  secret: string;
+                                };
+                              }
                             | {
                                 id: string;
                                 enabled: boolean;
@@ -5860,16 +6016,18 @@ export interface operations {
                       advancedSettings: {
                         /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
                         online_environment_names: string[] | null;
-                        /** @enum {string} */
+                        /**
+                         * @description continuous checks new traces; on_demand checks only traces evaluations are requested on. Both apply environments, run conditions, and sampling.
+                         * @enum {string}
+                         */
                         online_evaluation_mode: "continuous" | "on_demand";
+                        /** @description Percent of matching traces (or sessions, with session scoring on) scored, including evaluations requested on traces. */
                         online_sampling_rate: number;
-                        online_span_triggers:
-                          | unknown
-                          | {
-                              /** @enum {string} */
-                              kind: "and" | "or";
-                              conditions: unknown[];
-                            };
+                        online_span_triggers: {
+                          /** @enum {string} */
+                          kind: "and" | "or";
+                          conditions: unknown[];
+                        };
                         online_session_scoring: boolean;
                         session_evaluation_count_enabled: boolean | null;
                         session_evaluation_idle_enabled: boolean | null;
@@ -5921,7 +6079,7 @@ export interface operations {
                       actionConfig?: {
                         action_groups: {
                           id: string;
-                          /** @description Shown as the alert title */
+                          /** @description Action group display name; an empty string uses Action group 1, 2, etc. */
                           name: string;
                           enabled: boolean;
                           /** @description Empty runs the group in every environment */
@@ -5955,6 +6113,16 @@ export interface operations {
                           };
                           cooldown_seconds: number;
                           actions: (
+                            | {
+                                id: string;
+                                enabled: boolean;
+                                /** @constant */
+                                type: "webhook";
+                                config: {
+                                  url: string;
+                                  secret: string;
+                                };
+                              }
                             | {
                                 id: string;
                                 enabled: boolean;
@@ -6007,16 +6175,18 @@ export interface operations {
                       advancedSettings: {
                         /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
                         online_environment_names: string[] | null;
-                        /** @enum {string} */
+                        /**
+                         * @description continuous checks new traces; on_demand checks only traces evaluations are requested on. Both apply environments, run conditions, and sampling.
+                         * @enum {string}
+                         */
                         online_evaluation_mode: "continuous" | "on_demand";
+                        /** @description Percent of matching traces (or sessions, with session scoring on) scored, including evaluations requested on traces. */
                         online_sampling_rate: number;
-                        online_span_triggers:
-                          | unknown
-                          | {
-                              /** @enum {string} */
-                              kind: "and" | "or";
-                              conditions: unknown[];
-                            };
+                        online_span_triggers: {
+                          /** @enum {string} */
+                          kind: "and" | "or";
+                          conditions: unknown[];
+                        };
                         online_session_scoring: boolean;
                         session_evaluation_count_enabled: boolean | null;
                         session_evaluation_idle_enabled: boolean | null;
@@ -6063,7 +6233,7 @@ export interface operations {
                       actionConfig?: {
                         action_groups: {
                           id: string;
-                          /** @description Shown as the alert title */
+                          /** @description Action group display name; an empty string uses Action group 1, 2, etc. */
                           name: string;
                           enabled: boolean;
                           /** @description Empty runs the group in every environment */
@@ -6097,6 +6267,16 @@ export interface operations {
                           };
                           cooldown_seconds: number;
                           actions: (
+                            | {
+                                id: string;
+                                enabled: boolean;
+                                /** @constant */
+                                type: "webhook";
+                                config: {
+                                  url: string;
+                                  secret: string;
+                                };
+                              }
                             | {
                                 id: string;
                                 enabled: boolean;
@@ -6149,16 +6329,18 @@ export interface operations {
                       advancedSettings: {
                         /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
                         online_environment_names: string[] | null;
-                        /** @enum {string} */
+                        /**
+                         * @description continuous checks new traces; on_demand checks only traces evaluations are requested on. Both apply environments, run conditions, and sampling.
+                         * @enum {string}
+                         */
                         online_evaluation_mode: "continuous" | "on_demand";
+                        /** @description Percent of matching traces (or sessions, with session scoring on) scored, including evaluations requested on traces. */
                         online_sampling_rate: number;
-                        online_span_triggers:
-                          | unknown
-                          | {
-                              /** @enum {string} */
-                              kind: "and" | "or";
-                              conditions: unknown[];
-                            };
+                        online_span_triggers: {
+                          /** @enum {string} */
+                          kind: "and" | "or";
+                          conditions: unknown[];
+                        };
                         online_session_scoring: boolean;
                         session_evaluation_count_enabled: boolean | null;
                         session_evaluation_idle_enabled: boolean | null;
@@ -6205,7 +6387,7 @@ export interface operations {
                       actionConfig?: {
                         action_groups: {
                           id: string;
-                          /** @description Shown as the alert title */
+                          /** @description Action group display name; an empty string uses Action group 1, 2, etc. */
                           name: string;
                           enabled: boolean;
                           /** @description Empty runs the group in every environment */
@@ -6239,6 +6421,16 @@ export interface operations {
                           };
                           cooldown_seconds: number;
                           actions: (
+                            | {
+                                id: string;
+                                enabled: boolean;
+                                /** @constant */
+                                type: "webhook";
+                                config: {
+                                  url: string;
+                                  secret: string;
+                                };
+                              }
                             | {
                                 id: string;
                                 enabled: boolean;
@@ -6291,16 +6483,18 @@ export interface operations {
                       advancedSettings: {
                         /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
                         online_environment_names: string[] | null;
-                        /** @enum {string} */
+                        /**
+                         * @description continuous checks new traces; on_demand checks only traces evaluations are requested on. Both apply environments, run conditions, and sampling.
+                         * @enum {string}
+                         */
                         online_evaluation_mode: "continuous" | "on_demand";
+                        /** @description Percent of matching traces (or sessions, with session scoring on) scored, including evaluations requested on traces. */
                         online_sampling_rate: number;
-                        online_span_triggers:
-                          | unknown
-                          | {
-                              /** @enum {string} */
-                              kind: "and" | "or";
-                              conditions: unknown[];
-                            };
+                        online_span_triggers: {
+                          /** @enum {string} */
+                          kind: "and" | "or";
+                          conditions: unknown[];
+                        };
                         online_session_scoring: boolean;
                         session_evaluation_count_enabled: boolean | null;
                         session_evaluation_idle_enabled: boolean | null;
@@ -6364,7 +6558,7 @@ export interface operations {
                       actionConfig?: {
                         action_groups: {
                           id: string;
-                          /** @description Shown as the alert title */
+                          /** @description Action group display name; an empty string uses Action group 1, 2, etc. */
                           name: string;
                           enabled: boolean;
                           /** @description Empty runs the group in every environment */
@@ -6398,6 +6592,16 @@ export interface operations {
                           };
                           cooldown_seconds: number;
                           actions: (
+                            | {
+                                id: string;
+                                enabled: boolean;
+                                /** @constant */
+                                type: "webhook";
+                                config: {
+                                  url: string;
+                                  secret: string;
+                                };
+                              }
                             | {
                                 id: string;
                                 enabled: boolean;
@@ -6450,16 +6654,18 @@ export interface operations {
                       advancedSettings: {
                         /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
                         online_environment_names: string[] | null;
-                        /** @enum {string} */
+                        /**
+                         * @description continuous checks new traces; on_demand checks only traces evaluations are requested on. Both apply environments, run conditions, and sampling.
+                         * @enum {string}
+                         */
                         online_evaluation_mode: "continuous" | "on_demand";
+                        /** @description Percent of matching traces (or sessions, with session scoring on) scored, including evaluations requested on traces. */
                         online_sampling_rate: number;
-                        online_span_triggers:
-                          | unknown
-                          | {
-                              /** @enum {string} */
-                              kind: "and" | "or";
-                              conditions: unknown[];
-                            };
+                        online_span_triggers: {
+                          /** @enum {string} */
+                          kind: "and" | "or";
+                          conditions: unknown[];
+                        };
                         online_session_scoring: boolean;
                         session_evaluation_count_enabled: boolean | null;
                         session_evaluation_idle_enabled: boolean | null;
@@ -6479,7 +6685,7 @@ export interface operations {
                       actionConfig?: {
                         action_groups: {
                           id: string;
-                          /** @description Shown as the alert title */
+                          /** @description Action group display name; an empty string uses Action group 1, 2, etc. */
                           name: string;
                           enabled: boolean;
                           /** @description Empty runs the group in every environment */
@@ -6513,6 +6719,16 @@ export interface operations {
                           };
                           cooldown_seconds: number;
                           actions: (
+                            | {
+                                id: string;
+                                enabled: boolean;
+                                /** @constant */
+                                type: "webhook";
+                                config: {
+                                  url: string;
+                                  secret: string;
+                                };
+                              }
                             | {
                                 id: string;
                                 enabled: boolean;
@@ -6565,16 +6781,18 @@ export interface operations {
                       advancedSettings: {
                         /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
                         online_environment_names: string[] | null;
-                        /** @enum {string} */
+                        /**
+                         * @description continuous checks new traces; on_demand checks only traces evaluations are requested on. Both apply environments, run conditions, and sampling.
+                         * @enum {string}
+                         */
                         online_evaluation_mode: "continuous" | "on_demand";
+                        /** @description Percent of matching traces (or sessions, with session scoring on) scored, including evaluations requested on traces. */
                         online_sampling_rate: number;
-                        online_span_triggers:
-                          | unknown
-                          | {
-                              /** @enum {string} */
-                              kind: "and" | "or";
-                              conditions: unknown[];
-                            };
+                        online_span_triggers: {
+                          /** @enum {string} */
+                          kind: "and" | "or";
+                          conditions: unknown[];
+                        };
                         online_session_scoring: boolean;
                         session_evaluation_count_enabled: boolean | null;
                         session_evaluation_idle_enabled: boolean | null;
@@ -6605,6 +6823,89 @@ export interface operations {
                       )[];
                     }
                 );
+            /** @description New version that copies sourceVersion and changes only the fields you set. Arrays replace. */
+            newVersionFromSource?: {
+              /** @description Existing version to copy. Fields you omit keep its values. */
+              sourceVersion: {
+                major: number;
+                minor: number;
+              };
+              targetVersion: {
+                major: number;
+                minor: number;
+              };
+              /** @description Whether the new version becomes the production version */
+              promoteToProduction: boolean;
+              /** @description Only the settings to change. Set online_evaluation_mode to 'on_demand' and promote to stop continuous scoring. */
+              advancedSettings?: {
+                /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
+                online_environment_names?: string[] | null;
+                /**
+                 * @description continuous checks new traces; on_demand checks only traces evaluations are requested on. Both apply environments, run conditions, and sampling.
+                 * @enum {string}
+                 */
+                online_evaluation_mode?: "continuous" | "on_demand";
+                /** @description Percent of matching traces (or sessions, with session scoring on) scored, including evaluations requested on traces. */
+                online_sampling_rate?: number;
+                online_span_triggers?: {
+                  /** @enum {string} */
+                  kind: "and" | "or";
+                  conditions: unknown[];
+                };
+                online_session_scoring?: boolean;
+                session_evaluation_count_enabled?: boolean | null;
+                session_evaluation_idle_enabled?: boolean | null;
+                session_evaluation_min_candidate_traces?: number | null;
+                session_evaluation_max_wait_minutes?: number | null;
+              };
+              /** @description Categorical judges only. Replaces the complete output set. Changing outputs affects labels already applied and test-suite checks that expect them; check them first. */
+              outputs?: (
+                | {
+                    /** @description An existing label ID. The field name remains behaviorId. */
+                    behaviorId: string;
+                  }
+                | {
+                    /** @description Name of the label to create */
+                    name: string;
+                    /** @description Description of the label to create */
+                    description: string;
+                    /** @description Label category IDs from the same project as the judge */
+                    categoryIds?: string[];
+                  }
+              )[];
+              /** @description Only the fields to change, from the judge type's fields: prompt, description, reasoningLevel, minScore, maxScore for Agent judges; expression for deterministic judges. Code judges: omit to reuse the stored bundle; to upload new code, set bundleBase64, entrypointPath, and className. */
+              config?: {
+                /** @description Complete prompt for the new version */
+                prompt?: string;
+                /** @description Description stored on the new version */
+                description?: string | null;
+                /**
+                 * @description Reasoning level for the new Agent judge version
+                 * @enum {string}
+                 */
+                reasoningLevel?: "lite" | "normal" | "high";
+                /** @description Minimum numeric score for the new version */
+                minScore?: number;
+                /** @description Maximum numeric score for the new version */
+                maxScore?: number;
+                /** @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB. */
+                bundleBase64?: string;
+                /** @description Path to the Python entrypoint inside the tar.gz bundle */
+                entrypointPath?: string;
+                /** @description Optional requirements file path inside the bundle */
+                requirementsPath?: string;
+                /** @description Python scorer class name exported by the entrypoint */
+                className?: string;
+                /**
+                 * @description Input format expected by the Code judge. Omit to keep the source version's.
+                 * @enum {string}
+                 */
+                scorerType?: "example" | "trace";
+                /** @description judgeval SDK major version targeted by the Code judge */
+                sdkVersion?: number;
+                expression?: unknown;
+              };
+            };
           };
         };
       };
@@ -6630,7 +6931,9 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @example YOUR_PROJECT_ID */
         projectId: string;
+        /** @example YOUR_JUDGE_ID */
         judgeId: string;
       };
       cookie?: never;
@@ -6650,7 +6953,7 @@ export interface operations {
           /** @description Complete list. Preserve IDs of existing groups and actions; use new UUIDs when adding or duplicating. Omitted groups are removed in the new version. */
           action_groups: {
             id: string;
-            /** @description Shown as the alert title */
+            /** @description Action group display name; an empty string uses Action group 1, 2, etc. */
             name: string;
             enabled: boolean;
             /** @description Empty runs the group in every environment */
@@ -6684,6 +6987,16 @@ export interface operations {
             };
             cooldown_seconds: number;
             actions: (
+              | {
+                  id: string;
+                  enabled: boolean;
+                  /** @constant */
+                  type: "webhook";
+                  config: {
+                    url: string;
+                    secret: string;
+                  };
+                }
               | {
                   id: string;
                   enabled: boolean;
@@ -6725,6 +7038,8 @@ export interface operations {
                 }
             )[];
           }[];
+          /** @description Set to true to save an empty action_groups list */
+          clear_all_action_groups?: boolean;
         };
       };
     };
@@ -6748,7 +7063,9 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @example YOUR_PROJECT_ID */
         projectId: string;
+        /** @example YOUR_JUDGE_ID */
         judgeId: string;
       };
       cookie?: never;
@@ -6823,7 +7140,7 @@ export interface operations {
                   action_config?: {
                     action_groups: {
                       id: string;
-                      /** @description Shown as the alert title */
+                      /** @description Action group display name; an empty string uses Action group 1, 2, etc. */
                       name: string;
                       enabled: boolean;
                       /** @description Empty runs the group in every environment */
@@ -6857,6 +7174,16 @@ export interface operations {
                       };
                       cooldown_seconds: number;
                       actions: (
+                        | {
+                            id: string;
+                            enabled: boolean;
+                            /** @constant */
+                            type: "webhook";
+                            config: {
+                              url: string;
+                              secret: string;
+                            };
+                          }
                         | {
                             id: string;
                             enabled: boolean;
@@ -6900,18 +7227,18 @@ export interface operations {
                     }[];
                   } | null;
                   online_sampling_rate: number;
-                  online_span_triggers:
-                    | unknown
-                    | {
-                        /** @enum {string} */
-                        kind: "and" | "or";
-                        conditions: unknown[];
-                      };
+                  online_span_triggers: {
+                    /** @enum {string} */
+                    kind: "and" | "or";
+                    conditions: unknown[];
+                  };
                   online_session_scoring: boolean;
                   session_evaluation_count_enabled: boolean | null;
                   session_evaluation_idle_enabled: boolean | null;
                   session_evaluation_min_candidate_traces: number | null;
                   session_evaluation_max_wait_minutes: number | null;
+                  /** @constant */
+                  execution_mode?: "internal";
                   /**
                    * @description Agent judge (wire value `prompt`)
                    * @constant
@@ -6962,7 +7289,7 @@ export interface operations {
                   action_config?: {
                     action_groups: {
                       id: string;
-                      /** @description Shown as the alert title */
+                      /** @description Action group display name; an empty string uses Action group 1, 2, etc. */
                       name: string;
                       enabled: boolean;
                       /** @description Empty runs the group in every environment */
@@ -6996,6 +7323,16 @@ export interface operations {
                       };
                       cooldown_seconds: number;
                       actions: (
+                        | {
+                            id: string;
+                            enabled: boolean;
+                            /** @constant */
+                            type: "webhook";
+                            config: {
+                              url: string;
+                              secret: string;
+                            };
+                          }
                         | {
                             id: string;
                             enabled: boolean;
@@ -7039,18 +7376,18 @@ export interface operations {
                     }[];
                   } | null;
                   online_sampling_rate: number;
-                  online_span_triggers:
-                    | unknown
-                    | {
-                        /** @enum {string} */
-                        kind: "and" | "or";
-                        conditions: unknown[];
-                      };
+                  online_span_triggers: {
+                    /** @enum {string} */
+                    kind: "and" | "or";
+                    conditions: unknown[];
+                  };
                   online_session_scoring: boolean;
                   session_evaluation_count_enabled: boolean | null;
                   session_evaluation_idle_enabled: boolean | null;
                   session_evaluation_min_candidate_traces: number | null;
                   session_evaluation_max_wait_minutes: number | null;
+                  /** @constant */
+                  execution_mode?: "internal";
                   /**
                    * @description Code judge (wire value `custom`)
                    * @constant
@@ -7104,7 +7441,7 @@ export interface operations {
                   action_config?: {
                     action_groups: {
                       id: string;
-                      /** @description Shown as the alert title */
+                      /** @description Action group display name; an empty string uses Action group 1, 2, etc. */
                       name: string;
                       enabled: boolean;
                       /** @description Empty runs the group in every environment */
@@ -7138,6 +7475,16 @@ export interface operations {
                       };
                       cooldown_seconds: number;
                       actions: (
+                        | {
+                            id: string;
+                            enabled: boolean;
+                            /** @constant */
+                            type: "webhook";
+                            config: {
+                              url: string;
+                              secret: string;
+                            };
+                          }
                         | {
                             id: string;
                             enabled: boolean;
@@ -7181,18 +7528,18 @@ export interface operations {
                     }[];
                   } | null;
                   online_sampling_rate: number;
-                  online_span_triggers:
-                    | unknown
-                    | {
-                        /** @enum {string} */
-                        kind: "and" | "or";
-                        conditions: unknown[];
-                      };
+                  online_span_triggers: {
+                    /** @enum {string} */
+                    kind: "and" | "or";
+                    conditions: unknown[];
+                  };
                   online_session_scoring: boolean;
                   session_evaluation_count_enabled: boolean | null;
                   session_evaluation_idle_enabled: boolean | null;
                   session_evaluation_min_candidate_traces: number | null;
                   session_evaluation_max_wait_minutes: number | null;
+                  /** @constant */
+                  execution_mode?: "internal";
                   /**
                    * @description Condition judge (wire value `deterministic`)
                    * @constant
@@ -7202,6 +7549,141 @@ export interface operations {
                     id: string;
                     expression: unknown;
                   };
+                }
+              | {
+                  id: string;
+                  name: string;
+                  judge_description: string | null;
+                  knowledge_file_id: string | null;
+                  /** @enum {string} */
+                  score_type: "numeric" | "binary" | "categorical";
+                  outputs: {
+                    behavior_id: string;
+                    name: string;
+                    description: string;
+                  }[];
+                  judge_version_id: string;
+                  judge_major_version: number;
+                  judge_minor_version: number;
+                  is_latest: boolean;
+                  is_production: boolean;
+                  optimistic_eval_enabled: boolean;
+                  preprocessor_artifact_revision_id: string | null;
+                  version_created_at: string;
+                  version_updated_at: string;
+                  updated_by: {
+                    user_id: string;
+                    first_name: string;
+                    last_name: string;
+                    user_email: string;
+                  } | null;
+                  online_environment_names: string[] | null;
+                  /** @enum {string} */
+                  online_evaluation_mode: "continuous" | "on_demand";
+                  action_config?: {
+                    action_groups: {
+                      id: string;
+                      /** @description Action group display name; an empty string uses Action group 1, 2, etc. */
+                      name: string;
+                      enabled: boolean;
+                      /** @description Empty runs the group in every environment */
+                      environment_names: string[];
+                      /** @description Judge result that runs the group. Categorical groups run when the result is any listed output name. */
+                      when:
+                        | {
+                            /** @constant */
+                            kind: "any";
+                          }
+                        | {
+                            /** @constant */
+                            kind: "binary";
+                            value: boolean;
+                          }
+                        | {
+                            /** @constant */
+                            kind: "categorical";
+                            values: string[];
+                          }
+                        | {
+                            /** @constant */
+                            kind: "numeric";
+                            /** @enum {string} */
+                            operator: "lt" | "lte" | "eq" | "gte" | "gt";
+                            value: number;
+                          };
+                      frequency: {
+                        count: number;
+                        window_seconds: number;
+                      };
+                      cooldown_seconds: number;
+                      actions: (
+                        | {
+                            id: string;
+                            enabled: boolean;
+                            /** @constant */
+                            type: "webhook";
+                            config: {
+                              url: string;
+                              secret: string;
+                            };
+                          }
+                        | {
+                            id: string;
+                            enabled: boolean;
+                            /** @constant */
+                            type: "email";
+                            config: {
+                              email_address: string;
+                            };
+                          }
+                        | {
+                            id: string;
+                            enabled: boolean;
+                            /** @constant */
+                            type: "slack";
+                            config: {
+                              team_id?: string;
+                              channel_id?: string;
+                              message?: string;
+                              custom_attribute_keys?: string[];
+                            };
+                          }
+                        | {
+                            id: string;
+                            enabled: boolean;
+                            /** @constant */
+                            type: "dataset";
+                            config: {
+                              dataset_id: string;
+                            };
+                          }
+                        | {
+                            id: string;
+                            enabled: boolean;
+                            /** @constant */
+                            type: "run_behavior";
+                            config: {
+                              judge_ids: string[];
+                            };
+                          }
+                      )[];
+                    }[];
+                  } | null;
+                  online_sampling_rate: number;
+                  online_span_triggers: {
+                    /** @enum {string} */
+                    kind: "and" | "or";
+                    conditions: unknown[];
+                  };
+                  online_session_scoring: boolean;
+                  session_evaluation_count_enabled: boolean | null;
+                  session_evaluation_idle_enabled: boolean | null;
+                  session_evaluation_min_candidate_traces: number | null;
+                  session_evaluation_max_wait_minutes: number | null;
+                  /** @constant */
+                  execution_mode: "external";
+                  judge_type: null;
+                  definition: null;
                 };
           };
         };
@@ -7213,8 +7695,11 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @example YOUR_PROJECT_ID */
         projectId: string;
+        /** @example YOUR_JUDGE_ID */
         judgeId: string;
+        /** @example YOUR_JUDGE_VERSION_ID */
         judgeVersionId: string;
       };
       cookie?: never;
@@ -7249,8 +7734,11 @@ export interface operations {
       query?: never;
       header?: never;
       path: {
+        /** @example YOUR_PROJECT_ID */
         projectId: string;
+        /** @example YOUR_JUDGE_ID */
         judgeId: string;
+        /** @example YOUR_JUDGE_VERSION_ID */
         judgeVersionId: string;
       };
       cookie?: never;
@@ -7289,6 +7777,7 @@ export interface operations {
       };
       header?: never;
       path: {
+        /** @example YOUR_PROJECT_ID */
         projectId: string;
       };
       cookie?: never;
@@ -7309,7 +7798,7 @@ export interface operations {
               judge_minor_version: number;
               action_group: {
                 id: string;
-                /** @description Shown as the alert title */
+                /** @description Action group display name; an empty string uses Action group 1, 2, etc. */
                 name: string;
                 enabled: boolean;
                 /** @description Empty runs the group in every environment */
@@ -7343,6 +7832,16 @@ export interface operations {
                 };
                 cooldown_seconds: number;
                 actions: (
+                  | {
+                      id: string;
+                      enabled: boolean;
+                      /** @constant */
+                      type: "webhook";
+                      config: {
+                        url: string;
+                        secret: string;
+                      };
+                    }
                   | {
                       id: string;
                       enabled: boolean;
@@ -10360,6 +10859,69 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["PublicJqlErrorResponse"];
+        };
+      };
+    };
+  };
+  "postV1ProjectsByProjectIdJudge-results": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @example YOUR_PROJECT_ID */
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json":
+          | {
+              target:
+                | {
+                    /** @constant */
+                    type: "trace";
+                    trace_id: string;
+                  }
+                | {
+                    /** @constant */
+                    type: "session";
+                    session_id: string;
+                  };
+              value: boolean | number | string;
+              reason?: string;
+              /** Format: uuid */
+              judge_id: string;
+            }
+          | {
+              target:
+                | {
+                    /** @constant */
+                    type: "trace";
+                    trace_id: string;
+                  }
+                | {
+                    /** @constant */
+                    type: "session";
+                    session_id: string;
+                  };
+              value: boolean | number | string;
+              reason?: string;
+              judge_name: string;
+            };
+      };
+    };
+    responses: {
+      /** @description Response for status 200 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** Format: uuid */
+            id: string;
+          };
         };
       };
     };

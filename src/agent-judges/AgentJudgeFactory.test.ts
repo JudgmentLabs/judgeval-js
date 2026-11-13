@@ -357,3 +357,16 @@ describe("AgentJudgeFactory.update", () => {
     expect(client.patchV1projectsJudgesByJudgeId).not.toHaveBeenCalled();
   });
 });
+
+test("rejects external judges with no executable type", async () => {
+  const { factory } = makeFactory("proj-1", [
+    judgeDetail({
+      execution_mode: "external",
+      judge_type: null,
+      definition: null,
+    }),
+  ]);
+  await expect(
+    factory.update({ judgeId: "judge-1", prompt: "Updated rubric" }),
+  ).rejects.toThrow("only prompt-based Agent judges are supported");
+});

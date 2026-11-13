@@ -276,6 +276,18 @@ export class JudgmentApiClient {
     );
   }
 
+  postV1projectsJudgeResults(
+    projectId: string,
+    payload: RequestBody<"/v1/projects/{projectId}/judge-results", "post">,
+  ) {
+    return ok(
+      this.api.POST("/v1/projects/{projectId}/judge-results", {
+        params: { path: { projectId } },
+        body: payload,
+      }),
+    );
+  }
+
   patchV1projectsJudgesByJudgeId(
     projectId: string,
     judgeId: string,

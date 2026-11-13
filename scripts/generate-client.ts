@@ -4,6 +4,11 @@ import spec from "../openapi/public-api.json";
 
 type Operation = { summary?: string; "x-mcp"?: { tool: string } };
 
+const methodAliases: Record<string, string[]> = {
+  set_judge_jev_optimization_enabled: ["set_judge_optimistic_eval_enabled"],
+  set_judge_preprocessing_script: ["set_judge_preprocessor_artifact_revision"],
+};
+
 const methods = Object.entries(
   spec.paths as Record<string, Record<string, Operation>>,
 )
@@ -11,14 +16,15 @@ const methods = Object.entries(
     Object.entries(operations).map(([method, op]) => ({ path, method, op })),
   )
   .filter(({ op }) => op["x-mcp"])
-  .map(({ path, method, op }) => ({
-    path,
-    method,
-    summary: op.summary,
-    name: op["x-mcp"]!.tool.replace(/_(\w)/g, (_, c: string) =>
-      c.toUpperCase(),
-    ),
-  }))
+  .flatMap(({ path, method, op }) => {
+    const tool = op["x-mcp"]!.tool;
+    return [tool, ...(methodAliases[tool] ?? [])].map((tool) => ({
+      path,
+      method,
+      summary: op.summary,
+      name: tool.replace(/_(\w)/g, (_, c: string) => c.toUpperCase()),
+    }));
+  })
   .sort((a, b) => a.name.localeCompare(b.name))
   .map(
     ({ path, method, summary, name }) => `

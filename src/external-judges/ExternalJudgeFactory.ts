@@ -1,0 +1,219 @@
+import type { JudgmentApiClient } from "../internal/api/client";
+import type {
+  CreateJudgeRequest,
+  SubmitExternalJudgeResult,
+} from "../internal/api/models";
+import { Logger } from "../utils/logger";
+import type { ExternalJudge, ScoreType } from "./ExternalJudge";
+
+/** Identifies the trace or session whose current score will be replaced. */
+export type ExternalJudgeTarget =
+  | { type: "trace"; traceId: string; sessionId?: never }
+  | { type: "session"; sessionId: string; traceId?: never };
+
+/**
+ * Create external judges and submit their results on the Judgment platform.
+ *
+ * Access via `client.externalJudges`.
+ *
+ * @example
+ * ```typescript
+ * const judge = await client.externalJudges.create({
+ *   name: "human-thumbs-up",
+ *   scoreType: "binary",
+ * });
+ *
+ * await client.externalJudges.submitResult({
+ *   judgeId: judge.judgeId,
+ *   target: { type: "trace", traceId: "<trace_id>" },
+ *   value: true,
+ * });
+ * ```
+ */
+export class ExternalJudgeFactory {
+  private readonly _client: JudgmentApiClient;
+  private readonly _projectId: string | null;
+  private readonly _projectName: string;
+
+  constructor(
+    client: JudgmentApiClient,
+    projectId: string | null,
+    projectName: string,
+  ) {
+    this._client = client;
+    this._projectId = projectId;
+    this._projectName = projectName;
+  }
+
+  /**
+   * Create a new external judge and its first version.
+   *
+   * @param options.name - Unique judge name within the project.
+   * @param options.scoreType - One of `"binary"`, `"numeric"`, or `"categorical"`.
+   * @param options.judgeDescription - Description shown in the UI.
+   * @param options.outputs - Choice list for `categorical` judges (2 or more
+   *   entries). Required when `scoreType` is `"categorical"`; must be
+   *   omitted otherwise.
+   * @returns The newly created `ExternalJudge`, or `null` if the project is unresolved.
+   *
+   * @example
+   * ```typescript
+   * const judge = await client.externalJudges.create({
+   *   name: "topic-classifier",
+   *   scoreType: "categorical",
+   *   outputs: [
+   *     { name: "billing", description: "Billing questions" },
+   *     { name: "support", description: "Support requests" },
+   *   ],
+   * });
+   * ```
+   */
+  async create(options: {
+    name: string;
+    scoreType: ScoreType;
+    judgeDescription?: string;
+    outputs?: { name: string; description: string }[];
+  }): Promise<ExternalJudge | null> {
+    const projectId = this._expectProjectId();
+    if (!projectId) return null;
+
+    const name = options.name.trim();
+    const outputs = options.outputs?.map((output) => ({
+      ...output,
+      name: output.name.trim(),
+    }));
+    let initialVersion: Extract<
+      CreateJudgeRequest["judge"],
+      { executionMode: "external" }
+    >["initialVersion"];
+    if (options.scoreType === "categorical") {
+      if (!outputs || outputs.length < 2) {
+        throw new Error(
+          "outputs must have at least 2 entries for a 'categorical' judge",
+        );
+      }
+      initialVersion = {
+        scoreType: "categorical",
+        outputs,
+      };
+    } else {
+      if (options.outputs !== undefined) {
+        throw new Error(
+          `outputs is only valid when scoreType is 'categorical' (got ${options.scoreType})`,
+        );
+      }
+      initialVersion = { scoreType: options.scoreType };
+    }
+
+    const payload: CreateJudgeRequest = {
+      judge: { name, executionMode: "external", initialVersion },
+    };
+    if (options.judgeDescription !== undefined)
+      payload.judge.judgeDescription = options.judgeDescription;
+
+    const response = await this._client.postV1projectsJudges(
+      projectId,
+      payload,
+    );
+
+    return {
+      judgeId: response.judge_id,
+      judgeVersionId: response.judge_version_id,
+      name,
+      scoreType: options.scoreType,
+      judgeDescription: options.judgeDescription ?? null,
+      outputs: outputs ?? null,
+      majorVersion: 0,
+      minorVersion: 0,
+    };
+  }
+
+  /**
+   * Submits a customer score under any judge for a trace or session.
+   *
+   * Resubmitting for the same judge and target replaces its current customer
+   * score. To correct a value, submit again for that judge and target.
+   * Each submission, including a retry, writes a new result row.
+   *
+   * Exactly one of `judgeId` or `judgeName` must be provided; the score
+   * is attached to that judge's production version. `value` must match
+   * the judge's score type (`boolean` for `binary`, `number` for
+   * `numeric`, or one of the judge's configured outputs' names for
+   * `categorical`).
+   *
+   * @param options.target - A trace or session target with its corresponding ID.
+   * @param options.value - The externally computed score.
+   * @param options.judgeId - ID of the judge to submit under.
+   * @param options.judgeName - Name of the judge to submit under.
+   * @param options.reason - Optional free-text explanation for the score.
+   * @returns The id of the persisted score result, or `null` if the
+   *   project is unresolved.
+   *
+   * @example
+   * ```typescript
+   * await client.externalJudges.submitResult({
+   *   judgeName: "human-thumbs-up",
+   *   target: { type: "trace", traceId: "<trace_id>" },
+   *   value: true,
+   *   reason: "Reviewer approved the response.",
+   * });
+   * ```
+   */
+  async submitResult(options: {
+    target: ExternalJudgeTarget;
+    value: boolean | number | string;
+    judgeId?: string;
+    judgeName?: string;
+    reason?: string;
+  }): Promise<string | null> {
+    if ((options.judgeId === undefined) === (options.judgeName === undefined)) {
+      throw new Error("Exactly one of judgeId or judgeName must be provided");
+    }
+
+    const targetKey =
+      options.target?.type === "trace" ? "traceId" : "sessionId";
+    if (
+      !options.target ||
+      !["trace", "session"].includes(options.target.type) ||
+      Object.keys(options.target).length !== 2 ||
+      typeof options.target[targetKey] !== "string" ||
+      !options.target[targetKey]
+    ) {
+      throw new Error("target must contain exactly one trace or session ID");
+    }
+
+    const projectId = this._expectProjectId();
+    if (!projectId) return null;
+
+    // The validation above guarantees exactly one identifier is present.
+    const judge =
+      options.judgeId !== undefined
+        ? { judge_id: options.judgeId }
+        : { judge_name: options.judgeName! };
+    const payload: SubmitExternalJudgeResult = {
+      target:
+        options.target.type === "trace"
+          ? { type: "trace", trace_id: options.target.traceId }
+          : { type: "session", session_id: options.target.sessionId },
+      value: options.value,
+      ...judge,
+      ...(options.reason !== undefined ? { reason: options.reason } : {}),
+    };
+    const response = await this._client.postV1projectsJudgeResults(
+      projectId,
+      payload,
+    );
+
+    return response.id;
+  }
+
+  private _expectProjectId(): string | null {
+    if (!this._projectId) {
+      Logger.error(
+        "Project ID is not resolved. External judge operations require a valid project.",
+      );
+      return null;
+    }
+    return this._projectId;
+  }
+}

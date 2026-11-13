@@ -86,3 +86,9 @@ export type JudgeDetail = OkResponse<
   "/v1/projects/{projectId}/judges/{judgeId}/lookup",
   "post"
 >["judge"];
+
+/** Externally calculated score submitted for a trace or session. */
+export type SubmitExternalJudgeResult = RequestBody<
+  "/v1/projects/{projectId}/judge-results",
+  "post"
+>;

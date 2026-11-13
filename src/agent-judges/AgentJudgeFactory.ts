@@ -237,6 +237,11 @@ export class AgentJudgeFactory {
       judgeId,
       { version },
     );
+    if (judge.execution_mode === "external") {
+      throw new Error(
+        `Judge ${judgeId} is an external judge; only prompt-based Agent judges are supported.`,
+      );
+    }
     if (judge.judge_type !== "prompt") {
       throw new Error(
         `Judge ${judgeId} is a ${judge.judge_type} judge; only prompt-based Agent judges are supported.`,
