@@ -322,20 +322,25 @@ test.each([
 );
 
 test.each([
-  registerTools,
-  (server: McpServerV1) => {
-    server.registerTool(
-      "greet",
-      {
-        inputSchema: z3.object({ name: z3.string() }),
-        outputSchema: z3.object({ ok: z3.boolean() }),
-      },
-      () => ({ content: [], structuredContent: { ok: true } }),
-    );
-  },
+  { register: registerTools, handoff: true },
+  ...[true, false].map((handoff) => ({
+    handoff,
+    register: (server: McpServerV1) => {
+      server.registerTool(
+        "greet",
+        {
+          inputSchema: z3.object({ name: z3.string() }),
+          outputSchema: z3
+            .object({ ok: z3.boolean() })
+            .catchall(handoff ? z3.never() : z3.number()),
+        },
+        () => ({ content: [], structuredContent: { ok: true } }),
+      );
+    },
+  })),
 ])(
   "repeated calls avoid listing discovery and duplicate protocol instrumentation",
-  async (register) => {
+  async ({ register, handoff }) => {
     const exporter = useExporter();
     const server = new McpServerV1({ name: "greeter", version: "1" });
     register(server);
@@ -348,6 +353,11 @@ test.each([
     });
     instrumentMcpServer(server);
     instrumentMcpServer(server.server);
+    const warning = spyOn(Logger, "warning").mockImplementation(() => {});
+    cleanups.push(() => {
+      warning.mockRestore();
+    });
+    instrumentMcpServer(server, { captureInput: true });
     const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
     await server.connect(serverSide);
     const client = new ClientV1({ name: "test", version: "1" });
@@ -364,6 +374,10 @@ test.each([
     });
     expect({
       listings,
+      warnings: warning.mock.calls,
+      captured: exporter
+        .getFinishedSpans()
+        .some((span) => "judgment.input" in span.attributes),
       calls: exporter
         .getFinishedSpans()
         .filter((span) => span.name === "tools/call greet").length,
@@ -375,9 +389,15 @@ test.each([
       ),
     }).toEqual({
       listings: 1,
+      warnings: [
+        [
+          "MCP server is already instrumented with different options; keeping the original configuration.",
+        ],
+      ],
+      captured: false,
       calls: 2,
       outputs: [true, true],
-      handoffs: [true, true],
+      handoffs: [handoff, handoff],
     });
   },
 );
@@ -791,6 +811,7 @@ test("SDK diagnostics leave MCP stdout untouched", () => {
 
 test("payload capture detaches values and omits unsafe data without changing the source", () => {
   const original = { token: SECRET };
+  const oversizedCallbacks: string[] = [];
   const captured = capturePayload(original, "input", (value) => {
     (value as { token: string }).token = "safe";
     return value;
@@ -802,12 +823,23 @@ test("payload capture detaches values and omits unsafe data without changing the
       throw new Error(SECRET);
     }),
     oversized: capturePayload("x".repeat(128 * 1024), "output"),
+    oversizedSource: capturePayload(
+      { text: "x".repeat(128 * 1024) },
+      "input",
+      (_, field) => {
+        oversizedCallbacks.push(field);
+        return {};
+      },
+    ),
+    oversizedCallbacks,
     null: capturePayload(null, "output"),
   }).toEqual({
     original: { token: SECRET },
     captured: { token: "safe" },
     failure: undefined,
     oversized: undefined,
+    oversizedSource: undefined,
+    oversizedCallbacks: [],
     null: null,
   });
 });

@@ -187,7 +187,7 @@ interface ToolContract {
 }
 
 const records = new AsyncLocalStorage<CallRecord>();
-const instrumented = new WeakSet<object>();
+const instrumented = new WeakMap<object, InstrumentMcpServerOptions>();
 // Updating a tool replaces its schema, invalidating its cached contract.
 const contracts = new WeakMap<object, Map<string, ToolContract | null>>();
 
@@ -244,7 +244,32 @@ function instrument(
     readonly _registeredTools?: Readonly<Record<string, RegisteredTool>>;
   };
   const protocol = highLevel.server ?? (server as ProtocolServer);
-  if (instrumented.has(protocol)) return;
+  const configuration = {
+    injectAgentArguments: true,
+    injectConversationId: true,
+    captureInput: false,
+    captureOutput: false,
+    captureErrorMessages: false,
+    ...Object.fromEntries(
+      Object.entries(options).filter(([, value]) => value !== undefined),
+    ),
+  };
+  const previous = instrumented.get(protocol);
+  if (previous !== undefined) {
+    const keys = new Set([
+      ...Object.keys(previous),
+      ...Object.keys(configuration),
+    ]);
+    if (
+      [...keys].some(
+        (key) => Reflect.get(previous, key) !== Reflect.get(configuration, key),
+      )
+    )
+      Logger.warning(
+        "MCP server is already instrumented with different options; keeping the original configuration.",
+      );
+    return;
+  }
   const handlers = protocol._requestHandlers;
   if (!(handlers instanceof Map)) {
     Logger.warning(
@@ -252,7 +277,7 @@ function instrument(
     );
     return;
   }
-  instrumented.add(protocol);
+  instrumented.set(protocol, configuration);
 
   const registry =
     highLevel.server === undefined ? undefined : highLevel._registeredTools;
@@ -803,7 +828,10 @@ function rememberStructuredOutput(
   }
   const schema = tool.outputSchema as {
     readonly shape?: Readonly<Record<string, unknown>>;
-    readonly _def?: { readonly typeName?: string };
+    readonly _def?: {
+      readonly typeName?: string;
+      readonly catchall?: { readonly _def?: { readonly typeName?: string } };
+    };
     readonly "~standard"?: {
       readonly jsonSchema?: {
         readonly output?: (options: { target: string }) => unknown;
@@ -824,7 +852,9 @@ function rememberStructuredOutput(
     if (
       shape !== undefined &&
       Object.keys(shape).length > 0 &&
-      !("_judgment" in shape)
+      !("_judgment" in shape) &&
+      (schema._def.catchall === undefined ||
+        schema._def.catchall._def?.typeName === "ZodNever")
     )
       structuredTools.add(name);
     return;
