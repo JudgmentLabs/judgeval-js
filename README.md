@@ -29,11 +29,23 @@ Requests create normal Judgment OTel spans, using the tracer's environment, samp
 
 Arguments/results are opt-in (`captureInput`, `captureOutput`); `redactPayload(value, field)` transforms a detached JSON snapshot before export. Throw or return `undefined` to omit a payload. Non-JSON or oversized payloads (128 KiB) are omitted. Telemetry failures never affect a call. Call `await Tracer.forceFlush()` before serverless return, or `await Tracer.shutdown()` when stopping. Delivery uses the existing OTel exporter and is best-effort; a terminated or hung tool may leave no completed span.
 
-**What changes on your server:** compatible tools gain optional `context`, `llm_model` and `conversation_id` arguments, stripped before execution. A missing logical session gets an ID in supplemental text and compatible existing `structuredContent._judgment`, with a matching optional output-schema property. Text-only results stay text-only; schema collisions/unsupported compositions keep text handoff. Session priority is `sessionId` callback or `Tracer.setSessionId`, then agent-echoed conversation ID, then transport session ID; otherwise calls remain standalone. Use `{ injectConversationId: false }` to disable only conversation schema injection/handoff. To leave your tools and results unchanged:
+**What changes on your server:** compatible tools gain optional `intent`, `llm_model` and `conversation_id` arguments, stripped before execution. A missing logical session gets an ID in supplemental text and compatible existing `structuredContent._judgment`, with a matching optional output-schema property. Text-only results stay text-only; schema collisions/unsupported compositions keep text handoff. Session priority is `sessionId` callback or `Tracer.setSessionId`, then agent-echoed conversation ID, then transport session ID; otherwise calls remain standalone. Use `{ injectConversationId: false }` to disable only conversation schema injection/handoff. To leave your tools and results unchanged:
 
 ```typescript
 instrumentMcpServer(server, { injectAgentArguments: false });
 ```
+
+Use `intentArgument`, `modelArgument`, and `conversationIdArgument` to choose names across all tools:
+
+```typescript
+instrumentMcpServer(server, {
+  intentArgument: "intent",
+  modelArgument: "judgment_llm_model",
+  conversationIdArgument: "chat_id",
+});
+```
+
+Explicit names opt existing fields into telemetry without changing their schemas or removing them from handler inputs. When absent from a compatible tool's schema, the SDK injects and strips the chosen name instead. Without explicit configuration, existing same-name fields are preserved but not interpreted as telemetry. Explicit fields can also be read with injection disabled; missing/non-string values are omitted. Existing conversation arguments supply application session IDs after callback/baggage resolution; injected conversation arguments use UUIDv7 echo handles. Names must be non-empty and distinct.
 
 Error-message capture defaults off; outcome and error type are still recorded. Set `captureErrorMessages: true` to capture failure text. There is no automatic PII or argument-value scrubbing: enabled payload/error capture and agent-reported intent are sent as-is unless transformed by `redactPayload` or `redact`. Intent remains enabled by default; use `redact` to remove sensitive values or `injectAgentArguments: false` to disable agent-reported fields and session handoff.
 

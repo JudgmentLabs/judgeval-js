@@ -13,6 +13,8 @@ import { W3CTraceContextPropagator } from "@opentelemetry/core";
 import { getBaggage, setBaggage, createBaggage } from "../../trace/baggage";
 import { capturePayload } from "./payload";
 import {
+  type ArgumentNames,
+  argumentNames,
   isAgentArgument,
   canExtendSchema,
   declaredArguments,
@@ -52,6 +54,15 @@ export interface McpRequestInfo {
 
 /** Options for {@link instrumentMcpServer}. */
 export interface InstrumentMcpServerOptions {
+  /** Explicit name to reuse when declared, or inject when absent. Defaults to intent.
+   * Existing fields are preserved; missing/non-string values are omitted.
+   * Explicit names are also read with injection disabled. */
+  readonly intentArgument?: string;
+  /** Same behavior for the calling model. Defaults to llm_model. */
+  readonly modelArgument?: string;
+  /** Same behavior for conversation_id. Existing fields supply application sessions;
+   * injected fields use UUIDv7 echo handles. Callback/baggage sessions take priority. */
+  readonly conversationIdArgument?: string;
   /** Capture business arguments/results as-is unless redactPayload transforms them. Both default false. */
   readonly captureInput?: boolean;
   readonly captureOutput?: boolean;
@@ -71,7 +82,7 @@ export interface InstrumentMcpServerOptions {
   /** The deployed build, used to compare releases. */
   readonly serverBuild?: string;
   /**
-   * Adds optional `context`, `llm_model` and `conversation_id` arguments to each
+   * Adds optional `intent`, `llm_model` and `conversation_id` arguments to each
    * tool's published schema, removes them before your handler runs, and returns
    * a conversation ID in tool results when the call has no session. Set to false
    * to leave your tools and their results exactly as they are, at the cost of
@@ -162,7 +173,7 @@ interface ToolContract {
 const records = new AsyncLocalStorage<CallRecord>();
 const instrumented = new WeakSet<object>();
 // Updating a tool replaces its schema, invalidating its cached contract.
-const contracts = new WeakMap<object, ToolContract | null>();
+const contracts = new WeakMap<object, Map<string, ToolContract | null>>();
 
 /**
  * Records the original error before you map it to a public tool error. Its
@@ -211,6 +222,7 @@ function instrument(
   server: InstrumentableMcpServer,
   options: InstrumentMcpServerOptions,
 ): void {
+  argumentNames(configuredArguments(options));
   if (instrumented.has(server)) return;
   const highLevel = server as {
     readonly server?: ProtocolServer;
@@ -268,12 +280,7 @@ function traced(
       const result = await handler(request, context);
       return method === "tools/list" && inject
         ? (attempt(() =>
-            listWithArguments(
-              result,
-              registry,
-              structuredTools,
-              options.injectConversationId !== false,
-            ),
+            listWithArguments(result, registry, structuredTools, options),
           ) ?? result)
         : result;
     }
@@ -290,8 +297,9 @@ function traced(
     );
     if (prepared === undefined) {
       const stripped =
-        attempt(() => withoutInjected(method, request, registry, inject)) ??
-        request;
+        attempt(() =>
+          withoutInjected(method, request, registry, inject, options),
+        ) ?? request;
       const result = await handler(stripped, context);
       return result;
     }
@@ -322,12 +330,7 @@ function traced(
           .catch(() => undefined);
         if (listed !== undefined)
           attempt(() =>
-            listWithArguments(
-              listed,
-              registry,
-              structuredTools,
-              options.injectConversationId !== false,
-            ),
+            listWithArguments(listed, registry, structuredTools, options),
           );
       }
       const conversationId = prepared.mintedConversationId;
@@ -339,6 +342,7 @@ function traced(
               conversationId,
               structuredTools,
               request.params?.name ?? "",
+              argumentNames(configuredArguments(options))[2],
             ),
           ) ?? result);
     } catch (error) {
@@ -465,11 +469,11 @@ function prepareCall(
   const args = params?.arguments ?? {};
   const toolName = method === "tools/call" ? params?.name : undefined;
   const tool = toolName === undefined ? undefined : registry?.[toolName];
-  const contract = tool === undefined ? undefined : toolContract(tool);
+  const names = configuredArguments(options);
+  const contract = tool === undefined ? undefined : toolContract(tool, names);
   const injected = inject && contract !== undefined && !contract.open;
-  const reported = injected
-    ? readReportedArguments(args, contract.declared)
-    : undefined;
+  const declared = contract?.declared ?? new Set<string>();
+  const reported = readReportedArguments(args, declared, names, injected);
   const headers = readHeaders(context);
   const transportSessionId = transportSession(context, headers);
   const configuredSessionId =
@@ -480,7 +484,11 @@ function prepareCall(
       getBaggage(
         JudgmentTracerProvider.getInstance().getCurrentContext(),
       )?.getEntry("judgment.session_id")?.value,
-    );
+    ) ??
+    (names.conversationId !== undefined &&
+    (declared.has(argumentNames(names)[2]) || !injected)
+      ? reported.conversationId
+      : undefined);
   const conversationId =
     options.injectConversationId === false
       ? undefined
@@ -490,7 +498,7 @@ function prepareCall(
   const mintedConversationId =
     injected &&
     options.injectConversationId !== false &&
-    !contract.declared.has("conversation_id") &&
+    !declared.has(argumentNames(names)[2]) &&
     sessionId === undefined
       ? mintConversationId()
       : undefined;
@@ -503,7 +511,12 @@ function prepareCall(
           ...request,
           params: {
             ...params,
-            arguments: withoutAgentArguments(args, contract.declared),
+            arguments: withoutAgentArguments(
+              args,
+              declared,
+              names,
+              options.injectConversationId !== false,
+            ),
           },
         }
       : request,
@@ -534,7 +547,12 @@ function prepareCall(
       "judgment.mcp.argument_keys":
         toolName === undefined
           ? undefined
-          : recordedKeys(args, injected ? contract.declared : undefined),
+          : recordedKeys(
+              args,
+              injected ? declared : undefined,
+              names,
+              options.injectConversationId !== false,
+            ),
       "judgment.mcp.conversation_id": logicalSessionId ?? mintedConversationId,
       "judgment.mcp.conversation_id_source":
         configuredSessionId !== undefined
@@ -640,7 +658,7 @@ function listWithArguments(
   result: McpResult,
   registry: Readonly<Record<string, RegisteredTool>> | undefined,
   structuredTools: Set<string>,
-  injectConversationId: boolean,
+  options: InstrumentMcpServerOptions,
 ): McpResult {
   return (
     attempt(() => ({
@@ -649,11 +667,19 @@ function listWithArguments(
         const name = tool["name"];
         const registered =
           typeof name === "string" ? registry?.[name] : undefined;
+        const names = configuredArguments(options);
         const contract =
-          registered === undefined ? undefined : toolContract(registered);
+          registered === undefined
+            ? undefined
+            : toolContract(registered, names);
         if (contract === undefined || contract.open) return tool;
-        const updated = withAgentArguments(tool, injectConversationId);
-        if (!injectConversationId) return updated;
+        const injectConversationId = options.injectConversationId !== false;
+        const updated = withAgentArguments(tool, injectConversationId, names);
+        if (
+          !injectConversationId ||
+          contract.declared.has(argumentNames(names)[2])
+        )
+          return updated;
         const output = tool["outputSchema"] as
           | Readonly<Record<string, unknown>>
           | undefined;
@@ -677,11 +703,13 @@ function withoutInjected(
   request: McpRequest,
   registry: Readonly<Record<string, RegisteredTool>> | undefined,
   inject: boolean,
+  options: InstrumentMcpServerOptions,
 ): McpRequest {
   const name = request.params?.name;
   const tool = name === undefined ? undefined : registry?.[name];
   if (method !== "tools/call" || !inject || tool === undefined) return request;
-  const contract = toolContract(tool);
+  const names = configuredArguments(options);
+  const contract = toolContract(tool, names);
   if (contract === undefined || contract.open) return request;
   return {
     ...request,
@@ -690,19 +718,35 @@ function withoutInjected(
       arguments: withoutAgentArguments(
         request.params?.arguments ?? {},
         contract.declared,
+        names,
+        options.injectConversationId !== false,
       ),
     },
   };
 }
 
-function toolContract(tool: RegisteredTool): ToolContract | undefined {
+function configuredArguments(
+  options: InstrumentMcpServerOptions,
+): ArgumentNames {
+  return {
+    intent: options.intentArgument,
+    model: options.modelArgument,
+    conversationId: options.conversationIdArgument,
+  };
+}
+
+function toolContract(
+  tool: RegisteredTool,
+  names: ArgumentNames = {},
+): ToolContract | undefined {
   const schema = tool.inputSchema;
+  const cacheKey = JSON.stringify(argumentNames(names));
   const cached =
     typeof schema === "object" && schema !== null
-      ? contracts.get(schema)
+      ? contracts.get(schema)?.get(cacheKey)
       : undefined;
   if (cached !== undefined) return cached ?? undefined;
-  const shape = readSchemaShape(tool.inputSchema);
+  const shape = readSchemaShape(tool.inputSchema, names);
   const contract =
     shape === undefined
       ? null
@@ -711,7 +755,9 @@ function toolContract(tool: RegisteredTool): ToolContract | undefined {
           open: shape.open,
         };
   if (typeof schema === "object" && schema !== null) {
-    contracts.set(schema, contract);
+    const entries = contracts.get(schema) ?? new Map();
+    entries.set(cacheKey, contract);
+    contracts.set(schema, entries);
   }
   return contract ?? undefined;
 }
@@ -722,7 +768,10 @@ interface SchemaShape {
 }
 
 /** Reads a tool's input names from a Standard Schema or Zod object. */
-function readSchemaShape(schema: unknown): SchemaShape | undefined {
+function readSchemaShape(
+  schema: unknown,
+  names: ArgumentNames,
+): SchemaShape | undefined {
   if (schema === undefined || schema === null) return { keys: [], open: false };
   const candidate = schema as {
     readonly "~standard"?: {
@@ -745,7 +794,7 @@ function readSchemaShape(schema: unknown): SchemaShape | undefined {
   if (json !== undefined) {
     if (!canExtendSchema(json)) return undefined;
     return {
-      keys: declaredArguments(json),
+      keys: declaredArguments(json, names),
       open:
         json["additionalProperties"] !== false &&
         json["unevaluatedProperties"] !== false,
@@ -843,11 +892,15 @@ function publicErrorCode(message: string | undefined): string | undefined {
 function recordedKeys(
   args: Readonly<Record<string, unknown>>,
   declared: ReadonlySet<string> | undefined,
+  names: ArgumentNames = {},
+  injectConversationId = true,
 ): string | undefined {
   const keys = Object.keys(args)
     .filter(
       (key) =>
-        declared === undefined || !isAgentArgument(key) || declared.has(key),
+        declared === undefined ||
+        !isAgentArgument(key, names, injectConversationId) ||
+        declared.has(key),
     )
     .slice(0, MAX_RECORDED_KEYS)
     .map((key) => key.slice(0, MAX_RECORDED_KEY_LENGTH));

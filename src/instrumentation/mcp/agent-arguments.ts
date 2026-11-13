@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-const INTENT_ARGUMENT = "context";
+const INTENT_ARGUMENT = "intent";
 const MODEL_ARGUMENT = "llm_model";
 const CONVERSATION_ARGUMENT = "conversation_id";
 const RESPONSE_CONTEXT = "_judgment";
@@ -14,12 +14,33 @@ const AGENT_ARGUMENT_DESCRIPTIONS: Readonly<Record<string, string>> = {
   [MODEL_ARGUMENT]:
     'Optional, for analytics only. The exact model identifier you are running as. Pass "unknown" if you are not certain.',
   [CONVERSATION_ARGUMENT]:
-    "Optional, for analytics only. Pass the conversation_id from the server's earlier response text or structuredContent._judgment, unchanged, on later calls in this conversation. Omit it on the first call, and do not invent one.",
+    "Optional, for analytics only. Read conversation_id from the server's earlier response text or structuredContent._judgment and pass it unchanged as {argument_name} on later calls in this conversation. Omit it on the first call, and do not invent one.",
 };
 
-const AGENT_ARGUMENTS: ReadonlySet<string> = new Set(
-  Object.keys(AGENT_ARGUMENT_DESCRIPTIONS),
-);
+/** Explicit names opt application-owned arguments into telemetry. */
+export interface ArgumentNames {
+  readonly intent?: string;
+  readonly model?: string;
+  readonly conversationId?: string;
+}
+
+export function argumentNames(
+  names: ArgumentNames = {},
+): readonly [string, string, string] {
+  const resolved = [
+    names.intent ?? INTENT_ARGUMENT,
+    names.model ?? MODEL_ARGUMENT,
+    names.conversationId ?? CONVERSATION_ARGUMENT,
+  ] as const;
+  if (
+    resolved.some((name) => name.trim() === "") ||
+    new Set(resolved).size !== 3
+  )
+    throw new Error(
+      "MCP telemetry argument names must be non-empty and distinct",
+    );
+  return resolved;
+}
 
 /** Schema keywords whose meaning could change if a property were added. */
 const COMPOSITION_KEYWORDS = [
@@ -59,26 +80,35 @@ export function mintConversationId(now = Date.now()): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-/** Reads agent-reported values, skipping any name the tool itself declares. */
+/** Reads injected arguments and explicitly opted-in business arguments. */
 export function readReportedArguments(
   args: Readonly<Record<string, unknown>>,
   declared: ReadonlySet<string>,
+  names: ArgumentNames = {},
+  injected = true,
 ): ReportedArguments {
-  const read = (name: string): string | undefined => {
+  const read = (
+    name: string,
+    configured: string | undefined,
+  ): string | undefined => {
+    if (configured === undefined && (!injected || declared.has(name)))
+      return undefined;
     const value = args[name];
-    return !declared.has(name) && typeof value === "string" && value !== ""
-      ? value
-      : undefined;
+    return typeof value === "string" && value.trim() !== "" ? value : undefined;
   };
-  const model = read(MODEL_ARGUMENT);
-  const conversationId = read(CONVERSATION_ARGUMENT);
-  const intent = read(INTENT_ARGUMENT);
+  const [intentName, modelName, conversationName] = argumentNames(names);
+  const model = read(modelName, names.model);
+  const conversationId = read(conversationName, names.conversationId);
+  const intent = read(intentName, names.intent);
   return {
     intent:
       intent === undefined ? undefined : intent.slice(0, MAX_INTENT_LENGTH),
     model: model?.toLowerCase() === "unknown" ? undefined : model,
     conversationId:
-      conversationId !== undefined && UUID_V7.test(conversationId)
+      conversationId !== undefined &&
+      ((names.conversationId !== undefined &&
+        (declared.has(conversationName) || !injected)) ||
+        UUID_V7.test(conversationId))
         ? conversationId
         : undefined,
   };
@@ -88,17 +118,28 @@ export function readReportedArguments(
 export function withoutAgentArguments(
   args: Readonly<Record<string, unknown>>,
   declared: ReadonlySet<string>,
+  names: ArgumentNames = {},
+  injectConversationId = true,
 ): Record<string, unknown> {
+  const injectedNames = new Set(
+    argumentNames(names).slice(0, injectConversationId ? 3 : 2),
+  );
   return Object.fromEntries(
     Object.entries(args).filter(
-      ([name]) => !AGENT_ARGUMENTS.has(name) || declared.has(name),
+      ([name]) => !injectedNames.has(name) || declared.has(name),
     ),
   );
 }
 
 /** Tells whether a name is one of the injected arguments. */
-export function isAgentArgument(name: string): boolean {
-  return AGENT_ARGUMENTS.has(name);
+export function isAgentArgument(
+  name: string,
+  names: ArgumentNames = {},
+  injectConversationId = true,
+): boolean {
+  return argumentNames(names)
+    .slice(0, injectConversationId ? 3 : 2)
+    .includes(name);
 }
 
 /**
@@ -108,10 +149,12 @@ export function isAgentArgument(name: string): boolean {
 export function withAgentArguments<Tool extends ListedTool>(
   tool: Tool,
   injectConversationId = true,
+  names: ArgumentNames = {},
 ): Tool {
   const schema = tool.inputSchema;
   if (schema === undefined || !canExtendSchema(schema)) return tool;
-  const declared = new Set(declaredArguments(schema));
+  const resolved = argumentNames(names);
+  const declared = new Set(declaredArguments(schema, names));
   return {
     ...tool,
     inputSchema: {
@@ -119,14 +162,21 @@ export function withAgentArguments<Tool extends ListedTool>(
       properties: {
         ...Object.fromEntries(
           Object.entries(AGENT_ARGUMENT_DESCRIPTIONS)
+            .map(
+              ([name, description], index) =>
+                [resolved[index]!, description, name] as const,
+            )
             .filter(
-              ([name]) =>
+              ([name, , original]) =>
                 !declared.has(name) &&
-                (injectConversationId || name !== CONVERSATION_ARGUMENT),
+                (injectConversationId || original !== CONVERSATION_ARGUMENT),
             )
             .map(([name, description]) => [
               name,
-              { type: "string", description },
+              {
+                type: "string",
+                description: description.replace("{argument_name}", name),
+              },
             ]),
         ),
         ...(schema["properties"] as Record<string, unknown> | undefined),
@@ -147,6 +197,7 @@ export function canExtendSchema(
 /** Names owned by the tool must never be removed as telemetry arguments. */
 export function declaredArguments(
   schema: Readonly<Record<string, unknown>>,
+  names: ArgumentNames = {},
 ): string[] {
   const keys = new Set(Object.keys((schema["properties"] as object) ?? {}));
   for (const key of (schema["required"] as unknown[] | undefined) ?? [])
@@ -155,7 +206,7 @@ export function declaredArguments(
     (schema["patternProperties"] as object) ?? {},
   )) {
     const expression = new RegExp(pattern);
-    for (const name of AGENT_ARGUMENTS)
+    for (const name of argumentNames(names))
       if (expression.test(name)) keys.add(name);
   }
   return [...keys];
@@ -215,10 +266,11 @@ export function withConversationIdPrompt<
   conversationId: string,
   structuredTools: ReadonlySet<string>,
   toolName: string,
+  conversationArgument = CONVERSATION_ARGUMENT,
 ): Result {
   const prompt = {
     [CONVERSATION_ARGUMENT]: conversationId,
-    note: `Pass this ${CONVERSATION_ARGUMENT} on later tool calls in this conversation.`,
+    note: `Pass this ${conversationArgument} on later tool calls in this conversation.`,
   };
   const structured = result.structuredContent;
   const structuredUpdate =

@@ -29,6 +29,7 @@ import {
   withAgentArguments,
   withConversationIdPrompt,
   withConversationOutputSchema,
+  withoutAgentArguments,
 } from "./agent-arguments";
 import {
   instrumentMcpServer,
@@ -117,9 +118,12 @@ function registerTools(server: object) {
   );
 }
 
-async function connectV1(options: InstrumentMcpServerOptions) {
+async function connectV1(
+  options: InstrumentMcpServerOptions,
+  register = registerTools,
+) {
   const server = new McpServerV1({ name: "greeter", version: "1" });
-  registerTools(server);
+  register(server);
   instrumentMcpServer(server, options);
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   await server.connect(serverSide);
@@ -224,15 +228,18 @@ test("open JSON schemas preserve undeclared business arguments", async () => {
   cleanups.push(() => client.close());
   await client.callTool({
     name: "lookup",
-    arguments: { name: "Alice", context: "business-owned" },
+    arguments: { name: "Alice", intent: "business-owned" },
   });
-  expect(received).toEqual({ name: "Alice", context: "business-owned" });
+  expect(received).toEqual({ name: "Alice", intent: "business-owned" });
 });
 
-async function connectV2(options: InstrumentMcpServerOptions) {
+async function connectV2(
+  options: InstrumentMcpServerOptions,
+  register = registerTools,
+) {
   const handler = createMcpHandler(() => {
     const server = new McpServerV2({ name: "greeter", version: "1" });
-    registerTools(server);
+    register(server);
     instrumentMcpServer(server, options);
     return server;
   });
@@ -249,6 +256,118 @@ describe.each([
   ["MCP 1.x", connectV1],
   ["MCP 2.x", connectV2],
 ] as const)("%s adapter", (_label, connect) => {
+  test.each([true, false])(
+    "explicit names reuse declared fields and inject absent fields (injection=%s)",
+    async (injectAgentArguments) => {
+      const exporter = useExporter();
+      const received: unknown[] = [];
+      const args = {
+        intent: "find tickets",
+        llm_model: "agent-model",
+        chat_id: "customer-chat",
+      };
+      const client = await connect(
+        {
+          injectAgentArguments,
+          intentArgument: "intent",
+          modelArgument: "llm_model",
+          conversationIdArgument: "chat_id",
+          captureInput: true,
+          redact: (value) => value.toUpperCase(),
+        },
+        (server) => {
+          for (const name of ["owned", "injected"])
+            (server as McpServerV1).registerTool(
+              name,
+              {
+                inputSchema:
+                  name === "owned"
+                    ? z.strictObject({
+                        intent: z.string().optional(),
+                        llm_model: z.string().optional(),
+                        chat_id: z.string().optional(),
+                      })
+                    : z.strictObject({}),
+                outputSchema: z.strictObject({ ok: z.boolean() }),
+              },
+              (input) => {
+                received.push(input);
+                return {
+                  content: [{ type: "text", text: "ok" }],
+                  structuredContent: { ok: true },
+                };
+              },
+            );
+        },
+      );
+      cleanups.push(() => client.close());
+      const listing = await client.listTools();
+      await client.callTool({ name: "owned", arguments: args });
+      await client.callTool({ name: "owned", arguments: {} });
+      const first = await client.callTool({
+        name: "injected",
+        arguments: injectAgentArguments
+          ? { intent: "find tickets", llm_model: "agent-model" }
+          : {},
+      });
+      const handle = (first.content as { text?: string }[])
+        .map((item) => item.text)
+        .find((text) => text?.startsWith('{"conversation_id"'));
+      if (injectAgentArguments)
+        await client.callTool({
+          name: "injected",
+          arguments: { chat_id: JSON.parse(handle!).conversation_id },
+        });
+      const calls = exporter
+        .getFinishedSpans()
+        .filter((span) => span.name.startsWith("tools/call"));
+      const owned = listing.tools.find((tool) => tool.name === "owned")!;
+      const injected = listing.tools.find((tool) => tool.name === "injected")!;
+      expect({
+        received,
+        ownedFields: Object.keys(owned.inputSchema.properties ?? {}).sort(),
+        injectedFields: Object.keys(
+          injected.inputSchema.properties ?? {},
+        ).sort(),
+        outputFields: Object.keys(owned.outputSchema?.properties ?? {}),
+        telemetry: [
+          "judgment.mcp.intent",
+          "judgment.llm.model",
+          "judgment.session_id",
+          "judgment.mcp.conversation_id_source",
+          "judgment.input",
+        ].map((key) => calls[0]?.attributes[key]),
+        missingIntent: calls[1]?.attributes["judgment.mcp.intent"],
+        injectedInput: calls[2]?.attributes["judgment.input"],
+        handoff: handle === undefined ? undefined : JSON.parse(handle).note,
+        continuity: injectAgentArguments
+          ? calls[2]?.attributes["judgment.session_id"] ===
+            calls[3]?.attributes["judgment.session_id"]
+          : undefined,
+      }).toEqual({
+        received: injectAgentArguments ? [args, {}, {}, {}] : [args, {}, {}],
+        ownedFields: ["chat_id", "intent", "llm_model"],
+        injectedFields: injectAgentArguments
+          ? ["chat_id", "intent", "llm_model"]
+          : [],
+        outputFields: ["ok"],
+        telemetry: [
+          "FIND TICKETS",
+          "agent-model",
+          "customer-chat",
+          "provided",
+          JSON.stringify(args),
+        ],
+        missingIntent: undefined,
+        injectedInput: "{}",
+        handoff: injectAgentArguments
+          ? "Pass this chat_id on later tool calls in this conversation."
+          : undefined,
+        continuity: injectAgentArguments ? true : undefined,
+      });
+    },
+  );
+
   test("captures redacted execution spans and hands off sessions without changing tool results", async () => {
     const exporter = useExporter();
     const client = await connect({
@@ -266,7 +385,7 @@ describe.each([
       name: "greet",
       arguments: {
         name: SECRET,
-        context: "Greeting",
+        intent: "Greeting",
         llm_model: "model-1",
       },
     })) as Result;
@@ -348,7 +467,7 @@ describe.each([
     const tools = await client.listTools();
     const result = (await client.callTool({
       name: "greet",
-      arguments: { name: SECRET, context: "Greeting" },
+      arguments: { name: SECRET, intent: "Greeting" },
     })) as Result;
     const call = exporter
       .getFinishedSpans()
@@ -365,7 +484,7 @@ describe.each([
       input: call?.attributes["judgment.input"],
       omitted: call?.attributes["judgment.mcp.input_omitted"],
     }).toEqual({
-      fields: ["context", "fail", "llm_model", "name"],
+      fields: ["fail", "intent", "llm_model", "name"],
       output: { ok: true },
       session: "application-session",
       intent: "Greeting",
@@ -432,7 +551,7 @@ test("required and pattern-owned telemetry names retain their business schema", 
   const schema = {
     type: "object",
     properties: {} as Record<string, unknown>,
-    required: ["context"],
+    required: ["intent"],
     patternProperties: { "^llm_": { type: "number" } },
   };
   const tool = withAgentArguments({ name: "lookup", inputSchema: schema });
@@ -440,7 +559,7 @@ test("required and pattern-owned telemetry names retain their business schema", 
     owned: declaredArguments(schema),
     added: Object.keys(tool.inputSchema.properties ?? {}),
   }).toEqual({
-    owned: ["context", "llm_model"],
+    owned: ["intent", "llm_model"],
     added: ["conversation_id"],
   });
 });
@@ -612,7 +731,40 @@ describe("structured conversation handoff", () => {
 
 test("reported intent preserves text and remains length-bounded", () => {
   expect([
-    readReportedArguments({ context: "Email a@b.co" }, new Set()).intent,
-    readReportedArguments({ context: "a".repeat(1000) }, new Set()).intent,
+    readReportedArguments({ intent: "Email a@b.co" }, new Set()).intent,
+    readReportedArguments({ intent: "a".repeat(1000) }, new Set()).intent,
   ]).toEqual(["Email a@b.co", "a".repeat(500)]);
+});
+
+test("a custom model argument leaves a tool's llm_model untouched", () => {
+  const names = { model: "judgment_llm_model" };
+  const tool = {
+    inputSchema: {
+      type: "object",
+      properties: { llm_model: { type: "string" } },
+    },
+  };
+  const updated = withAgentArguments(tool, true, names);
+  const declared = new Set(["llm_model"]);
+  const args = {
+    llm_model: "tool-model",
+    judgment_llm_model: "agent-model",
+    conversation_id: "extra",
+  };
+  expect({
+    fields: Object.keys(updated.inputSchema.properties).sort(),
+    model: readReportedArguments(args, declared, names).model,
+    missing: readReportedArguments({ llm_model: "tool-model" }, declared, names)
+      .model,
+    defaultCollision: readReportedArguments(args, declared).model,
+    business: withoutAgentArguments(args, declared, names),
+    disabledHandoff: withoutAgentArguments(args, declared, names, false),
+  }).toEqual({
+    fields: ["conversation_id", "intent", "judgment_llm_model", "llm_model"],
+    model: "agent-model",
+    missing: undefined,
+    defaultCollision: undefined,
+    business: { llm_model: "tool-model" },
+    disabledHandoff: { llm_model: "tool-model", conversation_id: "extra" },
+  });
 });
