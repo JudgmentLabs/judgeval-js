@@ -88,6 +88,16 @@ export function anthropicMessage(
 }
 
 /**
+ * The field each kind of streamed tool call sends in fragments: a function
+ * call's arguments and a custom tool call's input. Other fields, such as the
+ * name, arrive whole and are kept as the last chunk sent them.
+ */
+const STREAMED_TOOL_INPUTS: Partial<Record<string, string>> = {
+  function: "arguments",
+  custom: "input",
+};
+
+/**
  * The `chat.completion` a Chat Completions stream describes, assembled as the
  * OpenAI SDK's `ChatCompletionStream` does. Delta fields beyond OpenAI's own,
  * such as `reasoning_content`, are accumulated as they arrive.
@@ -122,19 +132,22 @@ export function chatCompletion(
           message[key] = value;
         }
       }
-      for (const { index: callIndex, function: fn, ...call } of toolCalls ??
-        []) {
+      for (const { index: callIndex, ...call } of toolCalls ?? []) {
         const calls = (message.tool_calls ??= []) as JsonObject[];
         const toolCall = (calls[callIndex] ??= {});
-        assignPresent(toolCall, call);
-        if (!fn) continue;
-        const target = (toolCall.function ??= {
-          name: "",
-          arguments: "",
-        }) as JsonObject;
-        const { arguments: args, ...fnFields } = fn;
-        assignPresent(target, fnFields);
-        if (args) target.arguments = String(target.arguments) + args;
+        for (const [kind, value] of Object.entries(call)) {
+          const streamed = STREAMED_TOOL_INPUTS[kind];
+          if (!streamed || typeof value !== "object" || value === null) {
+            if (value != null) toolCall[kind] = value;
+            continue;
+          }
+          const { [streamed]: fragment, ...fields } = value as JsonObject;
+          const target = (toolCall[kind] ??= {}) as JsonObject;
+          assignPresent(target, fields);
+          target[streamed] =
+            String(target[streamed] ?? "") +
+            (typeof fragment === "string" ? fragment : "");
+        }
       }
     }
   }
