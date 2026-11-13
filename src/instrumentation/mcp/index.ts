@@ -159,6 +159,7 @@ interface ProtocolServer {
 
 interface RegisteredTool {
   readonly inputSchema?: unknown;
+  readonly outputSchema?: unknown;
 }
 
 /** An `McpServer` or low-level `Server` from either supported MCP SDK. */
@@ -223,12 +224,12 @@ function instrument(
   options: InstrumentMcpServerOptions,
 ): void {
   argumentNames(configuredArguments(options));
-  if (instrumented.has(server)) return;
   const highLevel = server as {
     readonly server?: ProtocolServer;
     readonly _registeredTools?: Readonly<Record<string, RegisteredTool>>;
   };
   const protocol = highLevel.server ?? (server as ProtocolServer);
+  if (instrumented.has(protocol)) return;
   const handlers = protocol._requestHandlers;
   if (!(handlers instanceof Map)) {
     Logger.warning(
@@ -236,7 +237,7 @@ function instrument(
     );
     return;
   }
-  instrumented.add(server);
+  instrumented.add(protocol);
 
   // Stripping needs proof of what a tool declares, which only `McpServer` has.
   const registry =
@@ -244,7 +245,6 @@ function instrument(
   const inject =
     (options.injectAgentArguments ?? true) && registry !== undefined;
   const structuredTools = new Set<string>();
-  const listTools = handlers.get("tools/list");
   const wrap = (method: string, handler: RequestHandler): RequestHandler =>
     traced(
       method,
@@ -254,7 +254,6 @@ function instrument(
       options,
       inject,
       structuredTools,
-      listTools,
     );
 
   for (const [method, handler] of handlers) {
@@ -273,7 +272,6 @@ function traced(
   options: InstrumentMcpServerOptions,
   inject: boolean,
   structuredTools: Set<string>,
-  listTools: RequestHandler | undefined,
 ): RequestHandler {
   return async (request, context) => {
     if (method !== "tools/call") {
@@ -318,22 +316,22 @@ function traced(
           : await provider.withContext(started.context, run);
       if (started !== undefined)
         finishCall(started.span, record, result, context, options);
-      // Stateless HTTP servers may create a fresh server for each request.
-      // Read that instance's published schema before annotating its result.
       if (
         prepared.mintedConversationId !== undefined &&
-        result.structuredContent !== undefined &&
-        listTools !== undefined
+        result.structuredContent !== undefined
       ) {
-        const listed = await Promise.resolve()
-          .then(() => listTools({ method: "tools/list" }, context))
-          .catch(() => undefined);
-        if (listed !== undefined)
-          attempt(() =>
-            listWithArguments(listed, registry, structuredTools, options),
-          );
+        attempt(() =>
+          rememberStructuredOutput(
+            request.params?.name ?? "",
+            registry,
+            structuredTools,
+          ),
+        );
       }
-      const conversationId = prepared.mintedConversationId;
+      const conversationId =
+        attempt(() => result.isError) === true
+          ? undefined
+          : prepared.mintedConversationId;
       return conversationId === undefined
         ? result
         : (attempt(() =>
@@ -499,7 +497,7 @@ function prepareCall(
     injected &&
     options.injectConversationId !== false &&
     !declared.has(argumentNames(names)[2]) &&
-    sessionId === undefined
+    logicalSessionId === undefined
       ? mintConversationId()
       : undefined;
   const client = protocol.getClientVersion?.() ?? readClientInfo(meta);
@@ -698,6 +696,51 @@ function listWithArguments(
   );
 }
 
+/** Fresh server instances can receive calls without first serving tools/list. */
+function rememberStructuredOutput(
+  name: string,
+  registry: Readonly<Record<string, RegisteredTool>> | undefined,
+  structuredTools: Set<string>,
+): void {
+  structuredTools.delete(name);
+  const tool = registry?.[name];
+  if (tool === undefined) return;
+  if (tool.outputSchema === undefined) {
+    structuredTools.add(name);
+    return;
+  }
+  const schema = tool.outputSchema as {
+    readonly shape?: Readonly<Record<string, unknown>>;
+    readonly _def?: { readonly typeName?: string };
+    readonly "~standard"?: {
+      readonly jsonSchema?: {
+        readonly output?: (options: { target: string }) => unknown;
+      };
+    };
+  };
+  const output = schema["~standard"]?.jsonSchema?.output?.({
+    target: "draft-2020-12",
+  });
+  // Zod 3 predates Standard Schema's JSON Schema conversion API.
+  if (output === undefined && schema._def?.typeName === "ZodObject") {
+    const shape = schema.shape;
+    if (
+      shape !== undefined &&
+      Object.keys(shape).length > 0 &&
+      !("_judgment" in shape)
+    )
+      structuredTools.add(name);
+    return;
+  }
+  if (
+    output !== undefined &&
+    withConversationOutputSchema(
+      output as Readonly<Record<string, unknown>>,
+    ) !== undefined
+  )
+    structuredTools.add(name);
+}
+
 function withoutInjected(
   method: string,
   request: McpRequest,
@@ -788,9 +831,20 @@ function readSchemaShape(
       };
     };
   };
-  const json = attempt(() =>
-    candidate["~standard"]?.jsonSchema?.input?.({ target: "draft-2020-12" }),
-  ) as Readonly<Record<string, unknown>> | undefined;
+  const definition = candidate._def?.shape;
+  const shape =
+    candidate.shape ??
+    (typeof definition === "function" ? definition() : definition);
+  // Zod's default object parser strips extras, although its input JSON Schema
+  // allows them. Read the parser's ownership policy, not that permissive schema.
+  const json =
+    typeof shape === "object" && shape !== null
+      ? undefined
+      : (attempt(() =>
+          candidate["~standard"]?.jsonSchema?.input?.({
+            target: "draft-2020-12",
+          }),
+        ) as Readonly<Record<string, unknown>> | undefined);
   if (json !== undefined) {
     if (!canExtendSchema(json)) return undefined;
     return {
@@ -800,10 +854,6 @@ function readSchemaShape(
         json["unevaluatedProperties"] !== false,
     };
   }
-  const definition = candidate._def?.shape;
-  const shape =
-    candidate.shape ??
-    (typeof definition === "function" ? definition() : definition);
   if (typeof shape !== "object" || shape === null) return undefined;
   const keys = Object.keys(shape).sort();
   return {

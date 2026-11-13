@@ -29,6 +29,8 @@ Requests create normal Judgment OTel spans, using the tracer's environment, samp
 
 Arguments/results are opt-in (`captureInput`, `captureOutput`); `redactPayload(value, field)` transforms a detached JSON snapshot before export. Throw or return `undefined` to omit a payload. Non-JSON or oversized payloads (128 KiB) are omitted. Telemetry failures never affect a call. Call `await Tracer.forceFlush()` before serverless return, or `await Tracer.shutdown()` when stopping. Delivery uses the existing OTel exporter and is best-effort; a terminated or hung tool may leave no completed span.
 
+Successful calls without an application or echoed conversation session offer a new ID even on stateful HTTP; the transport session groups calls until the agent echoes it. Error results receive no handoff. Dictionary outputs stay unchanged and use supplemental text for handoff.
+
 **What changes on your server:** compatible tools gain optional `intent`, `llm_model` and `conversation_id` arguments, stripped before execution. A missing logical session gets an ID in supplemental text and compatible existing `structuredContent._judgment`, with a matching optional output-schema property. Text-only results stay text-only; schema collisions/unsupported compositions keep text handoff. Session priority is `sessionId` callback or `Tracer.setSessionId`, then agent-echoed conversation ID, then transport session ID; otherwise calls remain standalone. Use `{ injectConversationId: false }` to disable only conversation schema injection/handoff. To leave your tools and results unchanged:
 
 ```typescript

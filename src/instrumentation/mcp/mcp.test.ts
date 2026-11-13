@@ -17,6 +17,7 @@ import {
   SimpleSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
 import { z } from "zod/v4";
+import { z as z3 } from "zod/v3";
 import { BaseTracer } from "../../trace/BaseTracer";
 import { JudgmentTracerProvider } from "../../trace/JudgmentTracerProvider";
 import { NoOpSpanExporter } from "../../trace/exporters/NoOpSpanExporter";
@@ -93,7 +94,7 @@ function registerTools(server: object) {
   (server as McpServerV1).registerTool(
     "greet",
     {
-      inputSchema: z.strictObject({
+      inputSchema: z.object({
         name: z.string(),
         fail: z.boolean().optional(),
       }),
@@ -140,7 +141,7 @@ test.each([
     requestInfo: { headers: { "mcp-session-id": "transport-session" } },
   },
 ])(
-  "transport sessions prevent unnecessary conversation minting: %j",
+  "transport sessions retain grouping while offering conversation handoff: %j",
   async (context) => {
     const exporter = useExporter();
     const server = new McpServerV1({ name: "greeter", version: "1" });
@@ -164,16 +165,112 @@ test.each([
     const call = exporter
       .getFinishedSpans()
       .find((span) => span.name === "tools/call greet");
+    const handle = JSON.parse(result.content.at(-1).text).conversation_id;
+    const echoed = await handlers.get("tools/call")(
+      {
+        method: "tools/call",
+        params: {
+          name: "greet",
+          arguments: { name: "Alice", conversation_id: handle },
+        },
+      },
+      context,
+    );
+    const failed = await handlers.get("tools/call")(
+      {
+        method: "tools/call",
+        params: { name: "greet", arguments: { name: "Alice", fail: true } },
+      },
+      context,
+    );
     expect({
       callbackSession,
       output: result.structuredContent,
       session: call?.attributes["judgment.session_id"],
       source: call?.attributes["judgment.mcp.conversation_id_source"],
+      handoff: typeof handle,
+      laterContentLengths: [echoed.content.length, failed.content.length],
+      echoedSession: exporter
+        .getFinishedSpans()
+        .find(
+          (span) =>
+            span.attributes["judgment.mcp.conversation_id_source"] === "echoed",
+        )?.attributes["judgment.session_id"],
     }).toEqual({
       callbackSession: "transport-session",
-      output: { ok: true },
+      output: {
+        ok: true,
+        _judgment: {
+          conversation_id: handle,
+          note: "Pass this conversation_id on later tool calls in this conversation.",
+        },
+      },
       session: "transport-session",
       source: "transport",
+      handoff: "string",
+      laterContentLengths: [1, 1],
+      echoedSession: handle,
+    });
+  },
+);
+
+test.each([
+  registerTools,
+  (server: McpServerV1) => {
+    server.registerTool(
+      "greet",
+      {
+        inputSchema: z3.object({ name: z3.string() }),
+        outputSchema: z3.object({ ok: z3.boolean() }),
+      },
+      () => ({ content: [], structuredContent: { ok: true } }),
+    );
+  },
+])(
+  "repeated calls avoid listing discovery and duplicate protocol instrumentation",
+  async (register) => {
+    const exporter = useExporter();
+    const server = new McpServerV1({ name: "greeter", version: "1" });
+    register(server);
+    const handlers = Reflect.get(server.server, "_requestHandlers");
+    const list = handlers.get("tools/list");
+    let listings = 0;
+    handlers.set("tools/list", (...args: unknown[]) => {
+      listings++;
+      return list(...args);
+    });
+    instrumentMcpServer(server);
+    instrumentMcpServer(server.server);
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverSide);
+    const client = new ClientV1({ name: "test", version: "1" });
+    await client.connect(clientSide);
+    cleanups.push(() => client.close());
+    await client.listTools();
+    const first = await client.callTool({
+      name: "greet",
+      arguments: { name: "Alice" },
+    });
+    const second = await client.callTool({
+      name: "greet",
+      arguments: { name: "Bob" },
+    });
+    expect({
+      listings,
+      calls: exporter
+        .getFinishedSpans()
+        .filter((span) => span.name === "tools/call greet").length,
+      outputs: [first, second].map(
+        (result) => (result.structuredContent as { ok: boolean }).ok,
+      ),
+      handoffs: [first, second].map(
+        (result) => "_judgment" in (result.structuredContent as object),
+      ),
+    }).toEqual({
+      listings: 1,
+      calls: 2,
+      outputs: [true, true],
+      handoffs: [true, true],
     });
   },
 );
@@ -196,7 +293,13 @@ test("schema discovery failures never turn a successful tool call into an error"
     name: "greet",
     arguments: { name: "Alice" },
   });
-  expect(result.structuredContent).toEqual({ ok: true });
+  expect(result.structuredContent).toEqual({
+    ok: true,
+    _judgment: {
+      conversation_id: expect.any(String),
+      note: "Pass this conversation_id on later tool calls in this conversation.",
+    },
+  });
 });
 
 test("open JSON schemas preserve undeclared business arguments", async () => {
@@ -702,9 +805,15 @@ describe("structured conversation handoff", () => {
     { maxProperties: 1 },
     { const: { ok: true } },
     { enum: [{ ok: true }] },
+    { properties: {}, additionalProperties: { type: "integer" } },
+    { additionalProperties: { type: "integer" } },
   ])("leaves incompatible output schemas alone: %j", (constraints) => {
     expect(
-      withConversationOutputSchema({ type: "object", ...constraints }),
+      withConversationOutputSchema({
+        type: "object",
+        properties: { ok: { type: "boolean" } },
+        ...constraints,
+      }),
     ).toBeUndefined();
   });
 

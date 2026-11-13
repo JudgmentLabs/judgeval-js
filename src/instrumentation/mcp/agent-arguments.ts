@@ -218,6 +218,8 @@ export function withConversationOutputSchema(
 ): Readonly<Record<string, unknown>> | undefined {
   if (
     !canExtendSchema(schema) ||
+    Object.keys((schema["properties"] as object) ?? {}).length === 0 ||
+    typeof schema["additionalProperties"] === "object" ||
     [
       "not",
       "if",
