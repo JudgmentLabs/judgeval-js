@@ -315,7 +315,7 @@ test.each([
       session: handle,
       source: "minted",
       handoff: "string",
-      laterContentLengths: [1, 1],
+      laterContentLengths: [1, 2],
       echoedSession: handle,
     });
   },
@@ -402,6 +402,59 @@ test.each([
   },
 );
 
+test.each([connectV1, connectV2])(
+  "raw output shapes hand off IDs before and after listing (%p)",
+  async (connect) => {
+    const client = await connect({}, (server) =>
+      (server as McpServerV1).registerTool(
+        "greet",
+        {
+          inputSchema: z.object({ name: z.string() }),
+          outputSchema: { ok: z.boolean() },
+        },
+        () => ({ content: [], structuredContent: { ok: true } }),
+      ),
+    );
+    cleanups.push(() => client.close());
+    const call = () =>
+      client.callTool({ name: "greet", arguments: { name: "A" } });
+    const first = await call();
+    await client.listTools();
+    const second = await call();
+    expect(
+      [first, second].map((result) => ({
+        ok: (result as Result).structuredContent?.ok,
+        hasConversationId:
+          typeof (result as Result).structuredContent?._judgment
+            ?.conversation_id === "string",
+      })),
+    ).toEqual([
+      { ok: true, hasConversationId: true },
+      { ok: true, hasConversationId: true },
+    ]);
+  },
+);
+
+test("immutable output schemas are converted once across repeated calls", async () => {
+  const output = z.object({ ok: z.boolean() });
+  const conversion = spyOn(output["~standard"].jsonSchema, "output");
+  cleanups.push(() => conversion.mockRestore());
+  const server = new McpServerV1({ name: "conversion", version: "1" });
+  server.registerTool(
+    "greet",
+    { inputSchema: z.object({}), outputSchema: output },
+    () => ({ content: [], structuredContent: { ok: true } }),
+  );
+  instrumentMcpServer(server);
+  const call = Reflect.get(server.server, "_requestHandlers").get("tools/call");
+  for (let i = 0; i < 3; i++)
+    await call(
+      { method: "tools/call", params: { name: "greet", arguments: {} } },
+      {},
+    );
+  expect(conversion.mock.calls.length).toBe(1);
+});
+
 test.each(["cached", "pages", "timeout"])(
   "low-level ownership reuse and bounded discovery: %s",
   async (mode) => {
@@ -451,6 +504,14 @@ test.each(["cached", "pages", "timeout"])(
     if (mode === "cached")
       await protocol._requestHandlers.get("tools/list")!({}, {});
     const args = { intent: "business", llm_model: "model" };
+    await Promise.all(
+      Array.from({ length: 3 }, () =>
+        protocol._requestHandlers.get("tools/call")!(
+          { method: "tools/call", params: { name: "lookup", arguments: args } },
+          {},
+        ),
+      ),
+    );
     await protocol._requestHandlers.get("tools/call")!(
       { method: "tools/call", params: { name: "lookup", arguments: args } },
       {},
@@ -461,6 +522,59 @@ test.each(["cached", "pages", "timeout"])(
     });
   },
 );
+
+test("low-level ownership refreshes on notifications and handler replacement", async () => {
+  const server = new ServerV1(
+    { name: "changing", version: "1" },
+    { capabilities: { tools: { listChanged: true } } },
+  );
+  server.notification = () => Promise.resolve();
+  let properties = {};
+  const listing = () => ({
+    tools: [
+      {
+        name: "lookup",
+        inputSchema: {
+          type: "object",
+          properties,
+          additionalProperties: false,
+        },
+      },
+    ],
+  });
+  server.setRequestHandler(ListToolsRequestSchema, listing);
+  const received: unknown[] = [];
+  server.setRequestHandler(CallToolRequestSchema, (request) => {
+    received.push(request.params.arguments);
+    return { content: [], isError: true };
+  });
+  instrumentMcpServer(server);
+  const handlers = Reflect.get(server, "_requestHandlers");
+  const call = () =>
+    handlers.get("tools/call")(
+      {
+        method: "tools/call",
+        params: {
+          name: "lookup",
+          arguments: { intent: "business", llm_model: "model" },
+        },
+      },
+      {},
+    );
+  await handlers.get("tools/list")({ method: "tools/list" }, {});
+  await call();
+  properties = { intent: { type: "string" } };
+  await server.sendToolListChanged();
+  await call();
+  properties = { intent: { type: "string" }, llm_model: { type: "string" } };
+  server.setRequestHandler(ListToolsRequestSchema, listing);
+  await call();
+  expect(received).toEqual([
+    {},
+    { intent: "business" },
+    { intent: "business", llm_model: "model" },
+  ]);
+});
 
 test("schema discovery failures never turn a successful tool call into an error", async () => {
   const server = new McpServerV1({ name: "greeter", version: "1" });
@@ -790,9 +904,16 @@ describe.each([
       redact: () => "[redacted]",
     });
     cleanups.push(() => client.close());
-    await client.callTool({
+    const result = (await client.callTool({
       name: "greet",
       arguments: { name: SECRET, fail: true },
+    })) as { isError?: boolean; content: { type: string; text: string }[] };
+    const handle = JSON.parse(
+      result.content[result.content.length - 1]!.text,
+    ).conversation_id;
+    await client.callTool({
+      name: "greet",
+      arguments: { name: "retry", conversation_id: handle },
     });
     const call = exporter
       .getFinishedSpans()
@@ -800,7 +921,23 @@ describe.each([
     expect([
       call?.attributes["judgment.mcp.outcome"],
       call?.attributes["judgment.mcp.error_message"],
-    ]).toEqual(["error", "[redacted]"]);
+      result.isError,
+      result.content.slice(0, -1),
+      typeof handle,
+      exporter
+        .getFinishedSpans()
+        .find(
+          (span) =>
+            span.attributes["judgment.mcp.conversation_id_source"] === "echoed",
+        )?.attributes["judgment.session_id"],
+    ]).toEqual([
+      "error",
+      "[redacted]",
+      true,
+      [{ type: "text", text: `declined ${SECRET} for a@b.co` }],
+      "string",
+      handle,
+    ]);
   });
 });
 

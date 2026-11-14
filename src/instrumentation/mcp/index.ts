@@ -32,6 +32,8 @@ const MAX_RECORDED_KEYS = 30;
 const MAX_RECORDED_KEY_LENGTH = 64;
 const MAX_DISCOVERY_PAGES = 100;
 const DISCOVERY_TIMEOUT_MS = 1_000;
+const MISSING_TOOL_CACHE_MS = 1_000;
+const MAX_CACHED_TOOLS = 1_000;
 const CLIENT_INFO_META_KEY = "io.modelcontextprotocol/clientInfo";
 const PROTOCOL_VERSION_META_KEY = "io.modelcontextprotocol/protocolVersion";
 const INVALID_PARAMS_CODE = -32602;
@@ -167,6 +169,10 @@ type RequestHandler = (
 ) => Promise<McpResult>;
 
 interface ProtocolServer {
+  notification?: (
+    notification: { readonly method: string },
+    options?: unknown,
+  ) => Promise<void>;
   _requestHandlers?: Map<string, RequestHandler>;
   _serverInfo?: { readonly name?: string; readonly version?: string };
   getClientVersion?: () =>
@@ -177,6 +183,54 @@ interface ProtocolServer {
 interface RegisteredTool {
   readonly inputSchema?: unknown;
   readonly outputSchema?: unknown;
+}
+
+/** Ownership is reusable only while the server's advertised contracts are stable. */
+class ToolDiscoveryCache {
+  private readonly entries = new Map<
+    string,
+    { value: Promise<RegisteredTool | undefined>; expiresAt: number }
+  >();
+
+  clear(): void {
+    this.entries.clear();
+  }
+
+  remember(name: string, tool: RegisteredTool): void {
+    this.store(name, { value: Promise.resolve(tool), expiresAt: Infinity });
+  }
+
+  resolve(
+    name: string,
+    lookup: () => Promise<RegisteredTool | undefined>,
+  ): Promise<RegisteredTool | undefined> {
+    const cached = this.entries.get(name);
+    if (cached !== undefined && cached.expiresAt > performance.now())
+      return cached.value;
+    const entry = {
+      value: Promise.resolve().then(lookup),
+      expiresAt: Infinity,
+    };
+    entry.value = entry.value.then((tool) => {
+      // A list change or newer listing supersedes in-flight discovery.
+      if (this.entries.get(name) !== entry) return undefined;
+      if (tool === undefined)
+        entry.expiresAt = performance.now() + MISSING_TOOL_CACHE_MS;
+      return tool;
+    });
+    this.store(name, entry);
+    return entry.value;
+  }
+
+  private store(
+    name: string,
+    entry: { value: Promise<RegisteredTool | undefined>; expiresAt: number },
+  ): void {
+    this.entries.delete(name);
+    this.entries.set(name, entry);
+    if (this.entries.size > MAX_CACHED_TOOLS)
+      this.entries.delete(this.entries.keys().next().value!);
+  }
 }
 
 /** An `McpServer` or low-level `Server` from either supported MCP SDK. */
@@ -192,6 +246,7 @@ const records = new AsyncLocalStorage<CallRecord>();
 const instrumented = new WeakMap<object, InstrumentMcpServerOptions>();
 // Updating a tool replaces its schema, invalidating its cached contract.
 const contracts = new WeakMap<object, Map<string, ToolContract | null>>();
+const structuredOutputEligibility = new WeakMap<object, boolean>();
 
 /**
  * Records the original error before you map it to a public tool error. Its
@@ -285,7 +340,18 @@ function instrument(
     highLevel.server === undefined ? undefined : highLevel._registeredTools;
   const inject = options.injectAgentArguments ?? true;
   const structuredTools = new Set<string>();
-  const advertisedTools = new Map<string, RegisteredTool>();
+  const advertisedTools = new ToolDiscoveryCache();
+  const invalidateTools = () => {
+    advertisedTools.clear();
+    structuredTools.clear();
+  };
+  const notify = protocol.notification?.bind(protocol);
+  if (notify !== undefined)
+    protocol.notification = (notification, notificationOptions) => {
+      if (notification.method === "notifications/tools/list_changed")
+        invalidateTools();
+      return notify(notification, notificationOptions);
+    };
   const originals = new WeakMap<RequestHandler, RequestHandler>();
   const wrap = (method: string, handler: RequestHandler): RequestHandler => {
     const wrapped = traced(
@@ -308,7 +374,10 @@ function instrument(
   }
   // `McpServer` registers some handlers only when the first tool is added.
   const set = handlers.set.bind(handlers);
-  handlers.set = (method, handler) => set(method, wrap(method, handler));
+  handlers.set = (method, handler) => {
+    if (method === "tools/list" || method === "tools/call") invalidateTools();
+    return set(method, wrap(method, handler));
+  };
 }
 
 function traced(
@@ -320,7 +389,7 @@ function traced(
   inject: boolean,
   structuredTools: Set<string>,
   originals: WeakMap<RequestHandler, RequestHandler>,
-  advertisedTools: Map<string, RegisteredTool>,
+  advertisedTools: ToolDiscoveryCache,
 ): RequestHandler {
   return async (request, context) => {
     if (method !== "tools/call") {
@@ -403,10 +472,7 @@ function traced(
           ),
         );
       }
-      const conversationId =
-        attempt(() => result.isError) === true
-          ? undefined
-          : prepared.mintedConversationId;
+      const conversationId = prepared.mintedConversationId;
       return conversationId === undefined
         ? result
         : (attempt(() =>
@@ -427,43 +493,39 @@ function traced(
   };
 }
 
-async function resolveLowlevelTool(
+function resolveLowlevelTool(
   request: McpRequest,
   context: HandlerContext,
   list: RequestHandler | undefined,
   options: InstrumentMcpServerOptions,
-  advertisedTools: Map<string, RegisteredTool>,
+  advertisedTools: ToolDiscoveryCache,
 ): Promise<RegisteredTool | undefined> {
   const name = request.params?.name;
-  if (name === undefined) return undefined;
+  if (name === undefined) return Promise.resolve(undefined);
   if (
     options.injectAgentArguments === false &&
     options.intentArgument === undefined &&
     options.modelArgument === undefined &&
     options.conversationIdArgument === undefined
   )
-    return undefined;
-  if (options.resolveOriginalTool === undefined && advertisedTools.has(name))
-    return advertisedTools.get(name);
+    return Promise.resolve(undefined);
+  const lookup = () => boundedToolDiscovery(request, context, list, options);
+  return options.resolveOriginalTool === undefined
+    ? advertisedTools.resolve(name, lookup)
+    : lookup();
+}
+
+async function boundedToolDiscovery(
+  request: McpRequest,
+  context: HandlerContext,
+  list: RequestHandler | undefined,
+  options: InstrumentMcpServerOptions,
+): Promise<RegisteredTool | undefined> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const expired = new AbortController();
   try {
     return await Promise.race([
-      discoverLowlevelTool(
-        request,
-        context,
-        list,
-        options,
-        expired.signal,
-      ).then((tool) => {
-        if (
-          !expired.signal.aborted &&
-          tool !== undefined &&
-          options.resolveOriginalTool === undefined
-        )
-          advertisedTools.set(name, tool);
-        return tool;
-      }),
+      discoverLowlevelTool(request, context, list, options, expired.signal),
       new Promise<undefined>((resolve) => {
         timer = setTimeout(() => {
           expired.abort();
@@ -828,7 +890,7 @@ function listWithArguments(
   registry: Readonly<Record<string, RegisteredTool>> | undefined,
   structuredTools: Set<string>,
   options: InstrumentMcpServerOptions,
-  advertisedTools: Map<string, RegisteredTool>,
+  advertisedTools: ToolDiscoveryCache,
 ): McpResult {
   return (
     attempt(() => ({
@@ -837,7 +899,7 @@ function listWithArguments(
         const name = tool["name"];
         const original = originalTool(tool);
         if (typeof name === "string" && original !== undefined)
-          advertisedTools.set(name, original);
+          advertisedTools.remember(name, original);
         const registered =
           typeof name === "string" ? registry?.[name] : undefined;
         const names = configuredArguments(options);
@@ -882,15 +944,37 @@ function rememberStructuredOutput(
   structuredTools.delete(name);
   const tool = registry?.[name];
   if (tool === undefined) return;
-  if (tool.outputSchema === undefined) {
-    structuredTools.add(name);
-    return;
-  }
-  const schema = tool.outputSchema as {
+  if (supportsStructuredHandoff(tool.outputSchema)) structuredTools.add(name);
+}
+
+function supportsStructuredHandoff(outputSchema: unknown): boolean {
+  if (outputSchema === undefined) return true;
+  if (typeof outputSchema !== "object" || outputSchema === null) return false;
+  const immutable = "_zod" in outputSchema || "_def" in outputSchema;
+  const cached = immutable
+    ? structuredOutputEligibility.get(outputSchema)
+    : undefined;
+  if (cached !== undefined) return cached;
+  const eligible = inspectStructuredOutput(outputSchema);
+  if (immutable) structuredOutputEligibility.set(outputSchema, eligible);
+  return eligible;
+}
+
+function inspectStructuredOutput(outputSchema: object): boolean {
+  const schema = outputSchema as {
     readonly shape?: Readonly<Record<string, unknown>>;
     readonly _def?: {
       readonly typeName?: string;
       readonly catchall?: { readonly _def?: { readonly typeName?: string } };
+    };
+    readonly _zod?: {
+      readonly def?: {
+        readonly type?: string;
+        readonly checks?: readonly unknown[];
+        readonly catchall?: {
+          readonly _zod?: { readonly def?: { readonly type?: string } };
+        };
+      };
     };
     readonly "~standard"?: {
       readonly jsonSchema?: {
@@ -898,34 +982,52 @@ function rememberStructuredOutput(
       };
     };
   };
-  if (isJsonSchema(schema)) {
-    if (withConversationOutputSchema(schema) !== undefined)
-      structuredTools.add(name);
-    return;
-  }
+  if (isJsonSchema(schema))
+    return withConversationOutputSchema(schema) !== undefined;
   const output = schema["~standard"]?.jsonSchema?.output?.({
     target: "draft-2020-12",
   });
   // Zod 3 predates Standard Schema's JSON Schema conversion API.
   if (output === undefined && schema._def?.typeName === "ZodObject") {
     const shape = schema.shape;
-    if (
+    return (
       shape !== undefined &&
       Object.keys(shape).length > 0 &&
       !("_judgment" in shape) &&
       (schema._def.catchall === undefined ||
         schema._def.catchall._def?.typeName === "ZodNever")
-    )
-      structuredTools.add(name);
-    return;
+    );
   }
-  if (
-    output !== undefined &&
-    withConversationOutputSchema(
-      output as Readonly<Record<string, unknown>>,
-    ) !== undefined
-  )
-    structuredTools.add(name);
+  if (output !== undefined)
+    return (
+      withConversationOutputSchema(
+        output as Readonly<Record<string, unknown>>,
+      ) !== undefined
+    );
+  // The MCP SDK wraps raw Zod 4 shapes in Zod Mini objects without a converter.
+  if (schema._zod?.def?.type === "object") {
+    const definition = schema._zod.def;
+    return (
+      schema.shape !== undefined &&
+      Object.keys(schema.shape).length > 0 &&
+      !("_judgment" in schema.shape) &&
+      (definition.checks?.length ?? 0) === 0 &&
+      (definition.catchall === undefined ||
+        definition.catchall._zod?.def?.type === "never")
+    );
+  }
+  // MCP also accepts raw Zod shapes rather than z.object(...) output schemas.
+  const fields = Object.values(outputSchema);
+  return (
+    fields.length > 0 &&
+    !("_judgment" in outputSchema) &&
+    fields.every(
+      (field) =>
+        typeof field === "object" &&
+        field !== null &&
+        ("_zod" in field || "_def" in field),
+    )
+  );
 }
 
 function withoutInjected(
