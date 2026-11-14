@@ -28,6 +28,17 @@ export {
   wrapOpenAI,
 } from "./instrumentation";
 
+export {
+  instrumentMcpServer,
+  markMcpCallError,
+  setMcpCaller,
+  type InstrumentMcpServerOptions,
+  type InstrumentableMcpServer,
+  type McpCaller,
+  type McpRequestInfo,
+  type McpToolDescriptor,
+} from "./instrumentation/mcp";
+
 export { Example } from "./data";
 export type { ScoringResult } from "./data";
 
