@@ -34,6 +34,7 @@ const MAX_DISCOVERY_PAGES = 100;
 const DISCOVERY_TIMEOUT_MS = 1_000;
 const MISSING_TOOL_CACHE_MS = 1_000;
 const MAX_CACHED_TOOLS = 1_000;
+const MAX_DISCOVERY_ATTEMPTS = 2;
 const CLIENT_INFO_META_KEY = "io.modelcontextprotocol/clientInfo";
 const PROTOCOL_VERSION_META_KEY = "io.modelcontextprotocol/protocolVersion";
 const INVALID_PARAMS_CODE = -32602;
@@ -187,12 +188,14 @@ interface RegisteredTool {
 
 /** Ownership is reusable only while the server's advertised contracts are stable. */
 class ToolDiscoveryCache {
+  private generation = 0;
   private readonly entries = new Map<
     string,
     { value: Promise<RegisteredTool | undefined>; expiresAt: number }
   >();
 
   clear(): void {
+    this.generation++;
     this.entries.clear();
   }
 
@@ -200,26 +203,37 @@ class ToolDiscoveryCache {
     this.store(name, { value: Promise.resolve(tool), expiresAt: Infinity });
   }
 
-  resolve(
+  async resolve(
     name: string,
     lookup: () => Promise<RegisteredTool | undefined>,
   ): Promise<RegisteredTool | undefined> {
-    const cached = this.entries.get(name);
-    if (cached !== undefined && cached.expiresAt > performance.now())
-      return cached.value;
-    const entry = {
-      value: Promise.resolve().then(lookup),
-      expiresAt: Infinity,
-    };
-    entry.value = entry.value.then((tool) => {
-      // A list change or newer listing supersedes in-flight discovery.
-      if (this.entries.get(name) !== entry) return undefined;
-      if (tool === undefined)
-        entry.expiresAt = performance.now() + MISSING_TOOL_CACHE_MS;
-      return tool;
-    });
-    this.store(name, entry);
-    return entry.value;
+    for (let attempt = 0; attempt < MAX_DISCOVERY_ATTEMPTS; attempt++) {
+      const generation = this.generation;
+      let entry = this.entries.get(name);
+      if (entry === undefined || entry.expiresAt <= performance.now()) {
+        const pending = {
+          value: Promise.resolve().then(lookup),
+          expiresAt: Infinity,
+        };
+        pending.value = pending.value.then((tool) => {
+          if (tool === undefined)
+            pending.expiresAt = performance.now() + MISSING_TOOL_CACHE_MS;
+          return tool;
+        });
+        this.store(name, pending);
+        entry = pending;
+      }
+      const tool = await entry.value;
+      const current = this.entries.get(name);
+      // Eviction affects retention, not ownership for the waiting call.
+      if (
+        generation === this.generation &&
+        (current === undefined || current === entry)
+      )
+        return tool;
+      // Prefer a newer listing, or retry once after a schema invalidation.
+    }
+    return undefined;
   }
 
   private store(

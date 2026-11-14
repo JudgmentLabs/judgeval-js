@@ -576,6 +576,58 @@ test("low-level ownership refreshes on notifications and handler replacement", a
   ]);
 });
 
+test.each(["eviction", "listing", "notification", "unstable"])(
+  "in-flight discovery preserves call ownership after %s",
+  async (change) => {
+    const server = new ServerV1(
+      { name: "changing", version: "1" },
+      { capabilities: { tools: { listChanged: true } } },
+    );
+    server.notification = () => Promise.resolve();
+    let properties = {};
+    let listings = 0;
+    server.setRequestHandler(ListToolsRequestSchema, async () => {
+      const schema = {
+        type: "object",
+        properties,
+        additionalProperties: false,
+      };
+      if (++listings === 1) {
+        if (change !== "eviction") properties = { intent: { type: "string" } };
+        if (change === "listing" || change === "eviction")
+          await handlers.get("tools/list")({ method: "tools/list" }, {});
+        else await server.sendToolListChanged();
+      } else if (change === "eviction")
+        return {
+          tools: Array.from({ length: 1_000 }, (_, index) => ({
+            name: `other-${index}`,
+            inputSchema: schema,
+          })),
+        };
+      else if (change === "unstable") await server.sendToolListChanged();
+      return { tools: [{ name: "lookup", inputSchema: schema }] };
+    });
+    const received: unknown[] = [];
+    server.setRequestHandler(CallToolRequestSchema, (request) => {
+      received.push(request.params.arguments);
+      return { content: [] };
+    });
+    instrumentMcpServer(server);
+    const handlers = Reflect.get(server, "_requestHandlers");
+    await handlers.get("tools/call")(
+      {
+        method: "tools/call",
+        params: { name: "lookup", arguments: { intent: "business" } },
+      },
+      {},
+    );
+    expect({ received, listings }).toEqual({
+      received: change === "eviction" ? [{}] : [{ intent: "business" }],
+      listings: 2,
+    });
+  },
+);
+
 test("schema discovery failures never turn a successful tool call into an error", async () => {
   const server = new McpServerV1({ name: "greeter", version: "1" });
   registerTools(server);
