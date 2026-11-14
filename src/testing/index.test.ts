@@ -45,6 +45,27 @@ describe("TestRunsFactory", () => {
 });
 
 describe("TestSuitesFactory", () => {
+  test("repinChecks posts the judge and target version", async () => {
+    const calls = stubFetch({ case_ids: [], skipped_case_ids: [] });
+    await new TestSuitesFactory(client, "p1", "proj").repinChecks(
+      "t1",
+      "j1",
+      2,
+      1,
+    );
+    expect(calls).toEqual([
+      {
+        url: "https://api.example.com/v1/projects/p1/test-suites/t1/repin",
+        method: "POST",
+        body: JSON.stringify({
+          judge_id: "j1",
+          judge_major_version: 2,
+          judge_minor_version: 1,
+        }),
+      },
+    ]);
+  });
+
   test("a missing project fails before calling the API", async () => {
     const calls = stubFetch({});
     const error = await new TestSuitesFactory(client, null, "proj")

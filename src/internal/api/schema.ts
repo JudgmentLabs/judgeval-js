@@ -1531,6 +1531,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/projects/{projectId}/test-suites/{testSuiteId}/repin": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Move one judge's checks to another version
+     * @description Move every check by one judge in the test suite to another version of that judge. Fails, moving nothing, when the target version doesn't exist (the error names the version) or never returns a case's expected value (the error names each case id). Edits land in the draft, which opens automatically. To grade earlier outputs with the new version, publish_test_suite, then score_test_suite_run on that run.
+     */
+    post: operations["postV1ProjectsByProjectIdTest-suitesByTestSuiteIdRepin"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/projects/{projectId}/test-suites/{testSuiteId}/publish": {
     parameters: {
       query?: never;
@@ -10339,6 +10359,89 @@ export interface operations {
         content: {
           "application/json": {
             version: number;
+          };
+        };
+      };
+      /** @description Response for status 404 */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+      /** @description Response for status 409 */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+      /** @description Response for status 422 */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            error: string;
+            message?: string;
+            code?: string;
+            details?: string[];
+          };
+        };
+      };
+    };
+  };
+  "postV1ProjectsByProjectIdTest-suitesByTestSuiteIdRepin": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @example YOUR_PROJECT_ID */
+        projectId: string;
+        /** @example YOUR_TEST_SUITE_ID */
+        testSuiteId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": {
+          /** @description Judge whose checks move. */
+          judge_id: string;
+          /** @description Target major version. */
+          judge_major_version: number;
+          /** @description Target minor version. */
+          judge_minor_version: number;
+        };
+      };
+    };
+    responses: {
+      /** @description Response for status 200 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** @description Cases moved to the target version. Empty when no case has a check by judge_id on another version. */
+            case_ids: string[];
+            /** @description Cases edited or removed concurrently, left unchanged. */
+            skipped_case_ids: string[];
           };
         };
       };

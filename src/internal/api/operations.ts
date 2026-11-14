@@ -615,6 +615,21 @@ export class JudgmentApi {
     );
   }
 
+  /** Move one judge's checks to another version (`POST /v1/projects/{projectId}/test-suites/{testSuiteId}/repin`). */
+  repinTestSuiteChecks(
+    ...init: Init<
+      "/v1/projects/{projectId}/test-suites/{testSuiteId}/repin",
+      "post"
+    >
+  ) {
+    return ok(
+      this.client.POST(
+        "/v1/projects/{projectId}/test-suites/{testSuiteId}/repin",
+        ...init,
+      ),
+    );
+  }
+
   /** Prepare and queue test run (`POST /v1/projects/{projectId}/test-runs`). */
   runTest(...init: Init<"/v1/projects/{projectId}/test-runs", "post">) {
     return ok(this.client.POST("/v1/projects/{projectId}/test-runs", ...init));
