@@ -13,63 +13,28 @@ npm install judgeval
 
 ## Trace your MCP server
 
-If you build an MCP server, `instrumentMcpServer` shows you how agents use it: which tools they call, what fails and why, and how they move between tools. It works with `@modelcontextprotocol/sdk` 1.x and `@modelcontextprotocol/server` 2.x.
+See which tools agents call, investigate failures, and group related calls into conversations. Supports `@modelcontextprotocol/sdk` 1.x and `@modelcontextprotocol/server` 2.x.
+
+Initialize your tracer, then instrument your existing server before serving requests:
 
 ```typescript
 import { Tracer, instrumentMcpServer } from "judgeval";
 
 await Tracer.init({ projectName: "my-mcp-server" });
-
-const server = new McpServer({ name: "orders", version: "1.0.0" });
-// Register your tools, then:
 instrumentMcpServer(server);
 ```
 
-Requests create normal Judgment OTel spans, using the tracer's environment, sampling and export settings. Calls start new traces unless explicit incoming `params._meta.traceparent` supplies a parent. Instrumented work inside a tool becomes child spans. MCP dashboard rows are derived from completed execution spans, including nested calls; judges/issues operate on the containing trace.
+Tool calls appear as standard Judgment traces, with instrumented work inside each tool captured as child spans. Input/output and error-message capture are opt-in.
 
-Arguments/results are opt-in (`captureInput`, `captureOutput`); `redactPayload(value, field)` transforms a detached JSON snapshot before export. Throw or return `undefined` to omit a payload. Non-JSON or oversized payloads (128 KiB) are omitted. Telemetry failures never affect a call. Call `await Tracer.forceFlush()` before serverless return, or `await Tracer.shutdown()` when stopping. Delivery uses the existing OTel exporter and is best-effort; a terminated or hung tool may leave no completed span.
-
-Returned tool results without an application or echoed conversation session offer a new ID even on stateful HTTP, including `isError: true` results. The minted ID groups the first call and later calls echoing it; clients that never echo receive fresh IDs on each call. The transport ID remains recorded separately as `mcp.session.id`. Handoff preserves existing error content and flags; thrown exceptions and protocol errors propagate unchanged without handoff. Dictionary outputs stay unchanged and use supplemental text for handoff.
-
-**What changes on your server:** compatible tools gain optional `intent`, `llm_model` and `conversation_id` arguments, stripped before execution. A missing logical session gets an ID in supplemental text and compatible existing `structuredContent._judgment`, with a matching optional output-schema property. Text-only results stay text-only; schema collisions/unsupported compositions keep text handoff. Session priority is `sessionId` callback or `Tracer.setSessionId`, then agent-echoed conversation ID, then newly minted conversation ID, then transport session ID; otherwise calls remain standalone. Use `{ injectConversationId: false }` to disable only conversation schema injection/handoff and fall back to transport grouping when no explicit session is supplied. To leave your tools and results unchanged:
+By default, the SDK adds optional `intent`, `llm_model`, and `conversation_id` arguments to compatible tool schemas and removes them before your tool runs. Results include a conversation ID for the agent to reuse. To trace without changing tool schemas or results:
 
 ```typescript
 instrumentMcpServer(server, { injectAgentArguments: false });
 ```
 
-Injection changes the advertised tool contract, including an optional `_judgment` property on compatible output schemas. During a mixed instrumented/uninstrumented rollout, strict clients holding an older output schema may reject structured results containing this property. Keep replica schemas consistent and refresh client tool discovery after rollout; gateways caching tool lists must refresh too.
+Call `await Tracer.forceFlush()` before a serverless return, or `await Tracer.shutdown()` when stopping. Export is best-effort and uses your existing tracer.
 
-Injection is independent of telemetry availability: installing instrumentation before `Tracer.init()`, or disabling export, does not disable schema changes or conversation handoff. Injected fields and descriptions add model-context overhead per tool when clients expose the listing to an agent. Set `injectAgentArguments: false` to disable automatic argument injection and handoff while retaining tracing, or `injectConversationId: false` to disable only conversation-ID injection and handoff.
-
-Use `intentArgument`, `modelArgument`, and `conversationIdArgument` to choose names across all tools:
-
-```typescript
-instrumentMcpServer(server, {
-  intentArgument: "intent",
-  modelArgument: "judgment_llm_model",
-  conversationIdArgument: "chat_id",
-});
-```
-
-Explicit names opt existing fields into telemetry without changing their schemas or removing them from handler inputs. When absent from a compatible tool's schema, the SDK injects and strips the chosen name instead. Without explicit configuration, existing same-name fields are preserved but not interpreted as telemetry. Explicit fields can also be read with injection disabled; missing/non-string values are omitted. Existing conversation arguments supply application session IDs after callback/baggage resolution; injected conversation arguments use UUIDv7 echo handles. Names must be non-empty and distinct.
-
-Low-level `Server` instances support the same injection and handoff as `McpServer`. High-level servers use their native registry; low-level calls reuse original tool contracts cached from listings or successful discovery. To supply an authoritative sync or async per-tool lookup:
-
-```typescript
-instrumentMcpServer(server, {
-  resolveOriginalTool: (name) => originalTools.get(name),
-});
-```
-
-Return the original wire descriptor (`inputSchema` and optional `outputSchema`), before Judgment injection, using the same schemas as your `tools/list` handler. Keep it scoped to the current caller if tools vary by authorization or request. Resolver results are not cached across calls. When configured, the resolver bypasses the listing cache and replaces discovery: returning `undefined`, throwing, timing out, or returning an unsupported schema leaves arguments untouched and omits generated handoff. Open/composed schemas are not injected, and customer-owned arguments are never stripped.
-
-The default low-level cache is per server and tool name, refreshed when listings are served, and cleared when the server sends `notifications/tools/list_changed` or replaces its tool handlers. It holds at most 1,000 entries; concurrent lookups for the same tool share discovery, and missing tools or failed discovery are cached for one second. Tool schemas must be consistent across callers, and runtime changes must send a list-change notification; use a caller-aware resolver otherwise. High-level servers read their current native registry directly. Fresh replicas and cache misses use caller-scoped discovery, capped at 100 pages and one second; unknown ownership remains untouched if discovery fails. Async resolver lookup has the same timeout. These limits cannot preempt blocking synchronous callbacks or cancel customer promises; timed-out discovery does not start further pages once its in-flight page finishes. No cache is shared across processes.
-
-Capacity eviction does not discard a successful lookup for a waiting call. A newer listing takes precedence; a schema invalidation during lookup allows one retry, with the same per-attempt page and time limits. Repeated invalidation can still leave ownership unknown.
-
-Error-message capture defaults off; outcome and error type are still recorded. Set `captureErrorMessages: true` to capture failure text. There is no automatic PII or argument-value scrubbing: enabled payload/error capture and agent-reported intent are sent as-is unless transformed by `redactPayload` or `redact`. Intent remains enabled by default; use `redact` to remove sensitive values or `injectAgentArguments: false` to disable agent-reported fields and session handoff.
-
-Use `identify` or `setMcpCaller` to attach your end user, and `markMcpCallError` to record the original error before you turn it into a public tool error. The SDK can record the original exception type when the exception reaches its wrapper or is supplied through `markMcpCallError`. MCP frameworks may instead convert exceptions into `isError` results before the wrapper sees them; these generally use `error.type = "tool_error"`, since the original exception type is no longer available. Recognized refusals use `unknown_tool`, `tool_disabled`, or `invalid_input`; a structured public error code may also be used when error-message capture is enabled.
+See the [Judgment documentation](https://docs.judgmentlabs.ai/documentation) for more on tracing and integrations.
 
 ## Usage
 
