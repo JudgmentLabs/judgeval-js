@@ -14,6 +14,8 @@ const MAX_ATTEMPTS = 3;
 const MAX_BACKOFF_SECONDS = 30;
 /** How long one request may take before it is abandoned and retried. */
 const REQUEST_TIMEOUT_MILLIS = 30000;
+/** The longest rejection reason logged. */
+const MAX_REASON_LENGTH = 2000;
 
 /**
  * Server errors, timeouts, and rate limits may pass on retry; other client
@@ -36,6 +38,44 @@ function backoff(attempt: number, retryAfterSeconds: number): Promise<void> {
 }
 
 /**
+ * Reads a 400 from the observations route: the positions of the observations
+ * it names, and a reason to log. Each validation issue has a path such as
+ * `["observations", 3, "input", 0, "role"]`. The positions are empty when no
+ * issue names an observation, as when the request as a whole is malformed or
+ * the detail is not in this format. The reason lists each issue by path and
+ * leaves out the echoed request, which holds the caller's conversation
+ * content.
+ */
+function readRejection(
+  detail: string,
+  count: number,
+): { invalid: Set<number>; reason: string } {
+  let issues: { path: unknown[]; message: string }[];
+  let reason: string;
+  try {
+    issues = (JSON.parse(detail) as { errors: typeof issues }).errors;
+    reason = issues
+      .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+      .join("; ");
+  } catch {
+    return { invalid: new Set(), reason: detail.slice(0, MAX_REASON_LENGTH) };
+  }
+  const invalid = new Set<number>();
+  for (const [scope, index] of issues.map((issue) => issue.path)) {
+    if (
+      scope === "observations" &&
+      typeof index === "number" &&
+      Number.isInteger(index) &&
+      index >= 0 &&
+      index < count
+    ) {
+      invalid.add(index);
+    }
+  }
+  return { invalid, reason: reason.slice(0, MAX_REASON_LENGTH) };
+}
+
+/**
  * Sends one batch of observations to Judgment. Never rejects: a batch that
  * cannot be stored is logged and dropped.
  */
@@ -50,38 +90,24 @@ export class ObservationExporter {
   async export(batch: SentObservation[]): Promise<void> {
     const rejection = await this._send(batch);
     if (rejection === undefined) return;
-    if (batch.length > 1) await this._dropInvalid(batch);
-    else this._logDropped(1, rejection);
-  }
-
-  /**
-   * The server rejects a request when any observation in it does not fit the
-   * format; this finds which by halving the batch. When both halves are
-   * rejected, the fault is most likely in the request as a whole, such as a
-   * clock more than five minutes fast, so the batch is dropped rather than
-   * split further.
-   */
-  private async _dropInvalid(batch: SentObservation[]): Promise<void> {
-    const middle = Math.floor(batch.length / 2);
-    const halves = [batch.slice(0, middle), batch.slice(middle)];
-    const rejections = [
-      await this._send(halves[0]),
-      await this._send(halves[1]),
-    ];
-    if (rejections[0] !== undefined && rejections[1] !== undefined) {
-      this._logDropped(batch.length, rejections[0]);
+    const { invalid, reason } = readRejection(rejection, batch.length);
+    if (invalid.size === 0) {
+      this._logDropped(batch.length, reason);
       return;
     }
-    for (const [index, half] of halves.entries()) {
-      const rejection = rejections[index];
-      if (rejection === undefined) continue;
-      if (half.length > 1) await this._dropInvalid(half);
-      else this._logDropped(1, rejection);
+    // The server stores nothing from a rejected request, so the observations
+    // it did not name are sent again, once.
+    this._logDropped(invalid.size, reason);
+    const rest = batch.filter((_, index) => !invalid.has(index));
+    if (rest.length === 0) return;
+    const second = await this._send(rest);
+    if (second !== undefined) {
+      this._logDropped(rest.length, readRejection(second, rest.length).reason);
     }
   }
 
   /**
-   * Sends a batch, retrying temporary failures. Returns the server's reason
+   * Sends a batch, retrying temporary failures. Returns the server's detail
    * when it rejects the batch as invalid (400); handles every other outcome.
    */
   private async _send(batch: SentObservation[]): Promise<string | undefined> {
@@ -99,7 +125,13 @@ export class ObservationExporter {
         if (response.ok) return undefined;
         status = response.status;
         retryAfterSeconds = Number(response.headers.get("Retry-After")) || 0;
-        detail = JSON.stringify(error);
+        // The spec declares no error bodies; a 400 carries its issues as
+        // JSON text in `message`.
+        const body = error as { message?: unknown } | undefined;
+        detail =
+          typeof body?.message === "string"
+            ? body.message
+            : JSON.stringify(error);
       } catch (error) {
         detail = String(error);
       }
