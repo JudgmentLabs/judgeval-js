@@ -248,7 +248,7 @@ test.each([
     requestInfo: { headers: { "mcp-session-id": "transport-session" } },
   },
 ])(
-  "transport sessions retain grouping while offering conversation handoff: %j",
+  "minted conversation groups first and echoed calls ahead of transport: %j",
   async (context) => {
     const exporter = useExporter();
     const server = new McpServerV1({ name: "greeter", version: "1" });
@@ -312,8 +312,8 @@ test.each([
           note: "Pass this conversation_id on later tool calls in this conversation.",
         },
       },
-      session: "transport-session",
-      source: "transport",
+      session: handle,
+      source: "minted",
       handoff: "string",
       laterContentLengths: [1, 1],
       echoedSession: handle,
@@ -398,6 +398,66 @@ test.each([
       calls: 2,
       outputs: [true, true],
       handoffs: [handoff, handoff],
+    });
+  },
+);
+
+test.each(["cached", "pages", "timeout"])(
+  "low-level ownership reuse and bounded discovery: %s",
+  async (mode) => {
+    const tool = {
+      name: "lookup",
+      inputSchema: {
+        type: "object",
+        properties: { intent: { type: "string" } },
+        additionalProperties: false,
+      },
+    };
+    let listings = 0;
+    let received: unknown;
+    const protocol = {
+      _requestHandlers: new Map<
+        string,
+        (
+          request: {
+            method?: string;
+            params?: { name?: string; arguments?: unknown };
+          },
+          context: object,
+        ) => Promise<unknown>
+      >([
+        [
+          "tools/list",
+          async () => {
+            listings++;
+            if (mode === "cached") {
+              if (listings > 1) throw new Error("listing unavailable");
+              return { tools: [tool] };
+            }
+            if (mode === "timeout") await new Promise(() => {});
+            return { tools: [], nextCursor: String(listings) };
+          },
+        ],
+        [
+          "tools/call",
+          (request) => {
+            received = request.params?.arguments;
+            return Promise.resolve({ content: [], isError: true });
+          },
+        ],
+      ]),
+    };
+    instrumentMcpServer(protocol);
+    if (mode === "cached")
+      await protocol._requestHandlers.get("tools/list")!({}, {});
+    const args = { intent: "business", llm_model: "model" };
+    await protocol._requestHandlers.get("tools/call")!(
+      { method: "tools/call", params: { name: "lookup", arguments: args } },
+      {},
+    );
+    expect({ received, listings }).toEqual({
+      received: mode === "cached" ? { intent: "business" } : args,
+      listings: mode === "pages" ? 100 : 1,
     });
   },
 );

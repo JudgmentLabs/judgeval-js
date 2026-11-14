@@ -30,6 +30,8 @@ const propagator = new W3CTraceContextPropagator();
 const MAX_ERROR_MESSAGE_LENGTH = 1_000;
 const MAX_RECORDED_KEYS = 30;
 const MAX_RECORDED_KEY_LENGTH = 64;
+const MAX_DISCOVERY_PAGES = 100;
+const DISCOVERY_TIMEOUT_MS = 1_000;
 const CLIENT_INFO_META_KEY = "io.modelcontextprotocol/clientInfo";
 const PROTOCOL_VERSION_META_KEY = "io.modelcontextprotocol/protocolVersion";
 const INVALID_PARAMS_CODE = -32602;
@@ -283,6 +285,7 @@ function instrument(
     highLevel.server === undefined ? undefined : highLevel._registeredTools;
   const inject = options.injectAgentArguments ?? true;
   const structuredTools = new Set<string>();
+  const advertisedTools = new Map<string, RegisteredTool>();
   const originals = new WeakMap<RequestHandler, RequestHandler>();
   const wrap = (method: string, handler: RequestHandler): RequestHandler => {
     const wrapped = traced(
@@ -294,6 +297,7 @@ function instrument(
       inject,
       structuredTools,
       originals,
+      advertisedTools,
     );
     originals.set(wrapped, handler);
     return wrapped;
@@ -316,17 +320,23 @@ function traced(
   inject: boolean,
   structuredTools: Set<string>,
   originals: WeakMap<RequestHandler, RequestHandler>,
+  advertisedTools: Map<string, RegisteredTool>,
 ): RequestHandler {
   return async (request, context) => {
     if (method !== "tools/call") {
       const result = await handler(request, context);
       return method === "tools/list" && inject
         ? (attempt(() =>
-            listWithArguments(result, registry, structuredTools, options),
+            listWithArguments(
+              result,
+              registry,
+              structuredTools,
+              options,
+              advertisedTools,
+            ),
           ) ?? result)
         : result;
     }
-    // Never share caller-specific low-level contracts or output eligibility.
     const listed = protocol._requestHandlers?.get("tools/list");
     const tool =
       registry === undefined
@@ -335,6 +345,7 @@ function traced(
             context,
             listed === undefined ? undefined : originals.get(listed),
             options,
+            advertisedTools,
           )
         : undefined;
     const callRegistry =
@@ -421,6 +432,7 @@ async function resolveLowlevelTool(
   context: HandlerContext,
   list: RequestHandler | undefined,
   options: InstrumentMcpServerOptions,
+  advertisedTools: Map<string, RegisteredTool>,
 ): Promise<RegisteredTool | undefined> {
   const name = request.params?.name;
   if (name === undefined) return undefined;
@@ -431,13 +443,57 @@ async function resolveLowlevelTool(
     options.conversationIdArgument === undefined
   )
     return undefined;
+  if (options.resolveOriginalTool === undefined && advertisedTools.has(name))
+    return advertisedTools.get(name);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new AbortController();
+  try {
+    return await Promise.race([
+      discoverLowlevelTool(
+        request,
+        context,
+        list,
+        options,
+        expired.signal,
+      ).then((tool) => {
+        if (
+          !expired.signal.aborted &&
+          tool !== undefined &&
+          options.resolveOriginalTool === undefined
+        )
+          advertisedTools.set(name, tool);
+        return tool;
+      }),
+      new Promise<undefined>((resolve) => {
+        timer = setTimeout(() => {
+          expired.abort();
+          resolve(undefined);
+        }, DISCOVERY_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+async function discoverLowlevelTool(
+  request: McpRequest,
+  context: HandlerContext,
+  list: RequestHandler | undefined,
+  options: InstrumentMcpServerOptions,
+  signal: AbortSignal,
+): Promise<RegisteredTool | undefined> {
+  const name = request.params?.name;
+  if (name === undefined) return undefined;
   try {
     if (options.resolveOriginalTool !== undefined)
       return originalTool(await options.resolveOriginalTool(name));
     if (list === undefined) return undefined;
     let cursor: string | undefined;
     const seen = new Set<string>();
-    do {
+    const deadline = performance.now() + DISCOVERY_TIMEOUT_MS;
+    for (let page = 0; page < MAX_DISCOVERY_PAGES; page++) {
+      if (signal.aborted || performance.now() >= deadline) return undefined;
       // Keep caller metadata, but do not reuse the tool call's progress token.
       const { progressToken: _, ...meta } = request.params?._meta ?? {};
       const result = await list(
@@ -452,7 +508,7 @@ async function resolveLowlevelTool(
       cursor = result.nextCursor;
       if (cursor === undefined || seen.has(cursor)) return undefined;
       seen.add(cursor);
-    } while (cursor !== undefined);
+    }
     return undefined;
   } catch {
     Logger.debug("MCP tool resolution failed");
@@ -607,7 +663,6 @@ function prepareCall(
       ? undefined
       : reported?.conversationId;
   const logicalSessionId = configuredSessionId ?? conversationId;
-  const sessionId = logicalSessionId ?? transportSessionId;
   const mintedConversationId =
     injected &&
     options.injectConversationId !== false &&
@@ -652,7 +707,8 @@ function prepareCall(
       "judgment.mcp.server_name":
         options.serverName ?? protocol._serverInfo?.name ?? "mcp",
       "judgment.mcp.tool_name": toolName,
-      "judgment.session_id": sessionId ?? mintedConversationId,
+      "judgment.session_id":
+        logicalSessionId ?? mintedConversationId ?? transportSessionId,
       "judgment.mcp.server.version": protocol._serverInfo?.version,
       "judgment.mcp.server.build": options.serverBuild,
       "judgment.mcp.client_name": client?.name,
@@ -672,10 +728,10 @@ function prepareCall(
           ? "provided"
           : conversationId !== undefined
             ? "echoed"
-            : transportSessionId !== undefined
-              ? "transport"
-              : mintedConversationId !== undefined
-                ? "minted"
+            : mintedConversationId !== undefined
+              ? "minted"
+              : transportSessionId !== undefined
+                ? "transport"
                 : undefined,
       "judgment.mcp.intent":
         intent === undefined ? undefined : redacted(intent, options),
@@ -772,12 +828,16 @@ function listWithArguments(
   registry: Readonly<Record<string, RegisteredTool>> | undefined,
   structuredTools: Set<string>,
   options: InstrumentMcpServerOptions,
+  advertisedTools: Map<string, RegisteredTool>,
 ): McpResult {
   return (
     attempt(() => ({
       ...result,
       tools: result.tools?.map((tool) => {
         const name = tool["name"];
+        const original = originalTool(tool);
+        if (typeof name === "string" && original !== undefined)
+          advertisedTools.set(name, original);
         const registered =
           typeof name === "string" ? registry?.[name] : undefined;
         const names = configuredArguments(options);
