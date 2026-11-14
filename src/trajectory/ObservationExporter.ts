@@ -42,9 +42,9 @@ function backoff(attempt: number, retryAfterSeconds: number): Promise<void> {
  * it names, and a reason to log. Each validation issue has a path such as
  * `["observations", 3, "input", 0, "role"]`. The positions are empty when no
  * issue names an observation, as when the request as a whole is malformed or
- * the detail is not in this format. The reason lists each issue by path and
- * leaves out the echoed request, which holds the caller's conversation
- * content.
+ * the detail is not in this format. The reason lists each issue by path. It
+ * never includes the detail itself, which can echo the request and so the
+ * caller's conversation content.
  */
 function readRejection(
   detail: string,
@@ -58,7 +58,10 @@ function readRejection(
       .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
       .join("; ");
   } catch {
-    return { invalid: new Set(), reason: detail.slice(0, MAX_REASON_LENGTH) };
+    return {
+      invalid: new Set(),
+      reason: "the request was rejected as invalid",
+    };
   }
   const invalid = new Set<number>();
   for (const [scope, index] of issues.map((issue) => issue.path)) {
