@@ -36,7 +36,7 @@ export class Logger {
   private static initialize(): void {
     if (!Logger.initialized) {
       const noColor = process.env.JUDGMENT_NO_COLOR;
-      Logger.useColor = !noColor && process.stdout.isTTY;
+      Logger.useColor = !noColor && process.stderr.isTTY;
 
       if (!Logger.levelSetManually) {
         const logLevel = JUDGMENT_LOG_LEVEL.toLowerCase();
@@ -95,9 +95,8 @@ export class Logger {
       formattedMessage = `${color}${formattedMessage}${Logger.RESET}`;
     }
 
-    const output =
-      level >= Logger.Level.ERROR ? process.stderr : process.stdout;
-    output.write(formattedMessage + "\n");
+    // stdout belongs to the MCP stdio protocol, including when export fails.
+    process.stderr.write(formattedMessage + "\n");
   }
 
   /** Log a debug message. */
