@@ -10,6 +10,8 @@
     "judgeval": "file:../.."
   },
   "devDependencies": {
-    "tsx": "^4.19.2"
+    "tsx": "^4.19.2",
+    "@types/node": "^22.0.0",
+    "typescript": "^6.0.2"
   }
 }

@@ -2,7 +2,9 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "Node16",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "moduleResolution": "Node16",
     "outDir": "./dist",
     "esModuleInterop": true,
@@ -10,8 +12,16 @@
     "strict": false,
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "types": [
+      "node"
+    ]
   },
-  "include": ["*.ts"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }
