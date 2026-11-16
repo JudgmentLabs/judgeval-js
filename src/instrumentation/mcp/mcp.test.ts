@@ -4,6 +4,7 @@ import {
   StreamableHTTPClientTransport,
 } from "@modelcontextprotocol/client";
 import { Client as ClientV1 } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport as LegacyHttpClient } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer as McpServerV1 } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Server as ServerV1 } from "@modelcontextprotocol/sdk/server/index.js";
@@ -16,6 +17,7 @@ import {
   createMcpHandler,
   fromJsonSchema,
   Server as ServerV2,
+  WebStandardStreamableHTTPServerTransport,
 } from "@modelcontextprotocol/server";
 import {
   BasicTracerProvider,
@@ -707,6 +709,74 @@ async function connectV2(
   );
   return client;
 }
+
+test("legacy HTTP clients retain handshake identity across fresh server instances", async () => {
+  const exporter = useExporter();
+  const handler = createMcpHandler(() => {
+    const server = new McpServerV2(
+      { name: "greeter", version: "1" },
+      { supportedProtocolVersions: ["2025-06-18"] },
+    );
+    registerTools(server);
+    instrumentMcpServer(server);
+    return server;
+  });
+  cleanups.push(() => handler.close());
+  const call = async (name: string) => {
+    const client = new ClientV1({ name, version: "client-1" });
+    const transport = new LegacyHttpClient(new URL("http://test.local/mcp"), {
+      fetch: (url, init) => handler.fetch(new Request(String(url), init)),
+    });
+    await client.connect(transport);
+    cleanups.push(() => client.close());
+    await client.callTool({ name: "greet", arguments: { name: "Alice" } });
+    await client.callTool({ name: "greet", arguments: { name: "Bob" } });
+  };
+  await Promise.all([call("client-a"), call("client-b")]);
+  expect(
+    exporter
+      .getFinishedSpans()
+      .filter((span) => span.attributes["mcp.method.name"] === "tools/call")
+      .map((span) => ({
+        client: span.attributes["judgment.mcp.client_name"],
+        version: span.attributes["judgment.mcp.client.version"],
+        protocol: span.attributes["mcp.protocol.version"],
+      }))
+      .sort((a, b) => String(a.client).localeCompare(String(b.client))),
+  ).toEqual([
+    { client: "client-a", version: "client-1", protocol: "2025-06-18" },
+    { client: "client-a", version: "client-1", protocol: "2025-06-18" },
+    { client: "client-b", version: "client-1", protocol: "2025-06-18" },
+    { client: "client-b", version: "client-1", protocol: "2025-06-18" },
+  ]);
+});
+
+test("native HTTP sessions are not replaced by identity carriers", async () => {
+  const server = new McpServerV2({ name: "greeter", version: "1" });
+  registerTools(server);
+  instrumentMcpServer(server);
+  const transport = new WebStandardStreamableHTTPServerTransport({
+    sessionIdGenerator: () => "native-session",
+    enableJsonResponse: true,
+  });
+  await server.connect(transport);
+  const client = new ClientV1({ name: "native-client", version: "1" });
+  const http = new LegacyHttpClient(new URL("http://test.local/mcp"), {
+    fetch: (url, init) =>
+      transport.handleRequest(new Request(String(url), init)),
+  });
+  cleanups.push(() => server.close());
+  cleanups.push(() => client.close());
+  await client.connect(http);
+  const result = await client.callTool({
+    name: "greet",
+    arguments: { name: "Alice" },
+  });
+  expect({ session: http.sessionId, failed: result.isError ?? false }).toEqual({
+    session: "native-session",
+    failed: false,
+  });
+});
 
 describe.each([
   ["MCP 1.x", connectV1],
