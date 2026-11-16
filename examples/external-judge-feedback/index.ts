@@ -32,8 +32,11 @@ async function answer(messageId: string, sessionId: string) {
   const targets = await loadTargets();
   if (Object.hasOwn(targets, messageId))
     throw new Error("Use a unique message ID for each response being rated");
-  targets[messageId] = { projectName, traceId, sessionId };
-  await writeFile(targetsFile, JSON.stringify(targets, null, 2));
+  const updatedTargets = {
+    ...targets,
+    [messageId]: { projectName, traceId, sessionId },
+  };
+  await writeFile(targetsFile, JSON.stringify(updatedTargets, null, 2));
   return { messageId, answer: "Here is the answer." };
 }
 
@@ -51,7 +54,11 @@ async function main() {
   }
   if (command === "request") {
     if (!detail) throw new Error("request requires MESSAGE_ID SESSION_ID");
-    await Tracer.init({ projectName });
+    const tracer = await Tracer.init({ projectName });
+    if (!tracer.projectId)
+      throw new Error(
+        "Tracing requires valid credentials and an existing project",
+      );
     // observe captures the initialized tracer when the wrapper is created.
     const tracedAnswer = Tracer.observe(answer, {
       spanType: "agent",
