@@ -50,7 +50,19 @@ export function instrumentClientIdentity(transport: HttpTransport): void {
   )
     return;
   http.handleRequest = async (request, ...args) => {
-    const token = await initializeToken(request).catch(() => undefined);
+    if (
+      (request.method === "GET" || request.method === "DELETE") &&
+      request.headers.get("mcp-session-id")?.startsWith(PREFIX)
+    )
+      return new Response(null, { status: 405, headers: { Allow: "POST" } });
+    const options = args[0];
+    const parsedBody: unknown =
+      typeof options === "object" && options !== null
+        ? Reflect.get(options, "parsedBody")
+        : undefined;
+    const token = await initializeToken(request, parsedBody).catch(
+      () => undefined,
+    );
     const response = await handle(request, ...args);
     if (
       token === undefined ||
@@ -68,9 +80,23 @@ export function instrumentClientIdentity(transport: HttpTransport): void {
   };
 }
 
-async function initializeToken(request: Request): Promise<string | undefined> {
+async function initializeToken(
+  request: Request,
+  parsedBody: unknown,
+): Promise<string | undefined> {
   if (request.method !== "POST" || request.headers.has("mcp-session-id"))
     return undefined;
+  const message: unknown =
+    parsedBody === undefined ? await readInitializeBody(request) : parsedBody;
+  if (
+    parsedBody !== undefined &&
+    Buffer.byteLength(JSON.stringify(parsedBody), "utf8") > MAX_INITIALIZE_BYTES
+  )
+    return undefined;
+  return identityToken(message);
+}
+
+async function readInitializeBody(request: Request): Promise<unknown> {
   // Bound our copy without changing the body the MCP transport reads.
   const reader = request.clone().body?.getReader();
   if (reader === undefined) return undefined;
@@ -87,7 +113,10 @@ async function initializeToken(request: Request): Promise<string | undefined> {
   } finally {
     void reader.cancel().catch(() => {});
   }
-  const message: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
+function identityToken(message: unknown): string | undefined {
   if (
     typeof message !== "object" ||
     message === null ||

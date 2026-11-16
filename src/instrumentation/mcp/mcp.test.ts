@@ -712,6 +712,7 @@ async function connectV2(
 
 test("legacy HTTP clients retain handshake identity across fresh server instances", async () => {
   const exporter = useExporter();
+  const streamStatuses: number[] = [];
   const handler = createMcpHandler(() => {
     const server = new McpServerV2(
       { name: "greeter", version: "1" },
@@ -724,17 +725,54 @@ test("legacy HTTP clients retain handshake identity across fresh server instance
   cleanups.push(() => handler.close());
   const call = async (name: string) => {
     const client = new ClientV1({ name, version: "client-1" });
+    const dispatch = async (request: Request) => {
+      if (name === "client-a") return handler.fetch(request);
+      const server = new McpServerV2(
+        { name: "greeter", version: "1" },
+        { supportedProtocolVersions: ["2025-06-18"] },
+      );
+      registerTools(server);
+      instrumentMcpServer(server);
+      const transport = new WebStandardStreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+        enableJsonResponse: true,
+      });
+      await server.connect(transport);
+      cleanups.push(() => server.close());
+      const parsedBody =
+        request.method === "POST" ? await request.json() : undefined;
+      return transport.handleRequest(
+        new Request(request.url, {
+          method: request.method,
+          headers: request.headers,
+        }),
+        { parsedBody },
+      );
+    };
     const transport = new LegacyHttpClient(new URL("http://test.local/mcp"), {
-      fetch: (url, init) => handler.fetch(new Request(String(url), init)),
+      fetch: (url, init) => dispatch(new Request(String(url), init)),
     });
     await client.connect(transport);
     cleanups.push(() => client.close());
     await client.callTool({ name: "greet", arguments: { name: "Alice" } });
     await client.callTool({ name: "greet", arguments: { name: "Bob" } });
+    if (name === "client-b")
+      for (const method of ["GET", "DELETE"])
+        streamStatuses.push(
+          (
+            await dispatch(
+              new Request("http://test.local/mcp", {
+                method,
+                headers: { "mcp-session-id": transport.sessionId! },
+              }),
+            )
+          ).status,
+        );
   };
   await Promise.all([call("client-a"), call("client-b")]);
-  expect(
-    exporter
+  expect({
+    streamStatuses,
+    identities: exporter
       .getFinishedSpans()
       .filter((span) => span.attributes["mcp.method.name"] === "tools/call")
       .map((span) => ({
@@ -743,12 +781,15 @@ test("legacy HTTP clients retain handshake identity across fresh server instance
         protocol: span.attributes["mcp.protocol.version"],
       }))
       .sort((a, b) => String(a.client).localeCompare(String(b.client))),
-  ).toEqual([
-    { client: "client-a", version: "client-1", protocol: "2025-06-18" },
-    { client: "client-a", version: "client-1", protocol: "2025-06-18" },
-    { client: "client-b", version: "client-1", protocol: "2025-06-18" },
-    { client: "client-b", version: "client-1", protocol: "2025-06-18" },
-  ]);
+  }).toEqual({
+    streamStatuses: [405, 405],
+    identities: [
+      { client: "client-a", version: "client-1", protocol: "2025-06-18" },
+      { client: "client-a", version: "client-1", protocol: "2025-06-18" },
+      { client: "client-b", version: "client-1", protocol: "2025-06-18" },
+      { client: "client-b", version: "client-1", protocol: "2025-06-18" },
+    ],
+  });
 });
 
 test("native HTTP sessions are not replaced by identity carriers", async () => {
