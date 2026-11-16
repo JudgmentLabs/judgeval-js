@@ -365,11 +365,12 @@ function buildCategoryOutputs(
 }
 
 function toAgentJudge(judge: PromptJudgeDetail): AgentJudge {
+  const model = "model" in judge.definition ? judge.definition.model : null;
   return {
     judgeId: judge.id,
     name: judge.name,
     prompt: judge.definition.prompt,
-    model: judge.definition.model,
+    model: typeof model === "string" ? model : null,
     reasoningLevel: judge.definition.reasoning_level,
     scoreType: judge.score_type,
     description: judge.definition.description,

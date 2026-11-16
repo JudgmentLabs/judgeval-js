@@ -28,6 +28,17 @@ export {
   wrapOpenAI,
 } from "./instrumentation";
 
+export {
+  instrumentMcpServer,
+  markMcpCallError,
+  setMcpCaller,
+  type InstrumentMcpServerOptions,
+  type InstrumentableMcpServer,
+  type McpCaller,
+  type McpRequestInfo,
+  type McpToolDescriptor,
+} from "./instrumentation/mcp";
+
 export { Example } from "./data";
 export type { ScoringResult } from "./data";
 
@@ -45,7 +56,34 @@ export type {
 export { Evaluation, type EvaluationRunOptions } from "./evaluation";
 
 export { Dataset } from "./datasets";
+export {
+  Trajectory,
+  type TrajectoryConfig,
+  type RecordOptions,
+} from "./trajectory";
 export type { DatasetInfo } from "./internal/api/models";
+export type {
+  ConversationBase64Source,
+  ConversationCustomItem,
+  ConversationCustomPart,
+  ConversationError,
+  ConversationItem,
+  ConversationJson,
+  ConversationJsonPart,
+  ConversationMediaPart,
+  ConversationMediaSource,
+  ConversationMessage,
+  ConversationObservation,
+  ConversationPart,
+  ConversationReasoning,
+  ConversationTextPart,
+  ConversationTool,
+  ConversationToolCall,
+  ConversationToolResult,
+  ConversationUrlSource,
+  ConversationUsage,
+  Observation,
+} from "./internal/api/models";
 export type { ExperimentScorer } from "./internal/api/models";
 export {
   validateDatasetSchema,

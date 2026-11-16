@@ -370,3 +370,18 @@ test("rejects external judges with no executable type", async () => {
     factory.update({ judgeId: "judge-1", prompt: "Updated rubric" }),
   ).rejects.toThrow("only prompt-based Agent judges are supported");
 });
+
+test("preserves judge metadata when the server omits its model", async () => {
+  const definition = { ...DEFINITION };
+  Reflect.deleteProperty(definition, "model");
+  const { factory } = makeFactory("proj-1", [judgeDetail({ definition })]);
+  const judge = await factory.create({
+    name: "helpfulness",
+    prompt: "Check helpfulness.",
+    scoreType: "binary",
+  });
+  expect({
+    model: judge?.model,
+    reasoningLevel: judge?.reasoningLevel,
+  }).toEqual({ model: null, reasoningLevel: "lite" });
+});

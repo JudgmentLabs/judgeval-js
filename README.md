@@ -11,6 +11,31 @@ Find the latest version on [npm](https://www.npmjs.com/package/judgeval).
 npm install judgeval
 ```
 
+## Trace your MCP server
+
+See which tools agents call, investigate failures, and group related calls into conversations. Supports `@modelcontextprotocol/sdk` 1.x and `@modelcontextprotocol/server` 2.x.
+
+Initialize your tracer, then instrument your existing server before serving requests:
+
+```typescript
+import { Tracer, instrumentMcpServer } from "judgeval";
+
+await Tracer.init({ projectName: "my-mcp-server" });
+instrumentMcpServer(server);
+```
+
+Tool calls appear as standard Judgment traces, with instrumented work inside each tool captured as child spans. Input/output and error-message capture are opt-in.
+
+By default, the SDK adds optional `intent`, `llm_model`, and `conversation_id` arguments to compatible tool schemas and removes them before your tool runs. Results include a conversation ID for the agent to reuse. To trace without changing tool schemas or results:
+
+```typescript
+instrumentMcpServer(server, { injectAgentArguments: false });
+```
+
+Call `await Tracer.forceFlush()` before a serverless return, or `await Tracer.shutdown()` when stopping. Export is best-effort and uses your existing tracer.
+
+See the [Judgment documentation](https://docs.judgmentlabs.ai/documentation) for more on tracing and integrations.
+
 ## Usage
 
 ### Tracer

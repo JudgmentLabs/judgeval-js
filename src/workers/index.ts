@@ -6,6 +6,27 @@ export {
   type TracerConfig,
 } from "../trace/BaseTracer";
 export { Tracer, type WorkersTracerConfig } from "./Tracer";
+export type {
+  ConversationBase64Source,
+  ConversationCustomItem,
+  ConversationCustomPart,
+  ConversationError,
+  ConversationItem,
+  ConversationJson,
+  ConversationJsonPart,
+  ConversationMediaPart,
+  ConversationMediaSource,
+  ConversationMessage,
+  ConversationObservation,
+  ConversationPart,
+  ConversationReasoning,
+  ConversationTextPart,
+  ConversationTool,
+  ConversationToolCall,
+  ConversationToolResult,
+  ConversationUrlSource,
+  ConversationUsage,
+} from "../internal/api/models";
 export {
   wrap,
   wrapAnthropicManagedAgents,
