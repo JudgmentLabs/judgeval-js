@@ -23,22 +23,19 @@ async function loadTargets(): Promise<Record<string, SavedTarget>> {
     : {};
 }
 
-const answer = Tracer.observe(
-  async (messageId: string, sessionId: string) => {
-    Tracer.setSessionId(sessionId);
-    const span = Tracer.getCurrentSpan();
-    if (!span?.isRecording())
-      throw new Error("Enable tracing before retaining a feedback target");
-    const traceId = span.spanContext().traceId;
-    const targets = await loadTargets();
-    if (Object.hasOwn(targets, messageId))
-      throw new Error("Use a unique message ID for each response being rated");
-    targets[messageId] = { projectName, traceId, sessionId };
-    await writeFile(targetsFile, JSON.stringify(targets, null, 2));
-    return { messageId, answer: "Here is the answer." };
-  },
-  { spanType: "agent", spanName: "answer" },
-);
+async function answer(messageId: string, sessionId: string) {
+  Tracer.setSessionId(sessionId);
+  const span = Tracer.getCurrentSpan();
+  if (!span?.isRecording())
+    throw new Error("Enable tracing before retaining a feedback target");
+  const traceId = span.spanContext().traceId;
+  const targets = await loadTargets();
+  if (Object.hasOwn(targets, messageId))
+    throw new Error("Use a unique message ID for each response being rated");
+  targets[messageId] = { projectName, traceId, sessionId };
+  await writeFile(targetsFile, JSON.stringify(targets, null, 2));
+  return { messageId, answer: "Here is the answer." };
+}
 
 async function main() {
   const [command, targetId, detail] = process.argv.slice(2);
@@ -55,7 +52,12 @@ async function main() {
   if (command === "request") {
     if (!detail) throw new Error("request requires MESSAGE_ID SESSION_ID");
     await Tracer.init({ projectName });
-    const response = await answer(targetId, detail);
+    // observe captures the initialized tracer when the wrapper is created.
+    const tracedAnswer = Tracer.observe(answer, {
+      spanType: "agent",
+      spanName: "answer",
+    });
+    const response = await tracedAnswer(targetId, detail);
     await Tracer.forceFlush();
     console.log(response);
     return;
