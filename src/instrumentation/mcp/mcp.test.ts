@@ -1298,6 +1298,16 @@ describe("cancelled calls", () => {
 });
 
 describe("withAgentArguments", () => {
+  test.each([null, "intent"])("ignores malformed required: %p", (required) => {
+    const inputSchema: Record<string, unknown> = {
+      type: "object",
+      properties: {},
+      required,
+    };
+    const tool = withAgentArguments({ name: "t", inputSchema });
+    expect(tool.inputSchema.required).toEqual(["intent", "llm_model"]);
+  });
+
   test.each([
     ["oneOf", []],
     ["anyOf", []],

@@ -160,6 +160,7 @@ export function withAgentArguments<Tool extends ListedTool>(
   const resolved = argumentNames(names);
   const [intentName, modelName] = resolved;
   const declared = new Set(declaredArguments(schema, names));
+  const required = schema["required"];
   const requiredArguments = [intentName, modelName].filter(
     (name) => !declared.has(name),
   );
@@ -171,7 +172,7 @@ export function withAgentArguments<Tool extends ListedTool>(
         ? {}
         : {
             required: [
-              ...((schema["required"] as string[] | undefined) ?? []),
+              ...(Array.isArray(required) ? required : []),
               ...requiredArguments,
             ],
           }),
@@ -216,7 +217,8 @@ export function declaredArguments(
   names: ArgumentNames = {},
 ): string[] {
   const keys = new Set(Object.keys((schema["properties"] as object) ?? {}));
-  for (const key of (schema["required"] as unknown[] | undefined) ?? [])
+  const required = schema["required"];
+  for (const key of Array.isArray(required) ? required : [])
     if (typeof key === "string") keys.add(key);
   for (const pattern of Object.keys(
     (schema["patternProperties"] as object) ?? {},
