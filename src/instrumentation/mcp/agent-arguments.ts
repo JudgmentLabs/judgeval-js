@@ -10,9 +10,9 @@ const UUID_V7 =
 
 const AGENT_ARGUMENT_DESCRIPTIONS: Readonly<Record<string, string>> = {
   [INTENT_ARGUMENT]:
-    "Optional, for analytics only. In 15-25 words, describe in general terms why you are calling this tool. Never include names, contact details, credentials, or other sensitive details.",
+    "In 15-25 words, describe in general terms why you are calling this tool. Never include names, contact details, credentials, or other sensitive details. For analytics only.",
   [MODEL_ARGUMENT]:
-    'Optional, for analytics only. The exact model identifier you are running as. Pass "unknown" if you are not certain.',
+    'The exact model identifier you are running as, taken from your system prompt or environment. For analytics only. If you do not know it with certainty, pass "unknown"—never guess.',
   [CONVERSATION_ARGUMENT]:
     "Optional, for analytics only. Read conversation_id from the server's earlier response text or structuredContent._judgment and pass it unchanged as {argument_name} on later calls in this conversation. Omit it on the first call, and do not invent one.",
 };
@@ -56,6 +56,9 @@ const COMPOSITION_KEYWORDS = [
   "dependentRequired",
   "dependencies",
   "propertyNames",
+  "maxProperties",
+  "const",
+  "enum",
 ] as const;
 
 /** Values an agent reported on a call, kept apart from the tool's own input. */
@@ -143,8 +146,9 @@ export function isAgentArgument(
 }
 
 /**
- * Adds the optional arguments to a listed tool. Schemas we can't safely extend
- * are returned unchanged, and a tool's own property of the same name wins.
+ * Adds analytics arguments, requiring injected intent and model in the listing.
+ * Schemas we can't safely extend are returned unchanged, and a tool's own
+ * property of the same name wins.
  */
 export function withAgentArguments<Tool extends ListedTool>(
   tool: Tool,
@@ -154,11 +158,24 @@ export function withAgentArguments<Tool extends ListedTool>(
   const schema = tool.inputSchema;
   if (schema === undefined || !canExtendSchema(schema)) return tool;
   const resolved = argumentNames(names);
+  const [intentName, modelName] = resolved;
   const declared = new Set(declaredArguments(schema, names));
+  const required = schema["required"];
+  const requiredArguments = [intentName, modelName].filter(
+    (name) => !declared.has(name),
+  );
   return {
     ...tool,
     inputSchema: {
       ...schema,
+      ...(requiredArguments.length === 0
+        ? {}
+        : {
+            required: [
+              ...(Array.isArray(required) ? required : []),
+              ...requiredArguments,
+            ],
+          }),
       properties: {
         ...Object.fromEntries(
           Object.entries(AGENT_ARGUMENT_DESCRIPTIONS)
@@ -200,7 +217,8 @@ export function declaredArguments(
   names: ArgumentNames = {},
 ): string[] {
   const keys = new Set(Object.keys((schema["properties"] as object) ?? {}));
-  for (const key of (schema["required"] as unknown[] | undefined) ?? [])
+  const required = schema["required"];
+  for (const key of Array.isArray(required) ? required : [])
     if (typeof key === "string") keys.add(key);
   for (const pattern of Object.keys(
     (schema["patternProperties"] as object) ?? {},
