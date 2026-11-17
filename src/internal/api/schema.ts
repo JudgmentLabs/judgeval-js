@@ -694,7 +694,7 @@ export interface paths {
     put?: never;
     /**
      * Submit a customer judge result
-     * @description Submit a customer score for one trace or session under any judge. Resubmitting for the same judge and target replaces its current customer score. Each submission, including a retry, writes a new result row. Hosted results are preserved. Validates against the production version and derives attribution from the target.
+     * @description Submit a customer score for one trace, session, or conversation under any judge. Resubmitting for the same judge and target replaces its current customer score. Each submission, including a retry, writes a new result row. Hosted results are preserved. Validates against the production version and derives attribution from the target.
      */
     post: operations["postV1ProjectsByProjectIdJudge-results"];
     delete?: never;
@@ -3185,7 +3185,7 @@ export interface components {
        * @enum {string}
        */
       trigger: "manual" | "ci" | "schedule" | "api";
-      /** @description Score each case's stored trace, named by its metadata.trace_id, instead of running the agent. Every published case needs a trace in this project. */
+      /** @description Score what each case stores instead of running the agent: the trace in its metadata.trace_id, the conversation in its metadata.conversation_id, or both. Every published case needs one that is in this project. A case with only a conversation can only use conversation judges. */
       stored_traces?: boolean;
     };
     StartTestRunResponse: {
@@ -3219,7 +3219,7 @@ export interface components {
       trigger: string;
       case_filter: components["schemas"]["TestCaseFilter"];
       cases_total: number;
-      /** @description Cases whose trace arrived. */
+      /** @description Cases whose trace arrived, or that have a stored conversation. */
       cases_with_output: number;
       cases_scored: number;
       /** @description Scored cases whose checks all passed. */
@@ -3238,6 +3238,7 @@ export interface components {
         /** Format: uuid */
         case_id: string;
         trace_id: string | null;
+        conversation_id: string | null;
         scored_at: string | null;
         passed: boolean | null;
         checks: {
@@ -5241,6 +5242,11 @@ export interface operations {
                     /** @constant */
                     type: "session";
                     session_id: string;
+                  }
+                | {
+                    /** @constant */
+                    type: "conversation";
+                    conversation_id: string;
                   };
               value: boolean | number | string;
               reason?: string;
@@ -5258,6 +5264,11 @@ export interface operations {
                     /** @constant */
                     type: "session";
                     session_id: string;
+                  }
+                | {
+                    /** @constant */
+                    type: "conversation";
+                    conversation_id: string;
                   };
               value: boolean | number | string;
               reason?: string;

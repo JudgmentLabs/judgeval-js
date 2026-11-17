@@ -6,10 +6,26 @@ import type {
 import { Logger } from "../utils/logger";
 import type { ExternalJudge, ScoreType } from "./ExternalJudge";
 
-/** Identifies the trace or session whose current score will be replaced. */
+/** Identifies the trace, session, or conversation whose current score will be replaced. */
 export type ExternalJudgeTarget =
-  | { type: "trace"; traceId: string; sessionId?: never }
-  | { type: "session"; sessionId: string; traceId?: never };
+  | {
+      type: "trace";
+      traceId: string;
+      sessionId?: never;
+      conversationId?: never;
+    }
+  | {
+      type: "session";
+      sessionId: string;
+      traceId?: never;
+      conversationId?: never;
+    }
+  | {
+      type: "conversation";
+      conversationId: string;
+      traceId?: never;
+      sessionId?: never;
+    };
 
 /**
  * Create external judges and submit their results on the Judgment platform.
@@ -129,7 +145,7 @@ export class ExternalJudgeFactory {
   }
 
   /**
-   * Submits a customer score under any judge for a trace or session.
+   * Submits a customer score under any judge for a trace, session, or conversation.
    *
    * Resubmitting for the same judge and target replaces its current customer
    * score. To correct a value, submit again for that judge and target.
@@ -141,7 +157,7 @@ export class ExternalJudgeFactory {
    * `numeric`, or one of the judge's configured outputs' names for
    * `categorical`).
    *
-   * @param options.target - A trace or session target with its corresponding ID.
+   * @param options.target - A trace, session, or conversation target with its corresponding ID.
    * @param options.value - The externally computed score.
    * @param options.judgeId - ID of the judge to submit under.
    * @param options.judgeName - Name of the judge to submit under.
@@ -171,15 +187,21 @@ export class ExternalJudgeFactory {
     }
 
     const targetKey =
-      options.target?.type === "trace" ? "traceId" : "sessionId";
+      options.target?.type === "trace"
+        ? "traceId"
+        : options.target?.type === "session"
+          ? "sessionId"
+          : "conversationId";
     if (
       !options.target ||
-      !["trace", "session"].includes(options.target.type) ||
+      !["trace", "session", "conversation"].includes(options.target.type) ||
       Object.keys(options.target).length !== 2 ||
       typeof options.target[targetKey] !== "string" ||
       !options.target[targetKey]
     ) {
-      throw new Error("target must contain exactly one trace or session ID");
+      throw new Error(
+        "target must contain exactly one trace, session, or conversation ID",
+      );
     }
 
     const projectId = this._expectProjectId();
@@ -194,7 +216,12 @@ export class ExternalJudgeFactory {
       target:
         options.target.type === "trace"
           ? { type: "trace", trace_id: options.target.traceId }
-          : { type: "session", session_id: options.target.sessionId },
+          : options.target.type === "session"
+            ? { type: "session", session_id: options.target.sessionId }
+            : {
+                type: "conversation",
+                conversation_id: options.target.conversationId,
+              },
       value: options.value,
       ...judge,
       ...(options.reason !== undefined ? { reason: options.reason } : {}),
