@@ -124,12 +124,22 @@ export function resolveModel(
 ): string | undefined {
   if (names.model !== undefined && reportedModel !== undefined)
     return reportedModel;
+  return modelFromClientMetadata(meta) ?? reportedModel;
+}
+
+function modelFromClientMetadata(
+  meta: Readonly<Record<string, unknown>>,
+): string | undefined {
+  return modelFromCodexMetadata(meta);
+}
+
+function modelFromCodexMetadata(
+  meta: Readonly<Record<string, unknown>>,
+): string | undefined {
   const turn = meta["x-codex-turn-metadata"];
-  const model =
-    typeof turn === "object" && turn !== null && !Array.isArray(turn)
-      ? normalizeModel((turn as Record<string, unknown>)["model"])
-      : undefined;
-  return model ?? reportedModel;
+  return typeof turn === "object" && turn !== null && !Array.isArray(turn)
+    ? normalizeModel((turn as Record<string, unknown>)["model"])
+    : undefined;
 }
 
 function normalizeModel(value: unknown): string | undefined {
