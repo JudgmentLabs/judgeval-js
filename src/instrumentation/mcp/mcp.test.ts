@@ -823,6 +823,43 @@ describe.each([
   ["MCP 1.x", connectV1],
   ["MCP 2.x", connectV2],
 ] as const)("%s adapter", (_label, connect) => {
+  test("advertises required intent and model without rejecting older calls", async () => {
+    const exporter = useExporter();
+    const client = await connect({});
+    cleanups.push(() => client.close());
+    const listing = await client.listTools();
+    const missing = await client.callTool({
+      name: "greet",
+      arguments: { name: "Alice" },
+    });
+    const supplied = await client.callTool({
+      name: "greet",
+      arguments: {
+        name: "Alice",
+        intent: "Greeting",
+        llm_model: "agent-model",
+      },
+    });
+    expect({
+      required: listing.tools[0]?.inputSchema.required,
+      failed: [missing.isError ?? false, supplied.isError ?? false],
+      telemetry: exporter
+        .getFinishedSpans()
+        .filter((span) => span.name === "tools/call greet")
+        .map((span) => ({
+          intent: span.attributes["judgment.mcp.intent"],
+          model: span.attributes["judgment.llm.model"],
+        })),
+    }).toEqual({
+      required: ["name", "intent", "llm_model"],
+      failed: [false, false],
+      telemetry: [
+        { intent: undefined, model: undefined },
+        { intent: "Greeting", model: "agent-model" },
+      ],
+    });
+  });
+
   test.each([true, false])(
     "explicit names reuse declared fields and inject absent fields (injection=%s)",
     async (injectAgentArguments) => {
@@ -893,6 +930,8 @@ describe.each([
       expect({
         received,
         ownedFields: Object.keys(owned.inputSchema.properties ?? {}).sort(),
+        ownedRequired: owned.inputSchema.required ?? [],
+        injectedRequired: injected.inputSchema.required ?? [],
         injectedFields: Object.keys(
           injected.inputSchema.properties ?? {},
         ).sort(),
@@ -914,6 +953,8 @@ describe.each([
       }).toEqual({
         received: injectAgentArguments ? [args, {}, {}, {}] : [args, {}, {}],
         ownedFields: ["chat_id", "intent", "llm_model"],
+        ownedRequired: [],
+        injectedRequired: injectAgentArguments ? ["intent", "llm_model"] : [],
         injectedFields: injectAgentArguments
           ? ["chat_id", "intent", "llm_model"]
           : [],
@@ -1257,16 +1298,37 @@ describe("cancelled calls", () => {
 });
 
 describe("withAgentArguments", () => {
-  test.each(["oneOf", "anyOf", "allOf", "$ref"])(
-    "leaves a schema using %s unchanged",
-    (keyword) => {
-      const tool = {
-        name: "t",
-        inputSchema: { type: "object", [keyword]: [] },
-      };
-      expect(withAgentArguments(tool)).toEqual(tool);
-    },
-  );
+  test.each([null, "intent"])("ignores malformed required: %p", (required) => {
+    const inputSchema: Record<string, unknown> = {
+      type: "object",
+      properties: {},
+      required,
+    };
+    const tool = withAgentArguments({ name: "t", inputSchema });
+    expect(tool.inputSchema.required).toEqual(["intent", "llm_model"]);
+  });
+
+  test.each([
+    ["oneOf", []],
+    ["anyOf", []],
+    ["allOf", []],
+    ["$ref", "#/Input"],
+    ["maxProperties", 1],
+    ["const", { name: "Alice" }],
+    ["enum", [{ name: "Alice" }]],
+  ] as const)("leaves a schema using %s unchanged", (keyword, constraint) => {
+    const tool = {
+      name: "t",
+      inputSchema: {
+        type: "object",
+        properties: { name: { type: "string" } },
+        required: ["name"],
+        additionalProperties: false,
+        [keyword]: constraint,
+      },
+    };
+    expect(withAgentArguments(tool)).toEqual(tool);
+  });
 });
 
 describe("structured conversation handoff", () => {
