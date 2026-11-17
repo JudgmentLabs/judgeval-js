@@ -237,6 +237,11 @@ export class AgentJudgeFactory {
       judgeId,
       { version },
     );
+    if (judge.execution_mode === "external") {
+      throw new Error(
+        `Judge ${judgeId} is an external judge; only prompt-based Agent judges are supported.`,
+      );
+    }
     if (judge.judge_type !== "prompt") {
       throw new Error(
         `Judge ${judgeId} is a ${judge.judge_type} judge; only prompt-based Agent judges are supported.`,
@@ -360,11 +365,12 @@ function buildCategoryOutputs(
 }
 
 function toAgentJudge(judge: PromptJudgeDetail): AgentJudge {
+  const model = "model" in judge.definition ? judge.definition.model : null;
   return {
     judgeId: judge.id,
     name: judge.name,
     prompt: judge.definition.prompt,
-    model: judge.definition.model,
+    model: typeof model === "string" ? model : null,
     reasoningLevel: judge.definition.reasoning_level,
     scoreType: judge.score_type,
     description: judge.definition.description,

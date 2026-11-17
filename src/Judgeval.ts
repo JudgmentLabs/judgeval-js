@@ -6,6 +6,7 @@ import { Logger } from "./utils/logger";
 import { EvaluationFactory } from "./evaluation/EvaluationFactory";
 import { DatasetFactory } from "./datasets/DatasetFactory";
 import { AgentJudgeFactory } from "./agent-judges/AgentJudgeFactory";
+import { ExternalJudgeFactory } from "./external-judges/ExternalJudgeFactory";
 import { OfflineTestsFactory } from "./offline-tests/OfflineTestsFactory";
 import { warnOfflineTestsDeprecated } from "./offline-tests/deprecation";
 import { TestRunsFactory, TestSuitesFactory } from "./testing";
@@ -225,6 +226,15 @@ export class Judgeval {
   /** Manage Agent judges (prompt-based scorers) on the platform. */
   get agentJudges(): AgentJudgeFactory {
     return new AgentJudgeFactory(
+      this._client,
+      this._projectId,
+      this._projectName,
+    );
+  }
+
+  /** Creates external judges and submits feedback from your application. */
+  get externalJudges(): ExternalJudgeFactory {
+    return new ExternalJudgeFactory(
       this._client,
       this._projectId,
       this._projectName,

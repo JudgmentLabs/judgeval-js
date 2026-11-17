@@ -683,6 +683,26 @@ export interface paths {
     patch: operations["patchV1ProjectsByProjectIdIssuesByIssueId"];
     trace?: never;
   };
+  "/v1/projects/{projectId}/judge-results": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Submit a customer judge result
+     * @description Submit a customer score for one trace or session under any judge. Resubmitting for the same judge and target replaces its current customer score. Each submission, including a retry, writes a new result row. Hosted results are preserved. Validates against the production version and derives attribution from the target.
+     */
+    post: operations["postV1ProjectsByProjectIdJudge-results"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/projects/{projectId}/judges": {
     parameters: {
       query?: never;
@@ -698,7 +718,7 @@ export interface paths {
     put?: never;
     /**
      * Create judge
-     * @description Create an Agent judge (wire value `prompt`), a Code judge (wire value `custom`), or a deterministic judge with categorical outputs and its initial production version. Deterministic judges require two outputs ordered match, then miss. This call fixes the judge type for its lifetime. Agent judges require prompt configuration; Code judges require a base64-encoded tar.gz bundle and Python entrypoint metadata.
+     * @description Create an Agent judge (wire value `prompt`), a Code judge (wire value `custom`), a deterministic judge with categorical outputs, or an external judge with executionMode external and binary, numeric, or categorical outputs, with its initial production version. Deterministic judges require two outputs ordered match, then miss. This call fixes the judge type for its lifetime. Agent judges require prompt configuration; Code judges require a base64-encoded tar.gz bundle and Python entrypoint metadata.
      */
     post: operations["postV1ProjectsByProjectIdJudges"];
     delete?: never;
@@ -2700,6 +2720,7 @@ export interface components {
       response_type: "binary" | "categorical" | "numeric";
       version?: number;
       bump_major?: boolean;
+      conversation?: boolean;
       categories?:
         | {
             value: string;
@@ -2764,7 +2785,7 @@ export interface components {
           judge?: {
             id: string;
             name: string;
-            judge_type: string;
+            judge_type: string | null;
             score_type: string;
           };
         }[];
@@ -2803,7 +2824,7 @@ export interface components {
           judge?: {
             id: string;
             name: string;
-            judge_type: string;
+            judge_type: string | null;
             score_type: string;
           };
         }[];
@@ -3725,6 +3746,18 @@ export interface operations {
         };
         content: {
           "application/json": {
+            /** @description Model used for the independent Agent Judge comparison baseline. */
+            ordinary_agent_model: string;
+            /** @description JEV catalog model cost in USD from reported tokens; excludes preprocessing. Null when usage or pricing is unavailable. */
+            candidate_catalog_model_cost_usd: number | null;
+            /** @description Catalog model cost in USD across recorded Agent Judge generations. Null if any generation usage or pricing is unavailable. */
+            ordinary_catalog_model_cost_usd: number | null;
+            /** @description JEV catalog model cost, plus Agent Judge catalog model cost when the candidate falls back or fails. */
+            optimized_catalog_model_cost_usd: number | null;
+            /** @description Agent Judge catalog model cost minus optimized catalog model cost; negative means a cost increase. */
+            catalog_model_cost_savings_usd: number | null;
+            /** @description Savings relative to Agent Judge catalog model cost. Null when costs are unknown or the baseline is zero. */
+            catalog_model_cost_savings_percent: number | null;
             /** Format: uuid */
             judge_id: string;
             /** Format: uuid */
@@ -5184,6 +5217,69 @@ export interface operations {
       };
     };
   };
+  "postV1ProjectsByProjectIdJudge-results": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @example YOUR_PROJECT_ID */
+        projectId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json":
+          | {
+              target:
+                | {
+                    /** @constant */
+                    type: "trace";
+                    trace_id: string;
+                  }
+                | {
+                    /** @constant */
+                    type: "session";
+                    session_id: string;
+                  };
+              value: boolean | number | string;
+              reason?: string;
+              /** Format: uuid */
+              judge_id: string;
+            }
+          | {
+              target:
+                | {
+                    /** @constant */
+                    type: "trace";
+                    trace_id: string;
+                  }
+                | {
+                    /** @constant */
+                    type: "session";
+                    session_id: string;
+                  };
+              value: boolean | number | string;
+              reason?: string;
+              judge_name: string;
+            };
+      };
+    };
+    responses: {
+      /** @description Response for status 200 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": {
+            /** Format: uuid */
+            id: string;
+          };
+        };
+      };
+    };
+  };
   getV1ProjectsByProjectIdJudges: {
     parameters: {
       query?: {
@@ -5211,7 +5307,10 @@ export interface operations {
                   id: string;
                   name: string;
                   /** @enum {string} */
-                  judge_type: "prompt" | "custom" | "agent" | "deterministic";
+                  execution_mode: "internal" | "external";
+                  judge_type:
+                    | ("prompt" | "custom" | "agent" | "deterministic")
+                    | null;
                   /** @enum {string} */
                   score_type: "numeric" | "binary" | "categorical";
                   judge_major_version: number;
@@ -5224,14 +5323,15 @@ export interface operations {
                   online_sampling_rate: number;
                 }[]
               | {
+                  /** @enum {string} */
+                  execution_mode: "internal" | "external";
                   id: string;
                   name: string;
                   judge_description: string | null;
-                  /**
-                   * @description Agent judge (wire value `prompt`); Code judge (wire value `custom`); legacy Agent judge (wire value `agent`); Condition judge (wire value `deterministic`)
-                   * @enum {string}
-                   */
-                  judge_type: "prompt" | "custom" | "agent" | "deterministic";
+                  /** @description Agent judge (wire value `prompt`); Code judge (wire value `custom`); legacy Agent judge (wire value `agent`); Condition judge (wire value `deterministic`) */
+                  judge_type:
+                    | ("prompt" | "custom" | "agent" | "deterministic")
+                    | null;
                   knowledge_file_id: string | null;
                   /**
                    * @description numeric, binary, or categorical. For binary judges, true means the judge applied its label, which the app shows under the judge's name. false means no label was applied. For classification judges, the value is the label, meaning the chosen option.
@@ -5377,6 +5477,8 @@ export interface operations {
                 name: string;
                 /** @description Human-readable description shown in the UI */
                 judgeDescription?: string | null;
+                /** @constant */
+                executionMode?: "internal";
                 /**
                  * @description Agent judge (wire value `prompt`)
                  * @constant
@@ -5525,6 +5627,8 @@ export interface operations {
                 name: string;
                 /** @description Human-readable description shown in the UI */
                 judgeDescription?: string | null;
+                /** @constant */
+                executionMode?: "internal";
                 /**
                  * @description Code judge (wire value `custom`)
                  * @constant
@@ -5672,6 +5776,8 @@ export interface operations {
                 name: string;
                 judgeDescription?: string | null;
                 /** @constant */
+                executionMode?: "internal";
+                /** @constant */
                 judgeType: "deterministic";
                 initialVersion: {
                   actionConfig?: {
@@ -5795,6 +5901,29 @@ export interface operations {
                 config: {
                   expression: unknown;
                 };
+              }
+            | {
+                name: string;
+                judgeDescription?: string | null;
+                /** @constant */
+                executionMode: "external";
+                initialVersion:
+                  | {
+                      /** @constant */
+                      scoreType: "binary";
+                    }
+                  | {
+                      /** @constant */
+                      scoreType: "numeric";
+                    }
+                  | {
+                      /** @constant */
+                      scoreType: "categorical";
+                      outputs: {
+                        name: string;
+                        description: string;
+                      }[];
+                    };
               };
         };
       };
@@ -5809,7 +5938,7 @@ export interface operations {
           "application/json": {
             judge_id: string;
             judge_version_id: string;
-            implementation_id: string;
+            implementation_id: string | null;
           };
         };
       };
@@ -7469,6 +7598,8 @@ export interface operations {
                   session_evaluation_idle_enabled: boolean | null;
                   session_evaluation_min_candidate_traces: number | null;
                   session_evaluation_max_wait_minutes: number | null;
+                  /** @constant */
+                  execution_mode?: "internal";
                   /**
                    * @description Agent judge (wire value `prompt`)
                    * @constant
@@ -7482,7 +7613,6 @@ export interface operations {
                     reasoning_level: "lite" | "normal" | "high";
                     min_score: number;
                     max_score: number;
-                    model: string;
                     threshold: number;
                   };
                 }
@@ -7616,6 +7746,8 @@ export interface operations {
                   session_evaluation_idle_enabled: boolean | null;
                   session_evaluation_min_candidate_traces: number | null;
                   session_evaluation_max_wait_minutes: number | null;
+                  /** @constant */
+                  execution_mode?: "internal";
                   /**
                    * @description Code judge (wire value `custom`)
                    * @constant
@@ -7766,6 +7898,8 @@ export interface operations {
                   session_evaluation_idle_enabled: boolean | null;
                   session_evaluation_min_candidate_traces: number | null;
                   session_evaluation_max_wait_minutes: number | null;
+                  /** @constant */
+                  execution_mode?: "internal";
                   /**
                    * @description Condition judge (wire value `deterministic`)
                    * @constant
@@ -7775,6 +7909,141 @@ export interface operations {
                     id: string;
                     expression: unknown;
                   };
+                }
+              | {
+                  id: string;
+                  name: string;
+                  judge_description: string | null;
+                  knowledge_file_id: string | null;
+                  /** @enum {string} */
+                  score_type: "numeric" | "binary" | "categorical";
+                  outputs: {
+                    behavior_id: string;
+                    name: string;
+                    description: string;
+                  }[];
+                  judge_version_id: string;
+                  judge_major_version: number;
+                  judge_minor_version: number;
+                  is_latest: boolean;
+                  is_production: boolean;
+                  optimistic_eval_enabled: boolean;
+                  preprocessor_artifact_revision_id: string | null;
+                  version_created_at: string;
+                  version_updated_at: string;
+                  updated_by: {
+                    user_id: string;
+                    first_name: string;
+                    last_name: string;
+                    user_email: string;
+                  } | null;
+                  online_environment_names: string[] | null;
+                  /** @enum {string} */
+                  online_evaluation_mode: "continuous" | "on_demand";
+                  action_config?: {
+                    action_groups: {
+                      id: string;
+                      /** @description Action group display name; an empty string uses Action group 1, 2, etc. */
+                      name: string;
+                      enabled: boolean;
+                      /** @description Empty runs the group in every environment */
+                      environment_names: string[];
+                      /** @description Judge result that runs the group. Categorical groups run when the result is any listed output name. */
+                      when:
+                        | {
+                            /** @constant */
+                            kind: "any";
+                          }
+                        | {
+                            /** @constant */
+                            kind: "binary";
+                            value: boolean;
+                          }
+                        | {
+                            /** @constant */
+                            kind: "categorical";
+                            values: string[];
+                          }
+                        | {
+                            /** @constant */
+                            kind: "numeric";
+                            /** @enum {string} */
+                            operator: "lt" | "lte" | "eq" | "gte" | "gt";
+                            value: number;
+                          };
+                      frequency: {
+                        count: number;
+                        window_seconds: number;
+                      };
+                      cooldown_seconds: number;
+                      actions: (
+                        | {
+                            id: string;
+                            enabled: boolean;
+                            /** @constant */
+                            type: "webhook";
+                            config: {
+                              url: string;
+                              secret: string;
+                            };
+                          }
+                        | {
+                            id: string;
+                            enabled: boolean;
+                            /** @constant */
+                            type: "email";
+                            config: {
+                              email_address: string;
+                            };
+                          }
+                        | {
+                            id: string;
+                            enabled: boolean;
+                            /** @constant */
+                            type: "slack";
+                            config: {
+                              team_id?: string;
+                              channel_id?: string;
+                              message?: string;
+                              custom_attribute_keys?: string[];
+                            };
+                          }
+                        | {
+                            id: string;
+                            enabled: boolean;
+                            /** @constant */
+                            type: "dataset";
+                            config: {
+                              dataset_id: string;
+                            };
+                          }
+                        | {
+                            id: string;
+                            enabled: boolean;
+                            /** @constant */
+                            type: "run_behavior";
+                            config: {
+                              judge_ids: string[];
+                            };
+                          }
+                      )[];
+                    }[];
+                  } | null;
+                  online_sampling_rate: number;
+                  online_span_triggers: {
+                    /** @enum {string} */
+                    kind: "and" | "or";
+                    conditions: unknown[];
+                  };
+                  online_session_scoring: boolean;
+                  session_evaluation_count_enabled: boolean | null;
+                  session_evaluation_idle_enabled: boolean | null;
+                  session_evaluation_min_candidate_traces: number | null;
+                  session_evaluation_max_wait_minutes: number | null;
+                  /** @constant */
+                  execution_mode: "external";
+                  judge_type: null;
+                  definition: null;
                 };
           };
         };

@@ -124,3 +124,8 @@ export {
   type TestResults,
   type TestRun,
 } from "./testing";
+
+export { ExternalJudgeFactory } from "./external-judges";
+export type { ExternalJudge } from "./external-judges";
+
+export type { ExternalJudgeTarget } from "./external-judges";

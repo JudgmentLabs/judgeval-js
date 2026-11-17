@@ -5,7 +5,8 @@ export interface AgentJudge {
   judgeId: string;
   name: string;
   prompt: string;
-  model: string;
+  /** Legacy resolved model when the server supplies it; otherwise null. */
+  model: string | null;
   reasoningLevel: ReasoningLevel;
   scoreType: ScoreType;
   description: string | null;
