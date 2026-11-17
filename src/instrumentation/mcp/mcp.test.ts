@@ -35,6 +35,7 @@ import type { JudgmentSpanProcessor } from "../../trace/processors/JudgmentSpanP
 import {
   declaredArguments,
   readReportedArguments,
+  resolveModel,
   withAgentArguments,
   withConversationIdPrompt,
   withConversationOutputSchema,
@@ -823,6 +824,52 @@ describe.each([
   ["MCP 1.x", connectV1],
   ["MCP 2.x", connectV2],
 ] as const)("%s adapter", (_label, connect) => {
+  test.each([true, false])(
+    "captures model metadata (injection=%s)",
+    async (injectAgentArguments) => {
+      const exporter = useExporter();
+      const client = await connect({ injectAgentArguments });
+      cleanups.push(() => client.close());
+      const results = [];
+      for (const turn of [
+        { model: " runtime-model " },
+        { model: " Unknown " },
+        { model: 42 },
+        null,
+        [],
+      ]) {
+        const result = await client.callTool({
+          name: "greet",
+          arguments: {
+            name: "Alice",
+            ...(injectAgentArguments ? { llm_model: "agent-model" } : {}),
+          },
+          _meta: { "x-codex-turn-metadata": turn },
+        });
+        results.push(result.isError ?? false);
+      }
+      expect({
+        errors: results,
+        models: exporter
+          .getFinishedSpans()
+          .filter((span) => span.name === "tools/call greet")
+          .map((span) => span.attributes["judgment.llm.model"]),
+        override: resolveModel(
+          { "x-codex-turn-metadata": { model: "runtime-model" } },
+          "customer-model",
+          { model: "chosen_model" },
+        ),
+      }).toEqual({
+        errors: [false, false, false, false, false],
+        models: [
+          "runtime-model",
+          ...Array(4).fill(injectAgentArguments ? "agent-model" : undefined),
+        ],
+        override: "customer-model",
+      });
+    },
+  );
+
   test("advertises required intent and model without rejecting older calls", async () => {
     const exporter = useExporter();
     const client = await connect({});

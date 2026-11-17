@@ -34,6 +34,8 @@ By default, the SDK adds required `intent` and `llm_model` and optional `convers
 instrumentMcpServer(server, { injectAgentArguments: false });
 ```
 
+Calling-model capture prefers an explicit `modelArgument` mapping, then Codex's per-call model metadata, then the agent-supplied `llm_model`. Codex metadata is captured even with injection disabled. Blank and `unknown` model values are ignored; other clients rely on the mapped or agent-supplied field.
+
 Call `await Tracer.forceFlush()` before a serverless return, or `await Tracer.shutdown()` when stopping. Export is best-effort and uses your existing tracer.
 
 See the [Judgment documentation](https://docs.judgmentlabs.ai/documentation) for more on tracing and integrations.
