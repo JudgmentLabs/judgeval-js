@@ -332,3 +332,33 @@ test("surfaces a rejected session score from the server", async () => {
     }),
   ).rejects.toThrow('HTTP 404: {"message":"Session not found"}');
 });
+
+test("conversation feedback uses the customer-owned ID without a trace or session", async () => {
+  const requests: unknown[] = [];
+  const client = new JudgmentApiClient("https://api.test", "key", "org");
+  client.api.use({
+    async onRequest({ request }) {
+      requests.push(await request.json());
+      return Response.json({ id: "conversation-score" });
+    },
+  });
+  const factory = new ExternalJudgeFactory(client, "project", "test");
+  const id = await factory.submitResult({
+    judgeName: "Quality",
+    target: { type: "conversation", conversationId: "customer/trajectory-123" },
+    value: 4.5,
+  });
+  expect({ id, requests }).toEqual({
+    id: "conversation-score",
+    requests: [
+      {
+        judge_name: "Quality",
+        target: {
+          type: "conversation",
+          conversation_id: "customer/trajectory-123",
+        },
+        value: 4.5,
+      },
+    ],
+  });
+});
