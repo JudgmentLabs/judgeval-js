@@ -158,10 +158,11 @@ export function withAgentArguments<Tool extends ListedTool>(
   const schema = tool.inputSchema;
   if (schema === undefined || !canExtendSchema(schema)) return tool;
   const resolved = argumentNames(names);
+  const [intentName, modelName] = resolved;
   const declared = new Set(declaredArguments(schema, names));
-  const requiredArguments = resolved
-    .slice(0, 2)
-    .filter((name) => !declared.has(name));
+  const requiredArguments = [intentName, modelName].filter(
+    (name) => !declared.has(name),
+  );
   return {
     ...tool,
     inputSchema: {
