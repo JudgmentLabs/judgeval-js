@@ -26,6 +26,7 @@ import {
   declaredArguments,
   mintConversationId,
   readReportedArguments,
+  resolveModel,
   withAgentArguments,
   withConversationIdPrompt,
   withConversationOutputSchema,
@@ -848,7 +849,10 @@ function prepareCall(
                 : undefined,
       "judgment.mcp.intent":
         intent === undefined ? undefined : redacted(intent, options),
-      "judgment.llm.model": reported?.model,
+      "judgment.llm.model":
+        method === "tools/call"
+          ? resolveModel(meta, reported?.model, names)
+          : reported?.model,
       "judgment.mcp.sdk_version": VERSION,
     }),
   };

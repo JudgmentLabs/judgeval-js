@@ -106,7 +106,7 @@ export function readReportedArguments(
   return {
     intent:
       intent === undefined ? undefined : intent.slice(0, MAX_INTENT_LENGTH),
-    model: model?.toLowerCase() === "unknown" ? undefined : model,
+    model: normalizeModel(model),
     conversationId:
       conversationId !== undefined &&
       ((names.conversationId !== undefined &&
@@ -115,6 +115,37 @@ export function readReportedArguments(
         ? conversationId
         : undefined,
   };
+}
+
+export function resolveModel(
+  meta: Readonly<Record<string, unknown>>,
+  reportedModel: string | undefined,
+  names: ArgumentNames = {},
+): string | undefined {
+  if (names.model !== undefined && reportedModel !== undefined)
+    return reportedModel;
+  return modelFromClientMetadata(meta) ?? reportedModel;
+}
+
+function modelFromClientMetadata(
+  meta: Readonly<Record<string, unknown>>,
+): string | undefined {
+  return modelFromCodexMetadata(meta);
+}
+
+function modelFromCodexMetadata(
+  meta: Readonly<Record<string, unknown>>,
+): string | undefined {
+  const turn = meta["x-codex-turn-metadata"];
+  return typeof turn === "object" && turn !== null && !Array.isArray(turn)
+    ? normalizeModel((turn as Record<string, unknown>)["model"])
+    : undefined;
+}
+
+function normalizeModel(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const model = value.trim();
+  return model === "" || model.toLowerCase() === "unknown" ? undefined : model;
 }
 
 /** Removes injected values so a tool's strict schema still accepts the call. */
