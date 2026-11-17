@@ -13,6 +13,12 @@ import { W3CTraceContextPropagator } from "@opentelemetry/core";
 import { getBaggage, setBaggage, createBaggage } from "../../trace/baggage";
 import { capturePayload } from "./payload";
 import {
+  instrumentClientIdentity,
+  readClientIdentity,
+  type ClientIdentity,
+  type HttpTransport,
+} from "./client-identity";
+import {
   type ArgumentNames,
   argumentNames,
   isAgentArgument,
@@ -27,6 +33,7 @@ import {
 } from "./agent-arguments";
 
 const propagator = new W3CTraceContextPropagator();
+const handshakes = new WeakMap<ProtocolServer, ClientIdentity>();
 const MAX_ERROR_MESSAGE_LENGTH = 1_000;
 const MAX_RECORDED_KEYS = 30;
 const MAX_RECORDED_KEY_LENGTH = 64;
@@ -130,6 +137,8 @@ interface McpRequest {
   readonly method?: string;
   readonly id?: string | number;
   readonly params?: {
+    readonly clientInfo?: unknown;
+    readonly protocolVersion?: string;
     readonly name?: string;
     readonly uri?: string;
     readonly cursor?: string;
@@ -157,6 +166,7 @@ interface HandlerContext {
 }
 
 interface McpResult {
+  readonly protocolVersion?: string;
   readonly isError?: boolean;
   readonly content?: readonly { readonly text?: string }[];
   readonly structuredContent?: unknown;
@@ -170,6 +180,8 @@ type RequestHandler = (
 ) => Promise<McpResult>;
 
 interface ProtocolServer {
+  connect?: (transport: HttpTransport, ...args: unknown[]) => Promise<void>;
+  getNegotiatedProtocolVersion?: () => string | undefined;
   notification?: (
     notification: { readonly method: string },
     options?: unknown,
@@ -349,6 +361,12 @@ function instrument(
     return;
   }
   instrumented.set(protocol, configuration);
+  const connect = protocol.connect?.bind(protocol);
+  if (connect !== undefined)
+    protocol.connect = (transport, ...args) => {
+      attempt(() => instrumentClientIdentity(transport));
+      return connect(transport, ...args);
+    };
 
   const registry =
     highLevel.server === undefined ? undefined : highLevel._registeredTools;
@@ -408,6 +426,15 @@ function traced(
   return async (request, context) => {
     if (method !== "tools/call") {
       const result = await handler(request, context);
+      if (method === "initialize")
+        attempt(() => {
+          handshakes.set(protocol, {
+            ...readClientInfo({
+              [CLIENT_INFO_META_KEY]: request.params?.clientInfo,
+            }),
+            protocolVersion: result.protocolVersion,
+          });
+        });
       return method === "tools/list" && inject
         ? (attempt(() =>
             listWithArguments(
@@ -746,7 +773,13 @@ function prepareCall(
     logicalSessionId === undefined
       ? mintConversationId()
       : undefined;
-  const client = protocol.getClientVersion?.() ?? readClientInfo(meta);
+  const carried = readClientIdentity(headers["mcp-session-id"]);
+  const handshake = handshakes.get(protocol);
+  const client =
+    protocol.getClientVersion?.() ??
+    readClientInfo(meta) ??
+    handshake ??
+    carried;
   const intent = reported?.intent;
   return {
     mintedConversationId,
@@ -768,7 +801,10 @@ function prepareCall(
       "mcp.method.name": method,
       "mcp.protocol.version":
         stringOrUndefined(meta[PROTOCOL_VERSION_META_KEY]) ??
-        headers["mcp-protocol-version"],
+        headers["mcp-protocol-version"] ??
+        protocol.getNegotiatedProtocolVersion?.() ??
+        handshake?.protocolVersion ??
+        carried.protocolVersion,
       "mcp.session.id": transportSessionId,
       "jsonrpc.request.id": requestIdOf(request, context),
       "gen_ai.operation.name":
