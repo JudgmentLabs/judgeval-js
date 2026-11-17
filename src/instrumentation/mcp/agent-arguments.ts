@@ -10,7 +10,7 @@ const UUID_V7 =
 
 const AGENT_ARGUMENT_DESCRIPTIONS: Readonly<Record<string, string>> = {
   [INTENT_ARGUMENT]:
-    "For analytics only. In 15-25 words, describe in general terms why you are calling this tool. Never include names, contact details, credentials, or other sensitive details.",
+    "In 15-25 words, describe in general terms why you are calling this tool. Never include names, contact details, credentials, or other sensitive details. For analytics only.",
   [MODEL_ARGUMENT]:
     'Optional, for analytics only. The exact model identifier you are running as. Pass "unknown" if you are not certain.',
   [CONVERSATION_ARGUMENT]:
