@@ -823,6 +823,33 @@ describe.each([
   ["MCP 1.x", connectV1],
   ["MCP 2.x", connectV2],
 ] as const)("%s adapter", (_label, connect) => {
+  test("advertises required intent without rejecting older calls that omit it", async () => {
+    const exporter = useExporter();
+    const client = await connect({});
+    cleanups.push(() => client.close());
+    const listing = await client.listTools();
+    const missing = await client.callTool({
+      name: "greet",
+      arguments: { name: "Alice" },
+    });
+    const supplied = await client.callTool({
+      name: "greet",
+      arguments: { name: "Alice", intent: "Greeting" },
+    });
+    expect({
+      required: listing.tools[0]?.inputSchema.required,
+      failed: [missing.isError ?? false, supplied.isError ?? false],
+      intents: exporter
+        .getFinishedSpans()
+        .filter((span) => span.name === "tools/call greet")
+        .map((span) => span.attributes["judgment.mcp.intent"]),
+    }).toEqual({
+      required: ["name", "intent"],
+      failed: [false, false],
+      intents: [undefined, "Greeting"],
+    });
+  });
+
   test.each([true, false])(
     "explicit names reuse declared fields and inject absent fields (injection=%s)",
     async (injectAgentArguments) => {
@@ -893,6 +920,8 @@ describe.each([
       expect({
         received,
         ownedFields: Object.keys(owned.inputSchema.properties ?? {}).sort(),
+        ownedRequired: owned.inputSchema.required ?? [],
+        injectedRequired: injected.inputSchema.required ?? [],
         injectedFields: Object.keys(
           injected.inputSchema.properties ?? {},
         ).sort(),
@@ -914,6 +943,8 @@ describe.each([
       }).toEqual({
         received: injectAgentArguments ? [args, {}, {}, {}] : [args, {}, {}],
         ownedFields: ["chat_id", "intent", "llm_model"],
+        ownedRequired: [],
+        injectedRequired: injectAgentArguments ? ["intent"] : [],
         injectedFields: injectAgentArguments
           ? ["chat_id", "intent", "llm_model"]
           : [],

@@ -10,7 +10,7 @@ const UUID_V7 =
 
 const AGENT_ARGUMENT_DESCRIPTIONS: Readonly<Record<string, string>> = {
   [INTENT_ARGUMENT]:
-    "Optional, for analytics only. In 15-25 words, describe in general terms why you are calling this tool. Never include names, contact details, credentials, or other sensitive details.",
+    "For analytics only. In 15-25 words, describe in general terms why you are calling this tool. Never include names, contact details, credentials, or other sensitive details.",
   [MODEL_ARGUMENT]:
     'Optional, for analytics only. The exact model identifier you are running as. Pass "unknown" if you are not certain.',
   [CONVERSATION_ARGUMENT]:
@@ -143,8 +143,9 @@ export function isAgentArgument(
 }
 
 /**
- * Adds the optional arguments to a listed tool. Schemas we can't safely extend
- * are returned unchanged, and a tool's own property of the same name wins.
+ * Adds analytics arguments, requiring only injected intent in the listing.
+ * Schemas we can't safely extend are returned unchanged, and a tool's own
+ * property of the same name wins.
  */
 export function withAgentArguments<Tool extends ListedTool>(
   tool: Tool,
@@ -154,11 +155,20 @@ export function withAgentArguments<Tool extends ListedTool>(
   const schema = tool.inputSchema;
   if (schema === undefined || !canExtendSchema(schema)) return tool;
   const resolved = argumentNames(names);
+  const [intentName] = resolved;
   const declared = new Set(declaredArguments(schema, names));
   return {
     ...tool,
     inputSchema: {
       ...schema,
+      ...(declared.has(intentName)
+        ? {}
+        : {
+            required: [
+              ...((schema["required"] as string[] | undefined) ?? []),
+              intentName,
+            ],
+          }),
       properties: {
         ...Object.fromEntries(
           Object.entries(AGENT_ARGUMENT_DESCRIPTIONS)
