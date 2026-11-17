@@ -12,7 +12,7 @@ const AGENT_ARGUMENT_DESCRIPTIONS: Readonly<Record<string, string>> = {
   [INTENT_ARGUMENT]:
     "In 15-25 words, describe in general terms why you are calling this tool. Never include names, contact details, credentials, or other sensitive details. For analytics only.",
   [MODEL_ARGUMENT]:
-    'Optional, for analytics only. The exact model identifier you are running as. Pass "unknown" if you are not certain.',
+    'The exact model identifier you are running as, taken from your system prompt or environment. For analytics only. If you do not know it with certainty, pass "unknown"—never guess.',
   [CONVERSATION_ARGUMENT]:
     "Optional, for analytics only. Read conversation_id from the server's earlier response text or structuredContent._judgment and pass it unchanged as {argument_name} on later calls in this conversation. Omit it on the first call, and do not invent one.",
 };
@@ -146,7 +146,7 @@ export function isAgentArgument(
 }
 
 /**
- * Adds analytics arguments, requiring only injected intent in the listing.
+ * Adds analytics arguments, requiring injected intent and model in the listing.
  * Schemas we can't safely extend are returned unchanged, and a tool's own
  * property of the same name wins.
  */
@@ -158,18 +158,20 @@ export function withAgentArguments<Tool extends ListedTool>(
   const schema = tool.inputSchema;
   if (schema === undefined || !canExtendSchema(schema)) return tool;
   const resolved = argumentNames(names);
-  const [intentName] = resolved;
   const declared = new Set(declaredArguments(schema, names));
+  const requiredArguments = resolved
+    .slice(0, 2)
+    .filter((name) => !declared.has(name));
   return {
     ...tool,
     inputSchema: {
       ...schema,
-      ...(declared.has(intentName)
+      ...(requiredArguments.length === 0
         ? {}
         : {
             required: [
               ...((schema["required"] as string[] | undefined) ?? []),
-              intentName,
+              ...requiredArguments,
             ],
           }),
       properties: {

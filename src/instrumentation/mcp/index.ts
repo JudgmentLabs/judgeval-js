@@ -107,8 +107,8 @@ export interface InstrumentMcpServerOptions {
   /** The deployed build, used to compare releases. */
   readonly serverBuild?: string;
   /**
-   * Adds required `intent` and optional `llm_model` and `conversation_id` to each
-   * tool's published schema. Missing injected intent does not fail execution.
+   * Adds required `intent` and `llm_model` and optional `conversation_id` to each
+   * tool's published schema. Missing injected telemetry does not fail execution.
    * Removes injected arguments before your handler runs, and returns
    * a conversation ID in tool results when the call has no session. Set to false
    * to leave your tools and their results exactly as they are, at the cost of

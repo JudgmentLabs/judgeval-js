@@ -823,7 +823,7 @@ describe.each([
   ["MCP 1.x", connectV1],
   ["MCP 2.x", connectV2],
 ] as const)("%s adapter", (_label, connect) => {
-  test("advertises required intent without rejecting older calls that omit it", async () => {
+  test("advertises required intent and model without rejecting older calls", async () => {
     const exporter = useExporter();
     const client = await connect({});
     cleanups.push(() => client.close());
@@ -834,19 +834,29 @@ describe.each([
     });
     const supplied = await client.callTool({
       name: "greet",
-      arguments: { name: "Alice", intent: "Greeting" },
+      arguments: {
+        name: "Alice",
+        intent: "Greeting",
+        llm_model: "agent-model",
+      },
     });
     expect({
       required: listing.tools[0]?.inputSchema.required,
       failed: [missing.isError ?? false, supplied.isError ?? false],
-      intents: exporter
+      telemetry: exporter
         .getFinishedSpans()
         .filter((span) => span.name === "tools/call greet")
-        .map((span) => span.attributes["judgment.mcp.intent"]),
+        .map((span) => ({
+          intent: span.attributes["judgment.mcp.intent"],
+          model: span.attributes["judgment.llm.model"],
+        })),
     }).toEqual({
-      required: ["name", "intent"],
+      required: ["name", "intent", "llm_model"],
       failed: [false, false],
-      intents: [undefined, "Greeting"],
+      telemetry: [
+        { intent: undefined, model: undefined },
+        { intent: "Greeting", model: "agent-model" },
+      ],
     });
   });
 
@@ -944,7 +954,7 @@ describe.each([
         received: injectAgentArguments ? [args, {}, {}, {}] : [args, {}, {}],
         ownedFields: ["chat_id", "intent", "llm_model"],
         ownedRequired: [],
-        injectedRequired: injectAgentArguments ? ["intent"] : [],
+        injectedRequired: injectAgentArguments ? ["intent", "llm_model"] : [],
         injectedFields: injectAgentArguments
           ? ["chat_id", "intent", "llm_model"]
           : [],
