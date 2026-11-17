@@ -1288,16 +1288,27 @@ describe("cancelled calls", () => {
 });
 
 describe("withAgentArguments", () => {
-  test.each(["oneOf", "anyOf", "allOf", "$ref"])(
-    "leaves a schema using %s unchanged",
-    (keyword) => {
-      const tool = {
-        name: "t",
-        inputSchema: { type: "object", [keyword]: [] },
-      };
-      expect(withAgentArguments(tool)).toEqual(tool);
-    },
-  );
+  test.each([
+    ["oneOf", []],
+    ["anyOf", []],
+    ["allOf", []],
+    ["$ref", "#/Input"],
+    ["maxProperties", 1],
+    ["const", { name: "Alice" }],
+    ["enum", [{ name: "Alice" }]],
+  ] as const)("leaves a schema using %s unchanged", (keyword, constraint) => {
+    const tool = {
+      name: "t",
+      inputSchema: {
+        type: "object",
+        properties: { name: { type: "string" } },
+        required: ["name"],
+        additionalProperties: false,
+        [keyword]: constraint,
+      },
+    };
+    expect(withAgentArguments(tool)).toEqual(tool);
+  });
 });
 
 describe("structured conversation handoff", () => {

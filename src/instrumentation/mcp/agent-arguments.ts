@@ -56,6 +56,9 @@ const COMPOSITION_KEYWORDS = [
   "dependentRequired",
   "dependencies",
   "propertyNames",
+  "maxProperties",
+  "const",
+  "enum",
 ] as const;
 
 /** Values an agent reported on a call, kept apart from the tool's own input. */
