@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
-const PREFIX = "judgment-mcp-v1.";
+const PREFIX = "mcp-session-v1.";
+const LEGACY_PREFIX = "judgment-mcp-v1.";
 const MAX_TOKEN_LENGTH = 4096;
 const MAX_INITIALIZE_BYTES = 8192;
 
@@ -18,15 +19,16 @@ export interface HttpTransport {
 
 /** Metadata is client-reported, never an authentication or authorization fact. */
 export function readClientIdentity(token: string | undefined): ClientIdentity {
+  const prefix = identityPrefix(token);
   if (
     token === undefined ||
-    !token.startsWith(PREFIX) ||
+    prefix === undefined ||
     token.length > MAX_TOKEN_LENGTH
   )
     return {};
   try {
     const value: unknown = JSON.parse(
-      Buffer.from(token.slice(PREFIX.length), "base64url").toString("utf8"),
+      Buffer.from(token.slice(prefix.length), "base64url").toString("utf8"),
     );
     if (typeof value !== "object" || value === null) return {};
     return {
@@ -37,6 +39,10 @@ export function readClientIdentity(token: string | undefined): ClientIdentity {
   } catch {
     return {};
   }
+}
+
+function identityPrefix(token: string | null | undefined): string | undefined {
+  return [PREFIX, LEGACY_PREFIX].find((prefix) => token?.startsWith(prefix));
 }
 
 /** Adds a carrier at the HTTP boundary, before SSE response headers are sent. */
@@ -52,7 +58,7 @@ export function instrumentClientIdentity(transport: HttpTransport): void {
   http.handleRequest = async (request, ...args) => {
     if (
       (request.method === "GET" || request.method === "DELETE") &&
-      request.headers.get("mcp-session-id")?.startsWith(PREFIX)
+      identityPrefix(request.headers.get("mcp-session-id")) !== undefined
     )
       return new Response(null, { status: 405, headers: { Allow: "POST" } });
     const options = args[0];

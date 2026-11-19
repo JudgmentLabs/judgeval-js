@@ -20,6 +20,7 @@ import {
 } from "./client-identity";
 import {
   type ArgumentNames,
+  type ArgumentInjection,
   argumentNames,
   isAgentArgument,
   canExtendSchema,
@@ -117,6 +118,10 @@ export interface InstrumentMcpServerOptions {
    * @defaultValue true
    */
   readonly injectAgentArguments?: boolean;
+  /** Disable intent schema injection without disabling explicit argument mappings. Defaults true. */
+  readonly injectIntent?: boolean;
+  /** Disable model schema injection without disabling explicit argument mappings. Defaults true. */
+  readonly injectModel?: boolean;
   /** Disable only conversation-ID schema injection and handoff. Defaults true. */
   readonly injectConversationId?: boolean;
   /** Attaches the end user or customer once a call finishes. */
@@ -330,6 +335,8 @@ function instrument(
   const protocol = highLevel.server ?? (server as ProtocolServer);
   const configuration = {
     injectAgentArguments: true,
+    injectIntent: true,
+    injectModel: true,
     injectConversationId: true,
     captureInput: false,
     captureOutput: false,
@@ -746,7 +753,13 @@ function prepareCall(
   const contract = tool === undefined ? undefined : toolContract(tool, names);
   const injected = inject && contract !== undefined && !contract.open;
   const declared = contract?.declared ?? new Set<string>();
-  const reported = readReportedArguments(args, declared, names, injected);
+  const reported = readReportedArguments(
+    args,
+    declared,
+    names,
+    injected,
+    options,
+  );
   const headers = readHeaders(context);
   const transportSessionId = transportSession(context, headers);
   const configuredSessionId =
@@ -789,12 +802,7 @@ function prepareCall(
           ...request,
           params: {
             ...params,
-            arguments: withoutAgentArguments(
-              args,
-              declared,
-              names,
-              options.injectConversationId !== false,
-            ),
+            arguments: withoutAgentArguments(args, declared, names, options),
           },
         }
       : request,
@@ -829,12 +837,7 @@ function prepareCall(
       "judgment.mcp.argument_keys":
         toolName === undefined
           ? undefined
-          : recordedKeys(
-              args,
-              injected ? declared : undefined,
-              names,
-              options.injectConversationId !== false,
-            ),
+          : recordedKeys(args, injected ? declared : undefined, names, options),
       "judgment.mcp.conversation_id": logicalSessionId ?? mintedConversationId,
       "judgment.mcp.conversation_id_source":
         configuredSessionId !== undefined
@@ -962,7 +965,7 @@ function listWithArguments(
             : toolContract(registered, names);
         if (contract === undefined || contract.open) return tool;
         const injectConversationId = options.injectConversationId !== false;
-        const updated = withAgentArguments(tool, injectConversationId, names);
+        const updated = withAgentArguments(tool, options, names);
         if (
           !injectConversationId ||
           contract.declared.has(argumentNames(names)[2])
@@ -1102,7 +1105,7 @@ function withoutInjected(
         request.params?.arguments ?? {},
         contract.declared,
         names,
-        options.injectConversationId !== false,
+        options,
       ),
     },
   };
@@ -1299,13 +1302,13 @@ function recordedKeys(
   args: Readonly<Record<string, unknown>>,
   declared: ReadonlySet<string> | undefined,
   names: ArgumentNames = {},
-  injectConversationId = true,
+  injection: ArgumentInjection = {},
 ): string | undefined {
   const keys = Object.keys(args)
     .filter(
       (key) =>
         declared === undefined ||
-        !isAgentArgument(key, names, injectConversationId) ||
+        !isAgentArgument(key, names, injection) ||
         declared.has(key),
     )
     .slice(0, MAX_RECORDED_KEYS)
