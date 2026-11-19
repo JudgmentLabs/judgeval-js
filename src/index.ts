@@ -96,20 +96,6 @@ export {
 export { AgentJudgeFactory } from "./agent-judges";
 export type { AgentJudge, ReasoningLevel, ScoreType } from "./agent-judges";
 
-export {
-  OfflineTestsFactory,
-  OfflineTestRunner,
-  type JudgeRef,
-  type OfflineRunOptions,
-  type TestConfig,
-  type JudgeVersionPin,
-  type OfflineScorerData,
-  type OfflineExampleResult,
-  type OfflineTestResult,
-  type AgentFunction,
-  type PassConditionFn,
-} from "./offline-tests";
-
 export { JudgevalAPIError, type SqlResponse } from "./sql/client";
 export {
   TestRunsFactory,

@@ -2,7 +2,6 @@ import pc from "picocolors";
 import type { JudgmentApiClient } from "../internal/api/client";
 import type {
   ExampleEvaluationRun,
-  ExperimentResult,
   ExperimentRunItem,
 } from "../internal/api/models";
 import type { Example } from "../data/Example";
@@ -68,11 +67,7 @@ export abstract class EvaluatorRunner<S extends string | Judge> {
         projectId,
         evalId,
       );
-      const allResults: ExperimentResult[] = response.results ?? [];
-      // Evaluation runs produce legacy experiment rows.
-      const resultsData = allResults.filter(
-        (item): item is ExperimentRunItem => "experiment_run_id" in item,
-      );
+      const resultsData = response.results ?? [];
       const completed = resultsData.length;
 
       if (completed >= expectedCount) {
@@ -80,10 +75,7 @@ export abstract class EvaluatorRunner<S extends string | Judge> {
         console.log(
           `${pc.green("\u2713")} Evals completed and saved in ${pc.bold(`${elapsed.toFixed(1)}s`)}`,
         );
-        // The experiments alias now returns a union (legacy experiment rows |
-        // offline test-run rows). This hosted runner only drives the legacy
-        // experiment path, so the rows are ExperimentRunItem at runtime.
-        return { results: resultsData as ExperimentRunItem[], url };
+        return { results: resultsData, url };
       }
 
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));

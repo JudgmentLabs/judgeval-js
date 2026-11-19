@@ -7,8 +7,6 @@ import { EvaluationFactory } from "./evaluation/EvaluationFactory";
 import { DatasetFactory } from "./datasets/DatasetFactory";
 import { AgentJudgeFactory } from "./agent-judges/AgentJudgeFactory";
 import { ExternalJudgeFactory } from "./external-judges/ExternalJudgeFactory";
-import { OfflineTestsFactory } from "./offline-tests/OfflineTestsFactory";
-import { warnOfflineTestsDeprecated } from "./offline-tests/deprecation";
 import { TestRunsFactory, TestSuitesFactory } from "./testing";
 import type { OfflineTracer, OfflineTracerConfig } from "./trace/OfflineTracer";
 import { JudgevalQueryClient, type SqlResponse } from "./sql/client";
@@ -253,20 +251,6 @@ export class Judgeval {
   /** Run test suites and read their results. */
   get testRuns(): TestRunsFactory {
     return new TestRunsFactory(
-      this._client,
-      this._projectId,
-      this._projectName,
-    );
-  }
-
-  /**
-   * Create test configs and run offline tests (dataset + judges).
-   *
-   * @deprecated Use {@link Judgeval.testSuites} and {@link Judgeval.testRuns}.
-   */
-  get offlineTests(): OfflineTestsFactory {
-    warnOfflineTestsDeprecated();
-    return new OfflineTestsFactory(
       this._client,
       this._projectId,
       this._projectName,

@@ -114,106 +114,10 @@ export class JudgmentApiClient {
     );
   }
 
-  postV1projectsTestRuns(
-    projectId: string,
-    payload: RequestBody<"/v1/projects/{projectId}/test-runs", "post">,
-  ) {
-    return ok(
-      this.api.POST("/v1/projects/{projectId}/test-runs", {
-        params: { path: { projectId } },
-        body: payload,
-      }),
-    );
-  }
-
-  getV1projectsTestRunsByTestRunId(projectId: string, testRunId: string) {
-    return ok(
-      this.api.GET("/v1/projects/{projectId}/test-runs/{testRunId}", {
-        params: { path: { projectId, testRunId } },
-      }),
-    );
-  }
-
-  getV1projectsTestRunsByTestRunIdItems(
-    projectId: string,
-    testRunId: string,
-    limit?: number,
-    cursor?: string,
-  ) {
-    return ok(
-      this.api.GET("/v1/projects/{projectId}/test-runs/{testRunId}/items", {
-        params: { path: { projectId, testRunId }, query: { limit, cursor } },
-      }),
-    );
-  }
-
-  patchV1projectsTestRunsByTestRunIdSuccess(
-    projectId: string,
-    testRunId: string,
-    payload: RequestBody<
-      "/v1/projects/{projectId}/test-runs/{testRunId}/success",
-      "patch"
-    >,
-  ) {
-    return ok(
-      this.api.PATCH("/v1/projects/{projectId}/test-runs/{testRunId}/success", {
-        params: { path: { projectId, testRunId } },
-        body: payload,
-      }),
-    );
-  }
-
-  getV1projectsTestConfigs(projectId: string, dataset_id?: string) {
-    return ok(
-      this.api.GET("/v1/projects/{projectId}/test-configs", {
-        params: { path: { projectId }, query: { dataset_id } },
-      }),
-    );
-  }
-
-  postV1projectsTestConfigs(
-    projectId: string,
-    payload: RequestBody<"/v1/projects/{projectId}/test-configs", "post">,
-  ) {
-    return ok(
-      this.api.POST("/v1/projects/{projectId}/test-configs", {
-        params: { path: { projectId } },
-        body: payload,
-      }),
-    );
-  }
-
-  getV1projectsTestConfigsByTestConfigId(
-    projectId: string,
-    testConfigId: string,
-  ) {
-    return ok(
-      this.api.GET("/v1/projects/{projectId}/test-configs/{testConfigId}", {
-        params: { path: { projectId, testConfigId } },
-      }),
-    );
-  }
-
-  deleteV1projectsTestConfigsByTestConfigId(
-    projectId: string,
-    testConfigId: string,
-  ) {
-    return ok(
-      this.api.DELETE("/v1/projects/{projectId}/test-configs/{testConfigId}", {
-        params: { path: { projectId, testConfigId } },
-      }),
-    );
-  }
-
-  getV1projectsExperimentsByRunId(
-    projectId: string,
-    runId: string,
-    limit?: number,
-    cursor?: string,
-  ) {
+  getV1projectsExperimentsByRunId(projectId: string, runId: string) {
     return ok(
       this.api.GET("/v1/projects/{projectId}/experiments/{runId}", {
-        params: { path: { projectId, runId }, query: { limit, cursor } },
+        params: { path: { projectId, runId } },
       }),
     );
   }
