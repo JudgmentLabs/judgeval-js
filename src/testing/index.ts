@@ -18,6 +18,8 @@ export interface CaseCheck {
   op: CheckOp;
   /** The golden value; a list for `in` and `not_in`. */
   expected: unknown;
+  /** Why the check expects this value, shown next to its verdict. Judges never read it. */
+  rationale?: string;
 }
 
 export interface TestCaseInput {
@@ -81,8 +83,10 @@ export interface TestResults {
     trace_id: string | null;
     scored_at: string | null;
     passed: boolean | null;
-    checks: (CaseCheck & {
+    checks: (Omit<CaseCheck, "rationale"> & {
       judge_id: string;
+      /** The case check's rationale at the run's test suite version. */
+      rationale: string | null;
       judge_output: unknown;
       passed: boolean;
       reason: string | null;
