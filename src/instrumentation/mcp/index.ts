@@ -1044,7 +1044,7 @@ function inspectStructuredOutput(outputSchema: object): boolean {
     return (
       shape !== undefined &&
       Object.keys(shape).length > 0 &&
-      !("_judgment" in shape) &&
+      !("_mcp_instructions" in shape) &&
       (schema._def.catchall === undefined ||
         schema._def.catchall._def?.typeName === "ZodNever")
     );
@@ -1061,7 +1061,7 @@ function inspectStructuredOutput(outputSchema: object): boolean {
     return (
       schema.shape !== undefined &&
       Object.keys(schema.shape).length > 0 &&
-      !("_judgment" in schema.shape) &&
+      !("_mcp_instructions" in schema.shape) &&
       (definition.checks?.length ?? 0) === 0 &&
       (definition.catchall === undefined ||
         definition.catchall._zod?.def?.type === "never")
@@ -1071,7 +1071,7 @@ function inspectStructuredOutput(outputSchema: object): boolean {
   const fields = Object.values(outputSchema);
   return (
     fields.length > 0 &&
-    !("_judgment" in outputSchema) &&
+    !("_mcp_instructions" in outputSchema) &&
     fields.every(
       (field) =>
         typeof field === "object" &&

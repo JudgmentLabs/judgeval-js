@@ -95,7 +95,10 @@ function useExporter() {
 }
 
 type Result = {
-  structuredContent?: { ok: boolean; _judgment?: { conversation_id: string } };
+  structuredContent?: {
+    ok: boolean;
+    _mcp_instructions?: { conversation_id: string };
+  };
 };
 
 function registerTools(server: object) {
@@ -220,7 +223,7 @@ describe.each(["1", "2"])("low-level MCP %s", (version) => {
         name: "lookup",
         arguments: { intent: "business", llm_model: "model" },
       })) as Result;
-      const id = result.structuredContent?._judgment?.conversation_id;
+      const id = result.structuredContent?._mcp_instructions?.conversation_id;
       await client.callTool({
         name: "lookup",
         arguments: { intent: "business", conversation_id: id },
@@ -309,7 +312,7 @@ test.each([
       callbackSession: "transport-session",
       output: {
         ok: true,
-        _judgment: {
+        _mcp_instructions: {
           conversation_id: handle,
           note: "Pass this conversation_id on later tool calls in this conversation.",
         },
@@ -387,7 +390,7 @@ test.each([
         (result) => (result.structuredContent as { ok: boolean }).ok,
       ),
       handoffs: [first, second].map(
-        (result) => "_judgment" in (result.structuredContent as object),
+        (result) => "_mcp_instructions" in (result.structuredContent as object),
       ),
     }).toEqual({
       listings: 1,
@@ -427,7 +430,7 @@ test.each([connectV1, connectV2])(
       [first, second].map((result) => ({
         ok: (result as Result).structuredContent?.ok,
         hasConversationId:
-          typeof (result as Result).structuredContent?._judgment
+          typeof (result as Result).structuredContent?._mcp_instructions
             ?.conversation_id === "string",
       })),
     ).toEqual([
@@ -650,7 +653,7 @@ test("schema discovery failures never turn a successful tool call into an error"
   });
   expect(result.structuredContent).toEqual({
     ok: true,
-    _judgment: {
+    _mcp_instructions: {
       conversation_id: expect.any(String),
       note: "Pass this conversation_id on later tool calls in this conversation.",
     },
@@ -997,7 +1000,7 @@ describe.each([
         llm_model: "model-1",
       },
     })) as Result;
-    const session = first.structuredContent?._judgment?.conversation_id;
+    const session = first.structuredContent?._mcp_instructions?.conversation_id;
     await client.callTool({
       name: "greet",
       arguments: {
@@ -1336,7 +1339,7 @@ describe("structured conversation handoff", () => {
     const expected = {
       structuredContent: {
         ok: true,
-        _judgment: {
+        _mcp_instructions: {
           conversation_id: "id",
           note: "Pass this conversation_id on later tool calls in this conversation.",
         },
@@ -1361,7 +1364,7 @@ describe("structured conversation handoff", () => {
     ).toEqual(expected);
   });
   test.each([
-    { properties: { _judgment: { type: "string" } } },
+    { properties: { _mcp_instructions: { type: "string" } } },
     { oneOf: [] },
     { maxProperties: 1 },
     { const: { ok: true } },
@@ -1378,7 +1381,7 @@ describe("structured conversation handoff", () => {
     ).toBeUndefined();
   });
 
-  test.each([undefined, { _judgment: "developer-owned" }])(
+  test.each([undefined, { _mcp_instructions: "developer-owned" }])(
     "never replaces text-only output or developer fields: %j",
     (structuredContent) => {
       const result = {

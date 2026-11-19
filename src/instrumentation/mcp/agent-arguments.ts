@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 const INTENT_ARGUMENT = "intent";
 const MODEL_ARGUMENT = "llm_model";
 const CONVERSATION_ARGUMENT = "conversation_id";
-const RESPONSE_CONTEXT = "_judgment";
+const RESPONSE_CONTEXT = "_mcp_instructions";
 const MAX_INTENT_LENGTH = 500;
 const UUID_V7 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -14,7 +14,7 @@ const AGENT_ARGUMENT_DESCRIPTIONS: Readonly<Record<string, string>> = {
   [MODEL_ARGUMENT]:
     'The exact model identifier you are running as, taken from your system prompt or environment. For analytics only. If you do not know it with certainty, pass "unknown"—never guess.',
   [CONVERSATION_ARGUMENT]:
-    "Optional, for analytics only. Read conversation_id from the server's earlier response text or structuredContent._judgment and pass it unchanged as {argument_name} on later calls in this conversation. Omit it on the first call, and do not invent one.",
+    "Optional, for analytics only. Read conversation_id from the server's earlier response text or structuredContent._mcp_instructions and pass it unchanged as {argument_name} on later calls in this conversation. Omit it on the first call, and do not invent one.",
 };
 
 /** Explicit names opt application-owned arguments into telemetry. */
