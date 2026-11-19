@@ -68,16 +68,14 @@ describe("TestSuitesFactory", () => {
   });
 });
 
-test("the offline-tests deprecation is logged once", async () => {
+test("the OfflineTracer deprecation is logged once", async () => {
   // A fresh module copy, since other tests may already have logged it.
-  const freshModule: string = "../offline-tests/deprecation?fresh";
-  const { OFFLINE_TESTS_DEPRECATION, warnOfflineTestsDeprecated } =
-    (await import(
-      freshModule
-    )) as typeof import("../offline-tests/deprecation");
+  const freshModule: string = "../trace/deprecation?fresh";
+  const { OFFLINE_TRACER_DEPRECATION, warnOfflineTracerDeprecated } =
+    (await import(freshModule)) as typeof import("../trace/deprecation");
   const warning = spyOn(Logger, "warning").mockImplementation(() => {});
-  warnOfflineTestsDeprecated();
-  warnOfflineTestsDeprecated();
-  expect(warning.mock.calls).toEqual([[OFFLINE_TESTS_DEPRECATION]]);
+  warnOfflineTracerDeprecated();
+  warnOfflineTracerDeprecated();
+  expect(warning.mock.calls).toEqual([[OFFLINE_TRACER_DEPRECATION]]);
   warning.mockRestore();
 });

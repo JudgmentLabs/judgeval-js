@@ -8,7 +8,7 @@ import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import type { Example } from "../data/Example";
 import { JUDGMENT_API_KEY, JUDGMENT_API_URL, JUDGMENT_ORG_ID } from "../env";
 import { JudgmentApiClient } from "../internal/api";
-import { warnOfflineTestsDeprecated } from "../offline-tests/deprecation";
+import { warnOfflineTracerDeprecated } from "./deprecation";
 import { resolveProjectId } from "../utils/resolve-project-id";
 import { safeStringify } from "../utils/serializer";
 import { VERSION } from "../version";
@@ -142,7 +142,7 @@ export class OfflineTracer extends Tracer {
    *   project cannot be found on the backend.
    */
   static async create(config: OfflineTracerConfig): Promise<OfflineTracer> {
-    warnOfflineTestsDeprecated();
+    warnOfflineTracerDeprecated();
     const apiKey = config.apiKey ?? JUDGMENT_API_KEY;
     const organizationId = config.organizationId ?? JUDGMENT_ORG_ID;
     const apiUrl = config.apiUrl ?? JUDGMENT_API_URL;

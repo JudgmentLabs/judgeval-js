@@ -54,21 +54,6 @@ export class JudgmentApi {
     );
   }
 
-  /** Cancel test run (`POST /v1/projects/{projectId}/test-runs/{testRunId}/cancel`). */
-  cancelTestRun(
-    ...init: Init<
-      "/v1/projects/{projectId}/test-runs/{testRunId}/cancel",
-      "post"
-    >
-  ) {
-    return ok(
-      this.client.POST(
-        "/v1/projects/{projectId}/test-runs/{testRunId}/cancel",
-        ...init,
-      ),
-    );
-  }
-
   /** Create offline-test dataset (`POST /v1/projects/{projectId}/datasets`). */
   createDataset(...init: Init<"/v1/projects/{projectId}/datasets", "post">) {
     return ok(this.client.POST("/v1/projects/{projectId}/datasets", ...init));
@@ -126,15 +111,6 @@ export class JudgmentApi {
   ) {
     return ok(
       this.client.POST("/v1/projects/{projectId}/scheduled-tasks", ...init),
-    );
-  }
-
-  /** Create test config (`POST /v1/projects/{projectId}/test-configs`). */
-  createTestConfig(
-    ...init: Init<"/v1/projects/{projectId}/test-configs", "post">
-  ) {
-    return ok(
-      this.client.POST("/v1/projects/{projectId}/test-configs", ...init),
     );
   }
 
@@ -196,21 +172,6 @@ export class JudgmentApi {
     return ok(
       this.client.DELETE(
         "/v1/projects/{projectId}/attribute-mappers/{configId}",
-        ...init,
-      ),
-    );
-  }
-
-  /** Delete test config (`DELETE /v1/projects/{projectId}/test-configs/{testConfigId}`). */
-  deleteTestConfig(
-    ...init: Init<
-      "/v1/projects/{projectId}/test-configs/{testConfigId}",
-      "delete"
-    >
-  ) {
-    return ok(
-      this.client.DELETE(
-        "/v1/projects/{projectId}/test-configs/{testConfigId}",
         ...init,
       ),
     );
@@ -366,30 +327,6 @@ export class JudgmentApi {
     );
   }
 
-  /** Fetch test run (`GET /v1/projects/{projectId}/test-runs/{testRunId}`). */
-  getTestRun(
-    ...init: Init<"/v1/projects/{projectId}/test-runs/{testRunId}", "get">
-  ) {
-    return ok(
-      this.client.GET(
-        "/v1/projects/{projectId}/test-runs/{testRunId}",
-        ...init,
-      ),
-    );
-  }
-
-  /** Fetch test run items (`GET /v1/projects/{projectId}/test-runs/{testRunId}/items`). */
-  getTestRunItems(
-    ...init: Init<"/v1/projects/{projectId}/test-runs/{testRunId}/items", "get">
-  ) {
-    return ok(
-      this.client.GET(
-        "/v1/projects/{projectId}/test-runs/{testRunId}/items",
-        ...init,
-      ),
-    );
-  }
-
   /** Get a test run (`GET /v1/projects/{projectId}/test-suites/runs/{runId}`). */
   getTestSuiteRun(
     ...init: Init<"/v1/projects/{projectId}/test-suites/runs/{runId}", "get">
@@ -512,20 +449,6 @@ export class JudgmentApi {
     );
   }
 
-  /** Fetch test configs (`GET /v1/projects/{projectId}/test-configs`). */
-  listTestConfigs(
-    ...init: Init<"/v1/projects/{projectId}/test-configs", "get">
-  ) {
-    return ok(
-      this.client.GET("/v1/projects/{projectId}/test-configs", ...init),
-    );
-  }
-
-  /** Fetch test runs (`GET /v1/projects/{projectId}/test-runs`). */
-  listTestRuns(...init: Init<"/v1/projects/{projectId}/test-runs", "get">) {
-    return ok(this.client.GET("/v1/projects/{projectId}/test-runs", ...init));
-  }
-
   /** List test runs (`GET /v1/projects/{projectId}/test-suites/{testSuiteId}/runs`). */
   listTestSuiteRuns(
     ...init: Init<
@@ -613,11 +536,6 @@ export class JudgmentApi {
         ...init,
       ),
     );
-  }
-
-  /** Prepare and queue test run (`POST /v1/projects/{projectId}/test-runs`). */
-  runTest(...init: Init<"/v1/projects/{projectId}/test-runs", "post">) {
-    return ok(this.client.POST("/v1/projects/{projectId}/test-runs", ...init));
   }
 
   /** Score a test run (`POST /v1/projects/{projectId}/test-suites/runs/{runId}/score`). */
@@ -848,21 +766,6 @@ export class JudgmentApi {
     return ok(
       this.client.PUT(
         "/v1/projects/{projectId}/test-suites/{testSuiteId}/cases/{caseId}",
-        ...init,
-      ),
-    );
-  }
-
-  /** Update test config (`PATCH /v1/projects/{projectId}/test-configs/{testConfigId}`). */
-  updateTestConfig(
-    ...init: Init<
-      "/v1/projects/{projectId}/test-configs/{testConfigId}",
-      "patch"
-    >
-  ) {
-    return ok(
-      this.client.PATCH(
-        "/v1/projects/{projectId}/test-configs/{testConfigId}",
         ...init,
       ),
     );

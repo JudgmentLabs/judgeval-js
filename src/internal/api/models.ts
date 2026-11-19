@@ -60,22 +60,6 @@ export type PullAllOfflineDatasetsResponse = OkResponse<
   "/v1/projects/{projectId}/datasets",
   "get"
 >;
-export type CreateTestConfigRequest = RequestBody<
-  "/v1/projects/{projectId}/test-configs",
-  "post"
->;
-export type CreateTestRunRequest = RequestBody<
-  "/v1/projects/{projectId}/test-runs",
-  "post"
->;
-export type PreparedTestRunResponse = OkResponse<
-  "/v1/projects/{projectId}/test-runs",
-  "post"
->;
-export type ApplyTestRunSuccessRequest = RequestBody<
-  "/v1/projects/{projectId}/test-runs/{testRunId}/success",
-  "patch"
->;
 export type ExampleEvaluationRun = RequestBody<
   "/v1/projects/{projectId}/eval-queue/examples",
   "post"
@@ -85,14 +69,9 @@ export type LocalScorerResult = RequestBody<
   "/v1/projects/{projectId}/eval-results/examples",
   "post"
 >["results"][number];
-export type ExperimentResult = NonNullable<
+export type ExperimentRunItem = NonNullable<
   OkResponse<"/v1/projects/{projectId}/experiments/{runId}", "get">["results"]
 >[number];
-/** A legacy experiment row; the experiments route also serves test-run items. */
-export type ExperimentRunItem = Extract<
-  ExperimentResult,
-  { experiment_run_id: string }
->;
 export type ExperimentScorer = ExperimentRunItem["scorers"][number];
 
 /** A dataset summary; part of the public SDK surface. */

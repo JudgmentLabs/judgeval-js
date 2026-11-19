@@ -623,8 +623,8 @@ export interface paths {
       cookie?: never;
     };
     /**
-     * Fetch offline-test run via experiment alias
-     * @description Legacy SDK-compatible v1 fetch endpoint backed by test_runs and test_items_wide, falling back to legacy experiment runs. For v1 test runs the results are keyset-paginated by example_id (default first 200 items); pass next_cursor back as cursor for the next page. The legacy fallback ignores pagination params.
+     * Fetch experiment run
+     * @description Legacy SDK-compatible fetch of an experiment run logged through eval-results.
      */
     get: operations["getV1ProjectsByProjectIdExperimentsByRunId"];
     put?: never;
@@ -718,7 +718,7 @@ export interface paths {
     put?: never;
     /**
      * Create judge
-     * @description Create an Agent judge (wire value `prompt`), a Code judge (wire value `custom`), a deterministic judge with categorical outputs, or an external judge with executionMode external and binary, numeric, or categorical outputs, with its initial production version. Deterministic judges require two outputs ordered match, then miss. This call fixes the judge type for its lifetime. Agent judges require prompt configuration; Code judges require a base64-encoded tar.gz bundle and Python entrypoint metadata.
+     * @description Create an Agent judge (wire value `prompt`), a Code judge (wire value `custom`), a deterministic judge with categorical outputs, or an external judge with executionMode external and binary, numeric, or categorical outputs, with its initial production version. Deterministic judges require two outputs ordered match, then miss. This call fixes the judge type for its lifetime. Agent judges require prompt configuration; Code judges take a base64-encoded tar.gz bundle with Python entrypoint metadata, or functionSource: one Python file defining judge(example).
      */
     post: operations["postV1ProjectsByProjectIdJudges"];
     delete?: never;
@@ -746,7 +746,7 @@ export interface paths {
     head?: never;
     /**
      * Update judge
-     * @description Update a judge description and/or create one complete immutable judge version. A new version requires an explicit target version, the existing judge and score types, a complete implementation config, outputs, and monitoring-settings snapshot. Categorical outputs may reference existing labels by ID or define new labels. Code judge versions take a base64-encoded tar.gz bundle, or a sourceVersion whose stored code to reuse. Alternatively, newVersionFromSource copies sourceVersion and changes only the fields you set. Set promoteToProduction to make the new version production; latest is inferred automatically. Judge and score types cannot change.
+     * @description Update a judge description and/or create one complete immutable judge version. A new version requires an explicit target version, the existing judge and score types, a complete implementation config, outputs, and monitoring-settings snapshot. Categorical outputs may reference existing labels by ID or define new labels. Code judge versions take a base64-encoded tar.gz bundle, functionSource (one Python file defining judge(example)), or a sourceVersion whose stored code to reuse. Alternatively, newVersionFromSource copies sourceVersion and changes only the fields you set. Set promoteToProduction to make the new version production; latest is inferred automatically. Judge and score types cannot change.
      */
     patch: operations["patchV1ProjectsByProjectIdJudgesByJudgeId"];
     trace?: never;
@@ -1201,222 +1201,6 @@ export interface paths {
     options?: never;
     head?: never;
     patch?: never;
-    trace?: never;
-  };
-  "/v1/projects/{projectId}/test-configs": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Fetch test configs
-     * @description Fetch Supabase-backed v1 test configs, optionally filtered by dataset.
-     */
-    get: operations["getV1ProjectsByProjectIdTest-configs"];
-    put?: never;
-    /**
-     * Create test config
-     * @description Create a Supabase-backed v1 test config and immutable judge membership for a dataset.
-     */
-    post: operations["postV1ProjectsByProjectIdTest-configs"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/projects/{projectId}/test-configs/{testConfigId}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Fetch test config
-     * @description Fetch a Supabase-backed v1 test config by id.
-     */
-    get: operations["getV1ProjectsByProjectIdTest-configsByTestConfigId"];
-    put?: never;
-    post?: never;
-    /**
-     * Delete test config
-     * @description Hard-delete a Supabase-backed v1 test config.
-     */
-    delete: operations["deleteV1ProjectsByProjectIdTest-configsByTestConfigId"];
-    options?: never;
-    head?: never;
-    /**
-     * Update test config
-     * @description Update mutable test config fields. Judge membership is intentionally not patched in place.
-     */
-    patch: operations["patchV1ProjectsByProjectIdTest-configsByTestConfigId"];
-    trace?: never;
-  };
-  "/v1/projects/{projectId}/test-runs": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Fetch test runs
-     * @description Fetch Supabase-backed v1 test runs for a project, optionally filtered by config, dataset, or status.
-     */
-    get: operations["getV1ProjectsByProjectIdTest-runs"];
-    put?: never;
-    /**
-     * Prepare and queue test run
-     * @description Create a Supabase-backed v1 test run, create linked evaluation_runs, and enqueue judge evaluation work.
-     */
-    post: operations["postV1ProjectsByProjectIdTest-runs"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/projects/{projectId}/test-runs/{testRunId}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Fetch test run
-     * @description Fetch Supabase-backed v1 test run metadata by id.
-     */
-    get: operations["getV1ProjectsByProjectIdTest-runsByTestRunId"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/projects/{projectId}/test-runs/{testRunId}/cancel": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    /**
-     * Cancel test run
-     * @description Cancel a pending or running test run. Runs that already completed, errored, or were canceled cannot be canceled.
-     */
-    post: operations["postV1ProjectsByProjectIdTest-runsByTestRunIdCancel"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/projects/{projectId}/test-runs/{testRunId}/graph": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Fetch test run graph
-     * @description Fetch graph aggregates for ClickHouse test_items_wide.
-     */
-    get: operations["getV1ProjectsByProjectIdTest-runsByTestRunIdGraph"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/projects/{projectId}/test-runs/{testRunId}/items": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Fetch test run items
-     * @description Fetch one page of ClickHouse test_items_wide rows for a v1 test run, keyset-paginated by example_id. Defaults to the first 200 items when no pagination params are given; pass next_cursor back as cursor to fetch the next page.
-     */
-    get: operations["getV1ProjectsByProjectIdTest-runsByTestRunIdItems"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/projects/{projectId}/test-runs/{testRunId}/results": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    /**
-     * Fetch test run results
-     * @description Fetch one page of ClickHouse test_items_wide result rows for a v1 test run, keyset-paginated by example_id. Defaults to the first 200 items when no pagination params are given; pass next_cursor back as cursor to fetch the next page.
-     */
-    get: operations["getV1ProjectsByProjectIdTest-runsByTestRunIdResults"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/v1/projects/{projectId}/test-runs/{testRunId}/status": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    /**
-     * Update test run status
-     * @description Update Supabase test_runs status for a v1 test run.
-     */
-    patch: operations["patchV1ProjectsByProjectIdTest-runsByTestRunIdStatus"];
-    trace?: never;
-  };
-  "/v1/projects/{projectId}/test-runs/{testRunId}/success": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    get?: never;
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    /**
-     * Apply test run pass-condition successes
-     * @description Applies client-computed pass-condition results to stored test item rows: each matched ClickHouse row is re-inserted with the new success value and all other columns preserved.
-     */
-    patch: operations["patchV1ProjectsByProjectIdTest-runsByTestRunIdSuccess"];
     trace?: never;
   };
   "/v1/projects/{projectId}/test-suites": {
@@ -2056,7 +1840,6 @@ export interface components {
         updated_at?: string;
         creator_id: string | null;
         entries?: number;
-        test_config_count?: number;
       };
     };
     PullAllOfflineDatasetsResponse: {
@@ -2072,7 +1855,6 @@ export interface components {
       updated_at?: string;
       creator_id: string | null;
       entries?: number;
-      test_config_count?: number;
     }[];
     DeleteOfflineDatasetResponse: {
       status: string;
@@ -2091,7 +1873,6 @@ export interface components {
       updated_at?: string;
       creator_id: string | null;
       entries?: number;
-      test_config_count?: number;
       dataset_kind: "example" & "example";
       examples: {
         example_id: string;
@@ -2133,7 +1914,6 @@ export interface components {
         updated_at?: string;
         creator_id: string | null;
         entries?: number;
-        test_config_count?: number;
       };
       entries: {
         item: {
@@ -2523,58 +2303,8 @@ export interface components {
       created_at: string;
       scorers: components["schemas"]["ExperimentScorer"][];
     };
-    FetchTestRunViaExperimentAliasResponse: {
-      results:
-        | (
-            | {
-                organization_id: string;
-                project_id: string;
-                test_run_id: string;
-                dataset_id: string;
-                dataset_version_id: string;
-                example_id: string;
-                agent_offline_trace_id: string | null;
-                created_at: string;
-                example: {
-                  example_id: string;
-                  organization_id?: string;
-                  project_id?: string;
-                  data: {
-                    [key: string]: unknown;
-                  };
-                  metadata?: {
-                    [key: string]: unknown;
-                  } | null;
-                  managed_metadata: {
-                    [key: string]: unknown;
-                  };
-                  created_at?: string;
-                  user_id: string;
-                } | null;
-                data: {
-                  [key: string]: unknown;
-                };
-                scorers: {
-                  judge_id: string;
-                  judge_name: string | null;
-                  judge_major_version: number;
-                  judge_minor_version: number;
-                  score_type: string;
-                  num_value: number;
-                  bool_value: boolean;
-                  str_value: string;
-                  reason: unknown;
-                  metadata: unknown;
-                  success: boolean | null;
-                  error: string | null;
-                  created_at: string;
-                }[];
-              }[]
-            | components["schemas"]["ExperimentRunItem"][]
-          )
-        | null;
-      has_more?: boolean;
-      next_cursor?: string | null;
+    FetchExperimentRunResponse: {
+      results: components["schemas"]["ExperimentRunItem"][] | null;
       ui_results_url: string | null;
     };
     /** @description The model call, in the conversation format */
@@ -2763,313 +2493,6 @@ export interface components {
       message: string;
       hint?: string;
     };
-    TestConfigsResponse: {
-      test_configs: {
-        id: string;
-        organization_id?: string;
-        project_id: string;
-        dataset_id: string;
-        name: string;
-        description?: string | null;
-        created_at?: string;
-        updated_at?: string;
-        user_id: string;
-        judges?: {
-          id?: string;
-          organization_id?: string;
-          project_id?: string;
-          test_config_id?: string;
-          judge_id: string;
-          created_at?: string;
-          user_id: string;
-          judge?: {
-            id: string;
-            name: string;
-            judge_type: string | null;
-            score_type: string;
-          };
-        }[];
-      }[];
-    };
-    CreateTestConfigRequest: {
-      name: string;
-      description?: string | null;
-      dataset_id?: string;
-      dataset_name?: string;
-      judge_ids?: string[];
-      judges?: {
-        judge_id?: string;
-        name?: string;
-      }[];
-    };
-    TestConfigResponse: {
-      test_config: {
-        id: string;
-        organization_id?: string;
-        project_id: string;
-        dataset_id: string;
-        name: string;
-        description?: string | null;
-        created_at?: string;
-        updated_at?: string;
-        user_id: string;
-        judges?: {
-          id?: string;
-          organization_id?: string;
-          project_id?: string;
-          test_config_id?: string;
-          judge_id: string;
-          created_at?: string;
-          user_id: string;
-          judge?: {
-            id: string;
-            name: string;
-            judge_type: string | null;
-            score_type: string;
-          };
-        }[];
-      };
-    };
-    UpdateTestConfigRequest: {
-      name?: string;
-      description?: string | null;
-    };
-    DeleteTestConfigResponse: {
-      status: string;
-      message: string;
-    };
-    TestRunsResponse: {
-      test_runs: {
-        id: string;
-        organization_id?: string;
-        project_id: string;
-        user_id: string;
-        test_config_id: string;
-        dataset_id: string;
-        dataset_version_id: string;
-        /** @enum {string} */
-        source: "sdk" | "cli" | "mcp" | "platform" | "legacy";
-        /** @enum {string} */
-        status: "pending" | "running" | "completed" | "error" | "cancelled";
-        name: string;
-        error_message?: string | null;
-        created_at?: string;
-        updated_at?: string;
-        started_at?: string | null;
-        completed_at?: string | null;
-      }[];
-    };
-    CreateTestRunRequest: {
-      /**
-       * Format: uuid
-       * @description Reuse an owned, pending platform agent run instead of creating a new run.
-       */
-      test_run_id?: string;
-      test_config_id: string;
-      name?: string;
-      dataset_version_id?: string;
-      dataset_version_number?: number;
-      judge_versions?: {
-        judge_id?: string;
-        name?: string;
-        version?: string;
-        major_version?: number;
-        minor_version?: number;
-      }[];
-      /** @enum {string} */
-      source?: "sdk" | "cli" | "mcp" | "platform" | "legacy";
-      agent_errors?: {
-        example_id: string;
-        error: string;
-      }[];
-      agent_traces?: {
-        example_id: string;
-        agent_offline_trace_id: string;
-      }[];
-    };
-    PreparedTestRunResponse: {
-      test_run: {
-        id: string;
-        organization_id?: string;
-        project_id: string;
-        user_id: string;
-        test_config_id: string;
-        dataset_id: string;
-        dataset_version_id: string;
-        /** @enum {string} */
-        source: "sdk" | "cli" | "mcp" | "platform" | "legacy";
-        /** @enum {string} */
-        status: "pending" | "running" | "completed" | "error" | "cancelled";
-        name: string;
-        error_message?: string | null;
-        created_at?: string;
-        updated_at?: string;
-        started_at?: string | null;
-        completed_at?: string | null;
-      };
-      dataset: {
-        dataset_id: string;
-        organization_id?: string;
-        project_id?: string;
-        name: string;
-        schema?: {
-          [key: string]: unknown;
-        } | null;
-        current_version?: number;
-        created_at?: string;
-        updated_at?: string;
-        creator_id: string | null;
-        entries?: number;
-        test_config_count?: number;
-      };
-      dataset_version: {
-        version_id: string;
-        dataset_id: string;
-        organization_id: string;
-        project_id: string;
-        version_number: number;
-        created_at: string;
-        user_id: string | null;
-        item_count: number;
-      };
-      examples: {
-        example_id: string;
-        organization_id?: string;
-        project_id?: string;
-        data: {
-          [key: string]: unknown;
-        };
-        metadata?: {
-          [key: string]: unknown;
-        } | null;
-        managed_metadata: {
-          [key: string]: unknown;
-        };
-        created_at?: string;
-        user_id: string;
-      }[];
-      judges: {
-        judge_id: string;
-        judge_name: string;
-        judge_type: string;
-        score_type: string;
-        judge_major_version: number;
-        judge_minor_version: number;
-      }[];
-      evaluation_runs: {
-        run_id: string;
-        judge_name: string;
-        example_id: string;
-        test_run_id: string;
-        judge_id: string;
-        judge_major_version: number;
-        judge_minor_version: number;
-      }[];
-      ui_results_url: string;
-    };
-    TestRunResponse: {
-      test_run: {
-        id: string;
-        organization_id?: string;
-        project_id: string;
-        user_id: string;
-        test_config_id: string;
-        dataset_id: string;
-        dataset_version_id: string;
-        /** @enum {string} */
-        source: "sdk" | "cli" | "mcp" | "platform" | "legacy";
-        /** @enum {string} */
-        status: "pending" | "running" | "completed" | "error" | "cancelled";
-        name: string;
-        error_message?: string | null;
-        created_at?: string;
-        updated_at?: string;
-        started_at?: string | null;
-        completed_at?: string | null;
-      };
-      ui_results_url?: string | null;
-    };
-    TestRunGraphResponse: {
-      graph: {
-        [key: string]: {
-          judge_id: string;
-          judge_name: string | null;
-          judge_major_version: number;
-          judge_minor_version: number;
-          score_type: string;
-          score_distribution: number[];
-          true_count: number;
-          false_count: number;
-          value_counts: {
-            [key: string]: number;
-          };
-        };
-      };
-    };
-    TestRunItemsResponse: {
-      results: {
-        organization_id: string;
-        project_id: string;
-        test_run_id: string;
-        dataset_id: string;
-        dataset_version_id: string;
-        example_id: string;
-        agent_offline_trace_id: string | null;
-        created_at: string;
-        example: {
-          example_id: string;
-          organization_id?: string;
-          project_id?: string;
-          data: {
-            [key: string]: unknown;
-          };
-          metadata?: {
-            [key: string]: unknown;
-          } | null;
-          managed_metadata: {
-            [key: string]: unknown;
-          };
-          created_at?: string;
-          user_id: string;
-        } | null;
-        data: {
-          [key: string]: unknown;
-        };
-        scorers: {
-          judge_id: string;
-          judge_name: string | null;
-          judge_major_version: number;
-          judge_minor_version: number;
-          score_type: string;
-          num_value: number;
-          bool_value: boolean;
-          str_value: string;
-          reason: unknown;
-          metadata: unknown;
-          success: boolean | null;
-          error: string | null;
-          created_at: string;
-        }[];
-      }[];
-      /** @description Whether more items exist beyond this page. */
-      has_more: boolean;
-      next_cursor: string | null;
-      ui_results_url?: string | null;
-    };
-    UpdateTestRunStatusRequest: {
-      /** @enum {string} */
-      status: "pending" | "running" | "completed" | "error" | "cancelled";
-      error_message?: string | null;
-    };
-    ApplyTestRunSuccessRequest: {
-      successes: {
-        evaluation_run_id: string;
-        success: boolean | null;
-      }[];
-    };
-    ApplyTestRunSuccessResponse: {
-      updated: number;
-    };
     CreateTestSuiteRequest: {
       name: string;
       description?: string;
@@ -3108,6 +2531,8 @@ export interface components {
           op: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "not_in";
           /** @description Passes when output <op> expected. */
           expected: unknown;
+          /** @description Why the check expects this value, shown next to its verdict. Judges never read it. */
+          rationale?: string;
         };
       };
       tags: string[];
@@ -3142,6 +2567,8 @@ export interface components {
           op: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "not_in";
           /** @description Passes when output <op> expected. */
           expected: unknown;
+          /** @description Why the check expects this value, shown next to its verdict. Judges never read it. */
+          rationale?: string;
         };
       };
       tags?: string[];
@@ -3257,6 +2684,7 @@ export interface components {
           op: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "not_in";
           /** @description The golden value. */
           expected: unknown;
+          rationale: string | null;
           /** @description What the judge returned; NULL when it errored. */
           judge_output: unknown;
           passed: boolean;
@@ -4879,10 +4307,7 @@ export interface operations {
   };
   getV1ProjectsByProjectIdExperimentsByRunId: {
     parameters: {
-      query?: {
-        limit?: number;
-        cursor?: string;
-      };
+      query?: never;
       header?: never;
       path: {
         /** @example YOUR_PROJECT_ID */
@@ -4900,7 +4325,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": components["schemas"]["FetchTestRunViaExperimentAliasResponse"];
+          "application/json": components["schemas"]["FetchExperimentRunResponse"];
         };
       };
     };
@@ -5645,143 +5070,268 @@ export interface operations {
                  * @constant
                  */
                 judgeType: "custom";
-                initialVersion: {
-                  actionConfig?: {
-                    action_groups: {
-                      id: string;
-                      /** @description Action group display name; an empty string uses Action group 1, 2, etc. */
-                      name: string;
-                      enabled: boolean;
-                      /** @description Empty runs the group in every environment */
-                      environment_names: string[];
-                      /** @description Judge result that runs the group. Categorical groups run when the result is any listed output name. */
-                      when:
-                        | {
-                            /** @constant */
-                            kind: "any";
-                          }
-                        | {
-                            /** @constant */
-                            kind: "binary";
-                            value: boolean;
-                          }
-                        | {
-                            /** @constant */
-                            kind: "categorical";
-                            values: string[];
-                          }
-                        | {
-                            /** @constant */
-                            kind: "numeric";
-                            /** @enum {string} */
-                            operator: "lt" | "lte" | "eq" | "gte" | "gt";
-                            value: number;
+                /** @description Categorical with at least two outputs. A function judge (config.functionSource) may instead be binary or numeric, with no outputs. */
+                initialVersion:
+                  | {
+                      actionConfig?: {
+                        action_groups: {
+                          id: string;
+                          /** @description Action group display name; an empty string uses Action group 1, 2, etc. */
+                          name: string;
+                          enabled: boolean;
+                          /** @description Empty runs the group in every environment */
+                          environment_names: string[];
+                          /** @description Judge result that runs the group. Categorical groups run when the result is any listed output name. */
+                          when:
+                            | {
+                                /** @constant */
+                                kind: "any";
+                              }
+                            | {
+                                /** @constant */
+                                kind: "binary";
+                                value: boolean;
+                              }
+                            | {
+                                /** @constant */
+                                kind: "categorical";
+                                values: string[];
+                              }
+                            | {
+                                /** @constant */
+                                kind: "numeric";
+                                /** @enum {string} */
+                                operator: "lt" | "lte" | "eq" | "gte" | "gt";
+                                value: number;
+                              };
+                          frequency: {
+                            count: number;
+                            window_seconds: number;
                           };
-                      frequency: {
-                        count: number;
-                        window_seconds: number;
+                          cooldown_seconds: number;
+                          actions: (
+                            | {
+                                id: string;
+                                enabled: boolean;
+                                /** @constant */
+                                type: "webhook";
+                                config: {
+                                  url: string;
+                                  secret: string;
+                                };
+                              }
+                            | {
+                                id: string;
+                                enabled: boolean;
+                                /** @constant */
+                                type: "email";
+                                config: {
+                                  email_address: string;
+                                };
+                              }
+                            | {
+                                id: string;
+                                enabled: boolean;
+                                /** @constant */
+                                type: "slack";
+                                config: {
+                                  team_id?: string;
+                                  channel_id?: string;
+                                  message?: string;
+                                  custom_attribute_keys?: string[];
+                                };
+                              }
+                            | {
+                                id: string;
+                                enabled: boolean;
+                                /** @constant */
+                                type: "dataset";
+                                config: {
+                                  dataset_id: string;
+                                };
+                              }
+                            | {
+                                id: string;
+                                enabled: boolean;
+                                /** @constant */
+                                type: "run_behavior";
+                                config: {
+                                  judge_ids: string[];
+                                };
+                              }
+                          )[];
+                        }[];
+                      } | null;
+                      /** @constant */
+                      scoreType: "categorical";
+                      outputs: {
+                        name: string;
+                        description: string;
+                      }[];
+                      advancedSettings?: {
+                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
+                        online_environment_names: string[] | null;
+                        /**
+                         * @description continuous checks new traces; on_demand checks only traces evaluations are requested on. Both apply environments, run conditions, and sampling.
+                         * @enum {string}
+                         */
+                        online_evaluation_mode: "continuous" | "on_demand";
+                        /** @description Percent of matching traces (or sessions, with session scoring on) scored, including evaluations requested on traces. */
+                        online_sampling_rate: number;
+                        online_span_triggers: {
+                          /** @enum {string} */
+                          kind: "and" | "or";
+                          conditions: unknown[];
+                        };
+                        online_session_scoring: boolean;
+                        session_evaluation_count_enabled?: boolean | null;
+                        session_evaluation_idle_enabled?: boolean | null;
+                        session_evaluation_min_candidate_traces?: number | null;
+                        session_evaluation_max_wait_minutes?: number | null;
                       };
-                      cooldown_seconds: number;
-                      actions: (
-                        | {
-                            id: string;
-                            enabled: boolean;
-                            /** @constant */
-                            type: "webhook";
-                            config: {
-                              url: string;
-                              secret: string;
-                            };
-                          }
-                        | {
-                            id: string;
-                            enabled: boolean;
-                            /** @constant */
-                            type: "email";
-                            config: {
-                              email_address: string;
-                            };
-                          }
-                        | {
-                            id: string;
-                            enabled: boolean;
-                            /** @constant */
-                            type: "slack";
-                            config: {
-                              team_id?: string;
-                              channel_id?: string;
-                              message?: string;
-                              custom_attribute_keys?: string[];
-                            };
-                          }
-                        | {
-                            id: string;
-                            enabled: boolean;
-                            /** @constant */
-                            type: "dataset";
-                            config: {
-                              dataset_id: string;
-                            };
-                          }
-                        | {
-                            id: string;
-                            enabled: boolean;
-                            /** @constant */
-                            type: "run_behavior";
-                            config: {
-                              judge_ids: string[];
-                            };
-                          }
-                      )[];
-                    }[];
-                  } | null;
-                  /** @constant */
-                  scoreType: "categorical";
-                  outputs: {
-                    name: string;
-                    description: string;
-                  }[];
-                  advancedSettings?: {
-                    /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
-                    online_environment_names: string[] | null;
-                    /**
-                     * @description continuous checks new traces; on_demand checks only traces evaluations are requested on. Both apply environments, run conditions, and sampling.
-                     * @enum {string}
-                     */
-                    online_evaluation_mode: "continuous" | "on_demand";
-                    /** @description Percent of matching traces (or sessions, with session scoring on) scored, including evaluations requested on traces. */
-                    online_sampling_rate: number;
-                    online_span_triggers: {
+                    }
+                  | {
+                      actionConfig?: {
+                        action_groups: {
+                          id: string;
+                          /** @description Action group display name; an empty string uses Action group 1, 2, etc. */
+                          name: string;
+                          enabled: boolean;
+                          /** @description Empty runs the group in every environment */
+                          environment_names: string[];
+                          /** @description Judge result that runs the group. Categorical groups run when the result is any listed output name. */
+                          when:
+                            | {
+                                /** @constant */
+                                kind: "any";
+                              }
+                            | {
+                                /** @constant */
+                                kind: "binary";
+                                value: boolean;
+                              }
+                            | {
+                                /** @constant */
+                                kind: "categorical";
+                                values: string[];
+                              }
+                            | {
+                                /** @constant */
+                                kind: "numeric";
+                                /** @enum {string} */
+                                operator: "lt" | "lte" | "eq" | "gte" | "gt";
+                                value: number;
+                              };
+                          frequency: {
+                            count: number;
+                            window_seconds: number;
+                          };
+                          cooldown_seconds: number;
+                          actions: (
+                            | {
+                                id: string;
+                                enabled: boolean;
+                                /** @constant */
+                                type: "webhook";
+                                config: {
+                                  url: string;
+                                  secret: string;
+                                };
+                              }
+                            | {
+                                id: string;
+                                enabled: boolean;
+                                /** @constant */
+                                type: "email";
+                                config: {
+                                  email_address: string;
+                                };
+                              }
+                            | {
+                                id: string;
+                                enabled: boolean;
+                                /** @constant */
+                                type: "slack";
+                                config: {
+                                  team_id?: string;
+                                  channel_id?: string;
+                                  message?: string;
+                                  custom_attribute_keys?: string[];
+                                };
+                              }
+                            | {
+                                id: string;
+                                enabled: boolean;
+                                /** @constant */
+                                type: "dataset";
+                                config: {
+                                  dataset_id: string;
+                                };
+                              }
+                            | {
+                                id: string;
+                                enabled: boolean;
+                                /** @constant */
+                                type: "run_behavior";
+                                config: {
+                                  judge_ids: string[];
+                                };
+                              }
+                          )[];
+                        }[];
+                      } | null;
                       /** @enum {string} */
-                      kind: "and" | "or";
-                      conditions: unknown[];
+                      scoreType: "binary" | "numeric";
+                      advancedSettings?: {
+                        /** @description null leaves on-demand evaluation unconfigured; online evaluation requires [] for All or selected names. */
+                        online_environment_names: string[] | null;
+                        /**
+                         * @description continuous checks new traces; on_demand checks only traces evaluations are requested on. Both apply environments, run conditions, and sampling.
+                         * @enum {string}
+                         */
+                        online_evaluation_mode: "continuous" | "on_demand";
+                        /** @description Percent of matching traces (or sessions, with session scoring on) scored, including evaluations requested on traces. */
+                        online_sampling_rate: number;
+                        online_span_triggers: {
+                          /** @enum {string} */
+                          kind: "and" | "or";
+                          conditions: unknown[];
+                        };
+                        online_session_scoring: boolean;
+                        session_evaluation_count_enabled?: boolean | null;
+                        session_evaluation_idle_enabled?: boolean | null;
+                        session_evaluation_min_candidate_traces?: number | null;
+                        session_evaluation_max_wait_minutes?: number | null;
+                      };
                     };
-                    online_session_scoring: boolean;
-                    session_evaluation_count_enabled?: boolean | null;
-                    session_evaluation_idle_enabled?: boolean | null;
-                    session_evaluation_min_candidate_traces?: number | null;
-                    session_evaluation_max_wait_minutes?: number | null;
-                  };
-                };
-                config: {
-                  /** @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB. */
-                  bundleBase64: string;
-                  /** @description Path to the Python entrypoint inside the tar.gz bundle */
-                  entrypointPath: string;
-                  /** @description Optional requirements file path inside the bundle */
-                  requirementsPath?: string;
-                  /** @description Python scorer class name exported by the entrypoint */
-                  className: string;
-                  /** @description Input format expected by the Code judge. Defaults to 'example'. */
-                  scorerType?: ("example" | "trace") | null;
-                  /**
-                   * @description judgeval SDK major version targeted by the Code judge
-                   * @default 4
-                   */
-                  sdkVersion?: number;
-                  /** @description Description stored on the Code judge version */
-                  description?: string | null;
-                };
+                config:
+                  | {
+                      /** @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB. */
+                      bundleBase64: string;
+                      /** @description Path to the Python entrypoint inside the tar.gz bundle */
+                      entrypointPath: string;
+                      /** @description Optional requirements file path inside the bundle */
+                      requirementsPath?: string;
+                      /** @description Python scorer class name exported by the entrypoint */
+                      className: string;
+                      /** @description Input format expected by the Code judge. Defaults to 'example'. */
+                      scorerType?: ("example" | "trace") | null;
+                      /**
+                       * @description judgeval SDK major version targeted by the Code judge
+                       * @default 4
+                       */
+                      sdkVersion?: number;
+                      /** @description Description stored on the Code judge version */
+                      description?: string | null;
+                    }
+                  | {
+                      /** @description One Python file defining judge(example), run in Monty. example holds the example's fields, plus example['trace']['spans'] for a trace judge or example['conversation'] (the conversation's model calls and items in order) when conversation is true. Return a value matching the judge's outputs, or a dict with value and optional reason. No classes with inheritance, del, or third-party packages; it is checked at upload. */
+                      functionSource: string;
+                      /** @description Description stored on the Code judge version */
+                      description?: string | null;
+                    };
+                /** @description true grades the whole conversation; false or omitted grades one trace. Grading conversations needs conversations enabled for the organization. Fixed for the judge’s lifetime. */
+                conversation?: boolean;
               }
             | {
                 name: string;
@@ -6571,25 +6121,33 @@ export interface operations {
                        */
                       judgeType: "custom";
                       config:
-                        | {
-                            /** @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB. */
-                            bundleBase64: string;
-                            /** @description Path to the Python entrypoint inside the tar.gz bundle */
-                            entrypointPath: string;
-                            /** @description Optional requirements file path inside the bundle */
-                            requirementsPath?: string;
-                            /** @description Python scorer class name exported by the entrypoint */
-                            className: string;
-                            /** @description Input format expected by the Code judge. Defaults to 'example'. */
-                            scorerType?: ("example" | "trace") | null;
-                            /**
-                             * @description judgeval SDK major version targeted by the Code judge
-                             * @default 4
-                             */
-                            sdkVersion?: number;
-                            /** @description Description stored on the Code judge version */
-                            description?: string | null;
-                          }
+                        | (
+                            | {
+                                /** @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB. */
+                                bundleBase64: string;
+                                /** @description Path to the Python entrypoint inside the tar.gz bundle */
+                                entrypointPath: string;
+                                /** @description Optional requirements file path inside the bundle */
+                                requirementsPath?: string;
+                                /** @description Python scorer class name exported by the entrypoint */
+                                className: string;
+                                /** @description Input format expected by the Code judge. Defaults to 'example'. */
+                                scorerType?: ("example" | "trace") | null;
+                                /**
+                                 * @description judgeval SDK major version targeted by the Code judge
+                                 * @default 4
+                                 */
+                                sdkVersion?: number;
+                                /** @description Description stored on the Code judge version */
+                                description?: string | null;
+                              }
+                            | {
+                                /** @description One Python file defining judge(example), run in Monty. example holds the example's fields, plus example['trace']['spans'] for a trace judge or example['conversation'] (the conversation's model calls and items in order) when conversation is true. Return a value matching the judge's outputs, or a dict with value and optional reason. No classes with inheritance, del, or third-party packages; it is checked at upload. */
+                                functionSource: string;
+                                /** @description Description stored on the Code judge version */
+                                description?: string | null;
+                              }
+                          )
                         | {
                             /** @description Existing version whose stored code the new version reuses */
                             sourceVersion: {
@@ -6725,25 +6283,33 @@ export interface operations {
                        */
                       judgeType: "custom";
                       config:
-                        | {
-                            /** @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB. */
-                            bundleBase64: string;
-                            /** @description Path to the Python entrypoint inside the tar.gz bundle */
-                            entrypointPath: string;
-                            /** @description Optional requirements file path inside the bundle */
-                            requirementsPath?: string;
-                            /** @description Python scorer class name exported by the entrypoint */
-                            className: string;
-                            /** @description Input format expected by the Code judge. Defaults to 'example'. */
-                            scorerType?: ("example" | "trace") | null;
-                            /**
-                             * @description judgeval SDK major version targeted by the Code judge
-                             * @default 4
-                             */
-                            sdkVersion?: number;
-                            /** @description Description stored on the Code judge version */
-                            description?: string | null;
-                          }
+                        | (
+                            | {
+                                /** @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB. */
+                                bundleBase64: string;
+                                /** @description Path to the Python entrypoint inside the tar.gz bundle */
+                                entrypointPath: string;
+                                /** @description Optional requirements file path inside the bundle */
+                                requirementsPath?: string;
+                                /** @description Python scorer class name exported by the entrypoint */
+                                className: string;
+                                /** @description Input format expected by the Code judge. Defaults to 'example'. */
+                                scorerType?: ("example" | "trace") | null;
+                                /**
+                                 * @description judgeval SDK major version targeted by the Code judge
+                                 * @default 4
+                                 */
+                                sdkVersion?: number;
+                                /** @description Description stored on the Code judge version */
+                                description?: string | null;
+                              }
+                            | {
+                                /** @description One Python file defining judge(example), run in Monty. example holds the example's fields, plus example['trace']['spans'] for a trace judge or example['conversation'] (the conversation's model calls and items in order) when conversation is true. Return a value matching the judge's outputs, or a dict with value and optional reason. No classes with inheritance, del, or third-party packages; it is checked at upload. */
+                                functionSource: string;
+                                /** @description Description stored on the Code judge version */
+                                description?: string | null;
+                              }
+                          )
                         | {
                             /** @description Existing version whose stored code the new version reuses */
                             sourceVersion: {
@@ -6879,25 +6445,33 @@ export interface operations {
                        */
                       judgeType: "custom";
                       config:
-                        | {
-                            /** @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB. */
-                            bundleBase64: string;
-                            /** @description Path to the Python entrypoint inside the tar.gz bundle */
-                            entrypointPath: string;
-                            /** @description Optional requirements file path inside the bundle */
-                            requirementsPath?: string;
-                            /** @description Python scorer class name exported by the entrypoint */
-                            className: string;
-                            /** @description Input format expected by the Code judge. Defaults to 'example'. */
-                            scorerType?: ("example" | "trace") | null;
-                            /**
-                             * @description judgeval SDK major version targeted by the Code judge
-                             * @default 4
-                             */
-                            sdkVersion?: number;
-                            /** @description Description stored on the Code judge version */
-                            description?: string | null;
-                          }
+                        | (
+                            | {
+                                /** @description Base64-encoded tar.gz bundle. Decoded size must be at most 1 MiB. */
+                                bundleBase64: string;
+                                /** @description Path to the Python entrypoint inside the tar.gz bundle */
+                                entrypointPath: string;
+                                /** @description Optional requirements file path inside the bundle */
+                                requirementsPath?: string;
+                                /** @description Python scorer class name exported by the entrypoint */
+                                className: string;
+                                /** @description Input format expected by the Code judge. Defaults to 'example'. */
+                                scorerType?: ("example" | "trace") | null;
+                                /**
+                                 * @description judgeval SDK major version targeted by the Code judge
+                                 * @default 4
+                                 */
+                                sdkVersion?: number;
+                                /** @description Description stored on the Code judge version */
+                                description?: string | null;
+                              }
+                            | {
+                                /** @description One Python file defining judge(example), run in Monty. example holds the example's fields, plus example['trace']['spans'] for a trace judge or example['conversation'] (the conversation's model calls and items in order) when conversation is true. Return a value matching the judge's outputs, or a dict with value and optional reason. No classes with inheritance, del, or third-party packages; it is checked at upload. */
+                                functionSource: string;
+                                /** @description Description stored on the Code judge version */
+                                description?: string | null;
+                              }
+                          )
                         | {
                             /** @description Existing version whose stored code the new version reuses */
                             sourceVersion: {
@@ -7245,7 +6819,7 @@ export interface operations {
                     categoryIds?: string[];
                   }
               )[];
-              /** @description Only the fields to change, from the judge type's fields: prompt, description, reasoningLevel, minScore, maxScore for Agent judges; expression for deterministic judges. Code judges: omit to reuse the stored bundle; to upload new code, set bundleBase64, entrypointPath, and className. */
+              /** @description Only the fields to change, from the judge type's fields: prompt, description, reasoningLevel, minScore, maxScore for Agent judges; expression for deterministic judges. Code judges: omit to reuse the stored code; to upload new code, set functionSource, or bundleBase64, entrypointPath, and className. */
               config?: {
                 /** @description Complete prompt for the new version */
                 prompt?: string;
@@ -7275,6 +6849,8 @@ export interface operations {
                 scorerType?: "example" | "trace";
                 /** @description judgeval SDK major version targeted by the Code judge */
                 sdkVersion?: number;
+                /** @description One Python file defining judge(example), run in Monty. example holds the example's fields, plus example['trace']['spans'] for a trace judge or example['conversation'] (the conversation's model calls and items in order) when conversation is true. Return a value matching the judge's outputs, or a dict with value and optional reason. No classes with inheritance, del, or third-party packages; it is checked at upload. */
+                functionSource?: string;
                 expression?: unknown;
               };
             };
@@ -7469,6 +7045,7 @@ export interface operations {
               supported: boolean;
               byok_enabled: boolean;
               saas_runtime: boolean;
+              /** @description Configuration incompatibilities. uses_connections means the judge uses selected connections with both connection feature flags enabled; extracted trace evidence cannot replace checks against connected systems. */
               blockers: (
                 | "unsupported_runtime"
                 | "byok_enabled"
@@ -7476,6 +7053,7 @@ export interface operations {
                 | "unsupported_output_type"
                 | "missing_categorical_outputs"
                 | "session_scope"
+                | "uses_connections"
               )[];
             };
             judge:
@@ -7772,6 +7350,8 @@ export interface operations {
                     requirements_path: string | null;
                     scorer_type: ("example" | "trace") | null;
                     sdk_version: number;
+                    /** @description A function judge's Python source, defining judge(example); null for a class judge. */
+                    function_source: string | null;
                     /**
                      * Format: uri
                      * @description Presigned tar.gz bundle URL, present only when include_code_url is true. Download promptly; the URL lasts at most 55 minutes. Extract the archive to read individual source files.
@@ -9417,659 +8997,6 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["PublicJqlErrorResponse"];
-        };
-      };
-    };
-  };
-  "getV1ProjectsByProjectIdTest-configs": {
-    parameters: {
-      query?: {
-        dataset_id?: string;
-      };
-      header?: never;
-      path: {
-        /** @example YOUR_PROJECT_ID */
-        projectId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Response for status 200 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["TestConfigsResponse"];
-        };
-      };
-    };
-  };
-  "postV1ProjectsByProjectIdTest-configs": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @example YOUR_PROJECT_ID */
-        projectId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["CreateTestConfigRequest"];
-      };
-    };
-    responses: {
-      /** @description Response for status 200 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["TestConfigResponse"];
-        };
-      };
-      /** @description Response for status 409 */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message?: string;
-            code?: string;
-            details?: string[];
-          };
-        };
-      };
-      /** @description Response for status 422 */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message?: string;
-            code?: string;
-            details?: string[];
-          };
-        };
-      };
-    };
-  };
-  "getV1ProjectsByProjectIdTest-configsByTestConfigId": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @example YOUR_PROJECT_ID */
-        projectId: string;
-        /** @example YOUR_TEST_CONFIG_ID */
-        testConfigId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Response for status 200 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["TestConfigResponse"];
-        };
-      };
-      /** @description Response for status 404 */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message?: string;
-            code?: string;
-            details?: string[];
-          };
-        };
-      };
-    };
-  };
-  "deleteV1ProjectsByProjectIdTest-configsByTestConfigId": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @example YOUR_PROJECT_ID */
-        projectId: string;
-        /** @example YOUR_TEST_CONFIG_ID */
-        testConfigId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Response for status 200 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["DeleteTestConfigResponse"];
-        };
-      };
-    };
-  };
-  "patchV1ProjectsByProjectIdTest-configsByTestConfigId": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @example YOUR_PROJECT_ID */
-        projectId: string;
-        /** @example YOUR_TEST_CONFIG_ID */
-        testConfigId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["UpdateTestConfigRequest"];
-      };
-    };
-    responses: {
-      /** @description Response for status 200 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["TestConfigResponse"];
-        };
-      };
-      /** @description Response for status 404 */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message?: string;
-            code?: string;
-            details?: string[];
-          };
-        };
-      };
-      /** @description Response for status 409 */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message?: string;
-            code?: string;
-            details?: string[];
-          };
-        };
-      };
-    };
-  };
-  "getV1ProjectsByProjectIdTest-runs": {
-    parameters: {
-      query?: {
-        test_config_id?: string;
-        dataset_id?: string;
-        status?: "pending" | "running" | "completed" | "error" | "cancelled";
-        limit?: number;
-        offset?: number;
-      };
-      header?: never;
-      path: {
-        /** @example YOUR_PROJECT_ID */
-        projectId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Response for status 200 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["TestRunsResponse"];
-        };
-      };
-    };
-  };
-  "postV1ProjectsByProjectIdTest-runs": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @example YOUR_PROJECT_ID */
-        projectId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["CreateTestRunRequest"];
-      };
-    };
-    responses: {
-      /** @description Response for status 200 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["PreparedTestRunResponse"];
-        };
-      };
-      /** @description Response for status 402 */
-      402: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message?: string;
-            code?: string;
-            details?: string[];
-          };
-        };
-      };
-      /** @description Response for status 404 */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message?: string;
-            code?: string;
-            details?: string[];
-          };
-        };
-      };
-      /** @description Response for status 409 */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message?: string;
-            code?: string;
-            details?: string[];
-          };
-        };
-      };
-      /** @description Response for status 422 */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message?: string;
-            code?: string;
-            details?: string[];
-          };
-        };
-      };
-      /** @description Response for status 429 */
-      429: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message?: string;
-            code?: string;
-            details?: string[];
-          };
-        };
-      };
-    };
-  };
-  "getV1ProjectsByProjectIdTest-runsByTestRunId": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @example YOUR_PROJECT_ID */
-        projectId: string;
-        /** @example YOUR_TEST_RUN_ID */
-        testRunId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Response for status 200 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["TestRunResponse"];
-        };
-      };
-      /** @description Response for status 404 */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message?: string;
-            code?: string;
-            details?: string[];
-          };
-        };
-      };
-    };
-  };
-  "postV1ProjectsByProjectIdTest-runsByTestRunIdCancel": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @example YOUR_PROJECT_ID */
-        projectId: string;
-        /** @example YOUR_TEST_RUN_ID */
-        testRunId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Response for status 200 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            test_run: {
-              id: string;
-              organization_id: string;
-              project_id: string;
-              user_id: string;
-              test_config_id: string;
-              dataset_id: string;
-              dataset_version_id: string;
-              /** @enum {string} */
-              source: "sdk" | "cli" | "mcp" | "platform" | "legacy";
-              /** @enum {string} */
-              status:
-                | "pending"
-                | "running"
-                | "completed"
-                | "error"
-                | "cancelled";
-              error_message: string | null;
-              started_at: string | null;
-              completed_at: string | null;
-              created_at: string;
-              updated_at: string;
-              name: string;
-            };
-          };
-        };
-      };
-      /** @description Response for status 404 */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message?: string;
-            code?: string;
-            details?: string[];
-          };
-        };
-      };
-      /** @description Response for status 409 */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message?: string;
-            code?: string;
-            details?: string[];
-          };
-        };
-      };
-    };
-  };
-  "getV1ProjectsByProjectIdTest-runsByTestRunIdGraph": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @example YOUR_PROJECT_ID */
-        projectId: string;
-        /** @example YOUR_TEST_RUN_ID */
-        testRunId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Response for status 200 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["TestRunGraphResponse"];
-        };
-      };
-    };
-  };
-  "getV1ProjectsByProjectIdTest-runsByTestRunIdItems": {
-    parameters: {
-      query?: {
-        limit?: number;
-        cursor?: string;
-      };
-      header?: never;
-      path: {
-        /** @example YOUR_PROJECT_ID */
-        projectId: string;
-        /** @example YOUR_TEST_RUN_ID */
-        testRunId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Response for status 200 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["TestRunItemsResponse"];
-        };
-      };
-    };
-  };
-  "getV1ProjectsByProjectIdTest-runsByTestRunIdResults": {
-    parameters: {
-      query?: {
-        limit?: number;
-        cursor?: string;
-      };
-      header?: never;
-      path: {
-        /** @example YOUR_PROJECT_ID */
-        projectId: string;
-        /** @example YOUR_TEST_RUN_ID */
-        testRunId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Response for status 200 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["TestRunItemsResponse"];
-        };
-      };
-    };
-  };
-  "patchV1ProjectsByProjectIdTest-runsByTestRunIdStatus": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @example YOUR_PROJECT_ID */
-        projectId: string;
-        /** @example YOUR_TEST_RUN_ID */
-        testRunId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["UpdateTestRunStatusRequest"];
-      };
-    };
-    responses: {
-      /** @description Response for status 200 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["TestRunResponse"];
-        };
-      };
-      /** @description Response for status 404 */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message?: string;
-            code?: string;
-            details?: string[];
-          };
-        };
-      };
-      /** @description Response for status 409 */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message?: string;
-            code?: string;
-            details?: string[];
-          };
-        };
-      };
-      /** @description Response for status 422 */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message?: string;
-            code?: string;
-            details?: string[];
-          };
-        };
-      };
-    };
-  };
-  "patchV1ProjectsByProjectIdTest-runsByTestRunIdSuccess": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        /** @example YOUR_PROJECT_ID */
-        projectId: string;
-        /** @example YOUR_TEST_RUN_ID */
-        testRunId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ApplyTestRunSuccessRequest"];
-      };
-    };
-    responses: {
-      /** @description Response for status 200 */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["ApplyTestRunSuccessResponse"];
-        };
-      };
-      /** @description Response for status 404 */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message?: string;
-            code?: string;
-            details?: string[];
-          };
-        };
-      };
-      /** @description Response for status 422 */
-      422: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": {
-            error: string;
-            message?: string;
-            code?: string;
-            details?: string[];
-          };
         };
       };
     };
