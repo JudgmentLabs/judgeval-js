@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 const INTENT_ARGUMENT = "intent";
 const MODEL_ARGUMENT = "llm_model";
 const CONVERSATION_ARGUMENT = "conversation_id";
-const RESPONSE_CONTEXT = "_judgment";
+const RESPONSE_CONTEXT = "_mcp_instructions";
 const MAX_INTENT_LENGTH = 500;
 const UUID_V7 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -14,7 +14,7 @@ const AGENT_ARGUMENT_DESCRIPTIONS: Readonly<Record<string, string>> = {
   [MODEL_ARGUMENT]:
     'The exact model identifier you are running as, taken from your system prompt or environment. For analytics only. If you do not know it with certainty, pass "unknown"—never guess.',
   [CONVERSATION_ARGUMENT]:
-    "Optional, for analytics only. Read conversation_id from the server's earlier response text or structuredContent._judgment and pass it unchanged as {argument_name} on later calls in this conversation. Omit it on the first call, and do not invent one.",
+    "Optional, for analytics only. Read conversation_id from the server's earlier response text or structuredContent._mcp_instructions and pass it unchanged as {argument_name} on later calls in this conversation. Omit it on the first call, and do not invent one.",
 };
 
 /** Explicit names opt application-owned arguments into telemetry. */
@@ -22,6 +22,24 @@ export interface ArgumentNames {
   readonly intent?: string;
   readonly model?: string;
   readonly conversationId?: string;
+}
+
+export interface ArgumentInjection {
+  readonly injectIntent?: boolean;
+  readonly injectModel?: boolean;
+  readonly injectConversationId?: boolean;
+}
+
+function injectedArgumentNames(
+  names: ArgumentNames,
+  injection: ArgumentInjection,
+): readonly string[] {
+  const [intent, model, conversationId] = argumentNames(names);
+  return [
+    ...(injection.injectIntent === false ? [] : [intent]),
+    ...(injection.injectModel === false ? [] : [model]),
+    ...(injection.injectConversationId === false ? [] : [conversationId]),
+  ];
 }
 
 export function argumentNames(
@@ -89,12 +107,17 @@ export function readReportedArguments(
   declared: ReadonlySet<string>,
   names: ArgumentNames = {},
   injected = true,
+  injection: ArgumentInjection = {},
 ): ReportedArguments {
+  const enabled = new Set(injectedArgumentNames(names, injection));
   const read = (
     name: string,
     configured: string | undefined,
   ): string | undefined => {
-    if (configured === undefined && (!injected || declared.has(name)))
+    if (
+      configured === undefined &&
+      (!injected || !enabled.has(name) || declared.has(name))
+    )
       return undefined;
     const value = args[name];
     return typeof value === "string" && value.trim() !== "" ? value : undefined;
@@ -122,11 +145,9 @@ export function withoutAgentArguments(
   args: Readonly<Record<string, unknown>>,
   declared: ReadonlySet<string>,
   names: ArgumentNames = {},
-  injectConversationId = true,
+  injection: ArgumentInjection = {},
 ): Record<string, unknown> {
-  const injectedNames = new Set(
-    argumentNames(names).slice(0, injectConversationId ? 3 : 2),
-  );
+  const injectedNames = new Set(injectedArgumentNames(names, injection));
   return Object.fromEntries(
     Object.entries(args).filter(
       ([name]) => !injectedNames.has(name) || declared.has(name),
@@ -138,11 +159,9 @@ export function withoutAgentArguments(
 export function isAgentArgument(
   name: string,
   names: ArgumentNames = {},
-  injectConversationId = true,
+  injection: ArgumentInjection = {},
 ): boolean {
-  return argumentNames(names)
-    .slice(0, injectConversationId ? 3 : 2)
-    .includes(name);
+  return injectedArgumentNames(names, injection).includes(name);
 }
 
 /**
@@ -152,17 +171,18 @@ export function isAgentArgument(
  */
 export function withAgentArguments<Tool extends ListedTool>(
   tool: Tool,
-  injectConversationId = true,
+  injection: ArgumentInjection = {},
   names: ArgumentNames = {},
 ): Tool {
   const schema = tool.inputSchema;
   if (schema === undefined || !canExtendSchema(schema)) return tool;
   const resolved = argumentNames(names);
   const [intentName, modelName] = resolved;
+  const enabled = new Set(injectedArgumentNames(names, injection));
   const declared = new Set(declaredArguments(schema, names));
   const required = schema["required"];
   const requiredArguments = [intentName, modelName].filter(
-    (name) => !declared.has(name),
+    (name) => enabled.has(name) && !declared.has(name),
   );
   return {
     ...tool,
@@ -180,14 +200,10 @@ export function withAgentArguments<Tool extends ListedTool>(
         ...Object.fromEntries(
           Object.entries(AGENT_ARGUMENT_DESCRIPTIONS)
             .map(
-              ([name, description], index) =>
-                [resolved[index]!, description, name] as const,
+              ([, description], index) =>
+                [resolved[index]!, description] as const,
             )
-            .filter(
-              ([name, , original]) =>
-                !declared.has(name) &&
-                (injectConversationId || original !== CONVERSATION_ARGUMENT),
-            )
+            .filter(([name]) => !declared.has(name) && enabled.has(name))
             .map(([name, description]) => [
               name,
               {

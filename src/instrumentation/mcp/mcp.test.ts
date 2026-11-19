@@ -95,7 +95,10 @@ function useExporter() {
 }
 
 type Result = {
-  structuredContent?: { ok: boolean; _judgment?: { conversation_id: string } };
+  structuredContent?: {
+    ok: boolean;
+    _mcp_instructions?: { conversation_id: string };
+  };
 };
 
 function registerTools(server: object) {
@@ -220,7 +223,7 @@ describe.each(["1", "2"])("low-level MCP %s", (version) => {
         name: "lookup",
         arguments: { intent: "business", llm_model: "model" },
       })) as Result;
-      const id = result.structuredContent?._judgment?.conversation_id;
+      const id = result.structuredContent?._mcp_instructions?.conversation_id;
       await client.callTool({
         name: "lookup",
         arguments: { intent: "business", conversation_id: id },
@@ -309,7 +312,7 @@ test.each([
       callbackSession: "transport-session",
       output: {
         ok: true,
-        _judgment: {
+        _mcp_instructions: {
           conversation_id: handle,
           note: "Pass this conversation_id on later tool calls in this conversation.",
         },
@@ -387,7 +390,7 @@ test.each([
         (result) => (result.structuredContent as { ok: boolean }).ok,
       ),
       handoffs: [first, second].map(
-        (result) => "_judgment" in (result.structuredContent as object),
+        (result) => "_mcp_instructions" in (result.structuredContent as object),
       ),
     }).toEqual({
       listings: 1,
@@ -427,7 +430,7 @@ test.each([connectV1, connectV2])(
       [first, second].map((result) => ({
         ok: (result as Result).structuredContent?.ok,
         hasConversationId:
-          typeof (result as Result).structuredContent?._judgment
+          typeof (result as Result).structuredContent?._mcp_instructions
             ?.conversation_id === "string",
       })),
     ).toEqual([
@@ -650,7 +653,7 @@ test("schema discovery failures never turn a successful tool call into an error"
   });
   expect(result.structuredContent).toEqual({
     ok: true,
-    _judgment: {
+    _mcp_instructions: {
       conversation_id: expect.any(String),
       note: "Pass this conversation_id on later tool calls in this conversation.",
     },
@@ -713,6 +716,7 @@ async function connectV2(
 test("legacy HTTP clients retain handshake identity across fresh server instances", async () => {
   const exporter = useExporter();
   const streamStatuses: number[] = [];
+  const neutralTokens: boolean[] = [];
   const handler = createMcpHandler(() => {
     const server = new McpServerV2(
       { name: "greeter", version: "1" },
@@ -750,7 +754,20 @@ test("legacy HTTP clients retain handshake identity across fresh server instance
       );
     };
     const transport = new LegacyHttpClient(new URL("http://test.local/mcp"), {
-      fetch: (url, init) => dispatch(new Request(String(url), init)),
+      fetch: async (url, init) => {
+        const request = new Request(String(url), init);
+        const token = request.headers.get("mcp-session-id");
+        if (name === "client-b" && token !== null)
+          request.headers.set(
+            "mcp-session-id",
+            token.replace("mcp-session-v1.", "judgment-mcp-v1."),
+          );
+        const response = await dispatch(request);
+        const issued = response.headers.get("mcp-session-id");
+        if (issued !== null)
+          neutralTokens.push(issued.startsWith("mcp-session-v1."));
+        return response;
+      },
     });
     await client.connect(transport);
     cleanups.push(() => client.close());
@@ -763,7 +780,12 @@ test("legacy HTTP clients retain handshake identity across fresh server instance
             await dispatch(
               new Request("http://test.local/mcp", {
                 method,
-                headers: { "mcp-session-id": transport.sessionId! },
+                headers: {
+                  "mcp-session-id": transport.sessionId!.replace(
+                    "mcp-session-v1.",
+                    "judgment-mcp-v1.",
+                  ),
+                },
               }),
             )
           ).status,
@@ -771,6 +793,7 @@ test("legacy HTTP clients retain handshake identity across fresh server instance
   };
   await Promise.all([call("client-a"), call("client-b")]);
   expect({
+    neutralTokens,
     streamStatuses,
     identities: exporter
       .getFinishedSpans()
@@ -782,6 +805,7 @@ test("legacy HTTP clients retain handshake identity across fresh server instance
       }))
       .sort((a, b) => String(a.client).localeCompare(String(b.client))),
   }).toEqual({
+    neutralTokens: [true, true],
     streamStatuses: [405, 405],
     identities: [
       { client: "client-a", version: "client-1", protocol: "2025-06-18" },
@@ -823,6 +847,63 @@ describe.each([
   ["MCP 1.x", connectV1],
   ["MCP 2.x", connectV2],
 ] as const)("%s adapter", (_label, connect) => {
+  test.each([
+    [true, false],
+    [false, true],
+    [false, false],
+    [true, true],
+  ])(
+    "controls intent=%s and model=%s independently of conversation handoff",
+    async (injectIntent, injectModel) => {
+      const exporter = useExporter();
+      const client = await connect({ injectIntent, injectModel });
+      cleanups.push(() => client.close());
+      const listing = await client.listTools();
+      const result = await client.callTool({
+        name: "greet",
+        arguments: {
+          name: "Alice",
+          ...(injectIntent ? { intent: "Greeting" } : {}),
+          ...(injectModel ? { llm_model: "agent-model" } : {}),
+        },
+      });
+      const content = result.content as { text: string }[];
+      const handoff = JSON.parse(content[content.length - 1]!.text);
+      await client.callTool({
+        name: "greet",
+        arguments: { name: "Bob", conversation_id: handoff.conversation_id },
+      });
+      const spans = exporter
+        .getFinishedSpans()
+        .filter((span) => span.name === "tools/call greet");
+      expect({
+        fields: Object.keys(listing.tools[0]!.inputSchema.properties!),
+        required: listing.tools[0]!.inputSchema.required,
+        failed: result.isError ?? false,
+        intent: spans[0]!.attributes["judgment.mcp.intent"],
+        model: spans[0]!.attributes["judgment.llm.model"],
+        sessions: spans.map((span) => span.attributes["judgment.session_id"]),
+      }).toEqual({
+        fields: [
+          ...(injectIntent ? ["intent"] : []),
+          ...(injectModel ? ["llm_model"] : []),
+          "conversation_id",
+          "name",
+          "fail",
+        ],
+        required: [
+          "name",
+          ...(injectIntent ? ["intent"] : []),
+          ...(injectModel ? ["llm_model"] : []),
+        ],
+        failed: false,
+        intent: injectIntent ? "Greeting" : undefined,
+        model: injectModel ? "agent-model" : undefined,
+        sessions: [handoff.conversation_id, handoff.conversation_id],
+      });
+    },
+  );
+
   test("advertises required intent and model without rejecting older calls", async () => {
     const exporter = useExporter();
     const client = await connect({});
@@ -997,7 +1078,7 @@ describe.each([
         llm_model: "model-1",
       },
     })) as Result;
-    const session = first.structuredContent?._judgment?.conversation_id;
+    const session = first.structuredContent?._mcp_instructions?.conversation_id;
     await client.callTool({
       name: "greet",
       arguments: {
@@ -1336,7 +1417,7 @@ describe("structured conversation handoff", () => {
     const expected = {
       structuredContent: {
         ok: true,
-        _judgment: {
+        _mcp_instructions: {
           conversation_id: "id",
           note: "Pass this conversation_id on later tool calls in this conversation.",
         },
@@ -1361,7 +1442,7 @@ describe("structured conversation handoff", () => {
     ).toEqual(expected);
   });
   test.each([
-    { properties: { _judgment: { type: "string" } } },
+    { properties: { _mcp_instructions: { type: "string" } } },
     { oneOf: [] },
     { maxProperties: 1 },
     { const: { ok: true } },
@@ -1378,7 +1459,7 @@ describe("structured conversation handoff", () => {
     ).toBeUndefined();
   });
 
-  test.each([undefined, { _judgment: "developer-owned" }])(
+  test.each([undefined, { _mcp_instructions: "developer-owned" }])(
     "never replaces text-only output or developer fields: %j",
     (structuredContent) => {
       const result = {
@@ -1414,7 +1495,7 @@ test("a custom model argument leaves a tool's llm_model untouched", () => {
       properties: { llm_model: { type: "string" } },
     },
   };
-  const updated = withAgentArguments(tool, true, names);
+  const updated = withAgentArguments(tool, {}, names);
   const declared = new Set(["llm_model"]);
   const args = {
     llm_model: "tool-model",
@@ -1427,13 +1508,26 @@ test("a custom model argument leaves a tool's llm_model untouched", () => {
     missing: readReportedArguments({ llm_model: "tool-model" }, declared, names)
       .model,
     defaultCollision: readReportedArguments(args, declared).model,
+    mappedWithoutInjection: readReportedArguments(args, declared, names, true, {
+      injectModel: false,
+    }).model,
+    disabledModel: withoutAgentArguments(args, declared, names, {
+      injectModel: false,
+    }),
     business: withoutAgentArguments(args, declared, names),
-    disabledHandoff: withoutAgentArguments(args, declared, names, false),
+    disabledHandoff: withoutAgentArguments(args, declared, names, {
+      injectConversationId: false,
+    }),
   }).toEqual({
     fields: ["conversation_id", "intent", "judgment_llm_model", "llm_model"],
     model: "agent-model",
     missing: undefined,
     defaultCollision: undefined,
+    mappedWithoutInjection: "agent-model",
+    disabledModel: {
+      llm_model: "tool-model",
+      judgment_llm_model: "agent-model",
+    },
     business: { llm_model: "tool-model" },
     disabledHandoff: { llm_model: "tool-model", conversation_id: "extra" },
   });
