@@ -151,7 +151,18 @@ export class JudgmentTracerProvider implements TracerProvider {
   setActive(tracer: BaseTracer): boolean {
     const currentSpan = this.getCurrentSpan();
     if (currentSpan?.isRecording()) {
-      if (trace.getSpan(this.getCurrentContext()) === currentSpan) {
+      // Only a ROOT span blocks activation (parity with the Python SDK's
+      // parent check). SDK spans expose their parent as parentSpanContext
+      // (OTel JS >= 2.x) or parentSpanId (older); absence of both means
+      // the current span is a trace root.
+      const spanRecord = currentSpan as unknown as {
+        parentSpanContext?: unknown;
+        parentSpanId?: unknown;
+      };
+      const isRootSpan =
+        spanRecord.parentSpanContext === undefined &&
+        spanRecord.parentSpanId === undefined;
+      if (isRootSpan) {
         Logger.error(
           "Cannot set_active() while a root span is active. Keeping existing tracer provider.",
         );
