@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import type { JudgmentApiClient } from "../internal/api/client";
 import { Logger } from "../utils/logger";
-import { TestRunsFactory, TestSuitesFactory } from "./index";
+import {
+  NO_MATCH,
+  TestEnvironmentsFactory,
+  TestRunsFactory,
+  TestSuitesFactory,
+  cannedToolResult,
+} from "./index";
 
 const client = {
   getBaseUrl: () => "https://api.example.com",
@@ -39,6 +45,54 @@ describe("TestRunsFactory", () => {
         url: "https://api.example.com/v1/projects/p1/test-suites/t1/runs",
         method: "POST",
         body: JSON.stringify({ candidate: "abc123", stored_traces: true }),
+      },
+    ]);
+  });
+});
+
+test("cannedToolResult returns the first matching rule", () => {
+  const definition = {
+    tools: {
+      lookup_order: [
+        { match: { order_id: "A1", fields: ["status"] }, return: null },
+        { match: { order_id: "A1" }, return: { status: "shipped" } },
+        { match: { filter: { a: 1, b: [2] } }, return: "filtered" },
+        { match: { note: null }, return: "noted" },
+        { return: { error: "not found" } },
+      ],
+    },
+  };
+  const result = (toolName: string, args: Record<string, unknown>) =>
+    cannedToolResult(definition, toolName, args);
+
+  expect([
+    result("lookup_order", { order_id: "A1", fields: ["status"] }),
+    result("lookup_order", { order_id: "A1", fields: [] }),
+    result("lookup_order", { filter: { b: [2], a: 1 } }),
+    result("lookup_order", { filter: { a: 1, b: [2], c: 3 } }),
+    result("lookup_order", { order_id: "B2" }),
+    result("create_ticket", { order_id: "A1" }),
+    result("toString", {}),
+  ]).toEqual([
+    null,
+    { status: "shipped" },
+    "filtered",
+    { error: "not found" },
+    { error: "not found" },
+    NO_MATCH,
+    NO_MATCH,
+  ]);
+});
+
+describe("TestEnvironmentsFactory", () => {
+  test("get reads one version from the test environments route", async () => {
+    const calls = stubFetch({});
+    await new TestEnvironmentsFactory(client, "p1", "proj").get("refunds", 2);
+    expect(calls).toEqual([
+      {
+        url: "https://api.example.com/v1/projects/p1/test-environments/refunds/versions/2",
+        method: "GET",
+        body: undefined,
       },
     ]);
   });

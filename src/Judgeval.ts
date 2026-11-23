@@ -9,7 +9,11 @@ import { AgentJudgeFactory } from "./agent-judges/AgentJudgeFactory";
 import { ExternalJudgeFactory } from "./external-judges/ExternalJudgeFactory";
 import { OfflineTestsFactory } from "./offline-tests/OfflineTestsFactory";
 import { warnOfflineTestsDeprecated } from "./offline-tests/deprecation";
-import { TestRunsFactory, TestSuitesFactory } from "./testing";
+import {
+  TestEnvironmentsFactory,
+  TestRunsFactory,
+  TestSuitesFactory,
+} from "./testing";
 import type { OfflineTracer, OfflineTracerConfig } from "./trace/OfflineTracer";
 import { JudgevalQueryClient, type SqlResponse } from "./sql/client";
 
@@ -244,6 +248,15 @@ export class Judgeval {
   /** Create test suites and edit their versioned cases. */
   get testSuites(): TestSuitesFactory {
     return new TestSuitesFactory(
+      this._client,
+      this._projectId,
+      this._projectName,
+    );
+  }
+
+  /** Create and read the test environments that test cases run in. */
+  get testEnvironments(): TestEnvironmentsFactory {
+    return new TestEnvironmentsFactory(
       this._client,
       this._projectId,
       this._projectName,
