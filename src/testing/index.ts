@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import type { JudgmentApiClient } from "../internal/api/client";
 
 /** How a judge's output must compare to `expected` for the check to pass. */
@@ -114,24 +115,6 @@ export const NO_MATCH: unique symbol = Symbol("NO_MATCH");
 const hasOwn = (object: object, key: string) =>
   Object.prototype.hasOwnProperty.call(object, key);
 
-function deepEqual(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  if (typeof a !== "object" || typeof b !== "object" || !a || !b) return false;
-  if (Array.isArray(a) !== Array.isArray(b)) return false;
-  const keys = Object.keys(a);
-  return (
-    keys.length === Object.keys(b).length &&
-    keys.every(
-      (key) =>
-        hasOwn(b, key) &&
-        deepEqual(
-          (a as Record<string, unknown>)[key],
-          (b as Record<string, unknown>)[key],
-        ),
-    )
-  );
-}
-
 /**
  * Return what a test environment says a tool call returns, or `NO_MATCH`.
  *
@@ -155,7 +138,8 @@ export function cannedToolResult(
   const rules = hasOwn(tools, toolName) ? tools[toolName] : [];
   const rule = rules.find((rule) =>
     Object.entries(rule.match ?? {}).every(
-      ([key, value]) => hasOwn(args, key) && deepEqual(args[key], value),
+      ([key, value]) =>
+        hasOwn(args, key) && isDeepStrictEqual(args[key], value),
     ),
   );
   return rule ? rule.return : NO_MATCH;
