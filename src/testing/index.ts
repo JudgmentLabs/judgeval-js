@@ -427,7 +427,6 @@ export function issueIdFromDescription(
  *     number: pull.number,
  *     url: pull.html_url,
  *     title: pull.title,
- *     state: "open",
  *   });
  * }
  * ```
@@ -448,12 +447,13 @@ export class IssuesFactory extends ProjectTestSuitesClient {
       number: number;
       url: string;
       title?: string;
-      state: IssuePullRequest["state"];
+      /** Defaults to `"open"`. */
+      state?: IssuePullRequest["state"];
       merged_sha?: string;
     },
   ): Promise<IssuePullRequest> {
     return this.call("PUT", `/${issueId}/pull-requests`, {
-      body: pullRequest,
+      body: { state: "open", ...pullRequest },
     });
   }
 

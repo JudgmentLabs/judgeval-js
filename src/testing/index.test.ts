@@ -158,18 +158,17 @@ describe("IssuesFactory", () => {
       repo: "acme/agent",
       number: 7,
       url: "https://github.com/acme/agent/pull/7",
-      state: "open" as const,
     };
     await issues.linkPullRequest(issue, pullRequest);
     await issues.unlinkPullRequest(issue, { repo: "acme/agent", number: 7 });
-    expect(calls).toEqual([
-      { url, method: "PUT", body: JSON.stringify(pullRequest) },
-      {
-        url: `${url}?repo=acme%2Fagent&number=7`,
-        method: "DELETE",
-        body: "{}",
-      },
+    expect(calls.map(({ url, method }) => ({ url, method }))).toEqual([
+      { url, method: "PUT" },
+      { url: `${url}?repo=acme%2Fagent&number=7`, method: "DELETE" },
     ]);
+    expect(JSON.parse(calls[0].body!)).toEqual({
+      state: "open",
+      ...pullRequest,
+    });
   });
 });
 
