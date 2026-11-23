@@ -510,6 +510,8 @@ export abstract class BaseTracer {
    *   await Tracer.testCase(run.run_id, c.case_id, () => supportAgent(c.input));
    * }
    * ```
+   *
+   * For a case that names a test environment, see `cannedToolResult`.
    */
   static testCase<T>(runId: string, caseId: string, fn: () => T): T {
     const proxy = BaseTracer._getProxyProvider();
