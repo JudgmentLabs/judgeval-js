@@ -122,6 +122,7 @@ const hasOwn = (object: object, key: string) =>
  * the call with its `return`; a rule with no `match` answers every call.
  * Nested values must be equal: arrays in order, objects key by key. Compare
  * the result to `NO_MATCH` with `===`, since a rule may return `null`.
+ * Each call returns a fresh copy, so callers may mutate it.
  *
  * @example
  * ```typescript
@@ -142,7 +143,7 @@ export function cannedToolResult(
         hasOwn(args, key) && isDeepStrictEqual(args[key], value),
     ),
   );
-  return rule ? rule.return : NO_MATCH;
+  return rule ? structuredClone(rule.return) : NO_MATCH;
 }
 
 export interface TestRun {
