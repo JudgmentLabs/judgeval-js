@@ -84,6 +84,14 @@ test("cannedToolResult returns the first matching rule", () => {
   ]);
 });
 
+test("cannedToolResult returns a copy that does not share the rule's objects", () => {
+  const canned = { orders: [{ id: "A1" }] };
+  const definition = { tools: { list_orders: [{ return: canned }] } };
+  const result = cannedToolResult(definition, "list_orders", {});
+  canned.orders[0].id = "changed";
+  expect(result).toEqual({ orders: [{ id: "A1" }] });
+});
+
 describe("TestEnvironmentsFactory", () => {
   test("get reads one version from the test environments route", async () => {
     const calls = stubFetch({});
