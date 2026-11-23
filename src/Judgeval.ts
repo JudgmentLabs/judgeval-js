@@ -10,6 +10,7 @@ import { ExternalJudgeFactory } from "./external-judges/ExternalJudgeFactory";
 import { OfflineTestsFactory } from "./offline-tests/OfflineTestsFactory";
 import { warnOfflineTestsDeprecated } from "./offline-tests/deprecation";
 import {
+  IssuesFactory,
   TestEnvironmentsFactory,
   TestRunsFactory,
   TestSuitesFactory,
@@ -261,6 +262,11 @@ export class Judgeval {
       this._projectId,
       this._projectName,
     );
+  }
+
+  /** Link the pull requests that fix an issue. */
+  get issues(): IssuesFactory {
+    return new IssuesFactory(this._client, this._projectId, this._projectName);
   }
 
   /** Run test suites and read their results. */

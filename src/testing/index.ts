@@ -380,6 +380,94 @@ export class TestEnvironmentsFactory extends ProjectTestSuitesClient {
   }
 }
 
+/** A pull request linked to the issue it says it fixes. */
+export interface IssuePullRequest {
+  issue_id: string;
+  /** `owner/name`. */
+  repo: string;
+  number: number;
+  url: string;
+  title: string | null;
+  state: "open" | "merged" | "closed";
+  merged_sha: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+const ISSUE_LINE = /^Judgment-Issue:\s*(?:\S*\/)?([0-9a-f-]{36})\s*$/im;
+
+/**
+ * Return the issue ID a pull request description names, or `null`.
+ *
+ * The description names an issue with a line `Judgment-Issue: <issue URL or ID>`.
+ */
+export function issueIdFromDescription(
+  description: string | null | undefined,
+): string | null {
+  return ISSUE_LINE.exec(description ?? "")?.[1].toLowerCase() ?? null;
+}
+
+/**
+ * Link the pull requests that fix an issue. Access via `judgeval.issues`.
+ *
+ * A linked pull request shows on the issue's page, with the test runs that
+ * carry the same `repo` and `pr` in their `candidate_meta`. Call
+ * `linkPullRequest` from CI when a pull request's description names the
+ * issue (see `issueIdFromDescription`), and again with `state: "merged"` and
+ * `merged_sha` when it merges.
+ *
+ * The issue lifecycle must be enabled for your organization.
+ *
+ * @example
+ * ```typescript
+ * const issueId = issueIdFromDescription(pull.body);
+ * if (issueId) {
+ *   await judgeval.issues.linkPullRequest(issueId, {
+ *     repo: "acme/support-agent",
+ *     number: pull.number,
+ *     url: pull.html_url,
+ *     title: pull.title,
+ *   });
+ * }
+ * ```
+ */
+export class IssuesFactory extends ProjectTestSuitesClient {
+  protected override readonly _resource = "issues";
+
+  /**
+   * Link a pull request to the issue it fixes, or update its link.
+   *
+   * Calling it again for the same `repo` and `number` updates the link; a
+   * `title` or `merged_sha` left out keeps its stored value.
+   */
+  linkPullRequest(
+    issueId: string,
+    pullRequest: {
+      repo: string;
+      number: number;
+      url: string;
+      title?: string;
+      /** Defaults to `"open"`. */
+      state?: IssuePullRequest["state"];
+      merged_sha?: string;
+    },
+  ): Promise<IssuePullRequest> {
+    return this.call("PUT", `/${issueId}/pull-requests`, {
+      body: { state: "open", ...pullRequest },
+    });
+  }
+
+  /** Remove a pull request from an issue it no longer names. Succeeds if it was not linked. */
+  async unlinkPullRequest(
+    issueId: string,
+    pullRequest: { repo: string; number: number },
+  ): Promise<void> {
+    await this.call("DELETE", `/${issueId}/pull-requests`, {
+      query: pullRequest,
+    });
+  }
+}
+
 /**
  * Run test suites and read results. Access via `judgeval.testRuns`.
  *

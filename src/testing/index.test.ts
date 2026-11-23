@@ -2,11 +2,13 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import type { JudgmentApiClient } from "../internal/api/client";
 import { Logger } from "../utils/logger";
 import {
+  IssuesFactory,
   NO_MATCH,
   TestEnvironmentsFactory,
   TestRunsFactory,
   TestSuitesFactory,
   cannedToolResult,
+  issueIdFromDescription,
 } from "./index";
 
 const client = {
@@ -142,4 +144,41 @@ test("the offline-tests deprecation is logged once", async () => {
   warnOfflineTestsDeprecated();
   expect(warning.mock.calls).toEqual([[OFFLINE_TESTS_DEPRECATION]]);
   warning.mockRestore();
+});
+
+const issue = "0b6f6a1e-1c2d-4e5f-8a9b-0c1d2e3f4a5b";
+
+describe("IssuesFactory", () => {
+  const url = `https://api.example.com/v1/projects/p1/issues/${issue}/pull-requests`;
+
+  test("links and unlinks a pull request on the issue", async () => {
+    const calls = stubFetch({});
+    const issues = new IssuesFactory(client, "p1", "proj");
+    const pullRequest = {
+      repo: "acme/agent",
+      number: 7,
+      url: "https://github.com/acme/agent/pull/7",
+    };
+    await issues.linkPullRequest(issue, pullRequest);
+    await issues.unlinkPullRequest(issue, { repo: "acme/agent", number: 7 });
+    expect(calls.map(({ url, method }) => ({ url, method }))).toEqual([
+      { url, method: "PUT" },
+      { url: `${url}?repo=acme%2Fagent&number=7`, method: "DELETE" },
+    ]);
+    expect(JSON.parse(calls[0].body!)).toEqual({
+      state: "open",
+      ...pullRequest,
+    });
+  });
+});
+
+test("issueIdFromDescription reads the Judgment-Issue line", () => {
+  expect([
+    issueIdFromDescription(`Fix.\n\nJudgment-Issue: ${issue}`),
+    issueIdFromDescription(
+      `judgment-issue: https://app.judgmentlabs.ai/org/o/project/p/issues/${issue.toUpperCase()}\n`,
+    ),
+    issueIdFromDescription(`See Judgment-Issue: ${issue}`),
+    issueIdFromDescription(null),
+  ]).toEqual([issue, issue, null, null]);
 });
