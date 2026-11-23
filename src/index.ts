@@ -112,12 +112,20 @@ export {
 
 export { JudgevalAPIError, type SqlResponse } from "./sql/client";
 export {
+  NO_MATCH,
+  TestEnvironmentsFactory,
   TestRunsFactory,
   TestSuitesFactory,
+  cannedToolResult,
   type CaseCheck,
   type CaseFilter,
   type CheckOp,
+  type EnvironmentDefinition,
+  type EnvironmentToolRule,
+  type StartedCase,
+  type StartedEnvironment,
   type StartedRun,
+  type TestEnvironment,
   type TestSuite,
   type TestCase,
   type TestCaseInput,
