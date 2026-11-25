@@ -1,7 +1,6 @@
 import {
   type Attributes,
   type Context,
-  INVALID_SPAN_CONTEXT,
   type Span,
   SpanStatusCode,
   type Tracer,
@@ -70,12 +69,6 @@ export interface ObserveOptions {
   recordInput?: boolean;
   /** Whether to record function outputs as a span attribute. Defaults to `true`. */
   recordOutput?: boolean;
-  /**
-   * If `true`, run the function in a fresh linked trace instead of as a
-   * child of the current trace, when an active parent span exists.
-   * Defaults to `false`.
-   */
-  fork?: boolean;
 }
 
 /**
@@ -554,12 +547,6 @@ export abstract class BaseTracer {
    *   \@Tracer.observe({ spanType: "llm" })
    *   async chat(input: string) { ... }
    * }
-   *
-   * // Fork into a linked trace
-   * const delegate = Tracer.observe(runSubsystem, {
-   *   spanType: "agent",
-   *   fork: true,
-   * });
    * ```
    */
   static observe<TArgs extends unknown[], TReturn>(
@@ -589,7 +576,6 @@ export abstract class BaseTracer {
       spanName,
       recordInput = true,
       recordOutput = true,
-      fork = false,
     } = options ?? {};
     const proxy = BaseTracer._getProxyProvider();
     const decorator = (
@@ -598,117 +584,6 @@ export abstract class BaseTracer {
       const name = spanName ?? innerFunc.name;
       return function (this: unknown, ...args: TArgs): TReturn {
         const otelTracer = proxy.getTracer(TRACER_NAME);
-
-        const shouldFork =
-          fork &&
-          proxy.getActiveTracer() !== null &&
-          proxy.getCurrentSpan()?.isRecording() === true;
-
-        if (shouldFork) {
-          const serializer = BaseTracer._getSerializer();
-
-          // Invocation span — child of current trace
-          const invocationSpan = otelTracer.startSpan(name);
-          const invocationCtx = invocationSpan.spanContext();
-          if (spanType) {
-            invocationSpan.setAttribute(
-              AttributeKeys.JUDGMENT_SPAN_KIND,
-              spanType,
-            );
-          }
-
-          // Linked-root span — root of a new trace
-          const linkedRootAttrs: Attributes = {
-            [AttributeKeys.JUDGMENT_LINK_SOURCE_TRACE_ID]:
-              invocationCtx.traceId,
-            [AttributeKeys.JUDGMENT_LINK_SOURCE_SPAN_ID]: invocationCtx.spanId,
-          };
-          if (spanType) {
-            linkedRootAttrs[AttributeKeys.JUDGMENT_SPAN_KIND] = spanType;
-          }
-
-          const parentlessCtx = proxy.setSpan(
-            proxy.getCurrentContext(),
-            proxy.wrapSpanContext(INVALID_SPAN_CONTEXT),
-          );
-          const linkedRoot = otelTracer.startSpan(
-            name,
-            { attributes: linkedRootAttrs },
-            parentlessCtx,
-          );
-          const linkedRootCtx = linkedRoot.spanContext();
-          invocationSpan.setAttribute(
-            AttributeKeys.JUDGMENT_LINK_TARGET_TRACE_ID,
-            linkedRootCtx.traceId,
-          );
-          invocationSpan.setAttribute(
-            AttributeKeys.JUDGMENT_LINK_TARGET_SPAN_ID,
-            linkedRootCtx.spanId,
-          );
-
-          const endBoth = (): void => {
-            linkedRoot.end();
-            invocationSpan.end();
-          };
-          const recordErrorOnBoth = (e: unknown): void => {
-            for (const s of [linkedRoot, invocationSpan]) {
-              s.recordException(e as Error);
-              s.setStatus({
-                code: SpanStatusCode.ERROR,
-                message: String(e),
-              });
-            }
-          };
-          const recordOutputOnBoth = (value: unknown): void => {
-            const serialized = serializeAttribute(value, serializer);
-            linkedRoot.setAttribute(AttributeKeys.JUDGMENT_OUTPUT, serialized);
-            invocationSpan.setAttribute(
-              AttributeKeys.JUDGMENT_OUTPUT,
-              serialized,
-            );
-          };
-
-          if (recordInput) {
-            const serializedInput = serializeAttribute(
-              getInputs(innerFunc, args),
-              serializer,
-            );
-            linkedRoot.setAttribute(
-              AttributeKeys.JUDGMENT_INPUT,
-              serializedInput,
-            );
-            invocationSpan.setAttribute(
-              AttributeKeys.JUDGMENT_INPUT,
-              serializedInput,
-            );
-          }
-          BaseTracer._emitPartial();
-
-          return proxy.useSpan(linkedRoot, false, false, false, (): TReturn => {
-            try {
-              const result = innerFunc.call(this, ...args);
-              if (result instanceof Promise) {
-                return (result as Promise<unknown>)
-                  .then((res) => {
-                    if (recordOutput) recordOutputOnBoth(res);
-                    return res as TReturn;
-                  })
-                  .catch((e: unknown) => {
-                    recordErrorOnBoth(e);
-                    throw e;
-                  })
-                  .finally(endBoth) as TReturn;
-              }
-              if (recordOutput) recordOutputOnBoth(result);
-              endBoth();
-              return result;
-            } catch (e) {
-              recordErrorOnBoth(e);
-              endBoth();
-              throw e;
-            }
-          });
-        }
 
         return otelTracer.startActiveSpan(name, (span) => {
           if (spanType) {
